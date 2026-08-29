@@ -1,0 +1,31 @@
+{
+  "changelists": [
+    {
+      "name": "Default",
+      "files": [
+        ".gitignore",
+        "packages/local_llm_bridge/.gitignore",
+        "packages/local_llm_bridge/.metadata",
+        "packages/local_llm_bridge/CHANGELOG.md",
+        "packages/local_llm_bridge/LICENSE",
+        "packages/local_llm_bridge/README.md",
+        "packages/local_llm_bridge/analysis_options.yaml",
+        "packages/local_llm_bridge/ffigen.yaml",
+        "packages/local_llm_bridge/hook/build.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge_bindings_generated.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge_io.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge_stub.dart",
+        "packages/local_llm_bridge/pubspec.yaml",
+        "packages/local_llm_bridge/src/local_llm_bridge.cpp",
+        "packages/local_llm_bridge/src/local_llm_bridge.h",
+        "packages/local_llm_bridge/test/local_llm_bridge_test.dart",
+        "packages/local_llm_bridge/test/local_llm_bridge_web_stub_test.dart",
+        "packages/local_llm_bridge/tool/runtime_smoke_check.dart",
+        "packages/local_llm_bridge/tool/web_smoke_check.dart",
+        ".vscode/changelists.json"
+      ]
+    }
+  ],
+  "active": "Default"
+}
