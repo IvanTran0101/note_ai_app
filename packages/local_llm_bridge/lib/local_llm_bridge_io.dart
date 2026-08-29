@@ -84,63 +84,59 @@ final class LocalLlmBridgeRuntime {
   String generate(String prompt, {int maxTokens = 128}) {
     _ensureOpen();
     final nativePrompt = prompt.toNativeUtf8();
-    var outputCapacity = _initialOutputCapacity;
     try {
-      for (var attempt = 0; attempt < 3; attempt++) {
-        final outputBuffer = malloc<ffi.Char>(outputCapacity);
-        final outputLength = calloc<ffi.Int32>();
-        final errorBuffer = calloc<ffi.Char>(_errorCapacity);
-        try {
-          final status = bindings.local_llm_bridge_runtime_generate(
-            _handle,
-            nativePrompt.cast<ffi.Char>(),
-            maxTokens,
-            outputBuffer,
-            outputCapacity,
-            outputLength,
-            errorBuffer,
-            _errorCapacity,
-          );
-          if (status == _outputTooSmall) {
-            final required = outputLength.value;
-            if (required < 0 || required >= 0x7fffffff) {
-              throw LocalLlmBridgeException(
-                status,
-                'native runtime returned an invalid output size: $required',
-              );
-            }
-            outputCapacity = required + 1;
-            continue;
-          }
-          if (status != _ok) {
-            throw LocalLlmBridgeException(
-              status,
-              _readError(errorBuffer, 'llama.cpp generation failed'),
-            );
-          }
-
-          final length = outputLength.value;
-          if (length < 0 || length >= outputCapacity) {
-            throw LocalLlmBridgeException(
-              status,
-              'native runtime returned an invalid output length: $length',
-            );
-          }
-          return outputBuffer.cast<Utf8>().toDartString(length: length);
-        } finally {
-          malloc.free(outputBuffer);
-          calloc.free(outputLength);
-          calloc.free(errorBuffer);
-        }
-      }
+      return _runNativeGeneration(
+        (outputBuffer, outputCapacity, outputLength, errorBuffer) =>
+            bindings.local_llm_bridge_runtime_generate(
+          _handle,
+          nativePrompt.cast<ffi.Char>(),
+          maxTokens,
+          outputBuffer,
+          outputCapacity,
+          outputLength,
+          errorBuffer,
+          _errorCapacity,
+        ),
+      );
     } finally {
       malloc.free(nativePrompt);
     }
+  }
 
-    throw LocalLlmBridgeException(
-      _outputTooSmall,
-      'native runtime output exceeded the retry limit',
-    );
+  /// Generates a complete chat response with deterministic greedy sampling.
+  ///
+  /// The native side formats [systemPrompt] and [userPrompt] with the model's
+  /// `tokenizer.chat_template` (retrieved through
+  /// `llama_model_chat_template`) and appends the assistant turn start. No
+  /// template is hardcoded here; models without a usable chat template fail
+  /// with a [LocalLlmBridgeException].
+  String generateChat(
+    String systemPrompt,
+    String userPrompt, {
+    int maxTokens = 128,
+  }) {
+    _ensureOpen();
+    final nativeSystemPrompt = systemPrompt.toNativeUtf8();
+    final nativeUserPrompt = userPrompt.toNativeUtf8();
+    try {
+      return _runNativeGeneration(
+        (outputBuffer, outputCapacity, outputLength, errorBuffer) =>
+            bindings.local_llm_bridge_runtime_generate_chat(
+          _handle,
+          nativeSystemPrompt.cast<ffi.Char>(),
+          nativeUserPrompt.cast<ffi.Char>(),
+          maxTokens,
+          outputBuffer,
+          outputCapacity,
+          outputLength,
+          errorBuffer,
+          _errorCapacity,
+        ),
+      );
+    } finally {
+      malloc.free(nativeSystemPrompt);
+      malloc.free(nativeUserPrompt);
+    }
   }
 
   /// Releases the native model and context. Safe to call more than once.
@@ -158,6 +154,63 @@ final class LocalLlmBridgeRuntime {
       throw StateError('local_llm_bridge: runtime is already closed');
     }
   }
+}
+
+/// Runs one native generation call, retrying with a larger output buffer when
+/// the native side reports OUTPUT_TOO_SMALL.
+String _runNativeGeneration(
+  int Function(
+    ffi.Pointer<ffi.Char> outputBuffer,
+    int outputCapacity,
+    ffi.Pointer<ffi.Int32> outputLength,
+    ffi.Pointer<ffi.Char> errorBuffer,
+  ) run,
+) {
+  var outputCapacity = _initialOutputCapacity;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    final outputBuffer = malloc<ffi.Char>(outputCapacity);
+    final outputLength = calloc<ffi.Int32>();
+    final errorBuffer = calloc<ffi.Char>(_errorCapacity);
+    try {
+      final status =
+          run(outputBuffer, outputCapacity, outputLength, errorBuffer);
+      if (status == _outputTooSmall) {
+        final required = outputLength.value;
+        if (required < 0 || required >= 0x7fffffff) {
+          throw LocalLlmBridgeException(
+            status,
+            'native runtime returned an invalid output size: $required',
+          );
+        }
+        outputCapacity = required + 1;
+        continue;
+      }
+      if (status != _ok) {
+        throw LocalLlmBridgeException(
+          status,
+          _readError(errorBuffer, 'llama.cpp generation failed'),
+        );
+      }
+
+      final length = outputLength.value;
+      if (length < 0 || length >= outputCapacity) {
+        throw LocalLlmBridgeException(
+          status,
+          'native runtime returned an invalid output length: $length',
+        );
+      }
+      return outputBuffer.cast<Utf8>().toDartString(length: length);
+    } finally {
+      malloc.free(outputBuffer);
+      calloc.free(outputLength);
+      calloc.free(errorBuffer);
+    }
+  }
+
+  throw LocalLlmBridgeException(
+    _outputTooSmall,
+    'native runtime output exceeded the retry limit',
+  );
 }
 
 String _readError(ffi.Pointer<ffi.Char> buffer, String fallback) {

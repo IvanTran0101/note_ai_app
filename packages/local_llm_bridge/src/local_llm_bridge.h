@@ -39,6 +39,8 @@ enum local_llm_bridge_status {
   LOCAL_LLM_BRIDGE_STATUS_DECODE_FAILED = 5,
   LOCAL_LLM_BRIDGE_STATUS_OUTPUT_TOO_SMALL = 6,
   LOCAL_LLM_BRIDGE_STATUS_GENERATION_FAILED = 7,
+  LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING = 8,
+  LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED = 9,
 };
 
 /*
@@ -79,6 +81,32 @@ LOCAL_LLM_BRIDGE_EXPORT void local_llm_bridge_runtime_free(
 LOCAL_LLM_BRIDGE_EXPORT int32_t local_llm_bridge_runtime_generate(
     local_llm_bridge_runtime_handle runtime,
     const char* prompt,
+    int32_t max_tokens,
+    char* output_buffer,
+    int32_t output_capacity,
+    int32_t* output_length,
+    char* error_buffer,
+    int32_t error_capacity);
+
+/*
+ * Runs one independent, greedy chat generation request.
+ *
+ * The system and user prompts are formatted with the model's
+ * `tokenizer.chat_template` (retrieved through llama_model_chat_template with
+ * a null template name) and the assistant turn start is appended
+ * (llama_chat_apply_template with add_ass=true). The formatted prompt then
+ * reuses the one-shot generation path, so output/error/retry semantics match
+ * runtime_generate() exactly.
+ *
+ * Returns CHAT_TEMPLATE_MISSING when the model has no chat template and
+ * CHAT_TEMPLATE_FAILED when llama.cpp cannot render the model template. The
+ * template is always resolved on the native side; no template is hardcoded in
+ * Dart.
+ */
+LOCAL_LLM_BRIDGE_EXPORT int32_t local_llm_bridge_runtime_generate_chat(
+    local_llm_bridge_runtime_handle runtime,
+    const char* system_prompt,
+    const char* user_prompt,
     int32_t max_tokens,
     char* output_buffer,
     int32_t output_capacity,

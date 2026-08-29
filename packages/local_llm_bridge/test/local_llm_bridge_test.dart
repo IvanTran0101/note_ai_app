@@ -1,4 +1,6 @@
 import 'package:local_llm_bridge/local_llm_bridge.dart';
+import 'package:local_llm_bridge/local_llm_bridge_bindings_generated.dart'
+    as bindings;
 import 'package:test/test.dart';
 
 /// Smoke-API tests against the REAL native C ABI facade.
@@ -45,5 +47,26 @@ void main() {
       expect(error.status, 2);
       expect(error.message, contains('GGUF'));
     }
+  });
+
+  test('chat ABI surface is present in the generated bindings', () {
+    // A runtime cannot be created without a real GGUF model, so this suite
+    // proves the regenerated ABI surface instead: the new status codes and
+    // the generate_chat external must exist after `dart run ffigen`. The full
+    // chat path is exercised by tool/runtime_smoke_check.dart with a model.
+    expect(
+      bindings.local_llm_bridge_status
+          .LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING
+          .value,
+      8,
+    );
+    expect(
+      bindings
+          .local_llm_bridge_status
+          .LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED
+          .value,
+      9,
+    );
+    expect(bindings.local_llm_bridge_runtime_generate_chat, isA<Function>());
   });
 }

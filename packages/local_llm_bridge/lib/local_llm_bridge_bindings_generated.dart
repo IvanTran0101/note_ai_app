@@ -82,6 +82,44 @@ external int local_llm_bridge_runtime_generate(
   int error_capacity,
 );
 
+/// Runs one independent, greedy chat generation request.
+///
+/// The system and user prompts are formatted with the model's
+/// `tokenizer.chat_template` (retrieved through llama_model_chat_template with
+/// a null template name) and the assistant turn start is appended
+/// (llama_chat_apply_template with add_ass=true). The formatted prompt then
+/// reuses the one-shot generation path, so output/error/retry semantics match
+/// runtime_generate() exactly.
+///
+/// Returns CHAT_TEMPLATE_MISSING when the model has no chat template and
+/// CHAT_TEMPLATE_FAILED when llama.cpp cannot render the model template. The
+/// template is always resolved on the native side; no template is hardcoded in
+/// Dart.
+@ffi.Native<
+  ffi.Int32 Function(
+    local_llm_bridge_runtime_handle,
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ffi.Char>,
+    ffi.Int32,
+    ffi.Pointer<ffi.Char>,
+    ffi.Int32,
+    ffi.Pointer<ffi.Int32>,
+    ffi.Pointer<ffi.Char>,
+    ffi.Int32,
+  )
+>()
+external int local_llm_bridge_runtime_generate_chat(
+  local_llm_bridge_runtime_handle runtime,
+  ffi.Pointer<ffi.Char> system_prompt,
+  ffi.Pointer<ffi.Char> user_prompt,
+  int max_tokens,
+  ffi.Pointer<ffi.Char> output_buffer,
+  int output_capacity,
+  ffi.Pointer<ffi.Int32> output_length,
+  ffi.Pointer<ffi.Char> error_buffer,
+  int error_capacity,
+);
+
 typedef local_llm_bridge_runtime_handle = ffi.Pointer<ffi.Void>;
 
 enum local_llm_bridge_status {
@@ -92,7 +130,9 @@ enum local_llm_bridge_status {
   LOCAL_LLM_BRIDGE_STATUS_TOKENIZE_FAILED(4),
   LOCAL_LLM_BRIDGE_STATUS_DECODE_FAILED(5),
   LOCAL_LLM_BRIDGE_STATUS_OUTPUT_TOO_SMALL(6),
-  LOCAL_LLM_BRIDGE_STATUS_GENERATION_FAILED(7);
+  LOCAL_LLM_BRIDGE_STATUS_GENERATION_FAILED(7),
+  LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING(8),
+  LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED(9);
 
   final int value;
   const local_llm_bridge_status(this.value);
@@ -106,6 +146,8 @@ enum local_llm_bridge_status {
     5 => LOCAL_LLM_BRIDGE_STATUS_DECODE_FAILED,
     6 => LOCAL_LLM_BRIDGE_STATUS_OUTPUT_TOO_SMALL,
     7 => LOCAL_LLM_BRIDGE_STATUS_GENERATION_FAILED,
+    8 => LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING,
+    9 => LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED,
     _ => throw ArgumentError(
       'Unknown value for local_llm_bridge_status: $value',
     ),

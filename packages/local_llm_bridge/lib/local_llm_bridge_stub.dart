@@ -43,6 +43,16 @@ final class LocalLlmBridgeRuntime {
     );
   }
 
+  String generateChat(
+    String systemPrompt,
+    String userPrompt, {
+    int maxTokens = 128,
+  }) {
+    throw UnsupportedError(
+      'local_llm_bridge: local llama.cpp inference is not available on Web.',
+    );
+  }
+
   void close() {}
 }
 

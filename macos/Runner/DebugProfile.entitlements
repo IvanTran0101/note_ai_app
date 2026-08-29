@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<!--
+  DEBUG-ONLY entitlements for the local-LLM proof (Slice 3B/3C).
+
+  The App Sandbox is DISABLED here so the debug build can open the developer's
+  GGUF model at an arbitrary path (e.g. /Volumes/Kingsman/...). This file is
+  only used for Debug/Profile builds; Release.entitlements keeps the App
+  Sandbox enabled. Do NOT copy this relaxation to Release.
+-->
 <dict>
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.network.server</key>

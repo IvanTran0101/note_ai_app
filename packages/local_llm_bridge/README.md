@@ -45,13 +45,22 @@ On Web both throw `UnsupportedError`.
   context and up to four threads.
 * `runtime.generate(prompt)` — performs one independent greedy generation and
   returns complete UTF-8 text. The context is cleared before each request.
+* `runtime.generateChat(systemPrompt, userPrompt)` — performs one independent
+  greedy chat generation. The native facade formats both prompts with the
+  model's own `tokenizer.chat_template` (retrieved through
+  `llama_model_chat_template`) and appends the assistant turn start
+  (`llama_chat_apply_template` with `add_ass=true`), then reuses the same
+  one-shot generation path as `generate`. No template is hardcoded in Dart; a
+  model without a usable chat template fails with an explicit
+  `LocalLlmBridgeException`.
 * `runtime.close()` — releases the model and context. It is safe to call more
   than once.
 
-Prompts are passed through as complete prompts. Model-specific chat-template
-  formatting belongs to the application layer and will be added in a later
-  slice. Streaming, cancellation, and isolate orchestration are also outside
-  this synchronous runtime slice.
+Raw `generate` passes prompts through as complete prompts. Chat formatting
+(and the assistant turn start) is owned by the native chat path, which only
+supports the template families recognized by the pinned llama.cpp v0.3.0
+`llama_chat_apply_template`. Streaming, cancellation, and isolate
+orchestration are outside this synchronous runtime slice.
 
 ## Binding to native code
 
@@ -83,6 +92,11 @@ dart test      # runs the smoke-API tests against the real native asset
 With the selected Gemma 3 1B IT Q4_K_M model outside the repository:
 
 ```bash
+# Raw completion path (generate)
 dart run tool/runtime_smoke_check.dart \
   /Volumes/Kingsman/Projects/Schools/NoteFlow/gemma-3-1b-it-Q4_K_M.gguf
+
+# Chat path (generateChat, applies the model's own chat template)
+dart run tool/runtime_smoke_check.dart \
+  /Volumes/Kingsman/Projects/Schools/NoteFlow/gemma-3-1b-it-Q4_K_M.gguf --chat
 ```
