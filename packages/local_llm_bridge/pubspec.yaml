@@ -1,0 +1,33 @@
+name: local_llm_bridge
+description: >-
+  Isolated Dart FFI package (package_ffi / build hooks) exposing a narrow C ABI
+  facade for synchronous on-device llama.cpp inference and a Web-safe stub.
+version: 0.0.1
+publish_to: 'none' # Private package inside the note_ai_app monorepo.
+
+environment:
+  sdk: ^3.13.1
+
+# Dependencies are the minimal set required by the package_ffi / build-hooks
+# template that ships with the Flutter SDK (flutter create -t package_ffi):
+#   - code_assets: runtime support for locating native code assets built by
+#     build hooks (needed so `dart:ffi` @Native externals resolve).
+#   - ffi: companion package for dart:ffi; provides malloc/withNativeArena for
+#     the caller-owned buffers used by the smoke version API.
+#   - hooks: the build-hook runner protocol used by hook/build.dart.
+#   - logging: used by hook/build.dart to stream native build output.
+#   - native_toolchain_c: compiles src/*.c into the native code asset during
+#     `dart pub get` and app builds.
+dependencies:
+  code_assets: ^1.1.0
+  ffi: ^2.1.4
+  hooks: ^2.0.0
+  logging: ^1.3.0
+  native_toolchain_c: ^0.19.0
+
+dev_dependencies:
+  # ffigen generates lib/local_llm_bridge_bindings_generated.dart from
+  # src/local_llm_bridge.h (run `dart run ffigen --config ffigen.yaml`).
+  ffigen: ^20.1.1
+  flutter_lints: ^6.0.0
+  test: ^1.28.0

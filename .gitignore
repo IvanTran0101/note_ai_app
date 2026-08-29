@@ -46,4 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
-/pack 
+
+# Local agent instructions and generated workspace files
+/pack/
+/_agent_ops/
+AGENTS.md
