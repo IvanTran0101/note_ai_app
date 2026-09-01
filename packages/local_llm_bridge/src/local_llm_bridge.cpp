@@ -159,9 +159,10 @@ bool append_token_piece(const llama_vocab* vocab,
 }
 
 /*
- * Formats a system/user turn with the model's chat template and appends the
- * assistant turn start. On success returns OK and fills `formatted`; the
- * caller must hold the request mutex.
+ * Formats a chat turn with the model's chat template and appends the assistant
+ * turn start. A non-empty system prompt creates a system turn followed by a
+ * user turn; an empty system prompt creates a user turn only. On success
+ * returns OK and fills `formatted`; the caller must hold the request mutex.
  */
 int32_t format_chat_prompt(const llama_model* model,
                            const char* system_prompt,
@@ -176,14 +177,16 @@ int32_t format_chat_prompt(const llama_model* model,
     return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING;
   }
 
-  const llama_chat_message messages[] = {
-      {"system", system_prompt},
-      {"user", user_prompt},
-  };
-  constexpr size_t kMessageCount = 2;
+  llama_chat_message messages[2];
+  size_t message_count = 0;
+  if (system_prompt[0] != '\0') {
+    messages[message_count++] = {"system", system_prompt};
+  }
+  messages[message_count++] = {"user", user_prompt};
 
   const int32_t required = llama_chat_apply_template(
-      chat_template, messages, kMessageCount, /*add_ass=*/true, nullptr, 0);
+      chat_template, messages, static_cast<int32_t>(message_count),
+      /*add_ass=*/true, nullptr, 0);
   if (required < 0) {
     set_error(error_buffer, error_capacity,
               "llama.cpp does not support the model chat template");
@@ -197,8 +200,8 @@ int32_t format_chat_prompt(const llama_model* model,
 
   std::vector<char> buffer(static_cast<size_t>(required) + 1);
   const int32_t written = llama_chat_apply_template(
-      chat_template, messages, kMessageCount, /*add_ass=*/true, buffer.data(),
-      static_cast<int32_t>(buffer.size()));
+      chat_template, messages, static_cast<int32_t>(message_count),
+      /*add_ass=*/true, buffer.data(), static_cast<int32_t>(buffer.size()));
   if (written < 0 || written > required) {
     set_error(error_buffer, error_capacity,
               "llama.cpp failed to render the model chat template");

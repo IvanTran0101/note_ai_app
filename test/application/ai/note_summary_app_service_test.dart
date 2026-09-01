@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:note_ai_app/application/ai/note_summary_app_service.dart';
+import 'package:note_ai_app/application/note_intelligence/note_summary_app_service.dart';
 import 'package:note_ai_app/domain/note_intelligence/i_note_summarization_service.dart';
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 

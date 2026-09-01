@@ -69,8 +69,9 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             const Text(
-              'On-device summarization proof (macOS debug). The model path '
-              'comes from --dart-define=LOCAL_LLM_MODEL_PATH.',
+              'On-device summarization proof. Native platforms resolve the '
+              'model from app-private storage; macOS Debug also accepts the '
+              'LOCAL_LLM_MODEL_PATH override.',
             ),
             const SizedBox(height: 12),
             TextField(

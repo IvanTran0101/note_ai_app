@@ -91,12 +91,13 @@ LOCAL_LLM_BRIDGE_EXPORT int32_t local_llm_bridge_runtime_generate(
 /*
  * Runs one independent, greedy chat generation request.
  *
- * The system and user prompts are formatted with the model's
- * `tokenizer.chat_template` (retrieved through llama_model_chat_template with
- * a null template name) and the assistant turn start is appended
- * (llama_chat_apply_template with add_ass=true). The formatted prompt then
- * reuses the one-shot generation path, so output/error/retry semantics match
- * runtime_generate() exactly.
+ * A non-empty system prompt is formatted as a system turn followed by the user
+ * turn. When system_prompt is empty, only the user turn is formatted. Both
+ * variants use the model's `tokenizer.chat_template` (retrieved through
+ * llama_model_chat_template with a null template name) and append the
+ * assistant turn start (llama_chat_apply_template with add_ass=true). The
+ * formatted prompt then reuses the one-shot generation path, so
+ * output/error/retry semantics match runtime_generate() exactly.
  *
  * Returns CHAT_TEMPLATE_MISSING when the model has no chat template and
  * CHAT_TEMPLATE_FAILED when llama.cpp cannot render the model template. The

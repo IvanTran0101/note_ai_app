@@ -46,13 +46,14 @@ On Web both throw `UnsupportedError`.
 * `runtime.generate(prompt)` — performs one independent greedy generation and
   returns complete UTF-8 text. The context is cleared before each request.
 * `runtime.generateChat(systemPrompt, userPrompt)` — performs one independent
-  greedy chat generation. The native facade formats both prompts with the
+  greedy chat generation. The native facade formats the prompts with the
   model's own `tokenizer.chat_template` (retrieved through
   `llama_model_chat_template`) and appends the assistant turn start
   (`llama_chat_apply_template` with `add_ass=true`), then reuses the same
-  one-shot generation path as `generate`. No template is hardcoded in Dart; a
-  model without a usable chat template fails with an explicit
-  `LocalLlmBridgeException`.
+  one-shot generation path as `generate`. If `systemPrompt` is empty, only a
+  user turn is emitted; this supports Gemma 3 IT's user/model prompt format.
+  No template is hardcoded in Dart; a model without a usable chat template
+  fails with an explicit `LocalLlmBridgeException`.
 * `runtime.close()` — releases the model and context. It is safe to call more
   than once.
 

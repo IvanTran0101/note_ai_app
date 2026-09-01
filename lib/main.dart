@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'application/ai/note_summary_app_service.dart';
+import 'application/note_intelligence/note_summary_app_service.dart';
 import 'domain/note_intelligence/summary.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
-import 'infrastructure/ai/local_summarization_service.dart';
+import 'infrastructure/ai/model_storage.dart';
+import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'presentation/debug/local_llm_debug_page.dart';
 
 void main() {
@@ -32,6 +33,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   LlmWorkerClient? _workerClient;
   NoteSummaryAppService? _appService;
   Future<NoteSummaryAppService>? _serviceStart;
+  late final IModelStorage _modelStorage = createModelStorage(
+    overrideModelPath: _modelPath.trim().isEmpty ? null : _modelPath.trim(),
+  );
   bool _disposed = false;
 
   Future<Summary> _summarize(String content) async {
@@ -64,14 +68,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   }
 
   Future<NoteSummaryAppService> _startService() async {
-    final String modelPath = _modelPath.trim();
-    if (modelPath.isEmpty) {
-      throw StateError(
-        'LOCAL_LLM_MODEL_PATH is not set. Pass '
-        '--dart-define=LOCAL_LLM_MODEL_PATH=/path/to/model.gguf.',
-      );
-    }
-
+    final String modelPath = await _modelStorage.resolveModelPath();
     final LlmWorkerClient client = await startLlmWorkerClient(
       modelPath: modelPath,
     );

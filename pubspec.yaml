@@ -35,6 +35,16 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Cross-platform access to well-known filesystem locations (app documents,
+  # temp, cache dirs).
+  path_provider: ^2.1.6
+
+  # Cross-platform device/hardware capability detection (M3.1). Provides
+  # physical-device, OS version, ABI, memory, and storage facts that feed
+  # capability-based model selection. Only the hardware-detection adapter
+  # imports this plugin; contract types never do.
+  device_info_plus: ^13.2.0
+
   # On-device llama.cpp runtime (Slice 3A package). The worker isolate owns
   # the native runtime; the app never imports FFI directly.
   local_llm_bridge:

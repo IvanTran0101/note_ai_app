@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 import 'package:note_ai_app/infrastructure/ai/llm_worker_contract.dart';
-import 'package:note_ai_app/infrastructure/ai/local_summarization_service.dart';
+import 'package:note_ai_app/infrastructure/note_intelligence/local_summarization_service.dart';
 
 final class _FakeLlmWorkerClient implements LlmWorkerClient {
   _FakeLlmWorkerClient({this.result, this.error, this.emptyResult = false});
@@ -56,8 +56,16 @@ void main() {
       final Summary summary = await service.summarize('Note body');
 
       expect(summary, const Summary('The note summary.'));
-      expect(fake.systemPrompts.single, contains('concisely'));
-      expect(fake.userPrompts.single, 'Note body');
+      expect(fake.systemPrompts.single, isEmpty);
+      expect(
+        fake.userPrompts.single,
+        allOf(
+          contains('primarily Vietnamese'),
+          contains('primarily English'),
+          contains('Do not translate'),
+          contains('<note>\nNote body\n</note>'),
+        ),
+      );
       expect(fake.maxTokens.single, 128);
     });
 
@@ -72,9 +80,7 @@ void main() {
     });
 
     test('rejects empty native output with a clear error', () async {
-      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
-        emptyResult: true,
-      );
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(emptyResult: true);
       final LocalSummarizationService service = LocalSummarizationService(
         workerClient: fake,
       );
@@ -111,18 +117,21 @@ void main() {
       );
     });
 
-    test('propagates platform-unavailable errors without faking output', () async {
-      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
-        error: UnsupportedError('local inference is not available on Web'),
-      );
-      final LocalSummarizationService service = LocalSummarizationService(
-        workerClient: fake,
-      );
+    test(
+      'propagates platform-unavailable errors without faking output',
+      () async {
+        final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
+          error: UnsupportedError('local inference is not available on Web'),
+        );
+        final LocalSummarizationService service = LocalSummarizationService(
+          workerClient: fake,
+        );
 
-      await expectLater(
-        service.summarize('Note body'),
-        throwsA(isA<UnsupportedError>()),
-      );
-    });
+        await expectLater(
+          service.summarize('Note body'),
+          throwsA(isA<UnsupportedError>()),
+        );
+      },
+    );
   });
 }

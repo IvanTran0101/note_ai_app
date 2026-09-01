@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 import 'package:note_ai_app/infrastructure/ai/llm_worker_client.dart';
-import 'package:note_ai_app/infrastructure/ai/local_summarization_service.dart';
+import 'package:note_ai_app/infrastructure/note_intelligence/local_summarization_service.dart';
 
 const String _modelPathEnv = String.fromEnvironment('LOCAL_LLM_MODEL_PATH');
 
@@ -24,12 +24,17 @@ void main() {
         workerClient: client,
       );
 
-      final Summary summary = await service.summarize(
-        'The quick brown fox jumps over the lazy dog. This sentence contains '
-        'every letter of the English alphabet.',
+      final Summary vietnameseSummary = await service.summarize(
+        'Hôm nay tôi đã hoàn thành phần thiết kế giao diện và sẽ kiểm thử '
+        'ứng dụng vào ngày mai.',
+      );
+      final Summary englishSummary = await service.summarize(
+        'The team completed the interface design and will test the application '
+        'tomorrow.',
       );
 
-      expect(summary.text, isNotEmpty);
+      expect(vietnameseSummary.text, isNotEmpty);
+      expect(englishSummary.text, isNotEmpty);
     },
     skip: _modelPathEnv.trim().isEmpty
         ? 'Set --dart-define=LOCAL_LLM_MODEL_PATH to run the real-model smoke.'
