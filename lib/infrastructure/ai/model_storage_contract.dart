@@ -9,6 +9,7 @@
 library;
 
 import 'model_selection.dart';
+import 'model_provisioning_contract.dart';
 
 /// The directory (relative to the app support directory) that holds GGUF
 /// models on iOS and Android.
@@ -51,6 +52,28 @@ abstract interface class IModelStorage {
   /// [ModelDescriptor.fileName] is not a bare file name). Implementations
   /// never download the artifact or load a runtime.
   Future<String?> findModel(ModelDescriptor model);
+
+  /// Creates an empty, uniquely named staging file for [model] under the
+  /// app-private model directory.
+  ///
+  /// The returned handle is the only supported input to
+  /// [commitStagingFile] and [discardStagingFile]. An explicit debug model
+  /// path override is intentionally rejected: staging must always happen in
+  /// the app-private directory so a later commit cannot move or delete an
+  /// arbitrary external file.
+  Future<ModelStagingFile> createStagingFile(ModelDescriptor model);
+
+  /// Atomically moves [stagingFile] to the model's final bare file name.
+  ///
+  /// The destination is never overwritten. Implementations reject a missing,
+  /// foreign, malformed, or otherwise untrusted staging path.
+  Future<String> commitStagingFile(ModelStagingFile stagingFile);
+
+  /// Removes [stagingFile] when it is a validated app-private staging file.
+  ///
+  /// Implementations must never use this operation to delete the explicit
+  /// debug override or an arbitrary path outside the model directory.
+  Future<void> discardStagingFile(ModelStagingFile stagingFile);
 }
 
 /// Base error for model storage failures other than a missing model.

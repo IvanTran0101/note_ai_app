@@ -14,9 +14,12 @@
 library;
 
 import 'dart:io';
+import 'dart:async';
+import 'dart:math';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 import 'model_storage_contract.dart';
 
@@ -63,6 +66,17 @@ final class LocalModelStorage implements IModelStorage {
   /// Resolver of the application support directory (injectable for tests).
   final AppSupportDirectoryResolver appSupportDirectoryPath;
 
+  /// Staging mutations are serialized per storage instance. This keeps the
+  /// existence check and the subsequent atomic rename from racing with
+  /// another provisioning operation in the same process.
+  Future<void> _stagingOperationTail = Future<void>.value();
+
+  /// Handles issued by this storage instance, keyed by their normalized path.
+  /// Keeping the descriptor alongside the path prevents a caller from taking
+  /// a valid staging path and pairing it with a different model descriptor.
+  final Map<String, ModelDescriptor> _issuedStagingFiles =
+      <String, ModelDescriptor>{};
+
   @override
   Future<String> resolveModelPath() async {
     final String candidate = await _resolveCandidatePath(kModelFileName);
@@ -81,6 +95,109 @@ final class LocalModelStorage implements IModelStorage {
     return File(candidate).absolute.path;
   }
 
+  @override
+  Future<ModelStagingFile> createStagingFile(ModelDescriptor model) {
+    return _withStagingLock(() async {
+      _rejectOverrideForStaging();
+      _validateFileName(model.fileName);
+
+      final Directory modelsDirectory = await _resolveModelsDirectory(
+        create: true,
+      );
+      for (var attempt = 0; attempt < 8; attempt++) {
+        final String candidate = _join(
+          modelsDirectory.path,
+          _stagingFileName(model.fileName),
+        );
+        final File file = File(candidate);
+        try {
+          await file.create(exclusive: true);
+          final String absolutePath = _normalizeAbsolutePath(file.path);
+          _issuedStagingFiles[absolutePath] = model;
+          return ModelStagingFile(model: model, path: absolutePath);
+        } on FileSystemException catch (error) {
+          if (await file.exists()) {
+            continue;
+          }
+          throw ModelStorageException(
+            'failed to create model staging file: $error',
+          );
+        }
+      }
+      throw const ModelStorageException(
+        'failed to allocate a unique model staging file',
+      );
+    });
+  }
+
+  @override
+  Future<String> commitStagingFile(ModelStagingFile stagingFile) {
+    return _withStagingLock(() async {
+      _rejectOverrideForStaging();
+      final _ValidatedStagingPaths paths = await _validateStagingFile(
+        stagingFile,
+      );
+
+      final ModelDescriptor? issuedModel =
+          _issuedStagingFiles[paths.stagingPath];
+      if (issuedModel == null || issuedModel != stagingFile.model) {
+        throw const ModelStorageException(
+          'staging file was not issued for this exact model by this storage',
+        );
+      }
+
+      final File staging = File(paths.stagingPath);
+      if (!await _isRegularFile(staging)) {
+        throw ModelNotFoundException(paths.stagingPath);
+      }
+      if (await File(paths.finalPath).exists()) {
+        throw ModelStorageException(
+          'final model already exists and will not be overwritten: '
+          '${paths.finalPath}',
+        );
+      }
+
+      try {
+        // File.rename maps to the platform's rename operation, which is an
+        // atomic move on the app's local filesystem. The serialized operation
+        // queue plus the destination check prevents in-process overwrites.
+        await staging.rename(paths.finalPath);
+      } on FileSystemException catch (error) {
+        throw ModelStorageException(
+          'failed to commit model staging file: $error',
+        );
+      }
+      _issuedStagingFiles.remove(paths.stagingPath);
+      return _normalizeAbsolutePath(paths.finalPath);
+    });
+  }
+
+  @override
+  Future<void> discardStagingFile(ModelStagingFile stagingFile) {
+    return _withStagingLock(() async {
+      _rejectOverrideForStaging();
+      final _ValidatedStagingPaths paths = await _validateStagingFile(
+        stagingFile,
+      );
+
+      final File staging = File(paths.stagingPath);
+      if (!await _isRegularFile(staging)) {
+        // Discard is intentionally idempotent after a failed/finished
+        // operation, but validation above still rejects foreign paths.
+        _issuedStagingFiles.remove(paths.stagingPath);
+        return;
+      }
+      try {
+        await staging.delete();
+      } on FileSystemException catch (error) {
+        throw ModelStorageException(
+          'failed to discard model staging file: $error',
+        );
+      }
+      _issuedStagingFiles.remove(paths.stagingPath);
+    });
+  }
+
   /// Computes the candidate path for [fileName]: the pinned override when set,
   /// otherwise `<app support>/models/<fileName>`.
   Future<String> _resolveCandidatePath(String fileName) async {
@@ -89,6 +206,13 @@ final class LocalModelStorage implements IModelStorage {
     if (override != null) {
       return override;
     }
+    final Directory modelsDirectory = await _resolveModelsDirectory(
+      create: false,
+    );
+    return _join(modelsDirectory.path, fileName);
+  }
+
+  Future<Directory> _resolveModelsDirectory({required bool create}) async {
     final String supportPath;
     try {
       supportPath = await appSupportDirectoryPath();
@@ -97,11 +221,117 @@ final class LocalModelStorage implements IModelStorage {
         'failed to resolve the application support directory: $error',
       );
     }
-    return <String>[
-      supportPath,
-      kModelDirectoryName,
-      fileName,
-    ].join(Platform.pathSeparator);
+    final Directory directory = Directory(
+      _join(supportPath, kModelDirectoryName),
+    );
+    if (create) {
+      try {
+        await directory.create(recursive: true);
+      } on FileSystemException catch (error) {
+        throw ModelStorageException(
+          'failed to create the model directory: $error',
+        );
+      }
+    }
+    return directory;
+  }
+
+  Future<_ValidatedStagingPaths> _validateStagingFile(
+    ModelStagingFile stagingFile,
+  ) async {
+    _validateFileName(stagingFile.model.fileName);
+    final Directory modelsDirectory = await _resolveModelsDirectory(
+      create: false,
+    );
+    final String modelsPath = _normalizeAbsolutePath(modelsDirectory.path);
+    final String stagingPath = _normalizeAbsolutePath(stagingFile.path);
+    final String stagingParent = _normalizeAbsolutePath(
+      File(stagingPath).parent.path,
+    );
+    final String stagingName = _basename(stagingPath);
+    final String expectedPrefix = '${stagingFile.model.fileName}.';
+
+    if (stagingParent != modelsPath ||
+        !stagingName.startsWith(expectedPrefix) ||
+        !stagingName.endsWith('.part') ||
+        stagingName.length <= expectedPrefix.length + '.part'.length) {
+      throw const ModelStorageException(
+        'staging path must be a uniquely named .part file directly under '
+        'the app-private model directory',
+      );
+    }
+
+    final String finalPath = _join(modelsPath, stagingFile.model.fileName);
+    return _ValidatedStagingPaths(
+      stagingPath: stagingPath,
+      finalPath: _normalizeAbsolutePath(finalPath),
+    );
+  }
+
+  void _rejectOverrideForStaging() {
+    if (overrideModelPath != null) {
+      throw const ModelStorageException(
+        'model staging is unavailable while an explicit model path override '
+        'is configured',
+      );
+    }
+  }
+
+  Future<T> _withStagingLock<T>(Future<T> Function() action) {
+    final Future<void> previous = _stagingOperationTail;
+    final Completer<void> release = Completer<void>();
+    _stagingOperationTail = release.future;
+    return previous.then((_) async {
+      try {
+        return await action();
+      } finally {
+        release.complete();
+      }
+    });
+  }
+
+  static String _stagingFileName(String fileName) {
+    final int timestamp = DateTime.now().microsecondsSinceEpoch;
+    final int random = _random.nextInt(1 << 32);
+    return '$fileName.$timestamp-$random.part';
+  }
+
+  static String _join(String parent, String child) {
+    return <String>[parent, child].join(Platform.pathSeparator);
+  }
+
+  static String _basename(String path) {
+    final int separator = path.lastIndexOf(Platform.pathSeparator);
+    return separator == -1 ? path : path.substring(separator + 1);
+  }
+
+  static String _normalizeAbsolutePath(String path) {
+    final String absolute = File(path).absolute.path;
+    final String separator = Platform.pathSeparator;
+    final bool rooted = absolute.startsWith(separator);
+    final List<String> segments = <String>[];
+    for (final String segment in absolute.split(separator)) {
+      if (segment.isEmpty || segment == '.') {
+        continue;
+      }
+      if (segment == '..') {
+        if (segments.isNotEmpty && segments.last != '..') {
+          segments.removeLast();
+        }
+        continue;
+      }
+      segments.add(segment);
+    }
+    final String joined = segments.join(separator);
+    if (rooted) {
+      return '$separator$joined';
+    }
+    return joined;
+  }
+
+  static Future<bool> _isRegularFile(File file) async {
+    return await FileSystemEntity.type(file.path, followLinks: false) ==
+        FileSystemEntityType.file;
   }
 
   /// Storage may validate paths: a model file name must be a bare file name so
@@ -128,4 +358,16 @@ final class LocalModelStorage implements IModelStorage {
       throw ModelStorageException('failed to check model file: $error');
     }
   }
+
+  static final Random _random = Random.secure();
+}
+
+final class _ValidatedStagingPaths {
+  const _ValidatedStagingPaths({
+    required this.stagingPath,
+    required this.finalPath,
+  });
+
+  final String stagingPath;
+  final String finalPath;
 }

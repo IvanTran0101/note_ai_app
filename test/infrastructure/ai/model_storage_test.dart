@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/infrastructure/ai/model_selection.dart';
+import 'package:note_ai_app/infrastructure/ai/model_provisioning_contract.dart';
 import 'package:note_ai_app/infrastructure/ai/model_storage.dart' as facade;
 import 'package:note_ai_app/infrastructure/ai/model_storage_contract.dart';
 import 'package:note_ai_app/infrastructure/ai/model_storage_io.dart';
@@ -194,6 +195,22 @@ void main() {
 
       expect(() => storage.findModel(_descriptor()), throwsUnsupportedError);
     });
+
+    test('all staging actions throw UnsupportedError', () {
+      const stub.UnavailableModelStorage storage =
+          stub.UnavailableModelStorage();
+      final ModelStagingFile staging = ModelStagingFile(
+        model: _descriptor(),
+        path: '/unavailable/custom.gguf.part',
+      );
+
+      expect(
+        () => storage.createStagingFile(_descriptor()),
+        throwsUnsupportedError,
+      );
+      expect(() => storage.commitStagingFile(staging), throwsUnsupportedError);
+      expect(() => storage.discardStagingFile(staging), throwsUnsupportedError);
+    });
   });
 
   group('LocalModelStorage findModel (model-aware)', () {
@@ -328,5 +345,145 @@ void main() {
         throwsA(isA<ModelStorageException>()),
       );
     });
+  });
+
+  group('LocalModelStorage staging', () {
+    test('creates a unique app-private .part file for the model', () async {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+
+      final ModelStagingFile staging = await storage.createStagingFile(
+        _descriptor(fileName: 'staged.gguf'),
+      );
+
+      expect(staging.model.fileName, 'staged.gguf');
+      expect(staging.path, File(staging.path).absolute.path);
+      expect(staging.path, endsWith('.part'));
+      expect(
+        File(staging.path).parent.absolute.path,
+        Directory(
+          '${tempDir.path}${Platform.pathSeparator}$kModelDirectoryName',
+        ).absolute.path,
+      );
+      expect(File(staging.path).existsSync(), isTrue);
+      expect(File(staging.path).lengthSync(), 0);
+    });
+
+    test('commits a staging file atomically to the final model path', () async {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+      final ModelStagingFile staging = await storage.createStagingFile(
+        _descriptor(fileName: 'staged.gguf'),
+      );
+      await File(staging.path).writeAsString('fake gguf bytes');
+
+      final String finalPath = await storage.commitStagingFile(staging);
+
+      final File finalFile = File(finalPath);
+      expect(finalPath, endsWith('staged.gguf'));
+      expect(finalFile.existsSync(), isTrue);
+      expect(finalFile.readAsStringSync(), 'fake gguf bytes');
+      expect(File(staging.path).existsSync(), isFalse);
+    });
+
+    test(
+      'discards an issued staging file without publishing a model',
+      () async {
+        final LocalModelStorage storage = LocalModelStorage(
+          appSupportDirectoryPath: () async => tempDir.path,
+        );
+        final ModelStagingFile staging = await storage.createStagingFile(
+          _descriptor(fileName: 'discarded.gguf'),
+        );
+        await File(staging.path).writeAsString('partial bytes');
+
+        await storage.discardStagingFile(staging);
+
+        expect(File(staging.path).existsSync(), isFalse);
+        expect(
+          await storage.findModel(_descriptor(fileName: 'discarded.gguf')),
+          isNull,
+        );
+      },
+    );
+
+    test('rejects commit when the staging file is missing', () async {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+      final ModelStagingFile staging = await storage.createStagingFile(
+        _descriptor(fileName: 'missing.gguf'),
+      );
+      await File(staging.path).delete();
+
+      await expectLater(
+        storage.commitStagingFile(staging),
+        throwsA(isA<ModelNotFoundException>()),
+      );
+    });
+
+    test('refuses to overwrite an existing final model', () async {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+      final ModelDescriptor model = _descriptor(fileName: 'existing.gguf');
+      final ModelStagingFile staging = await storage.createStagingFile(model);
+      await File(staging.path).writeAsString('new bytes');
+      final File finalFile = File(
+        '${tempDir.path}${Platform.pathSeparator}$kModelDirectoryName'
+        '${Platform.pathSeparator}${model.fileName}',
+      )..writeAsStringSync('keep existing bytes');
+
+      await expectLater(
+        storage.commitStagingFile(staging),
+        throwsA(isA<ModelStorageException>()),
+      );
+      expect(finalFile.readAsStringSync(), 'keep existing bytes');
+      expect(File(staging.path).readAsStringSync(), 'new bytes');
+    });
+
+    test('refuses a staging path outside the app-private directory', () async {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+      final ModelDescriptor model = _descriptor(fileName: 'foreign.gguf');
+      final File foreign = File(
+        '${tempDir.path}${Platform.pathSeparator}foreign.gguf.part',
+      )..writeAsStringSync('foreign bytes');
+      final ModelStagingFile staging = ModelStagingFile(
+        model: model,
+        path: foreign.path,
+      );
+
+      await expectLater(
+        storage.commitStagingFile(staging),
+        throwsA(isA<ModelStorageException>()),
+      );
+      await expectLater(
+        storage.discardStagingFile(staging),
+        throwsA(isA<ModelStorageException>()),
+      );
+      expect(foreign.existsSync(), isTrue);
+    });
+
+    test(
+      'rejects staging when an explicit model override is configured',
+      () async {
+        final File override = File(
+          '${tempDir.path}${Platform.pathSeparator}override.gguf',
+        )..writeAsStringSync('override bytes');
+        final LocalModelStorage storage = LocalModelStorage(
+          overrideModelPath: override.path,
+          appSupportDirectoryPath: () async => tempDir.path,
+        );
+
+        await expectLater(
+          storage.createStagingFile(_descriptor()),
+          throwsA(isA<ModelStorageException>()),
+        );
+      },
+    );
   });
 }
