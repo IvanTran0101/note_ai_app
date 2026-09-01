@@ -13,8 +13,10 @@ import 'package:note_ai_app/infrastructure/device/hardware_detection.dart';
 
 /// Fixed-field metadata for one downloadable model candidate.
 ///
-/// All fields are required and fixed at construction. [supportedPlatforms] and
-/// [supportedAbis] are ordered lists of exact identifiers (e.g. `android`,
+/// All fields are required and fixed at construction, except resource
+/// thresholds which may be null while the midterm policy intentionally skips
+/// memory/storage gating. [supportedPlatforms] and [supportedAbis] are ordered
+/// lists of exact identifiers (e.g. `android`,
 /// `ios`, `macos` and `arm64-v8a`, `arm64`, `x86_64`). Values are plain data —
 /// there is no runtime loading and no downloader here; [downloadUrl] and
 /// [sha256] are metadata consumed by a separate (future) download lane.
@@ -62,13 +64,13 @@ final class ModelDescriptor {
   final int fileSizeBytes;
 
   /// Estimated peak RAM (in bytes) the runtime needs to load and run this
-  /// model. Compared against [DeviceCapability.totalMemoryBytes].
-  final int estimatedPeakMemoryBytes;
+  /// model. When null, the current midterm policy skips the memory gate.
+  final int? estimatedPeakMemoryBytes;
 
   /// Free storage (in bytes) required on the app-data partition, beyond what
   /// [fileSizeBytes] implies, to safely download and unpack the artifact.
-  /// Compared against [DeviceCapability.freeStorageBytes].
-  final int requiredFreeStorageBytes;
+  /// When null, the current midterm policy skips the storage gate.
+  final int? requiredFreeStorageBytes;
 
   /// Exact platform identifiers this model runs on.
   final List<String> supportedPlatforms;
@@ -204,27 +206,29 @@ abstract interface class IModelSelectionPolicy {
 
 /// Default deterministic selection policy (M3.1).
 ///
-/// Hard gates (all must pass):
+/// Hard gates (all configured gates must pass):
 ///  1. platform — [DeviceCapability.platform] is in the descriptor's
 ///     [ModelDescriptor.supportedPlatforms];
 ///  2. minimum OS version — [DeviceCapability.osVersion] is at least the
 ///     descriptor's [ModelDescriptor.minOsVersion] (numeric comparison);
 ///  3. ABI — the device's [DeviceCapability.supportedAbis] intersect the
 ///     descriptor's [ModelDescriptor.supportedAbis];
-///  4. memory — [DeviceCapability.totalMemoryBytes] >=
-///     [ModelDescriptor.estimatedPeakMemoryBytes];
-///  5. storage — [DeviceCapability.freeStorageBytes] >=
-///     [ModelDescriptor.requiredFreeStorageBytes].
+///  4. memory — when [ModelDescriptor.estimatedPeakMemoryBytes] is present,
+///     [DeviceCapability.totalMemoryBytes] must meet it;
+///  5. storage — when [ModelDescriptor.requiredFreeStorageBytes] is present,
+///     [DeviceCapability.freeStorageBytes] must meet it.
 ///
 /// [DeviceCapability.isPhysicalDevice] is carried into the result's
 /// [ModelSelectionResult.selectionReason] but is never a gate: a simulator is
 /// allowed to select a model if every hard gate passes.
 ///
-/// Unknown or invalid required values are rejected safely, never guessed:
-/// unparseable OS versions, non-positive memory/storage, and malformed
-/// descriptors (empty identity fields, empty platform/ABI lists, empty or
-/// unparseable `minOsVersion`, non-positive sizes) produce a rejection reason
-/// instead of a speculative pass.
+/// Unknown or invalid configured values are rejected safely, never guessed:
+/// unparseable OS versions, non-positive device memory/storage when their
+/// corresponding model threshold is configured, and malformed descriptors
+/// (empty identity fields, empty platform/ABI lists, empty or unparseable
+/// `minOsVersion`, non-positive sizes) produce a rejection reason instead of a
+/// speculative pass. Null resource thresholds intentionally disable those two
+/// gates for the midterm policy.
 ///
 /// The winner is the passing candidate with the highest
 /// [ModelDescriptor.selectionPriority]; ties keep catalog order, so the result
@@ -326,32 +330,38 @@ final class ModelSelectionPolicy implements IModelSelectionPolicy {
       );
     }
 
-    // 4. Memory. Non-positive device memory is "unknown" — reject, don't guess.
-    final int totalMemoryBytes = capability.totalMemoryBytes;
-    if (totalMemoryBytes <= 0) {
-      failures.add(
-        'memory gate: device memory is unknown (totalMemoryBytes '
-        '$totalMemoryBytes)',
-      );
-    } else if (totalMemoryBytes < model.estimatedPeakMemoryBytes) {
-      failures.add(
-        'memory gate: device memory $totalMemoryBytes bytes is below '
-        'required ${model.estimatedPeakMemoryBytes} bytes',
-      );
+    // 4. Memory. A null model threshold intentionally skips this gate.
+    final int? estimatedPeakMemoryBytes = model.estimatedPeakMemoryBytes;
+    if (estimatedPeakMemoryBytes != null) {
+      final int totalMemoryBytes = capability.totalMemoryBytes;
+      if (totalMemoryBytes <= 0) {
+        failures.add(
+          'memory gate: device memory is unknown (totalMemoryBytes '
+          '$totalMemoryBytes)',
+        );
+      } else if (totalMemoryBytes < estimatedPeakMemoryBytes) {
+        failures.add(
+          'memory gate: device memory $totalMemoryBytes bytes is below '
+          'required $estimatedPeakMemoryBytes bytes',
+        );
+      }
     }
 
-    // 5. Storage. Non-positive free storage is "unknown" — reject, don't guess.
-    final int freeStorageBytes = capability.freeStorageBytes;
-    if (freeStorageBytes <= 0) {
-      failures.add(
-        'storage gate: free storage is unknown (freeStorageBytes '
-        '$freeStorageBytes)',
-      );
-    } else if (freeStorageBytes < model.requiredFreeStorageBytes) {
-      failures.add(
-        'storage gate: free storage $freeStorageBytes bytes is below '
-        'required ${model.requiredFreeStorageBytes} bytes',
-      );
+    // 5. Storage. A null model threshold intentionally skips this gate.
+    final int? requiredFreeStorageBytes = model.requiredFreeStorageBytes;
+    if (requiredFreeStorageBytes != null) {
+      final int freeStorageBytes = capability.freeStorageBytes;
+      if (freeStorageBytes <= 0) {
+        failures.add(
+          'storage gate: free storage is unknown (freeStorageBytes '
+          '$freeStorageBytes)',
+        );
+      } else if (freeStorageBytes < requiredFreeStorageBytes) {
+        failures.add(
+          'storage gate: free storage $freeStorageBytes bytes is below '
+          'required $requiredFreeStorageBytes bytes',
+        );
+      }
     }
 
     return failures;
@@ -387,12 +397,14 @@ final class ModelSelectionPolicy implements IModelSelectionPolicy {
     if (model.fileSizeBytes <= 0) {
       failures.add('invalid descriptor: fileSizeBytes must be positive');
     }
-    if (model.estimatedPeakMemoryBytes <= 0) {
+    if (model.estimatedPeakMemoryBytes != null &&
+        model.estimatedPeakMemoryBytes! <= 0) {
       failures.add(
         'invalid descriptor: estimatedPeakMemoryBytes must be positive',
       );
     }
-    if (model.requiredFreeStorageBytes <= 0) {
+    if (model.requiredFreeStorageBytes != null &&
+        model.requiredFreeStorageBytes! <= 0) {
       failures.add(
         'invalid descriptor: requiredFreeStorageBytes must be positive',
       );

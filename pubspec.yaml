@@ -45,6 +45,9 @@ dependencies:
   # imports this plugin; contract types never do.
   device_info_plus: ^13.2.0
 
+  # Streaming SHA-256 verification for downloaded GGUF artifacts (M3.3b).
+  crypto: ^3.0.7
+
   # On-device llama.cpp runtime (Slice 3A package). The worker isolate owns
   # the native runtime; the app never imports FFI directly.
   local_llm_bridge:

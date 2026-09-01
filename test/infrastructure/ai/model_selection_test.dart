@@ -23,8 +23,8 @@ ModelDescriptor _descriptor({
   String downloadUrl = 'https://example.invalid/model-a.gguf',
   String sha256 = _sha256Zeros,
   int fileSizeBytes = 1 << 20, // 1 MiB
-  int estimatedPeakMemoryBytes = 4 << 30, // 4 GiB
-  int requiredFreeStorageBytes = 1 << 30, // 1 GiB
+  int? estimatedPeakMemoryBytes = 4 << 30, // 4 GiB
+  int? requiredFreeStorageBytes = 1 << 30, // 1 GiB
   List<String> supportedPlatforms = const ['android', 'ios'],
   List<String> supportedAbis = const ['arm64', 'arm64-v8a'],
   String minOsVersion = '14.0',
@@ -261,6 +261,21 @@ void main() {
         result.rejectionReasonFor(_descriptor(id: 'a')),
         contains('storage gate'),
       );
+    });
+
+    test('skips memory and storage gates when thresholds are null', () {
+      final result = _policy.select(
+        capability: _capability(totalMemoryBytes: 0, freeStorageBytes: 0),
+        candidates: [
+          _descriptor(
+            id: 'no-resource-thresholds',
+            estimatedPeakMemoryBytes: null,
+            requiredFreeStorageBytes: null,
+          ),
+        ],
+      );
+
+      expect(result.selectedModel!.id, 'no-resource-thresholds');
     });
   });
 
