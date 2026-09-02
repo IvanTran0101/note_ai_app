@@ -68,6 +68,48 @@ void main() {
   });
 
   group('HttpModelDownloader', () {
+    test('rejects a non-positive request timeout on native and Web APIs', () {
+      expect(
+        () => HttpModelDownloader(requestTimeout: Duration.zero),
+        throwsArgumentError,
+      );
+      expect(
+        () => stub.HttpModelDownloader(requestTimeout: Duration.zero),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'fails when the response body stalls beyond the request timeout',
+      () async {
+        final ModelDescriptor model = _model();
+        final File targetFile = File('${tempDir.path}/stalled.part');
+        final HttpModelDownloader downloader = HttpModelDownloader(
+          requestTimeout: const Duration(milliseconds: 10),
+          responseLoader: (_) async => ModelDownloadResponse(
+            statusCode: 200,
+            uri: Uri.parse('https://example.test/model.gguf'),
+            contentLength: 4,
+            body: Stream<List<int>>.fromFuture(
+              Future<List<int>>.delayed(
+                const Duration(milliseconds: 50),
+                () => <int>[1, 2, 3, 4],
+              ),
+            ),
+          ),
+        );
+
+        await expectLater(
+          downloader.download(
+            model: model,
+            target: _target(model, targetFile.path),
+          ),
+          throwsA(isA<ModelDownloadException>()),
+        );
+        downloader.close();
+      },
+    );
+
     test('streams a tiny fixture into the storage staging path', () async {
       final ModelDescriptor model = _model();
       final File targetFile = File('${tempDir.path}/model.gguf.part');

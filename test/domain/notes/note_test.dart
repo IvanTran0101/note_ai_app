@@ -40,6 +40,44 @@ void main() {
     });
   });
 
+  group('Note.reconstitute', () {
+    test('restores every field from persistence data', () {
+      final updatedAt = createdAt.add(const Duration(hours: 1));
+
+      final note = Note.reconstitute(
+        id: id,
+        ownerId: ownerId,
+        title: title,
+        content: content,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
+      expect(note.id, id);
+      expect(note.ownerId, ownerId);
+      expect(note.title, title);
+      expect(note.content, content);
+      expect(note.createdAt, createdAt);
+      expect(note.updatedAt, updatedAt);
+    });
+
+    test('preserves an updatedAt that differs from createdAt', () {
+      final updatedAt = createdAt.add(const Duration(days: 2));
+
+      final note = Note.reconstitute(
+        id: id,
+        ownerId: ownerId,
+        title: title,
+        content: content,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
+      expect(note.createdAt, isNot(note.updatedAt));
+      expect(note.updatedAt, updatedAt);
+    });
+  });
+
   group('Note.rename', () {
     test('replaces the title and records the supplied now as updatedAt', () {
       final note = buildNote(createdAt);
@@ -116,18 +154,12 @@ void main() {
     test('id, ownerId, and createdAt survive repeated mutations', () {
       final note = buildNote(createdAt);
 
-      note.rename(
-        'First rename',
-        createdAt.add(const Duration(minutes: 1)),
-      );
+      note.rename('First rename', createdAt.add(const Duration(minutes: 1)));
       note.replaceContent(
         'First replacement',
         createdAt.add(const Duration(minutes: 2)),
       );
-      note.rename(
-        'Second rename',
-        createdAt.add(const Duration(minutes: 3)),
-      );
+      note.rename('Second rename', createdAt.add(const Duration(minutes: 3)));
       note.replaceContent(
         'Second replacement',
         createdAt.add(const Duration(minutes: 4)),

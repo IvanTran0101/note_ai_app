@@ -29,6 +29,22 @@ class Note {
     return Note._(id, ownerId, title, content, now, now);
   }
 
+  /// Reconstitutes an existing note from persistence data.
+  ///
+  /// This factory intentionally does not apply creation-time validation or
+  /// mutation semantics. It restores both persisted timestamps exactly as
+  /// supplied; in particular, [updatedAt] may differ from [createdAt].
+  factory Note.reconstitute({
+    required String id,
+    required String ownerId,
+    required String title,
+    required String content,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) {
+    return Note._(id, ownerId, title, content, createdAt, updatedAt);
+  }
+
   final String _id;
   final String _ownerId;
   final DateTime _createdAt;

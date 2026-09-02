@@ -13,6 +13,7 @@ import 'infrastructure/ai/model_manager.dart';
 import 'infrastructure/ai/model_provisioning_contract.dart';
 import 'infrastructure/ai/model_selection.dart';
 import 'infrastructure/ai/model_storage.dart';
+import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'presentation/debug/local_llm_debug_page.dart';
@@ -34,22 +35,23 @@ class NoteFlowApp extends StatefulWidget {
 }
 
 class _NoteFlowAppState extends State<NoteFlowApp> {
-  static const String _modelPath = String.fromEnvironment(
-    'LOCAL_LLM_MODEL_PATH',
-  );
-
   LlmWorkerClient? _workerClient;
   NoteSummaryAppService? _appService;
   Future<NoteSummaryAppService>? _serviceStart;
+  late final AiConfiguration _aiConfiguration =
+      AiConfiguration.fromEnvironment();
   late final IModelStorage _modelStorage = createModelStorage(
-    overrideModelPath: _modelPath.trim().isEmpty ? null : _modelPath.trim(),
+    overrideModelPath: _aiConfiguration.modelPathOverride,
   );
   late final ModelManager _modelManager = ModelManager(
     hardwareDetectionService: createHardwareDetectionService(),
     modelCatalog: const ModelCatalog(),
     modelSelectionPolicy: const ModelSelectionPolicy(),
     modelStorage: _modelStorage,
-    modelDownloader: createModelDownloader(),
+    modelDownloader: createModelDownloader(
+      maxRedirects: _aiConfiguration.maxRedirects,
+      requestTimeout: _aiConfiguration.downloadTimeout,
+    ),
     integrityVerifier: createModelIntegrityVerifier(),
   );
   bool _disposed = false;
@@ -89,15 +91,21 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     }
 
     final String modelPath;
+    final int contextSize;
+    final int maxOutputTokens;
     if (_usesAutomaticModelProvisioning) {
       final PreparedModel preparedModel = await _modelManager
           .ensureModelReady();
       modelPath = preparedModel.path;
+      contextSize = preparedModel.model.contextSize;
+      maxOutputTokens = preparedModel.model.maxOutputTokens;
     } else {
       // Preserve the existing explicit-path/macOS/Web fallback. Automatic
       // provisioning is only enabled for mobile targets without an explicit
       // LOCAL_LLM_MODEL_PATH override.
       modelPath = await _modelStorage.resolveModelPath();
+      contextSize = _aiConfiguration.defaultContextSize;
+      maxOutputTokens = _aiConfiguration.defaultMaxOutputTokens;
     }
 
     if (_disposed) {
@@ -106,6 +114,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
 
     final LlmWorkerClient client = await startLlmWorkerClient(
       modelPath: modelPath,
+      contextSize: contextSize,
+      threads: _aiConfiguration.workerThreads,
     );
     if (_disposed) {
       await client.dispose();
@@ -114,7 +124,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
 
     try {
       final LocalSummarizationService infrastructureService =
-          LocalSummarizationService(workerClient: client);
+          LocalSummarizationService(
+            workerClient: client,
+            maxTokens: maxOutputTokens,
+          );
       _workerClient = client;
       return NoteSummaryAppService(summarizationService: infrastructureService);
     } on Object {
@@ -124,7 +137,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   }
 
   bool get _usesAutomaticModelProvisioning {
-    if (kIsWeb || _modelPath.trim().isNotEmpty) {
+    if (kIsWeb || _aiConfiguration.modelPathOverride != null) {
       return false;
     }
     return defaultTargetPlatform == TargetPlatform.iOS ||

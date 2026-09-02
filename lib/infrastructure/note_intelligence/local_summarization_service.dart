@@ -38,9 +38,23 @@ String _buildSummaryUserPrompt(String note) {
 /// without loading a model. On the Web the client throws [UnsupportedError]
 /// (never a fabricated summary).
 final class LocalSummarizationService implements INoteSummarizationService {
-  LocalSummarizationService({required this.workerClient});
+  LocalSummarizationService({
+    required this.workerClient,
+    this.maxTokens = 128,
+  }) {
+    if (maxTokens <= 0 || maxTokens > 512) {
+      throw ArgumentError.value(
+        maxTokens,
+        'maxTokens',
+        'must be between 1 and 512',
+      );
+    }
+  }
 
   final LlmWorkerClient workerClient;
+
+  /// Maximum number of output tokens requested from the selected model.
+  final int maxTokens;
 
   @override
   Future<Summary> summarize(String content) async {
@@ -54,7 +68,7 @@ final class LocalSummarizationService implements INoteSummarizationService {
       // turn. The native formatter omits the system role for an empty value.
       systemPrompt: '',
       userPrompt: _buildSummaryUserPrompt(note),
-      maxTokens: 128,
+      maxTokens: maxTokens,
     );
 
     final String summary = text.trim();

@@ -50,7 +50,23 @@ final class HttpModelDownloader implements IModelDownloader {
   HttpModelDownloader({
     ModelDownloadResponseLoader? responseLoader,
     int maxRedirects = 5,
-  });
+    Duration requestTimeout = const Duration(minutes: 15),
+  }) {
+    if (maxRedirects < 0) {
+      throw ArgumentError.value(
+        maxRedirects,
+        'maxRedirects',
+        'must not be negative',
+      );
+    }
+    if (requestTimeout.compareTo(Duration.zero) <= 0) {
+      throw ArgumentError.value(
+        requestTimeout,
+        'requestTimeout',
+        'must be greater than zero',
+      );
+    }
+  }
 
   /// Matches the native test seam.
   @override
@@ -72,9 +88,11 @@ final class HttpModelDownloader implements IModelDownloader {
 IModelDownloader createModelDownloader({
   ModelDownloadResponseLoader? responseLoader,
   int maxRedirects = 5,
+  Duration requestTimeout = const Duration(minutes: 15),
 }) {
   return HttpModelDownloader(
     responseLoader: responseLoader,
     maxRedirects: maxRedirects,
+    requestTimeout: requestTimeout,
   );
 }

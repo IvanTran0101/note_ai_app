@@ -58,12 +58,23 @@ final class HttpModelDownloader implements IModelDownloader {
   /// [responseLoader] is intended for unit tests. When omitted, the
   /// implementation creates a native [HttpClient], follows redirects, and
   /// requires the final response URI to remain HTTPS.
-  HttpModelDownloader({this.responseLoader, this.maxRedirects = 5}) {
+  HttpModelDownloader({
+    this.responseLoader,
+    this.maxRedirects = 5,
+    this.requestTimeout = const Duration(minutes: 15),
+  }) {
     if (maxRedirects < 0) {
       throw ArgumentError.value(
         maxRedirects,
         'maxRedirects',
         'must not be negative',
+      );
+    }
+    if (requestTimeout.compareTo(Duration.zero) <= 0) {
+      throw ArgumentError.value(
+        requestTimeout,
+        'requestTimeout',
+        'must be greater than zero',
       );
     }
   }
@@ -73,6 +84,11 @@ final class HttpModelDownloader implements IModelDownloader {
 
   /// Maximum number of redirects accepted by the native HTTP client.
   final int maxRedirects;
+
+  /// Maximum time allowed for connection/headers and for an idle response
+  /// body read. The default is intentionally long enough for a large GGUF
+  /// artifact on a mobile network.
+  final Duration requestTimeout;
 
   HttpClient? _client;
 
@@ -141,7 +157,9 @@ final class HttpModelDownloader implements IModelDownloader {
     var receivedBytes = 0;
     try {
       sink = File(targetPath).openWrite(mode: FileMode.write);
-      await for (final List<int> chunk in response.body) {
+      await for (final List<int> chunk in response.body.timeout(
+        requestTimeout,
+      )) {
         receivedBytes += chunk.length;
         if (receivedBytes > model.fileSizeBytes) {
           throw ModelDownloadException(
@@ -169,14 +187,18 @@ final class HttpModelDownloader implements IModelDownloader {
   Future<ModelDownloadResponse> _fetch(Uri sourceUri) async {
     final ModelDownloadResponseLoader? loader = responseLoader;
     if (loader != null) {
-      return loader(sourceUri);
+      return loader(sourceUri).timeout(requestTimeout);
     }
 
     final HttpClient client = _client ??= HttpClient();
-    final HttpClientRequest request = await client.getUrl(sourceUri);
+    final HttpClientRequest request = await client
+        .getUrl(sourceUri)
+        .timeout(requestTimeout);
     request.followRedirects = true;
     request.maxRedirects = maxRedirects;
-    final HttpClientResponse response = await request.close();
+    final HttpClientResponse response = await request.close().timeout(
+      requestTimeout,
+    );
     final List<RedirectInfo> redirects = response.redirects;
     return ModelDownloadResponse(
       statusCode: response.statusCode,
@@ -206,9 +228,11 @@ final class HttpModelDownloader implements IModelDownloader {
 IModelDownloader createModelDownloader({
   ModelDownloadResponseLoader? responseLoader,
   int maxRedirects = 5,
+  Duration requestTimeout = const Duration(minutes: 15),
 }) {
   return HttpModelDownloader(
     responseLoader: responseLoader,
     maxRedirects: maxRedirects,
+    requestTimeout: requestTimeout,
   );
 }

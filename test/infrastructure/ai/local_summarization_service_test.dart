@@ -69,6 +69,33 @@ void main() {
       expect(fake.maxTokens.single, 128);
     });
 
+    test('uses the injected output token budget', () async {
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
+        result: 'The note summary.',
+      );
+      final LocalSummarizationService service = LocalSummarizationService(
+        workerClient: fake,
+        maxTokens: 64,
+      );
+
+      await service.summarize('Note body');
+
+      expect(fake.maxTokens.single, 64);
+    });
+
+    test('rejects an output token budget outside native limits', () {
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient();
+
+      expect(
+        () => LocalSummarizationService(workerClient: fake, maxTokens: 0),
+        throwsArgumentError,
+      );
+      expect(
+        () => LocalSummarizationService(workerClient: fake, maxTokens: 513),
+        throwsArgumentError,
+      );
+    });
+
     test('rejects blank content without calling the worker', () async {
       final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient();
       final LocalSummarizationService service = LocalSummarizationService(
