@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 
 import 'application/note_intelligence/note_summary_app_service.dart';
+import 'application/notes/note_application.dart';
 import 'domain/note_intelligence/summary.dart';
+import 'domain/notes/note_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
 import 'infrastructure/ai/model_catalog.dart';
 import 'infrastructure/ai/model_downloader.dart';
@@ -16,7 +18,9 @@ import 'infrastructure/ai/model_storage.dart';
 import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
+import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
+import 'presentation/notes/notes_page.dart';
 
 void main() {
   runApp(const NoteFlowApp());
@@ -35,11 +39,24 @@ class NoteFlowApp extends StatefulWidget {
 }
 
 class _NoteFlowAppState extends State<NoteFlowApp> {
+  static const String _localOwnerId = 'local-user';
+
   LlmWorkerClient? _workerClient;
   NoteSummaryAppService? _appService;
   Future<NoteSummaryAppService>? _serviceStart;
+  int _noteIdSequence = 0;
   late final AiConfiguration _aiConfiguration =
       AiConfiguration.fromEnvironment();
+  late final INoteRepository _noteRepository = note_infrastructure
+      .createNoteRepository();
+  late final NoteApplicationService _noteApplicationService =
+      NoteApplicationService(
+        noteRepository: _noteRepository,
+        ownerId: _localOwnerId,
+        generateId: _generateNoteId,
+        now: _nowUtc,
+        summarizeContent: _summarize,
+      );
   late final IModelStorage _modelStorage = createModelStorage(
     overrideModelPath: _aiConfiguration.modelPathOverride,
   );
@@ -60,6 +77,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     final NoteSummaryAppService service = await _ensureService();
     return service.summarize(content);
   }
+
+  String _generateNoteId() {
+    _noteIdSequence++;
+    return 'note-${DateTime.now().microsecondsSinceEpoch}-$_noteIdSequence';
+  }
+
+  DateTime _nowUtc() => DateTime.now().toUtc();
 
   Future<NoteSummaryAppService> _ensureService() async {
     final NoteSummaryAppService? existing = _appService;
@@ -151,7 +175,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: LocalLlmDebugPage(summarize: _summarize),
+      home: Builder(
+        builder: (BuildContext context) {
+          return NotesPage(
+            applicationService: _noteApplicationService,
+            onOpenDiagnostics: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LocalLlmDebugPage(summarize: _summarize),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
