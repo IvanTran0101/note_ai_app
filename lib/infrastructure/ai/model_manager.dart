@@ -1,4 +1,5 @@
-/// Single-model provisioning orchestration (M3.3a).
+/// Single-model provisioning orchestration with advisory readiness state
+/// (M3.3a/M4.4).
 ///
 /// This class coordinates the infrastructure contracts only. It does not
 /// contain a model catalog, download implementation, digest implementation,
@@ -7,10 +8,11 @@ library;
 
 import 'dart:async';
 
+import '../configuration/ai_configuration_store.dart';
+import '../device/hardware_detection.dart';
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 import 'model_storage_contract.dart';
-import '../device/hardware_detection.dart';
 
 /// Coordinates the lifecycle of one model selected for the current device.
 ///
@@ -32,6 +34,7 @@ final class ModelManager implements IModelManager {
     required IModelStorage modelStorage,
     required IModelDownloader modelDownloader,
     required IModelIntegrityVerifier integrityVerifier,
+    AiConfigurationStore? aiConfigurationStore,
   }) : this._(
          hardwareDetectionService,
          modelSelectionPolicy,
@@ -39,6 +42,7 @@ final class ModelManager implements IModelManager {
          modelStorage,
          modelDownloader,
          integrityVerifier,
+         aiConfigurationStore,
        );
 
   ModelManager._(
@@ -48,6 +52,7 @@ final class ModelManager implements IModelManager {
     this._modelStorage,
     this._modelDownloader,
     this._integrityVerifier,
+    this._aiConfigurationStore,
   );
 
   final IHardwareDetectionService _hardwareDetectionService;
@@ -56,6 +61,7 @@ final class ModelManager implements IModelManager {
   final IModelStorage _modelStorage;
   final IModelDownloader _modelDownloader;
   final IModelIntegrityVerifier _integrityVerifier;
+  final AiConfigurationStore? _aiConfigurationStore;
 
   /// The current provisioning operation, if one is already running.
   Future<PreparedModel>? _inFlight;
@@ -108,25 +114,40 @@ final class ModelManager implements IModelManager {
       );
     }
 
-    final String? existingPath = await _modelStorage.findModel(selectedModel);
-    if (existingPath != null) {
-      // This branch intentionally has no staging cleanup: a verifier failure
-      // must not delete or discard an already-existing model.
-      await _integrityVerifier.verify(
+    await _saveReadinessBestEffort(
+      _snapshot(
         model: selectedModel,
-        filePath: existingPath,
-      );
-      return PreparedModel(
-        selectedModel: selectedModel,
-        localPath: existingPath,
         capability: capability,
-      );
-    }
-
-    final ModelStagingFile stagingFile = await _modelStorage.createStagingFile(
-      selectedModel,
+        status: ModelReadinessStatus.preparing,
+      ),
     );
+
+    ModelStagingFile? stagingFile;
     try {
+      final String? existingPath = await _modelStorage.findModel(selectedModel);
+      if (existingPath != null) {
+        // This branch intentionally has no staging cleanup: a verifier failure
+        // must not delete or discard an already-existing model.
+        await _integrityVerifier.verify(
+          model: selectedModel,
+          filePath: existingPath,
+        );
+        await _saveReadinessBestEffort(
+          _snapshot(
+            model: selectedModel,
+            capability: capability,
+            status: ModelReadinessStatus.ready,
+            localPath: existingPath,
+          ),
+        );
+        return PreparedModel(
+          selectedModel: selectedModel,
+          localPath: existingPath,
+          capability: capability,
+        );
+      }
+
+      stagingFile = await _modelStorage.createStagingFile(selectedModel);
       await _modelDownloader.download(
         model: selectedModel,
         target: stagingFile,
@@ -138,15 +159,78 @@ final class ModelManager implements IModelManager {
       final String localPath = await _modelStorage.commitStagingFile(
         stagingFile,
       );
+      await _saveReadinessBestEffort(
+        _snapshot(
+          model: selectedModel,
+          capability: capability,
+          status: ModelReadinessStatus.ready,
+          localPath: localPath,
+        ),
+      );
       return PreparedModel(
         selectedModel: selectedModel,
         localPath: localPath,
         capability: capability,
       );
     } on Object catch (error, stackTrace) {
-      await _discardStagingBestEffort(stagingFile);
+      if (stagingFile != null) {
+        await _discardStagingBestEffort(stagingFile);
+      }
+      await _saveReadinessBestEffort(
+        _snapshot(
+          model: selectedModel,
+          capability: capability,
+          status: ModelReadinessStatus.failed,
+          lastError: _boundedError(error),
+        ),
+      );
       Error.throwWithStackTrace(error, stackTrace);
     }
+  }
+
+  AiReadinessSnapshot _snapshot({
+    required ModelDescriptor model,
+    required DeviceCapability capability,
+    required ModelReadinessStatus status,
+    String? localPath,
+    String? lastError,
+  }) {
+    return AiReadinessSnapshot(
+      modelId: model.id,
+      modelVersion: model.version,
+      modelSha256: model.sha256,
+      localPath: localPath,
+      platform: capability.platform,
+      osVersion: capability.osVersion,
+      isPhysicalDevice: capability.isPhysicalDevice,
+      supportedAbis: capability.supportedAbis,
+      status: status,
+      lastError: lastError,
+      updatedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  Future<void> _saveReadinessBestEffort(AiReadinessSnapshot snapshot) async {
+    final AiConfigurationStore? store = _aiConfigurationStore;
+    if (store == null) {
+      return;
+    }
+    try {
+      await store.save(snapshot);
+    } on Object {
+      // Readiness is advisory bookkeeping. A store failure must not hide a
+      // successful model preparation or replace the original provisioning
+      // error.
+    }
+  }
+
+  static String _boundedError(Object error) {
+    const int maxLength = 512;
+    final String message = error.toString().replaceAll(RegExp(r'\s+'), ' ');
+    if (message.length <= maxLength) {
+      return message;
+    }
+    return '${message.substring(0, maxLength - 1)}…';
   }
 
   /// Discards only the staging file and never masks the original failure.

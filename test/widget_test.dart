@@ -46,4 +46,24 @@ void main() {
 
     expect(find.textContaining('model load failed'), findsOneWidget);
   });
+
+  testWidgets('debug page shows the advisory model readiness status', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LocalLlmDebugPage(
+          summarize: (String content) async => Summary('Summary: $content'),
+          loadModelReadiness: () async => 'ready · gemma-3-1b-it',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('model-readiness-status')),
+      findsOneWidget,
+    );
+    expect(find.text('Model status: ready · gemma-3-1b-it'), findsOneWidget);
+  });
 }

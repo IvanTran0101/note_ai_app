@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_ai_app/infrastructure/configuration/ai_configuration_store.dart';
 import 'package:note_ai_app/infrastructure/ai/model_manager.dart';
 import 'package:note_ai_app/infrastructure/ai/model_provisioning_contract.dart';
 import 'package:note_ai_app/infrastructure/ai/model_selection.dart';
@@ -37,6 +38,188 @@ const _capability = DeviceCapability(
 
 void main() {
   group('ModelManager', () {
+    test(
+      'records preparing and ready for an existing verified model',
+      () async {
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore();
+        final ModelManager manager = _manager(
+          storage: _FakeStorage(existingPath: '/models/${_model.fileName}'),
+          aiConfigurationStore: configurationStore,
+        );
+
+        await manager.ensureModelReady();
+
+        expect(
+          configurationStore.snapshots.map(
+            (AiReadinessSnapshot snapshot) => snapshot.status,
+          ),
+          <ModelReadinessStatus>[
+            ModelReadinessStatus.preparing,
+            ModelReadinessStatus.ready,
+          ],
+        );
+        expect(
+          configurationStore.snapshots.last.localPath,
+          '/models/${_model.fileName}',
+        );
+      },
+    );
+
+    test('records preparing and ready after download and commit', () async {
+      final _FakeAiConfigurationStore configurationStore =
+          _FakeAiConfigurationStore();
+      final ModelManager manager = _manager(
+        aiConfigurationStore: configurationStore,
+      );
+
+      await manager.ensureModelReady();
+
+      expect(
+        configurationStore.snapshots.map(
+          (AiReadinessSnapshot snapshot) => snapshot.status,
+        ),
+        <ModelReadinessStatus>[
+          ModelReadinessStatus.preparing,
+          ModelReadinessStatus.ready,
+        ],
+      );
+      expect(
+        configurationStore.snapshots.last.localPath,
+        '/models/${_model.fileName}',
+      );
+    });
+
+    test(
+      'records a bounded failure without replacing the original error',
+      () async {
+        final StateError expected = StateError('download failed');
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore();
+        final ModelManager manager = _manager(
+          aiConfigurationStore: configurationStore,
+          downloader: _FakeDownloader(failure: expected),
+        );
+
+        await expectLater(manager.ensureModelReady(), throwsA(same(expected)));
+
+        expect(
+          configurationStore.snapshots.last.status,
+          ModelReadinessStatus.failed,
+        );
+        expect(
+          configurationStore.snapshots.last.lastError,
+          contains('download failed'),
+        );
+        expect(
+          configurationStore.snapshots.last.lastError!.length,
+          lessThanOrEqualTo(512),
+        );
+      },
+    );
+
+    test(
+      'store failures never mask successful or failed provisioning',
+      () async {
+        final StateError expected = StateError('download failed');
+        final _FakeAiConfigurationStore failingStore =
+            _FakeAiConfigurationStore(
+              saveFailure: StateError('store unavailable'),
+            );
+
+        final PreparedModel prepared = await _manager(
+          aiConfigurationStore: failingStore,
+        ).ensureModelReady();
+        expect(prepared.path, '/models/${_model.fileName}');
+
+        await expectLater(
+          _manager(
+            aiConfigurationStore: failingStore,
+            downloader: _FakeDownloader(failure: expected),
+          ).ensureModelReady(),
+          throwsA(same(expected)),
+        );
+      },
+    );
+
+    test(
+      'does not trust stale stored paths and still verifies the current model',
+      () async {
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore(
+              initial: AiReadinessSnapshot(
+                modelId: _model.id,
+                modelVersion: _model.version,
+                modelSha256: _model.sha256,
+                localPath: '/stale/model.gguf',
+                platform: _capability.platform,
+                osVersion: _capability.osVersion,
+                isPhysicalDevice: _capability.isPhysicalDevice,
+                supportedAbis: _capability.supportedAbis,
+                status: ModelReadinessStatus.ready,
+                updatedAt: DateTime.utc(2026, 9, 4),
+              ),
+            );
+        final _FakeStorage storage = _FakeStorage(
+          existingPath: '/models/${_model.fileName}',
+        );
+        final _FakeVerifier verifier = _FakeVerifier();
+
+        final PreparedModel prepared = await _manager(
+          aiConfigurationStore: configurationStore,
+          storage: storage,
+          verifier: verifier,
+        ).ensureModelReady();
+
+        expect(prepared.path, '/models/${_model.fileName}');
+        expect(verifier.paths, ['/models/${_model.fileName}']);
+      },
+    );
+
+    test('no selected model writes no readiness snapshot', () async {
+      final _FakeAiConfigurationStore configurationStore =
+          _FakeAiConfigurationStore();
+      final ModelManager manager = _manager(
+        policy: _FakePolicy.noSelection(),
+        aiConfigurationStore: configurationStore,
+      );
+
+      await expectLater(
+        manager.ensureModelReady(),
+        throwsA(isA<NoModelSelectedException>()),
+      );
+
+      expect(configurationStore.snapshots, isEmpty);
+    });
+
+    test('records failed and never discards when an existing model fails '
+        'verification', () async {
+      final StateError expected = StateError('existing digest mismatch');
+      final _FakeAiConfigurationStore configurationStore =
+          _FakeAiConfigurationStore();
+      final _FakeStorage storage = _FakeStorage(
+        existingPath: '/models/${_model.fileName}',
+      );
+      final ModelManager manager = _manager(
+        storage: storage,
+        verifier: _FakeVerifier(failure: expected),
+        aiConfigurationStore: configurationStore,
+      );
+
+      await expectLater(manager.ensureModelReady(), throwsA(same(expected)));
+
+      expect(
+        configurationStore.snapshots.last.status,
+        ModelReadinessStatus.failed,
+      );
+      expect(
+        configurationStore.snapshots.last.lastError,
+        contains('digest mismatch'),
+      );
+      expect(storage.stagingCreates, isZero);
+      expect(storage.discards, isZero);
+    });
+
     test(
       'verifies an existing selected model and skips staging/download',
       () async {
@@ -188,6 +371,8 @@ void main() {
       () async {
         final Completer<void> downloadGate = Completer<void>();
         final Completer<void> downloadStarted = Completer<void>();
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore();
         final _FakeStorage storage = _FakeStorage();
         final _FakeDownloader downloader = _FakeDownloader(
           gate: downloadGate,
@@ -196,6 +381,7 @@ void main() {
         final ModelManager manager = _manager(
           storage: storage,
           downloader: downloader,
+          aiConfigurationStore: configurationStore,
         );
 
         final Future<PreparedModel> first = manager.ensureModelReady();
@@ -212,6 +398,15 @@ void main() {
         expect(prepared[0], prepared[1]);
         expect(storage.stagingCreates, 1);
         expect(storage.commits, 1);
+        expect(
+          configurationStore.snapshots.map(
+            (AiReadinessSnapshot snapshot) => snapshot.status,
+          ),
+          <ModelReadinessStatus>[
+            ModelReadinessStatus.preparing,
+            ModelReadinessStatus.ready,
+          ],
+        );
       },
     );
   });
@@ -223,6 +418,7 @@ ModelManager _manager({
   IModelDownloader? downloader,
   IModelIntegrityVerifier? verifier,
   IModelSelectionPolicy? policy,
+  AiConfigurationStore? aiConfigurationStore,
 }) {
   return ModelManager(
     hardwareDetectionService: _FakeHardware(events: events),
@@ -231,6 +427,7 @@ ModelManager _manager({
     modelStorage: storage ?? _FakeStorage(events: events),
     modelDownloader: downloader ?? _FakeDownloader(events: events),
     integrityVerifier: verifier ?? _FakeVerifier(events: events),
+    aiConfigurationStore: aiConfigurationStore,
   );
 }
 
@@ -382,4 +579,27 @@ final class _FakeVerifier implements IModelIntegrityVerifier {
       throw error;
     }
   }
+}
+
+final class _FakeAiConfigurationStore implements AiConfigurationStore {
+  _FakeAiConfigurationStore({this.initial, this.saveFailure});
+
+  final AiReadinessSnapshot? initial;
+  final Object? saveFailure;
+  final List<AiReadinessSnapshot> snapshots = <AiReadinessSnapshot>[];
+
+  @override
+  Future<AiReadinessSnapshot?> read() async => initial;
+
+  @override
+  Future<void> save(AiReadinessSnapshot snapshot) async {
+    final Object? error = saveFailure;
+    if (error != null) {
+      throw error;
+    }
+    snapshots.add(snapshot);
+  }
+
+  @override
+  Future<void> clear() async {}
 }

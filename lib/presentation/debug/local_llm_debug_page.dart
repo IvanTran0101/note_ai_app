@@ -5,15 +5,23 @@ import '../../domain/note_intelligence/summary.dart';
 /// Signature for the summarizer injected into [LocalLlmDebugPage].
 typedef SummarizeFunction = Future<Summary> Function(String content);
 
+/// Loads a display-only model-readiness label for the diagnostics surface.
+typedef LoadModelReadiness = Future<String?> Function();
+
 /// Minimal debug screen proving the local-LLM summarization path end to end.
 ///
 /// Accepts note text and shows loading / error / result states. It calls the
 /// injected application callback — never FFI or the bridge package directly.
 /// Widget tests can provide a fake callback.
 class LocalLlmDebugPage extends StatefulWidget {
-  const LocalLlmDebugPage({super.key, required this.summarize});
+  const LocalLlmDebugPage({
+    super.key,
+    required this.summarize,
+    this.loadModelReadiness,
+  });
 
   final SummarizeFunction summarize;
+  final LoadModelReadiness? loadModelReadiness;
 
   @override
   State<LocalLlmDebugPage> createState() => _LocalLlmDebugPageState();
@@ -24,6 +32,20 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
   bool _busy = false;
   String? _error;
   String? _result;
+  Future<String?>? _readinessFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshReadiness();
+  }
+
+  void _refreshReadiness() {
+    final LoadModelReadiness? loadModelReadiness = widget.loadModelReadiness;
+    if (loadModelReadiness != null) {
+      _readinessFuture = loadModelReadiness();
+    }
+  }
 
   Future<void> _onSummarize() async {
     final SummarizeFunction summarize = widget.summarize;
@@ -37,7 +59,10 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
       if (!mounted) {
         return;
       }
-      setState(() => _result = summary.text);
+      setState(() {
+        _result = summary.text;
+        _refreshReadiness();
+      });
     } on Object catch (error) {
       if (!mounted) {
         return;
@@ -73,6 +98,27 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
               'model from app-private storage; macOS Debug also accepts the '
               'LOCAL_LLM_MODEL_PATH override.',
             ),
+            if (widget.loadModelReadiness != null) ...<Widget>[
+              const SizedBox(height: 8),
+              FutureBuilder<String?>(
+                future: _readinessFuture,
+                builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+                  final String label;
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    label = 'Model status: loading…';
+                  } else if (snapshot.hasError) {
+                    label = 'Model status: unavailable';
+                  } else {
+                    label =
+                        'Model status: ${snapshot.data ?? 'not provisioned'}';
+                  }
+                  return Text(
+                    label,
+                    key: const ValueKey<String>('model-readiness-status'),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _noteController,

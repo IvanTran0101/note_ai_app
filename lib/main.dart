@@ -16,6 +16,7 @@ import 'infrastructure/ai/model_provisioning_contract.dart';
 import 'infrastructure/ai/model_selection.dart';
 import 'infrastructure/ai/model_storage.dart';
 import 'infrastructure/configuration/ai_configuration.dart';
+import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
@@ -47,6 +48,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   int _noteIdSequence = 0;
   late final AiConfiguration _aiConfiguration =
       AiConfiguration.fromEnvironment();
+  late final AiConfigurationStore _aiConfigurationStore =
+      createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
   late final NoteApplicationService _noteApplicationService =
@@ -70,6 +73,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       requestTimeout: _aiConfiguration.downloadTimeout,
     ),
     integrityVerifier: createModelIntegrityVerifier(),
+    aiConfigurationStore: _aiConfigurationStore,
   );
   bool _disposed = false;
 
@@ -84,6 +88,24 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   }
 
   DateTime _nowUtc() => DateTime.now().toUtc();
+
+  Future<String?> _loadModelReadiness() async {
+    try {
+      final AiReadinessSnapshot? snapshot = await _aiConfigurationStore.read();
+      if (snapshot == null) {
+        return null;
+      }
+      return switch (snapshot.status) {
+        ModelReadinessStatus.preparing => 'preparing · ${snapshot.modelId}',
+        ModelReadinessStatus.ready => 'ready · ${snapshot.modelId}',
+        ModelReadinessStatus.failed => 'failed · ${snapshot.modelId}',
+      };
+    } on Object {
+      // Diagnostics must remain usable when advisory state is unavailable or
+      // unsupported on the current platform.
+      return 'unavailable';
+    }
+  }
 
   Future<NoteSummaryAppService> _ensureService() async {
     final NoteSummaryAppService? existing = _appService;
@@ -182,7 +204,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
             onOpenDiagnostics: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => LocalLlmDebugPage(summarize: _summarize),
+                  builder: (_) => LocalLlmDebugPage(
+                    summarize: _summarize,
+                    loadModelReadiness: _loadModelReadiness,
+                  ),
                 ),
               );
             },
