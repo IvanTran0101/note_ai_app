@@ -51,3 +51,5 @@ app.*.map.json
 /pack/
 /_agent_ops/
 AGENTS.md
+/.agents
+skills-lock.json
