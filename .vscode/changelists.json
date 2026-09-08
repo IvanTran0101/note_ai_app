@@ -3,7 +3,15 @@
     {
       "name": "Default",
       "files": [
-        ".gitignore",
+        ".codex/agents/verifier.toml",
+        ".codex/skills/loop-budget/SKILL.md",
+        ".codex/skills/loop-constraints/SKILL.md",
+        ".codex/skills/loop-triage/SKILL.md",
+        "LOOP.md",
+        "STATE.md",
+        "loop-budget.md",
+        "loop-constraints.md",
+        "loop-run-log.md",
         ".vscode/changelists.json"
       ]
     }
