@@ -1,0 +1,28 @@
+version: 1
+
+patterns:
+  daily-triage:
+    name: Daily Triage
+    description: Lightweight daily repository health triage.
+    cadence: 1d
+    level: L1
+    risk: low
+    mode: report-only
+
+    budget:
+      max_runs_per_day: 1
+      soft_token_cap: 50000
+      hard_token_cap: 100000
+      max_subagents_per_run: 0
+
+    behavior:
+      delta_inspection: true
+      early_exit: true
+      auto_fix: false
+      auto_merge: false
+
+    state:
+      file: STATE.md
+
+    verification:
+      required: false

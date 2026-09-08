@@ -1,0 +1,28 @@
+# Machine-readable safety gate for Loop Engineering.
+# Keep this file aligned with docs/safety.md.
+
+version: 1
+
+denylist:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/secrets/**"
+  - "**/credentials/**"
+  - "**/*_key*"
+  - "**/*_secret*"
+  - "**/auth/**"
+  - "**/payments/**"
+  - "**/billing/**"
+  - "**/migrations/**"
+  - "**/.github/workflows/**"
+  - "**/docker-compose*.yml"
+  - "**/Dockerfile*"
+
+# Keep autonomous changes deliberately small.
+maxFiles: 10
+
+# For this personal project, do not enable unattended auto-merge yet.
+# The tool expects an allowlist, so keep it limited to very low-risk files.
+autoMergeAllowlist:
+  - "docs/**"
+  - "**/*.md"
