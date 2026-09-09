@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
+import 'notes_localizations.dart';
 
 /// Displays the saved Note projections and the list-level actions.
 final class NotesListPanel extends StatelessWidget {
@@ -25,6 +26,7 @@ final class NotesListPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NotesCopy copy = NotesCopy.of(context);
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLowest,
       child: Padding(
@@ -36,7 +38,7 @@ final class NotesListPanel extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    'Notes',
+                    copy.notes,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -44,7 +46,7 @@ final class NotesListPanel extends StatelessWidget {
                   key: const ValueKey<String>('new-note'),
                   onPressed: actionBusy ? null : onNewNote,
                   icon: const Icon(Icons.add),
-                  label: const Text('New note'),
+                  label: Text(copy.newNote),
                 ),
               ],
             ),
@@ -63,16 +65,33 @@ final class NotesListPanel extends StatelessWidget {
                   child: TextButton(
                     key: const ValueKey<String>('retry-notes'),
                     onPressed: actionBusy ? null : onRetry,
-                    child: const Text('Retry'),
+                    child: Text(copy.retry),
                   ),
                 ),
             ],
             const SizedBox(height: 8),
             Expanded(
               child: notes.isEmpty
-                  ? const Center(
+                  ? Center(
                       key: ValueKey<String>('notes-empty'),
-                      child: Text('No notes yet'),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.note_alt_outlined,
+                            size: 40,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(copy.noNotes),
+                          const SizedBox(height: 4),
+                          TextButton(
+                            key: const ValueKey<String>('new-note-empty'),
+                            onPressed: actionBusy ? null : onNewNote,
+                            child: Text(copy.createFirstNote),
+                          ),
+                        ],
+                      ),
                     )
                   : ListView.separated(
                       itemCount: notes.length,
@@ -88,13 +107,13 @@ final class NotesListPanel extends StatelessWidget {
                               .primaryContainer,
                           title: Text(
                             note.title.trim().isEmpty
-                                ? '(Untitled)'
+                                ? copy.untitled
                                 : note.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            _preview(note.content),
+                            _preview(note.content, copy),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -109,8 +128,8 @@ final class NotesListPanel extends StatelessWidget {
     );
   }
 
-  String _preview(String content) {
+  String _preview(String content, NotesCopy copy) {
     final String normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return normalized.isEmpty ? 'No content' : normalized;
+    return normalized.isEmpty ? copy.noContent : normalized;
   }
 }

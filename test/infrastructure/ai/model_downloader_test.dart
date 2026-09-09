@@ -131,6 +131,52 @@ void main() {
       downloader.close();
     });
 
+    test(
+      'reports cumulative bytes through the optional progress callback',
+      () async {
+        final ModelDescriptor model = _model();
+        final File targetFile = File('${tempDir.path}/progress.part');
+        final List<int> reported = <int>[];
+        final HttpModelDownloader downloader = HttpModelDownloader(
+          responseLoader: (_) async => _response(),
+        );
+
+        await downloader.download(
+          model: model,
+          target: _target(model, targetFile.path),
+          onProgress: reported.add,
+        );
+
+        expect(reported, <int>[2, 4]);
+        expect(await targetFile.readAsBytes(), <int>[1, 2, 3, 4]);
+        downloader.close();
+      },
+    );
+
+    test('reports cumulative bytes for an unknown-length response', () async {
+      final ModelDescriptor model = _model();
+      final File targetFile = File('${tempDir.path}/progress-unknown.part');
+      final List<int> reported = <int>[];
+      final HttpModelDownloader downloader = HttpModelDownloader(
+        responseLoader: (_) async => _response(
+          contentLength: null,
+          chunks: const <List<int>>[
+            <int>[1, 2],
+            <int>[3, 4],
+          ],
+        ),
+      );
+
+      await downloader.download(
+        model: model,
+        target: _target(model, targetFile.path),
+        onProgress: reported.add,
+      );
+
+      expect(reported, <int>[2, 4]);
+      downloader.close();
+    });
+
     test('accepts an HTTPS redirect response', () async {
       final ModelDescriptor model = _model();
       final File targetFile = File('${tempDir.path}/redirected.part');

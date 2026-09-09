@@ -10,6 +10,8 @@ import 'dart:io';
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 
+export 'model_provisioning_contract.dart' show ModelDownloadException;
+
 /// A response abstraction used by [HttpModelDownloader] and its test seam.
 final class ModelDownloadResponse {
   /// Creates a streamed response.
@@ -38,18 +40,6 @@ final class ModelDownloadResponse {
 typedef ModelDownloadResponseLoader = Future<ModelDownloadResponse> Function(
   Uri uri,
 );
-
-/// Typed failure raised when a model cannot be downloaded safely.
-final class ModelDownloadException implements Exception {
-  /// Creates a download failure with a human-readable explanation.
-  const ModelDownloadException(this.message);
-
-  /// Explanation suitable for logs or application error mapping.
-  final String message;
-
-  @override
-  String toString() => 'ModelDownloadException: $message';
-}
 
 /// Streams one selected model artifact into the storage-provided staging path.
 final class HttpModelDownloader implements IModelDownloader {
@@ -102,6 +92,7 @@ final class HttpModelDownloader implements IModelDownloader {
   Future<void> download({
     required ModelDescriptor model,
     required ModelStagingFile target,
+    ModelDownloadProgress? onProgress,
   }) async {
     if (target.model != model) {
       throw const ModelDownloadException(
@@ -168,6 +159,9 @@ final class HttpModelDownloader implements IModelDownloader {
           );
         }
         sink.add(chunk);
+        // Progress is advisory: report only bytes that passed the descriptor
+        // bound and were handed to the sink.
+        onProgress?.call(receivedBytes);
       }
       await sink.flush();
     } on ModelDownloadException {

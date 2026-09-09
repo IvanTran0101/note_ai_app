@@ -44,6 +44,14 @@ abstract interface class IModelCatalog {
   List<ModelDescriptor> get models;
 }
 
+/// Reports cumulative artifact bytes received so far for one download.
+///
+/// [receivedBytes] is monotonic (never decreases), is at most the selected
+/// model's declared [ModelDescriptor.fileSizeBytes], and equals the full
+/// artifact size when the download finishes. Progress reporting is optional
+/// and advisory: an implementation must never require a listener.
+typedef ModelDownloadProgress = void Function(int receivedBytes);
+
 /// Writes exactly one selected model to a storage-provided staging file.
 abstract interface class IModelDownloader {
   /// Downloads [model] into [target].
@@ -51,9 +59,16 @@ abstract interface class IModelDownloader {
   /// Implementations should fail without publishing a final model path. The
   /// manager discards [target] when this operation or a later staging step
   /// fails.
+  ///
+  /// When [onProgress] is supplied, the implementation calls it with the
+  /// cumulative number of artifact bytes received so far after each chunk
+  /// (never with a negative or decreasing value, never beyond the model's
+  /// declared size). A null [onProgress] means the caller does not observe
+  /// progress.
   Future<void> download({
     required ModelDescriptor model,
     required ModelStagingFile target,
+    ModelDownloadProgress? onProgress,
   });
 }
 
@@ -148,4 +163,36 @@ final class NoModelSelectedException implements Exception {
 
   @override
   String toString() => 'NoModelSelectedException: $message';
+}
+
+/// Typed failure raised when a model artifact cannot be downloaded safely.
+///
+/// Declared in this platform-neutral contract (rather than only in the native
+/// and Web implementations) so platform-neutral orchestrators such as the
+/// model manager can map it onto the Application failure vocabulary.
+final class ModelDownloadException implements Exception {
+  /// Creates a download failure with a human-readable explanation.
+  const ModelDownloadException(this.message);
+
+  /// Explanation suitable for logs or application error mapping.
+  final String message;
+
+  @override
+  String toString() => 'ModelDownloadException: $message';
+}
+
+/// Typed failure raised when a model artifact fails integrity validation.
+///
+/// Declared in this platform-neutral contract so platform-neutral
+/// orchestrators can map it onto the Application failure vocabulary without
+/// depending on a native or Web implementation.
+final class ModelIntegrityException implements Exception {
+  /// Creates an integrity failure with a human-readable explanation.
+  const ModelIntegrityException(this.message);
+
+  /// Explanation suitable for logs or application error mapping.
+  final String message;
+
+  @override
+  String toString() => 'ModelIntegrityException: $message';
 }

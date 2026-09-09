@@ -3,13 +3,8 @@
     {
       "name": "Default",
       "files": [
-        "docs/safety.md",
-        ".vscode/changelists.json",
-        "gate.yaml",
-        ".github/PULL_REQUEST_TEMPLATE.md",
-        ".github/ISSUE_TEMPLATE/task.md",
-        ".github/workflows/ci.yaml",
-        "patterns/registry.yaml"
+        ".gitignore",
+        ".vscode/changelists.json"
       ]
     }
   ],

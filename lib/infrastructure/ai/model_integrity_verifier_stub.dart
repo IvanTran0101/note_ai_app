@@ -4,17 +4,7 @@ library;
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 
-/// Typed failure type kept for API parity with native targets.
-final class ModelIntegrityException implements Exception {
-  /// Creates an integrity failure.
-  const ModelIntegrityException(this.message);
-
-  /// Explanation suitable for logs or application error mapping.
-  final String message;
-
-  @override
-  String toString() => 'ModelIntegrityException: $message';
-}
+export 'model_provisioning_contract.dart' show ModelIntegrityException;
 
 /// Web stub; local filesystem model verification is unavailable in a browser.
 final class Sha256ModelIntegrityVerifier implements IModelIntegrityVerifier {

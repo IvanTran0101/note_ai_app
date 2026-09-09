@@ -6,6 +6,7 @@ import '../../application/notes/note_application.dart';
 import 'note_editor_panel.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
+import 'notes_localizations.dart';
 
 export 'notes_application_controller.dart' show NotesApplicationController;
 
@@ -20,6 +21,7 @@ class NotesPage extends StatefulWidget {
     super.key,
     this.applicationService,
     this.controller,
+    this.onOpenSettings,
     this.onOpenDiagnostics,
   }) : assert(
          applicationService != null || controller != null,
@@ -28,6 +30,7 @@ class NotesPage extends StatefulWidget {
 
   final NoteApplicationService? applicationService;
   final NotesApplicationController? controller;
+  final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenDiagnostics;
 
   @override
@@ -42,6 +45,7 @@ class _NotesPageState extends State<NotesPage> {
   String? _selectedNoteId;
   String? _error;
   String? _summary;
+  String? _statusMessage;
   bool _loading = true;
   bool _saving = false;
   bool _deleting = false;
@@ -64,10 +68,19 @@ class _NotesPageState extends State<NotesPage> {
   @override
   void initState() {
     super.initState();
+    _titleController.addListener(_editorChanged);
+    _contentController.addListener(_editorChanged);
     unawaited(_loadNotes());
   }
 
   Future<void> _loadNotes() async {
+    if (mounted && !_loading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _statusMessage = null;
+      });
+    }
     try {
       final List<NoteDto> notes = await _application.listNotes();
       if (!mounted) {
@@ -98,6 +111,7 @@ class _NotesPageState extends State<NotesPage> {
         _loading = false;
         _error = null;
         _summary = null;
+        _statusMessage = null;
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -105,26 +119,36 @@ class _NotesPageState extends State<NotesPage> {
       }
       setState(() {
         _loading = false;
-        _error = _formatError(error);
+        _error = _formatError(error, NotesCopy.of(context).loadError);
       });
     }
   }
 
   void _selectNote(NoteDto note) {
+    if (_editorDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return;
+    }
     _populateEditor(note);
     setState(() {
       _selectedNoteId = note.id;
       _error = null;
       _summary = null;
+      _statusMessage = null;
     });
   }
 
   void _startNewNote() {
+    if (_editorDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return;
+    }
     _clearEditor();
     setState(() {
       _selectedNoteId = null;
       _error = null;
       _summary = null;
+      _statusMessage = null;
     });
   }
 
@@ -142,6 +166,7 @@ class _NotesPageState extends State<NotesPage> {
       _saving = true;
       _error = null;
       _summary = null;
+      _statusMessage = null;
     });
 
     try {
@@ -170,11 +195,14 @@ class _NotesPageState extends State<NotesPage> {
         return;
       }
       _upsertAndSelect(saved);
+      _showMessage(NotesCopy.of(context).saved);
     } on Object catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _error = _formatError(error));
+      setState(
+        () => _error = _formatError(error, NotesCopy.of(context).saveError),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -187,11 +215,16 @@ class _NotesPageState extends State<NotesPage> {
     if (noteId == null || _deleting) {
       return;
     }
+    final NoteDto? deleted = _findNote(noteId);
+    if (deleted == null) {
+      return;
+    }
 
     setState(() {
       _deleting = true;
       _error = null;
       _summary = null;
+      _statusMessage = null;
     });
 
     try {
@@ -213,11 +246,15 @@ class _NotesPageState extends State<NotesPage> {
         _notes = List<NoteDto>.unmodifiable(remaining);
         _selectedNoteId = next?.id;
       });
+      final NotesCopy copy = NotesCopy.of(context);
+      _showUndoMessage(deleted: deleted, message: copy.deleted, copy: copy);
     } on Object catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _error = _formatError(error));
+      setState(
+        () => _error = _formatError(error, NotesCopy.of(context).deleteError),
+      );
     } finally {
       if (mounted) {
         setState(() => _deleting = false);
@@ -230,11 +267,16 @@ class _NotesPageState extends State<NotesPage> {
     if (noteId == null || _summarizing) {
       return;
     }
+    if (_editorDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return;
+    }
 
     setState(() {
       _summarizing = true;
       _error = null;
       _summary = null;
+      _statusMessage = null;
     });
 
     try {
@@ -242,12 +284,18 @@ class _NotesPageState extends State<NotesPage> {
       if (!mounted) {
         return;
       }
-      setState(() => _summary = summary);
+      setState(() {
+        _summary = summary;
+        _statusMessage = NotesCopy.of(context).summarized;
+      });
     } on Object catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _error = _formatError(error));
+      setState(
+        () =>
+            _error = _formatError(error, NotesCopy.of(context).summarizeError),
+      );
     } finally {
       if (mounted) {
         setState(() => _summarizing = false);
@@ -290,10 +338,78 @@ class _NotesPageState extends State<NotesPage> {
     _contentController.clear();
   }
 
-  String _formatError(Object error) => 'Error: $error';
+  bool get _editorDirty {
+    final NoteDto? selected = _selectedNoteId == null
+        ? null
+        : _findNote(_selectedNoteId!);
+    return _titleController.text != (selected?.title ?? '') ||
+        _contentController.text != (selected?.content ?? '');
+  }
+
+  void _editorChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  String _formatError(Object error, String message) {
+    final String detail = error is StateError
+        ? error.message.toString().trim()
+        : '';
+    if (detail.isEmpty || detail == 'null') {
+      return message;
+    }
+    return '$message ${NotesCopy.of(context).detailPrefix}$detail';
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showUndoMessage({
+    required NoteDto deleted,
+    required String message,
+    required NotesCopy copy,
+  }) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(
+            label: copy.undo,
+            onPressed: () => unawaited(_restoreDeletedNote(deleted)),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _restoreDeletedNote(NoteDto note) async {
+    try {
+      final NoteDto restored = await _application.createNote(
+        title: note.title,
+        content: note.content,
+      );
+      if (!mounted) {
+        return;
+      }
+      _upsertAndSelect(restored);
+      _showMessage(NotesCopy.of(context).saved);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = _formatError(error, NotesCopy.of(context).saveError),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
+    _titleController.removeListener(_editorChanged);
+    _contentController.removeListener(_editorChanged);
     _titleController.dispose();
     _contentController.dispose();
     super.dispose();
@@ -301,24 +417,31 @@ class _NotesPageState extends State<NotesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final NotesCopy copy = NotesCopy.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NoteFlow · Notes'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: widget.onOpenDiagnostics == null
+        title: Text(copy.title),
+        actions:
+            widget.onOpenSettings == null && widget.onOpenDiagnostics == null
             ? null
             : <Widget>[
-                TextButton(
-                  key: const ValueKey<String>('open-diagnostics'),
-                  onPressed: widget.onOpenDiagnostics,
-                  child: const Text('Diagnostics'),
-                ),
+                if (widget.onOpenSettings != null) _settingsAction(),
+                if (widget.onOpenDiagnostics != null)
+                  TextButton(
+                    key: const ValueKey<String>('open-diagnostics'),
+                    onPressed: widget.onOpenDiagnostics,
+                    child: Text(copy.diagnostics),
+                  ),
               ],
       ),
       body: _loading
-          ? const Center(
-              key: ValueKey<String>('notes-loading'),
-              child: CircularProgressIndicator(),
+          ? Center(
+              key: const ValueKey<String>('notes-loading'),
+              child: Semantics(
+                liveRegion: true,
+                label: copy.loadingNotes,
+                child: const CircularProgressIndicator(),
+              ),
             )
           : LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
@@ -338,6 +461,9 @@ class _NotesPageState extends State<NotesPage> {
                   actionBusy: _actionBusy,
                   error: _error,
                   summary: _summary,
+                  isDirty: _editorDirty,
+                  summaryBusy: _summarizing,
+                  statusMessage: _statusMessage,
                   onSave: _saveNote,
                   onDelete: _selectedNoteId == null || _actionBusy
                       ? null
@@ -349,7 +475,10 @@ class _NotesPageState extends State<NotesPage> {
                 if (constraints.maxWidth < 700) {
                   return Column(
                     children: <Widget>[
-                      SizedBox(height: 205, child: listPanel),
+                      SizedBox(
+                        height: constraints.maxHeight < 720 ? 180 : 230,
+                        child: listPanel,
+                      ),
                       const Divider(height: 1),
                       Expanded(child: editor),
                     ],
@@ -365,6 +494,15 @@ class _NotesPageState extends State<NotesPage> {
                 );
               },
             ),
+    );
+  }
+
+  Widget _settingsAction() {
+    return IconButton(
+      key: const ValueKey<String>('open-settings'),
+      tooltip: 'Appearance and language / Giao diện và ngôn ngữ',
+      icon: const Icon(Icons.tune_outlined),
+      onPressed: widget.onOpenSettings,
     );
   }
 }

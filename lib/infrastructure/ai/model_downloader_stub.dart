@@ -4,6 +4,8 @@ library;
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 
+export 'model_provisioning_contract.dart' show ModelDownloadException;
+
 /// Web-compatible response shape matching the native downloader API.
 final class ModelDownloadResponse {
   /// Creates a response value for API compatibility and tests.
@@ -31,18 +33,6 @@ final class ModelDownloadResponse {
 typedef ModelDownloadResponseLoader = Future<ModelDownloadResponse> Function(
   Uri uri,
 );
-
-/// Typed failure raised when local model downloads are unavailable on Web.
-final class ModelDownloadException implements Exception {
-  /// Creates a download failure.
-  const ModelDownloadException(this.message);
-
-  /// Explanation suitable for logs or application error mapping.
-  final String message;
-
-  @override
-  String toString() => 'ModelDownloadException: $message';
-}
 
 /// Web stub; local GGUF provisioning is not supported by this runtime.
 final class HttpModelDownloader implements IModelDownloader {
@@ -73,6 +63,7 @@ final class HttpModelDownloader implements IModelDownloader {
   Future<void> download({
     required ModelDescriptor model,
     required ModelStagingFile target,
+    ModelDownloadProgress? onProgress,
   }) async {
     throw UnsupportedError(
       'Local model downloads are not available on Web; '

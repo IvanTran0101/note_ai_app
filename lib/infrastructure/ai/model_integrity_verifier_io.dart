@@ -9,17 +9,7 @@ import 'package:crypto/crypto.dart';
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
 
-/// Typed failure raised when a model artifact fails integrity validation.
-final class ModelIntegrityException implements Exception {
-  /// Creates an integrity failure with a human-readable explanation.
-  const ModelIntegrityException(this.message);
-
-  /// Explanation suitable for logs or application error mapping.
-  final String message;
-
-  @override
-  String toString() => 'ModelIntegrityException: $message';
-}
+export 'model_provisioning_contract.dart' show ModelIntegrityException;
 
 /// Verifies model file type, exact byte size, and SHA-256 digest.
 final class Sha256ModelIntegrityVerifier implements IModelIntegrityVerifier {

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'notes_localizations.dart';
+import 'notes_theme_tokens.dart';
+
 /// Edits one Note projection and displays its ephemeral summary.
 final class NoteEditorPanel extends StatelessWidget {
   const NoteEditorPanel({
@@ -10,6 +13,9 @@ final class NoteEditorPanel extends StatelessWidget {
     required this.actionBusy,
     required this.error,
     required this.summary,
+    this.isDirty = false,
+    this.summaryBusy = false,
+    this.statusMessage,
     required this.onSave,
     required this.onDelete,
     required this.onSummarize,
@@ -21,12 +27,20 @@ final class NoteEditorPanel extends StatelessWidget {
   final bool actionBusy;
   final String? error;
   final String? summary;
+  final bool isDirty;
+  final bool summaryBusy;
+  final String? statusMessage;
   final VoidCallback onSave;
   final VoidCallback? onDelete;
   final VoidCallback? onSummarize;
 
   @override
   Widget build(BuildContext context) {
+    final NotesCopy copy = NotesCopy.of(context);
+    final ThemeData theme = Theme.of(context);
+    final NoteFlowSemanticColors semanticColors =
+        theme.extension<NoteFlowSemanticColors>() ??
+        NoteFlowSemanticColors.fromColorScheme(theme.colorScheme);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: ConstrainedBox(
@@ -34,18 +48,15 @@ final class NoteEditorPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text(
-              'Note editor',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
+            Text(copy.editor, style: theme.textTheme.titleLarge),
             const SizedBox(height: 12),
             TextField(
               key: const ValueKey<String>('title-field'),
               controller: titleController,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: copy.titleLabel,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -55,10 +66,10 @@ final class NoteEditorPanel extends StatelessWidget {
               minLines: 8,
               maxLines: 16,
               keyboardType: TextInputType.multiline,
-              decoration: const InputDecoration(
-                labelText: 'Content',
+              decoration: InputDecoration(
+                labelText: copy.contentLabel,
                 alignLabelWithHint: true,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -69,39 +80,58 @@ final class NoteEditorPanel extends StatelessWidget {
                 FilledButton(
                   key: const ValueKey<String>('save-note'),
                   onPressed: actionBusy ? null : onSave,
-                  child: const Text('Save note'),
+                  child: Text(copy.save),
                 ),
                 OutlinedButton(
                   key: const ValueKey<String>('delete-note'),
                   onPressed: onDelete,
-                  child: const Text('Delete note'),
+                  child: Text(copy.delete),
                 ),
                 OutlinedButton(
                   key: const ValueKey<String>('summarize-note'),
-                  onPressed: onSummarize,
-                  child: const Text('Summarize note'),
+                  onPressed: isDirty || summaryBusy ? null : onSummarize,
+                  child: Text(summaryBusy ? copy.summarizing : copy.summarize),
                 ),
               ],
             ),
-            if (hasSelectedNote) ...<Widget>[
+            if (isDirty) ...<Widget>[
               const SizedBox(height: 8),
-              const Text(
-                'Save changes before summarizing.',
-                style: TextStyle(fontSize: 12),
+              Text(
+                copy.unsavedChanges,
+                key: ValueKey<String>('notes-dirty'),
+                style: theme.textTheme.bodySmall,
               ),
             ],
             if (actionBusy) ...<Widget>[
               const SizedBox(height: 12),
-              const LinearProgressIndicator(
-                key: ValueKey<String>('notes-action-progress'),
+              Semantics(
+                liveRegion: true,
+                label: copy.actionInProgress,
+                child: const LinearProgressIndicator(
+                  key: ValueKey<String>('notes-action-progress'),
+                ),
               ),
             ],
             if (error != null) ...<Widget>[
               const SizedBox(height: 12),
-              Text(
-                error!,
-                key: const ValueKey<String>('notes-error'),
-                style: TextStyle(color: Colors.red),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  error!,
+                  key: const ValueKey<String>('notes-error'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            ],
+            if (statusMessage != null) ...<Widget>[
+              const SizedBox(height: 12),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  statusMessage!,
+                  key: const ValueKey<String>('notes-status'),
+                  style: TextStyle(color: semanticColors.success),
+                ),
               ),
             ],
             if (summary != null) ...<Widget>[
@@ -113,9 +143,10 @@ final class NoteEditorPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      const Text(
-                        'Summary',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      Text(
+                        copy.summary,
+                        key: ValueKey<String>('summary-heading'),
+                        style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       SelectableText(

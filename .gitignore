@@ -53,3 +53,4 @@ app.*.map.json
 AGENTS.md
 /.agents
 skills-lock.json
+/.claude

@@ -2,11 +2,16 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:note_ai_app/infrastructure/configuration/ai_configuration_store.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_failure.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
+import 'package:note_ai_app/infrastructure/ai/llm_worker_contract.dart';
 import 'package:note_ai_app/infrastructure/ai/model_manager.dart';
 import 'package:note_ai_app/infrastructure/ai/model_provisioning_contract.dart';
 import 'package:note_ai_app/infrastructure/ai/model_selection.dart';
 import 'package:note_ai_app/infrastructure/ai/model_storage_contract.dart';
+import 'package:note_ai_app/infrastructure/configuration/ai_configuration_store.dart';
+import 'package:note_ai_app/infrastructure/device/device_info_plus_hardware_detection_contract.dart';
 import 'package:note_ai_app/infrastructure/device/hardware_detection.dart';
 
 const _model = ModelDescriptor(
@@ -409,6 +414,459 @@ void main() {
         );
       },
     );
+
+    group('M4.5.a provisioning snapshots', () {
+      test(
+        'publishes existing-model phases with identity and never ready',
+        () async {
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(
+            storage: _FakeStorage(existingPath: '/models/${_model.fileName}'),
+            reporter: reporter,
+          );
+
+          await manager.ensureModelReady();
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(
+            snapshots.map((ModelProvisioningState state) => state.phase),
+            <ModelProvisioningPhase>[
+              ModelProvisioningPhase.detectingDevice,
+              ModelProvisioningPhase.selectingModel,
+              ModelProvisioningPhase.checkingExistingModel,
+              ModelProvisioningPhase.verifying,
+              ModelProvisioningPhase.artifactReady,
+            ],
+          );
+          // The manager's own terminal success phase is artifactReady; the
+          // runtime phases belong to the composition root.
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.loadingRuntime)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.ready)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.failed)),
+          );
+
+          final List<ModelProvisioningState> withModel = snapshots
+              .skip(2)
+              .toList();
+          for (final ModelProvisioningState state in withModel) {
+            expect(state.modelId, _model.id);
+            expect(state.modelName, _model.fileName);
+          }
+          for (final ModelProvisioningState state in snapshots) {
+            expect(state.updatedAt.isUtc, isTrue);
+            expect(state.failure, isNull);
+            expect(state.downloadedBytes, 0);
+            expect(state.totalBytes, isNull);
+            expect(state.isIndeterminate, isTrue);
+          }
+          expect(identical(reporter.current, snapshots.last), isTrue);
+        },
+      );
+
+      test(
+        'publishes downloading progress bounded by the descriptor size',
+        () async {
+          final _RecordingReporter reporter = _RecordingReporter();
+          final _FakeStorage storage = _FakeStorage();
+          final ModelManager manager = _manager(
+            storage: storage,
+            downloader: _FakeDownloader(progressSteps: <int>[2048, 4096]),
+            reporter: reporter,
+          );
+
+          await manager.ensureModelReady();
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(
+            snapshots.map((ModelProvisioningState state) => state.phase),
+            <ModelProvisioningPhase>[
+              ModelProvisioningPhase.detectingDevice,
+              ModelProvisioningPhase.selectingModel,
+              ModelProvisioningPhase.checkingExistingModel,
+              ModelProvisioningPhase.downloading,
+              ModelProvisioningPhase.downloading,
+              ModelProvisioningPhase.downloading,
+              ModelProvisioningPhase.verifying,
+              ModelProvisioningPhase.committing,
+              ModelProvisioningPhase.artifactReady,
+            ],
+          );
+          final List<ModelProvisioningState> downloading = snapshots
+              .where((s) => s.phase == ModelProvisioningPhase.downloading)
+              .toList();
+          // The descriptor declares the artifact size, so progress is determinate.
+          for (final ModelProvisioningState state in downloading) {
+            expect(state.modelId, _model.id);
+            expect(state.modelName, _model.fileName);
+            expect(state.totalBytes, _model.fileSizeBytes);
+            expect(state.isIndeterminate, isFalse);
+            expect(state.failure, isNull);
+          }
+          expect(
+            downloading.map((s) => s.downloadedBytes),
+            <int>[0, 2048, 4096],
+            reason:
+                'progress is cumulative from the phase start to the last byte',
+          );
+          for (final ModelProvisioningState state in downloading) {
+            expect(state.downloadedBytes, lessThanOrEqualTo(state.totalBytes!));
+          }
+        },
+      );
+
+      test(
+        'never publishes ready or loadingRuntime after a download',
+        () async {
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(reporter: reporter);
+
+          await manager.ensureModelReady();
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(snapshots.last.phase, ModelProvisioningPhase.artifactReady);
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.ready)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.loadingRuntime)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.failed)),
+          );
+        },
+      );
+
+      test('publishes hardware detection failure as failed', () async {
+        final HardwareDetectionException expected = HardwareDetectionException(
+          'device info unavailable',
+        );
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _FakeStorage storage = _FakeStorage();
+        final ModelManager manager = _manager(
+          storage: storage,
+          hardware: _FakeHardware(failure: expected),
+          reporter: reporter,
+        );
+
+        await expectLater(manager.ensureModelReady(), throwsA(same(expected)));
+
+        final List<ModelProvisioningState> snapshots = reporter.snapshots;
+        expect(snapshots.last.phase, ModelProvisioningPhase.failed);
+        expect(
+          snapshots.last.failure!.code,
+          ModelProvisioningFailureCode.hardwareDetectionFailed,
+        );
+        expect(storage.finds, isZero);
+      });
+
+      test(
+        'publishes no-compatible-model as failed without readiness',
+        () async {
+          final _RecordingReporter reporter = _RecordingReporter();
+          final _FakeAiConfigurationStore configurationStore =
+              _FakeAiConfigurationStore();
+          final ModelManager manager = _manager(
+            policy: _FakePolicy.noSelection(),
+            aiConfigurationStore: configurationStore,
+            reporter: reporter,
+          );
+
+          await expectLater(
+            manager.ensureModelReady(),
+            throwsA(isA<NoModelSelectedException>()),
+          );
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(
+            snapshots.map((ModelProvisioningState state) => state.phase),
+            <ModelProvisioningPhase>[
+              ModelProvisioningPhase.detectingDevice,
+              ModelProvisioningPhase.selectingModel,
+              ModelProvisioningPhase.failed,
+            ],
+          );
+          expect(
+            snapshots.last.failure!.code,
+            ModelProvisioningFailureCode.noCompatibleModel,
+          );
+          expect(configurationStore.snapshots, isEmpty);
+        },
+      );
+
+      test(
+        'maps a download exception to downloadFailed with safe detail',
+        () async {
+          final ModelDownloadException expected = ModelDownloadException(
+            'download failed for https://example.invalid/model.gguf',
+          );
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(
+            downloader: _FakeDownloader(failure: expected),
+            reporter: reporter,
+          );
+
+          await expectLater(
+            manager.ensureModelReady(),
+            throwsA(same(expected)),
+          );
+
+          final ModelProvisioningState failed = reporter.snapshots.last;
+          expect(failed.phase, ModelProvisioningPhase.failed);
+          final ModelProvisioningFailure failure = failed.failure!;
+          expect(failure.code, ModelProvisioningFailureCode.downloadFailed);
+          expect(failure.retryable, isTrue);
+          expect(failure.detail, isNotNull);
+          expect(failure.detail, isNot(contains('https://')));
+          expect(failure.detail, isNot(contains('example.invalid')));
+          expect(failure.detail!.length, lessThanOrEqualTo(120));
+        },
+      );
+
+      test(
+        'maps integrity, storage, and unexpected failures to their codes',
+        () async {
+          Future<ModelProvisioningFailure> runFailure({
+            required Object error,
+            IModelDownloader? downloader,
+            IModelStorage? storage,
+            IModelIntegrityVerifier? verifier,
+          }) async {
+            final _RecordingReporter reporter = _RecordingReporter();
+            final ModelManager manager = _manager(
+              downloader: downloader ?? _FakeDownloader(),
+              storage: storage ?? _FakeStorage(),
+              verifier: verifier ?? _FakeVerifier(),
+              reporter: reporter,
+            );
+            await expectLater(manager.ensureModelReady(), throwsA(same(error)));
+            return reporter.snapshots.last.failure!;
+          }
+
+          final ModelProvisioningFailure integrity = await runFailure(
+            error: const ModelIntegrityException(
+              'sha mismatch for /models/model.gguf',
+            ),
+            verifier: _FakeVerifier(
+              failure: const ModelIntegrityException(
+                'sha mismatch for /models/model.gguf',
+              ),
+            ),
+          );
+          expect(
+            integrity.code,
+            ModelProvisioningFailureCode.integrityMismatch,
+          );
+          expect(integrity.detail, isNot(contains('/models/')));
+
+          final ModelProvisioningFailure storage = await runFailure(
+            error: const ModelStorageException(
+              'failed to resolve the app support directory',
+            ),
+            storage: _FakeStorage(
+              findFailure: const ModelStorageException(
+                'failed to resolve the app support directory',
+              ),
+            ),
+          );
+          expect(storage.code, ModelProvisioningFailureCode.storageFailed);
+
+          final ModelProvisioningFailure missing = await runFailure(
+            error: const ModelNotFoundException('/models/model.gguf'),
+            storage: _FakeStorage(
+              findFailure: const ModelNotFoundException('/models/model.gguf'),
+            ),
+          );
+          expect(
+            missing.code,
+            ModelProvisioningFailureCode.storageFailed,
+            reason: 'ModelNotFoundException extends ModelStorageException',
+          );
+
+          final StateError unexpectedError = StateError('mystery failure');
+          final ModelProvisioningFailure unexpected = await runFailure(
+            error: unexpectedError,
+            downloader: _FakeDownloader(failure: unexpectedError),
+          );
+          expect(unexpected.code, ModelProvisioningFailureCode.unexpected);
+          expect(unexpected.retryable, isFalse);
+        },
+      );
+
+      test(
+        'a runtime-load exception never becomes artifactReady or ready',
+        () async {
+          final LlmWorkerException expected = LlmWorkerException(
+            'worker isolate failed during startup',
+          );
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(
+            verifier: _FakeVerifier(failure: expected),
+            reporter: reporter,
+          );
+
+          await expectLater(
+            manager.ensureModelReady(),
+            throwsA(same(expected)),
+          );
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(snapshots.last.phase, ModelProvisioningPhase.failed);
+          expect(
+            snapshots.last.failure!.code,
+            ModelProvisioningFailureCode.runtimeLoadFailed,
+          );
+          expect(snapshots.last.failure!.retryable, isFalse);
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.artifactReady)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.ready)),
+          );
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.loadingRuntime)),
+          );
+        },
+      );
+
+      test(
+        'concurrent callers publish exactly one provisioning sequence',
+        () async {
+          final Completer<void> downloadGate = Completer<void>();
+          final Completer<void> downloadStarted = Completer<void>();
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(
+            downloader: _FakeDownloader(
+              gate: downloadGate,
+              started: downloadStarted,
+            ),
+            reporter: reporter,
+          );
+
+          final Future<PreparedModel> first = manager.ensureModelReady();
+          final Future<PreparedModel> second = manager.ensureModelReady();
+          expect(identical(first, second), isTrue);
+          await downloadStarted.future;
+          downloadGate.complete();
+          await Future.wait(<Future<PreparedModel>>[first, second]);
+
+          final List<ModelProvisioningState> snapshots = reporter.snapshots;
+          expect(
+            snapshots.where(
+              (s) => s.phase == ModelProvisioningPhase.detectingDevice,
+            ),
+            hasLength(1),
+            reason: 'one shared operation publishes one lifecycle',
+          );
+          expect(snapshots.last.phase, ModelProvisioningPhase.artifactReady);
+          expect(
+            snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.ready)),
+          );
+        },
+      );
+
+      test('a throwing reporter never masks successful provisioning', () async {
+        final ModelManager manager = _manager(reporter: _ThrowingReporter());
+
+        final PreparedModel prepared = await manager.ensureModelReady();
+
+        expect(prepared.path, '/models/${_model.fileName}');
+      });
+    });
+  });
+
+  group('mapModelProvisioningFailure', () {
+    ModelProvisioningFailure expectCode(
+      Object error,
+      ModelProvisioningFailureCode code,
+    ) {
+      final ModelProvisioningFailure failure = mapModelProvisioningFailure(
+        error,
+      );
+      expect(failure.code, code);
+      expect(failure.detail, isNotNull);
+      expect(failure.detail!.length, lessThanOrEqualTo(120));
+      expect(failure.detail, isNot(contains('https://')));
+      expect(failure.detail, isNot(contains('/models/')));
+      expect(failure.retryable, code.retryable);
+      return failure;
+    }
+
+    test('maps every expected failure class to its stable code', () {
+      const ModelSelectionResult noSelection = ModelSelectionResult(
+        selectedModel: null,
+        rejectionReasons: <String, String>{},
+        selectionReason: 'none',
+      );
+      expectCode(
+        const NoModelSelectedException(
+          capability: _capability,
+          selection: noSelection,
+        ),
+        ModelProvisioningFailureCode.noCompatibleModel,
+      );
+      expectCode(
+        const HardwareDetectionException('detection failed'),
+        ModelProvisioningFailureCode.hardwareDetectionFailed,
+      );
+      expectCode(
+        const ModelDownloadException('download failed'),
+        ModelProvisioningFailureCode.downloadFailed,
+      );
+      expectCode(
+        const ModelIntegrityException('digest mismatch'),
+        ModelProvisioningFailureCode.integrityMismatch,
+      );
+      expectCode(
+        const ModelStorageException('storage failed'),
+        ModelProvisioningFailureCode.storageFailed,
+      );
+      expectCode(
+        const ModelNotFoundException('model missing'),
+        ModelProvisioningFailureCode.storageFailed,
+        // ModelNotFoundException extends ModelStorageException.
+      );
+      expectCode(
+        const LlmWorkerException('startup failed'),
+        ModelProvisioningFailureCode.runtimeLoadFailed,
+      );
+      expectCode(
+        UnsupportedError('local models unsupported on this platform'),
+        ModelProvisioningFailureCode.unsupportedPlatform,
+      );
+      expectCode(
+        StateError('unmapped'),
+        ModelProvisioningFailureCode.unexpected,
+      );
+    });
+
+    test('never leaks exception text into the failure detail', () {
+      final ModelProvisioningFailure failure = mapModelProvisioningFailure(
+        ModelDownloadException(
+          'GET https://huggingface.co/evil/../../secret.gguf failed with '
+          'raw path /Users/me/.cache/models/model.gguf',
+        ),
+      );
+      expect(failure.code, ModelProvisioningFailureCode.downloadFailed);
+      expect(failure.detail, isNot(contains('huggingface')));
+      expect(failure.detail, isNot(contains('https://')));
+      expect(failure.detail, isNot(contains('.gguf')));
+      expect(failure.detail, isNot(contains('/Users/')));
+    });
   });
 }
 
@@ -418,27 +876,35 @@ ModelManager _manager({
   IModelDownloader? downloader,
   IModelIntegrityVerifier? verifier,
   IModelSelectionPolicy? policy,
+  IHardwareDetectionService? hardware,
   AiConfigurationStore? aiConfigurationStore,
+  IModelProvisioningReporter? reporter,
 }) {
   return ModelManager(
-    hardwareDetectionService: _FakeHardware(events: events),
+    hardwareDetectionService: hardware ?? _FakeHardware(events: events),
     modelSelectionPolicy: policy ?? _FakePolicy(events: events),
     modelCatalog: const _FakeCatalog(<ModelDescriptor>[_model]),
     modelStorage: storage ?? _FakeStorage(events: events),
     modelDownloader: downloader ?? _FakeDownloader(events: events),
     integrityVerifier: verifier ?? _FakeVerifier(events: events),
     aiConfigurationStore: aiConfigurationStore,
+    modelProvisioningReporter: reporter,
   );
 }
 
 final class _FakeHardware implements IHardwareDetectionService {
-  const _FakeHardware({this.events});
+  _FakeHardware({this.events, this.failure});
 
   final List<String>? events;
+  final Object? failure;
 
   @override
   Future<DeviceCapability> getDeviceCapability() async {
     events?.add('detect');
+    final Object? error = failure;
+    if (error != null) {
+      throw error;
+    }
     return _capability;
   }
 }
@@ -482,11 +948,17 @@ final class _FakeCatalog implements IModelCatalog {
 }
 
 final class _FakeStorage implements IModelStorage {
-  _FakeStorage({this.events, this.existingPath, this.commitFailure});
+  _FakeStorage({
+    this.events,
+    this.existingPath,
+    this.commitFailure,
+    this.findFailure,
+  });
 
   final List<String>? events;
   final String? existingPath;
   final Object? commitFailure;
+  final Object? findFailure;
   int finds = 0;
   int stagingCreates = 0;
   int commits = 0;
@@ -496,6 +968,10 @@ final class _FakeStorage implements IModelStorage {
   Future<String?> findModel(ModelDescriptor model) async {
     events?.add('find');
     finds++;
+    final Object? error = findFailure;
+    if (error != null) {
+      throw error;
+    }
     return existingPath;
   }
 
@@ -531,12 +1007,19 @@ final class _FakeStorage implements IModelStorage {
 }
 
 final class _FakeDownloader implements IModelDownloader {
-  _FakeDownloader({this.events, this.failure, this.gate, this.started});
+  _FakeDownloader({
+    this.events,
+    this.failure,
+    this.gate,
+    this.started,
+    this.progressSteps,
+  });
 
   final List<String>? events;
   final Object? failure;
   final Completer<void>? gate;
   final Completer<void>? started;
+  final List<int>? progressSteps;
   int downloads = 0;
   final List<ModelDescriptor> models = <ModelDescriptor>[];
 
@@ -544,6 +1027,7 @@ final class _FakeDownloader implements IModelDownloader {
   Future<void> download({
     required ModelDescriptor model,
     required ModelStagingFile target,
+    ModelDownloadProgress? onProgress,
   }) async {
     events?.add('download');
     downloads++;
@@ -552,6 +1036,12 @@ final class _FakeDownloader implements IModelDownloader {
     final Object? error = failure;
     if (error != null) {
       throw error;
+    }
+    final List<int>? steps = progressSteps;
+    if (steps != null && onProgress != null) {
+      for (final int step in steps) {
+        onProgress(step);
+      }
     }
     final Completer<void>? waitFor = gate;
     if (waitFor != null) {
@@ -602,4 +1092,24 @@ final class _FakeAiConfigurationStore implements AiConfigurationStore {
 
   @override
   Future<void> clear() async {}
+}
+
+/// Records every snapshot handed to [IModelProvisioningReporter.publish].
+final class _RecordingReporter implements IModelProvisioningReporter {
+  final List<ModelProvisioningState> snapshots = <ModelProvisioningState>[];
+  ModelProvisioningState? current;
+
+  @override
+  void publish(ModelProvisioningState state) {
+    current = state;
+    snapshots.add(state);
+  }
+}
+
+/// A reporter whose failure must not alter provisioning semantics.
+final class _ThrowingReporter implements IModelProvisioningReporter {
+  @override
+  void publish(ModelProvisioningState state) {
+    throw StateError('reporter unavailable');
+  }
 }
