@@ -74,6 +74,23 @@ abstract interface class IModelStorage {
   /// Implementations must never use this operation to delete the explicit
   /// debug override or an arbitrary path outside the model directory.
   Future<void> discardStagingFile(ModelStagingFile stagingFile);
+
+  /// Removes stale, recognized staging files from the app-private model
+  /// directory. Returns the number of files removed.
+  ///
+  /// Implementations must never traverse outside the model directory or
+  /// delete an explicit developer override. A zero duration is useful for
+  /// deterministic tests; negative ages are invalid.
+  Future<int> cleanupStagingFiles({
+    Duration olderThan = const Duration(hours: 24),
+  });
+
+  /// Removes the exact app-private artifact for [model] after an integrity
+  /// failure so a later attempt can download a fresh copy.
+  ///
+  /// This operation is a no-op when an explicit model-path override is active
+  /// and must never delete an arbitrary path or an unrelated model file.
+  Future<void> discardModel(ModelDescriptor model);
 }
 
 /// Base error for model storage failures other than a missing model.

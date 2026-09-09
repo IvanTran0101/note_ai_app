@@ -210,6 +210,8 @@ void main() {
       );
       expect(() => storage.commitStagingFile(staging), throwsUnsupportedError);
       expect(() => storage.discardStagingFile(staging), throwsUnsupportedError);
+      expect(() => storage.cleanupStagingFiles(), throwsUnsupportedError);
+      expect(() => storage.discardModel(_descriptor()), throwsUnsupportedError);
     });
   });
 
@@ -485,5 +487,86 @@ void main() {
         );
       },
     );
+
+    test('cleans only stale recognized staging files', () async {
+      final Directory modelsDir = Directory(
+        '${tempDir.path}${Platform.pathSeparator}$kModelDirectoryName',
+      )..createSync(recursive: true);
+      final File stale = File(
+        '${modelsDir.path}${Platform.pathSeparator}model.gguf.1-2.part',
+      )..writeAsStringSync('stale');
+      stale.setLastModifiedSync(
+        DateTime.now().subtract(const Duration(days: 2)),
+      );
+      final File fresh = File(
+        '${modelsDir.path}${Platform.pathSeparator}model.gguf.3-4.part',
+      )..writeAsStringSync('fresh');
+      final File unrecognized = File(
+        '${modelsDir.path}${Platform.pathSeparator}keep.part',
+      )..writeAsStringSync('keep');
+
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+
+      expect(
+        await storage.cleanupStagingFiles(olderThan: const Duration(hours: 24)),
+        1,
+      );
+      expect(stale.existsSync(), isFalse);
+      expect(fresh.existsSync(), isTrue);
+      expect(unrecognized.existsSync(), isTrue);
+    });
+
+    test('rejects a negative stale-file age', () {
+      final LocalModelStorage storage = LocalModelStorage(
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+
+      expect(
+        () =>
+            storage.cleanupStagingFiles(olderThan: const Duration(seconds: -1)),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+      'discardModel removes only the exact app-private model artifact',
+      () async {
+        final Directory modelsDir = Directory(
+          '${tempDir.path}${Platform.pathSeparator}$kModelDirectoryName',
+        )..createSync(recursive: true);
+        final ModelDescriptor model = _descriptor(fileName: 'invalid.gguf');
+        final File invalid = File(
+          '${modelsDir.path}${Platform.pathSeparator}${model.fileName}',
+        )..writeAsStringSync('invalid');
+        final File other = File(
+          '${modelsDir.path}${Platform.pathSeparator}other.gguf',
+        )..writeAsStringSync('keep');
+        final LocalModelStorage storage = LocalModelStorage(
+          appSupportDirectoryPath: () async => tempDir.path,
+        );
+
+        await storage.discardModel(model);
+
+        expect(invalid.existsSync(), isFalse);
+        expect(other.existsSync(), isTrue);
+      },
+    );
+
+    test('discardModel never deletes an explicit override', () async {
+      final File override = File(
+        '${tempDir.path}${Platform.pathSeparator}override.gguf',
+      )..writeAsStringSync('keep');
+      final LocalModelStorage storage = LocalModelStorage(
+        overrideModelPath: override.path,
+        appSupportDirectoryPath: () async => tempDir.path,
+      );
+
+      await storage.discardModel(_descriptor(fileName: 'override.gguf'));
+
+      expect(override.existsSync(), isTrue);
+      expect(override.readAsStringSync(), 'keep');
+    });
   });
 }

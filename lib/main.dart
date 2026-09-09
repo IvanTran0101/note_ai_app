@@ -212,6 +212,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     return service.summarize(content);
   }
 
+  void _cancelModelProvisioning() {
+    _modelManager.cancelProvisioning();
+  }
+
   String _generateNoteId() {
     _noteIdSequence++;
     return 'note-${DateTime.now().microsecondsSinceEpoch}-$_noteIdSequence';
@@ -225,10 +229,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       if (snapshot == null) {
         return null;
       }
-      return switch (snapshot.status) {
-        ModelReadinessStatus.preparing => 'preparing · ${snapshot.modelId}',
-        ModelReadinessStatus.ready => 'ready · ${snapshot.modelId}',
-        ModelReadinessStatus.failed => 'failed · ${snapshot.modelId}',
+      return switch (snapshot.runtimeStatus) {
+        RuntimeReadinessStatus.loading =>
+          'runtime-loading · ${snapshot.modelId}',
+        RuntimeReadinessStatus.failed => 'runtime-failed · ${snapshot.modelId}',
+        RuntimeReadinessStatus.ready => 'ready · ${snapshot.modelId}',
+        RuntimeReadinessStatus.unknown => switch (snapshot.status) {
+          ModelReadinessStatus.preparing => 'preparing · ${snapshot.modelId}',
+          ModelReadinessStatus.ready => 'ready · ${snapshot.modelId}',
+          ModelReadinessStatus.failed => 'failed · ${snapshot.modelId}',
+          ModelReadinessStatus.cancelled => 'cancelled · ${snapshot.modelId}',
+        },
       };
     } on Object {
       // Diagnostics must remain usable when advisory state is unavailable or
@@ -269,11 +280,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     final String modelPath;
     final int contextSize;
     final int maxOutputTokens;
+    PreparedModel? preparedModel;
     String? modelId;
     String? modelName;
     if (_usesAutomaticModelProvisioning) {
-      final PreparedModel preparedModel = await _modelManager
-          .ensureModelReady();
+      preparedModel = await _modelManager.ensureModelReady();
       modelPath = preparedModel.path;
       contextSize = preparedModel.model.contextSize;
       maxOutputTokens = preparedModel.model.maxOutputTokens;
@@ -292,42 +303,96 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       throw StateError('NoteFlowApp was disposed while preparing local AI');
     }
 
+    if (preparedModel != null) {
+      await _persistRuntimeReadiness(
+        preparedModel: preparedModel,
+        status: RuntimeReadinessStatus.loading,
+      );
+    }
+
     // Publish loadingRuntime before the worker starts, ready only after the
     // summarization service is constructed, and failed (runtimeLoadFailed for
     // worker failures) when startup throws. ModelManager never publishes these
     // runtime phases itself.
-    return runModelProvisioningRuntimeLoad<NoteSummaryAppService>(
-      reporter: _modelProvisioningStatus,
-      modelId: modelId,
-      modelName: modelName,
-      mapFailure: mapModelProvisioningFailure,
-      load: () async {
-        final LlmWorkerClient client = await startLlmWorkerClient(
-          modelPath: modelPath,
-          contextSize: contextSize,
-          threads: _aiConfiguration.workerThreads,
-        );
-        if (_disposed) {
-          await client.dispose();
-          throw StateError('NoteFlowApp was disposed while starting local AI');
-        }
-
-        try {
-          final LocalSummarizationService infrastructureService =
-              LocalSummarizationService(
-                workerClient: client,
-                maxTokens: maxOutputTokens,
+    try {
+      final NoteSummaryAppService service =
+          await runModelProvisioningRuntimeLoad<NoteSummaryAppService>(
+            reporter: _modelProvisioningStatus,
+            modelId: modelId,
+            modelName: modelName,
+            mapFailure: mapModelProvisioningFailure,
+            load: () async {
+              final LlmWorkerClient client = await startLlmWorkerClient(
+                modelPath: modelPath,
+                contextSize: contextSize,
+                threads: _aiConfiguration.workerThreads,
               );
-          _workerClient = client;
-          return NoteSummaryAppService(
-            summarizationService: infrastructureService,
+              if (_disposed) {
+                await client.dispose();
+                throw StateError(
+                  'NoteFlowApp was disposed while starting local AI',
+                );
+              }
+
+              try {
+                final LocalSummarizationService infrastructureService =
+                    LocalSummarizationService(
+                      workerClient: client,
+                      maxTokens: maxOutputTokens,
+                    );
+                _workerClient = client;
+                return NoteSummaryAppService(
+                  summarizationService: infrastructureService,
+                );
+              } on Object {
+                await client.dispose();
+                rethrow;
+              }
+            },
           );
-        } on Object {
-          await client.dispose();
-          rethrow;
-        }
-      },
-    );
+      if (preparedModel != null) {
+        await _persistRuntimeReadiness(
+          preparedModel: preparedModel,
+          status: RuntimeReadinessStatus.ready,
+        );
+      }
+      return service;
+    } on Object catch (error, stackTrace) {
+      if (preparedModel != null) {
+        await _persistRuntimeReadiness(
+          preparedModel: preparedModel,
+          status: RuntimeReadinessStatus.failed,
+          runtimeError: mapModelProvisioningFailure(error).detail,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _persistRuntimeReadiness({
+    required PreparedModel preparedModel,
+    required RuntimeReadinessStatus status,
+    String? runtimeError,
+  }) async {
+    try {
+      final AiReadinessSnapshot? snapshot = await _aiConfigurationStore.read();
+      if (snapshot == null ||
+          snapshot.modelId != preparedModel.model.id ||
+          snapshot.modelVersion != preparedModel.model.version ||
+          snapshot.modelSha256 != preparedModel.model.sha256) {
+        return;
+      }
+      await _aiConfigurationStore.save(
+        snapshot.withRuntimeStatus(
+          status,
+          runtimeError: runtimeError,
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+    } on Object {
+      // Runtime readiness is advisory bookkeeping. A store failure must never
+      // mask a usable runtime or its original startup failure.
+    }
   }
 
   bool get _usesAutomaticModelProvisioning {
@@ -456,6 +521,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
           return NotesPage(
             applicationService: _noteApplicationService,
             provisioningReader: _modelProvisioningStatus,
+            onProvisioningCancel: _cancelModelProvisioning,
             onOpenSettings: () => _showAppearanceSettings(context),
             onOpenDiagnostics: () {
               Navigator.of(context).push(
@@ -464,6 +530,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                     summarize: _summarize,
                     loadModelReadiness: _loadModelReadiness,
                     provisioningReader: _modelProvisioningStatus,
+                    onProvisioningCancel: _cancelModelProvisioning,
                   ),
                 ),
               );

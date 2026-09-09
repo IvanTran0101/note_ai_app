@@ -17,8 +17,8 @@ import 'model_provisioning_failure.dart';
 
 /// One observable step of the model-provisioning lifecycle.
 ///
-/// Phases run in lifecycle order; [failed] is the only terminal failure step
-/// and [ready] the only terminal success step.
+/// Phases run in lifecycle order; [failed] and [cancelled] are terminal
+/// non-success steps and [ready] is the terminal success step.
 enum ModelProvisioningPhase {
   /// No provisioning attempt has started.
   idle,
@@ -52,6 +52,9 @@ enum ModelProvisioningPhase {
 
   /// The attempt ended in failure; the snapshot must carry the failure.
   failed,
+
+  /// The user cancelled the active provisioning attempt.
+  cancelled,
 }
 
 /// Immutable snapshot of one model-provisioning attempt at a point in time.
@@ -62,12 +65,12 @@ enum ModelProvisioningPhase {
 /// [downloadedBytes] counts received artifact bytes and [totalBytes] is the
 /// declared artifact size, or null when unknown (indeterminate progress).
 /// [failure] is present exactly when [phase] is
-/// [ModelProvisioningPhase.failed].
+/// [ModelProvisioningPhase.failed]. A cancelled attempt has no failure.
 final class ModelProvisioningState {
   /// Creates a snapshot.
   ///
   /// Progress invariants are validated here: [downloadedBytes] must be
-  /// positive, a present [totalBytes] must be positive and at least
+  /// non-negative, a present [totalBytes] must be positive and at least
   /// [downloadedBytes], and [failure] must be present exactly when [phase] is
   /// [ModelProvisioningPhase.failed]: it cannot be attached to any other
   /// phase, and the failed phase cannot omit it.

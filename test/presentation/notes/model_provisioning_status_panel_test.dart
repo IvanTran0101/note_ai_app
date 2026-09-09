@@ -11,6 +11,7 @@ import 'package:note_ai_app/presentation/notes/notes_localizations.dart';
 Widget _app({
   required ModelProvisioningStatusHolder holder,
   VoidCallback? onRetry,
+  VoidCallback? onCancel,
   Locale locale = const Locale('en'),
 }) {
   return MaterialApp(
@@ -23,7 +24,11 @@ Widget _app({
       GlobalCupertinoLocalizations.delegate,
     ],
     home: Scaffold(
-      body: ModelProvisioningStatusPanel(reader: holder, onRetry: onRetry),
+      body: ModelProvisioningStatusPanel(
+        reader: holder,
+        onRetry: onRetry,
+        onCancel: onCancel,
+      ),
     ),
   );
 }
@@ -93,6 +98,52 @@ void main() {
           find.byKey(const ValueKey<String>('model-provisioning-progress')),
         );
     expect(progress.value, isNull);
+  });
+
+  testWidgets('offers cancellation while an active download is running', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.downloading,
+        downloadedBytes: 512,
+        totalBytes: 1024,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+    var cancelled = false;
+
+    await tester.pumpWidget(
+      _app(holder: holder, onRetry: () {}, onCancel: () => cancelled = true),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-cancel')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('model-provisioning-cancel')),
+    );
+    expect(cancelled, isTrue);
+  });
+
+  testWidgets('shows retry after cancellation', (WidgetTester tester) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.cancelled,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(_app(holder: holder, onRetry: () {}));
+
+    expect(find.text('Model setup was cancelled.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-retry')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

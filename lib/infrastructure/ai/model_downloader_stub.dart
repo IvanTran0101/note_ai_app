@@ -64,6 +64,7 @@ final class HttpModelDownloader implements IModelDownloader {
     required ModelDescriptor model,
     required ModelStagingFile target,
     ModelDownloadProgress? onProgress,
+    ModelProvisioningCancellationToken? cancellation,
   }) async {
     throw UnsupportedError(
       'Local model downloads are not available on Web; '

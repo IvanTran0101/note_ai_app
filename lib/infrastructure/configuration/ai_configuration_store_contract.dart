@@ -31,6 +31,28 @@ enum ModelReadinessStatus {
   /// The last provisioning attempt failed; [AiReadinessSnapshot.lastError]
   /// carries the failure detail when one was recorded.
   failed,
+
+  /// The user cancelled the last provisioning attempt before the artifact was
+  /// ready.
+  cancelled,
+}
+
+/// Runtime readiness of the native worker for the persisted artifact.
+///
+/// This is intentionally separate from [ModelReadinessStatus]: an artifact
+/// can be verified while the runtime is still loading or has failed to start.
+enum RuntimeReadinessStatus {
+  /// No runtime result has been recorded for this artifact.
+  unknown,
+
+  /// The worker/native runtime is currently loading the verified artifact.
+  loading,
+
+  /// The worker/native runtime loaded successfully.
+  ready,
+
+  /// The worker/native runtime failed to load.
+  failed,
 }
 
 /// Immutable persisted snapshot of the readiness of one on-device model.
@@ -54,6 +76,8 @@ final class AiReadinessSnapshot {
     required List<String> supportedAbis,
     required ModelReadinessStatus status,
     String? lastError,
+    RuntimeReadinessStatus runtimeStatus = RuntimeReadinessStatus.unknown,
+    String? runtimeError,
     required DateTime updatedAt,
   }) {
     return AiReadinessSnapshot._(
@@ -67,6 +91,8 @@ final class AiReadinessSnapshot {
       supportedAbis: _copySupportedAbis(supportedAbis),
       status: status,
       lastError: _normalizeNullableString(lastError),
+      runtimeStatus: runtimeStatus,
+      runtimeError: _normalizeNullableString(runtimeError),
       updatedAt: updatedAt,
     );
   }
@@ -87,6 +113,8 @@ final class AiReadinessSnapshot {
       supportedAbis: _readSupportedAbis(json),
       status: _readStatus(json),
       lastError: _readNullableString(json, 'lastError'),
+      runtimeStatus: _readRuntimeStatus(json),
+      runtimeError: _readNullableString(json, 'runtimeError'),
       updatedAt: _readTimestamp(json, 'updatedAt'),
     );
   }
@@ -102,6 +130,8 @@ final class AiReadinessSnapshot {
     required this.supportedAbis,
     required this.status,
     required this.lastError,
+    required this.runtimeStatus,
+    required this.runtimeError,
     required this.updatedAt,
   });
 
@@ -140,6 +170,12 @@ final class AiReadinessSnapshot {
   /// Failure detail from the last provisioning attempt, when recorded.
   final String? lastError;
 
+  /// Persisted runtime readiness, independent from artifact readiness.
+  final RuntimeReadinessStatus runtimeStatus;
+
+  /// Safe detail from the last runtime load failure, when recorded.
+  final String? runtimeError;
+
   /// When this record was last updated (ISO-8601 on the wire).
   final DateTime updatedAt;
 
@@ -156,6 +192,8 @@ final class AiReadinessSnapshot {
       'supportedAbis': supportedAbis,
       'status': status.name,
       'lastError': lastError,
+      'runtimeStatus': runtimeStatus.name,
+      'runtimeError': runtimeError,
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
@@ -171,6 +209,8 @@ final class AiReadinessSnapshot {
     'supportedAbis',
     'status',
     'lastError',
+    'runtimeStatus',
+    'runtimeError',
     'updatedAt',
   };
 
@@ -295,6 +335,29 @@ final class AiReadinessSnapshot {
     return status;
   }
 
+  static RuntimeReadinessStatus _readRuntimeStatus(Map<String, Object?> json) {
+    final Object? value = json['runtimeStatus'];
+    if (value == null) {
+      // Backward compatibility for schemaVersion=1 records written before
+      // runtime readiness was persisted.
+      return RuntimeReadinessStatus.unknown;
+    }
+    if (value is! String) {
+      throw const FormatException(
+        'AiReadinessSnapshot field "runtimeStatus" must be a string.',
+      );
+    }
+    final RuntimeReadinessStatus? status = RuntimeReadinessStatus.values
+        .asNameMap()[value];
+    if (status == null) {
+      throw FormatException(
+        'AiReadinessSnapshot field "runtimeStatus" must be one of '
+        '${RuntimeReadinessStatus.values.map((s) => s.name).join(', ')}.',
+      );
+    }
+    return status;
+  }
+
   static DateTime _readTimestamp(Map<String, Object?> json, String field) {
     final Object? value = json[field];
     if (value is! String) {
@@ -328,6 +391,8 @@ final class AiReadinessSnapshot {
         _sameAbis(other.supportedAbis, supportedAbis) &&
         other.status == status &&
         other.lastError == lastError &&
+        other.runtimeStatus == runtimeStatus &&
+        other.runtimeError == runtimeError &&
         other.updatedAt == updatedAt;
   }
 
@@ -343,8 +408,36 @@ final class AiReadinessSnapshot {
     Object.hashAll(supportedAbis),
     status,
     lastError,
+    runtimeStatus,
+    runtimeError,
     updatedAt,
   );
+
+  /// Returns a copy with only runtime readiness changed.
+  ///
+  /// The artifact identity and capability fingerprint remain untouched. A
+  /// loading/ready status clears [runtimeError] unless a caller supplies one.
+  AiReadinessSnapshot withRuntimeStatus(
+    RuntimeReadinessStatus status, {
+    String? runtimeError,
+    DateTime? updatedAt,
+  }) {
+    return AiReadinessSnapshot(
+      modelId: modelId,
+      modelVersion: modelVersion,
+      modelSha256: modelSha256,
+      localPath: localPath,
+      platform: platform,
+      osVersion: osVersion,
+      isPhysicalDevice: isPhysicalDevice,
+      supportedAbis: supportedAbis,
+      status: this.status,
+      lastError: lastError,
+      runtimeStatus: status,
+      runtimeError: runtimeError,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
+    );
+  }
 
   static bool _sameAbis(List<String> a, List<String> b) {
     if (a.length != b.length) {

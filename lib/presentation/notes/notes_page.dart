@@ -26,6 +26,7 @@ class NotesPage extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.provisioningReader,
+    this.onProvisioningCancel,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -36,6 +37,7 @@ class NotesPage extends StatefulWidget {
   final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenDiagnostics;
   final IModelProvisioningReader? provisioningReader;
+  final VoidCallback? onProvisioningCancel;
 
   @override
   State<NotesPage> createState() => _NotesPageState();
@@ -299,7 +301,8 @@ class _NotesPageState extends State<NotesPage> {
       final ModelProvisioningState? provisioningState =
           widget.provisioningReader?.current;
       final bool provisioningFailed =
-          provisioningState?.phase == ModelProvisioningPhase.failed;
+          provisioningState?.phase == ModelProvisioningPhase.failed ||
+          provisioningState?.phase == ModelProvisioningPhase.cancelled;
       setState(
         () => _error = provisioningFailed
             ? null
@@ -475,6 +478,7 @@ class _NotesPageState extends State<NotesPage> {
                   statusMessage: _statusMessage,
                   provisioningReader: widget.provisioningReader,
                   onProvisioningRetry: _summarizeNote,
+                  onProvisioningCancel: widget.onProvisioningCancel,
                   onSave: _saveNote,
                   onDelete: _selectedNoteId == null || _actionBusy
                       ? null

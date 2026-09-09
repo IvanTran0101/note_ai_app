@@ -136,6 +136,9 @@ final class ModelManager implements IModelManager {
   /// The current provisioning operation, if one is already running.
   Future<PreparedModel>? _inFlight;
 
+  /// Cancellation token owned by the current single-flight operation.
+  ModelProvisioningCancellationToken? _activeCancellation;
+
   /// Returns the current operation when present; otherwise starts exactly one
   /// operation and shares it with concurrent callers.
   @override
@@ -145,17 +148,20 @@ final class ModelManager implements IModelManager {
       return current;
     }
 
-    final Future<PreparedModel> started = _prepareModel();
+    final ModelProvisioningCancellationToken cancellation =
+        ModelProvisioningCancellationToken();
+    final Future<PreparedModel> started = _prepareModel(cancellation);
     _inFlight = started;
+    _activeCancellation = cancellation;
 
     // Clear the guard after either success or failure. The derived future
     // intentionally handles the error so it cannot become an unhandled error;
     // the original future returned to the caller retains the original error.
     unawaited(
       started.then<void>(
-        (_) => _clearInFlight(started),
+        (_) => _clearInFlight(started, cancellation),
         onError: (Object error, StackTrace stackTrace) {
-          _clearInFlight(started);
+          _clearInFlight(started, cancellation);
         },
       ),
     );
@@ -163,61 +169,81 @@ final class ModelManager implements IModelManager {
     return started;
   }
 
-  Future<void> _clearInFlight(Future<PreparedModel> operation) async {
+  @override
+  bool cancelProvisioning() {
+    final ModelProvisioningCancellationToken? cancellation =
+        _activeCancellation;
+    if (cancellation == null || _inFlight == null) {
+      return false;
+    }
+    cancellation.cancel();
+    return true;
+  }
+
+  Future<void> _clearInFlight(
+    Future<PreparedModel> operation,
+    ModelProvisioningCancellationToken cancellation,
+  ) async {
     if (identical(_inFlight, operation)) {
       _inFlight = null;
+      if (identical(_activeCancellation, cancellation)) {
+        _activeCancellation = null;
+      }
     }
   }
 
-  Future<PreparedModel> _prepareModel() async {
-    _publishPhase(ModelProvisioningPhase.detectingDevice);
-
-    final DeviceCapability capability;
-    try {
-      capability = await _hardwareDetectionService.getDeviceCapability();
-    } on Object catch (error, stackTrace) {
-      _publishFailure(error);
-      Error.throwWithStackTrace(error, stackTrace);
-    }
-
-    _publishPhase(ModelProvisioningPhase.selectingModel);
-    final ModelSelectionResult selection = _modelSelectionPolicy.select(
-      capability: capability,
-      candidates: _modelCatalog.models,
-    );
-    final ModelDescriptor? selectedModel = selection.selectedModel;
-    if (selectedModel == null) {
-      final NoModelSelectedException exception = NoModelSelectedException(
-        capability: capability,
-        selection: selection,
-      );
-      _publishFailure(exception);
-      throw exception;
-    }
-
-    _publishPhase(
-      ModelProvisioningPhase.checkingExistingModel,
-      model: selectedModel,
-    );
-    await _saveReadinessBestEffort(
-      _snapshot(
-        model: selectedModel,
-        capability: capability,
-        status: ModelReadinessStatus.preparing,
-      ),
-    );
-
+  Future<PreparedModel> _prepareModel(
+    ModelProvisioningCancellationToken cancellation,
+  ) async {
+    ModelDescriptor? selectedModel;
+    DeviceCapability? capability;
     ModelStagingFile? stagingFile;
+    String? existingPath;
+
     try {
-      final String? existingPath = await _modelStorage.findModel(selectedModel);
+      await _cleanupStagingBestEffort();
+      cancellation.throwIfCancelled();
+
+      _publishPhase(ModelProvisioningPhase.detectingDevice);
+      capability = await _hardwareDetectionService.getDeviceCapability();
+      cancellation.throwIfCancelled();
+
+      _publishPhase(ModelProvisioningPhase.selectingModel);
+      final ModelSelectionResult selection = _modelSelectionPolicy.select(
+        capability: capability,
+        candidates: _modelCatalog.models,
+      );
+      cancellation.throwIfCancelled();
+      selectedModel = selection.selectedModel;
+      if (selectedModel == null) {
+        throw NoModelSelectedException(
+          capability: capability,
+          selection: selection,
+        );
+      }
+
+      _publishPhase(
+        ModelProvisioningPhase.checkingExistingModel,
+        model: selectedModel,
+      );
+      await _saveReadinessBestEffort(
+        _snapshot(
+          model: selectedModel,
+          capability: capability,
+          status: ModelReadinessStatus.preparing,
+        ),
+      );
+      cancellation.throwIfCancelled();
+
+      existingPath = await _modelStorage.findModel(selectedModel);
+      cancellation.throwIfCancelled();
       if (existingPath != null) {
-        // This branch intentionally has no staging cleanup: a verifier failure
-        // must not delete or discard an already-existing model.
         _publishPhase(ModelProvisioningPhase.verifying, model: selectedModel);
         await _integrityVerifier.verify(
           model: selectedModel,
           filePath: existingPath,
         );
+        cancellation.throwIfCancelled();
         await _saveReadinessBestEffort(
           _snapshot(
             model: selectedModel,
@@ -238,16 +264,21 @@ final class ModelManager implements IModelManager {
       }
 
       stagingFile = await _modelStorage.createStagingFile(selectedModel);
-      await _downloadWithProgress(selectedModel, stagingFile);
+      cancellation.throwIfCancelled();
+      await _downloadWithProgress(selectedModel, stagingFile, cancellation);
+      cancellation.throwIfCancelled();
       _publishPhase(ModelProvisioningPhase.verifying, model: selectedModel);
       await _integrityVerifier.verify(
         model: selectedModel,
         filePath: stagingFile.path,
       );
+      cancellation.throwIfCancelled();
       _publishPhase(ModelProvisioningPhase.committing, model: selectedModel);
+      final ModelStagingFile committedStagingFile = stagingFile;
       final String localPath = await _modelStorage.commitStagingFile(
-        stagingFile,
+        committedStagingFile,
       );
+      stagingFile = null;
       await _saveReadinessBestEffort(
         _snapshot(
           model: selectedModel,
@@ -266,15 +297,40 @@ final class ModelManager implements IModelManager {
       if (stagingFile != null) {
         await _discardStagingBestEffort(stagingFile);
       }
+
+      if (error is ModelProvisioningCancelledException) {
+        _publishCancelled(model: selectedModel);
+        final DeviceCapability? detectedCapability = capability;
+        if (selectedModel != null && detectedCapability != null) {
+          await _saveReadinessBestEffort(
+            _snapshot(
+              model: selectedModel,
+              capability: detectedCapability,
+              status: ModelReadinessStatus.cancelled,
+            ),
+          );
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+
+      if (selectedModel != null &&
+          existingPath != null &&
+          error is ModelIntegrityException) {
+        await _discardModelBestEffort(selectedModel);
+      }
+
       _publishFailure(error, model: selectedModel);
-      await _saveReadinessBestEffort(
-        _snapshot(
-          model: selectedModel,
-          capability: capability,
-          status: ModelReadinessStatus.failed,
-          lastError: _boundedError(error),
-        ),
-      );
+      final DeviceCapability? detectedCapability = capability;
+      if (selectedModel != null && detectedCapability != null) {
+        await _saveReadinessBestEffort(
+          _snapshot(
+            model: selectedModel,
+            capability: detectedCapability,
+            status: ModelReadinessStatus.failed,
+            lastError: _boundedError(error),
+          ),
+        );
+      }
       Error.throwWithStackTrace(error, stackTrace);
     }
   }
@@ -284,9 +340,14 @@ final class ModelManager implements IModelManager {
   Future<void> _downloadWithProgress(
     ModelDescriptor model,
     ModelStagingFile stagingFile,
+    ModelProvisioningCancellationToken cancellation,
   ) async {
     if (_modelProvisioningReporter == null) {
-      await _modelDownloader.download(model: model, target: stagingFile);
+      await _modelDownloader.download(
+        model: model,
+        target: stagingFile,
+        cancellation: cancellation,
+      );
       return;
     }
 
@@ -301,6 +362,7 @@ final class ModelManager implements IModelManager {
     await _modelDownloader.download(
       model: model,
       target: stagingFile,
+      cancellation: cancellation,
       onProgress: (int receivedBytes) {
         _publishPhase(
           ModelProvisioningPhase.downloading,
@@ -367,6 +429,34 @@ final class ModelManager implements IModelManager {
         updatedAt: DateTime.now().toUtc(),
       ),
     );
+  }
+
+  void _publishCancelled({ModelDescriptor? model}) {
+    _publishState(
+      ModelProvisioningState(
+        phase: ModelProvisioningPhase.cancelled,
+        modelId: model?.id,
+        modelName: model?.fileName,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  Future<void> _cleanupStagingBestEffort() async {
+    try {
+      await _modelStorage.cleanupStagingFiles();
+    } on Object {
+      // Recovery is best-effort. A cleanup failure must not block a fresh
+      // provisioning attempt or replace its original error.
+    }
+  }
+
+  Future<void> _discardModelBestEffort(ModelDescriptor model) async {
+    try {
+      await _modelStorage.discardModel(model);
+    } on Object {
+      // Never replace the integrity error with a recovery failure.
+    }
   }
 
   /// Publishes [state] best-effort: reporting is advisory and must never

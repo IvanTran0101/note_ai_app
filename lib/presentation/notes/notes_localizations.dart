@@ -80,6 +80,11 @@ final class NotesCopy {
       : 'The model is downloaded once into app storage. Wi-Fi is recommended.';
   String get provisioningDownloaded => _isVietnamese ? 'Đã tải' : 'Downloaded';
   String get provisioningRetry => _isVietnamese ? 'Thử tải lại' : 'Retry setup';
+  String get provisioningCancel =>
+      _isVietnamese ? 'Hủy tải' : 'Cancel download';
+  String get provisioningCancelled => _isVietnamese
+      ? 'Đã hủy thiết lập mô hình.'
+      : 'Model setup was cancelled.';
   String get provisioningNoDetail => _isVietnamese
       ? 'Vui lòng thử lại hoặc mở Chẩn đoán.'
       : 'Please try again or open Diagnostics.';
@@ -111,6 +116,7 @@ final class NotesCopy {
         _isVietnamese ? 'AI cục bộ đã sẵn sàng' : 'Local AI is ready',
       ModelProvisioningPhase.failed =>
         _isVietnamese ? 'Thiết lập mô hình thất bại' : 'Model setup failed',
+      ModelProvisioningPhase.cancelled => provisioningCancelled,
     };
   }
 

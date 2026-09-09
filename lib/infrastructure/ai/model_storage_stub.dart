@@ -54,6 +54,22 @@ final class UnavailableModelStorage implements IModelStorage {
       'Serve the model through a separate remote inference path.',
     );
   }
+
+  @override
+  Future<int> cleanupStagingFiles({
+    Duration olderThan = const Duration(hours: 24),
+  }) {
+    throw UnsupportedError(
+      'Local model storage is not available on this platform (Web).',
+    );
+  }
+
+  @override
+  Future<void> discardModel(ModelDescriptor model) {
+    throw UnsupportedError(
+      'Local model storage is not available on this platform (Web).',
+    );
+  }
 }
 
 /// Returns an [UnavailableModelStorage] on platforms without local model

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
+import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../domain/note_intelligence/summary.dart';
 import '../notes/model_provisioning_status_panel.dart';
 
@@ -21,11 +22,13 @@ class LocalLlmDebugPage extends StatefulWidget {
     required this.summarize,
     this.loadModelReadiness,
     this.provisioningReader,
+    this.onProvisioningCancel,
   });
 
   final SummarizeFunction summarize;
   final LoadModelReadiness? loadModelReadiness;
   final IModelProvisioningReader? provisioningReader;
+  final VoidCallback? onProvisioningCancel;
 
   @override
   State<LocalLlmDebugPage> createState() => _LocalLlmDebugPageState();
@@ -71,7 +74,13 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = error.toString());
+      final ModelProvisioningPhase? provisioningPhase =
+          widget.provisioningReader?.current.phase;
+      setState(
+        () => _error = provisioningPhase == ModelProvisioningPhase.cancelled
+            ? null
+            : error.toString(),
+      );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -106,6 +115,7 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
               ModelProvisioningStatusPanel(
                 reader: widget.provisioningReader!,
                 onRetry: _onSummarize,
+                onCancel: widget.onProvisioningCancel,
               ),
               const SizedBox(height: 12),
             ] else if (widget.loadModelReadiness != null) ...<Widget>[

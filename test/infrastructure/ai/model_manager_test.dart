@@ -225,6 +225,54 @@ void main() {
       expect(storage.discards, isZero);
     });
 
+    test('discards an existing artifact after an integrity failure', () async {
+      final ModelIntegrityException expected = const ModelIntegrityException(
+        'digest mismatch',
+      );
+      final _FakeStorage storage = _FakeStorage(
+        existingPath: '/models/${_model.fileName}',
+      );
+      final ModelManager manager = _manager(
+        storage: storage,
+        verifier: _FakeVerifier(failure: expected),
+      );
+
+      await expectLater(manager.ensureModelReady(), throwsA(same(expected)));
+
+      expect(storage.modelDiscards, 1);
+      expect(storage.discards, isZero);
+    });
+
+    test('recovery failure never replaces the integrity failure', () async {
+      final ModelIntegrityException expected = const ModelIntegrityException(
+        'digest mismatch',
+      );
+      final StateError recoveryError = StateError('recovery unavailable');
+      final _FakeStorage storage = _FakeStorage(
+        existingPath: '/models/${_model.fileName}',
+        discardModelFailure: recoveryError,
+      );
+      final ModelManager manager = _manager(
+        storage: storage,
+        verifier: _FakeVerifier(failure: expected),
+      );
+
+      await expectLater(manager.ensureModelReady(), throwsA(same(expected)));
+
+      expect(storage.modelDiscards, 1);
+    });
+
+    test('cleanup failure never blocks provisioning', () async {
+      final StateError cleanupError = StateError('cleanup unavailable');
+      final _FakeStorage storage = _FakeStorage(cleanupFailure: cleanupError);
+
+      final PreparedModel prepared = await _manager(storage: storage)
+          .ensureModelReady();
+
+      expect(prepared.path, '/models/${_model.fileName}');
+      expect(storage.cleanupCalls, 1);
+    });
+
     test(
       'verifies an existing selected model and skips staging/download',
       () async {
@@ -854,6 +902,67 @@ void main() {
       );
     });
 
+    test('cancelProvisioning returns false when no operation is active', () {
+      expect(_manager().cancelProvisioning(), isFalse);
+    });
+
+    test(
+      'cancels before download and publishes a cancelled terminal state',
+      () async {
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _FakeDownloader downloader = _FakeDownloader();
+        final ModelManager manager = _manager(
+          downloader: downloader,
+          reporter: reporter,
+        );
+
+        final Future<PreparedModel> pending = manager.ensureModelReady();
+        expect(manager.cancelProvisioning(), isTrue);
+
+        await expectLater(
+          pending,
+          throwsA(isA<ModelProvisioningCancelledException>()),
+        );
+        expect(downloader.downloads, isZero);
+        expect(reporter.snapshots.last.phase, ModelProvisioningPhase.cancelled);
+      },
+    );
+
+    test(
+      'cancels during download and discards staging without committing',
+      () async {
+        final Completer<void> downloadStarted = Completer<void>();
+        final _CancellationAwareDownloader downloader =
+            _CancellationAwareDownloader(started: downloadStarted);
+        final _FakeStorage storage = _FakeStorage();
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore();
+        final ModelManager manager = _manager(
+          storage: storage,
+          downloader: downloader,
+          reporter: reporter,
+          aiConfigurationStore: configurationStore,
+        );
+
+        final Future<PreparedModel> pending = manager.ensureModelReady();
+        await downloadStarted.future;
+        expect(manager.cancelProvisioning(), isTrue);
+
+        await expectLater(
+          pending,
+          throwsA(isA<ModelProvisioningCancelledException>()),
+        );
+        expect(storage.discards, 1);
+        expect(storage.commits, isZero);
+        expect(reporter.snapshots.last.phase, ModelProvisioningPhase.cancelled);
+        expect(
+          configurationStore.snapshots.last.status,
+          ModelReadinessStatus.cancelled,
+        );
+      },
+    );
+
     test('never leaks exception text into the failure detail', () {
       final ModelProvisioningFailure failure = mapModelProvisioningFailure(
         ModelDownloadException(
@@ -953,16 +1062,22 @@ final class _FakeStorage implements IModelStorage {
     this.existingPath,
     this.commitFailure,
     this.findFailure,
+    this.cleanupFailure,
+    this.discardModelFailure,
   });
 
   final List<String>? events;
   final String? existingPath;
   final Object? commitFailure;
   final Object? findFailure;
+  final Object? cleanupFailure;
+  final Object? discardModelFailure;
   int finds = 0;
   int stagingCreates = 0;
   int commits = 0;
   int discards = 0;
+  int cleanupCalls = 0;
+  int modelDiscards = 0;
 
   @override
   Future<String?> findModel(ModelDescriptor model) async {
@@ -1002,6 +1117,27 @@ final class _FakeStorage implements IModelStorage {
   }
 
   @override
+  Future<int> cleanupStagingFiles({
+    Duration olderThan = const Duration(hours: 24),
+  }) async {
+    cleanupCalls++;
+    final Object? error = cleanupFailure;
+    if (error != null) {
+      throw error;
+    }
+    return 0;
+  }
+
+  @override
+  Future<void> discardModel(ModelDescriptor model) async {
+    modelDiscards++;
+    final Object? error = discardModelFailure;
+    if (error != null) {
+      throw error;
+    }
+  }
+
+  @override
   Future<String> resolveModelPath() async =>
       throw UnsupportedError('unused by ModelManager');
 }
@@ -1028,11 +1164,13 @@ final class _FakeDownloader implements IModelDownloader {
     required ModelDescriptor model,
     required ModelStagingFile target,
     ModelDownloadProgress? onProgress,
+    ModelProvisioningCancellationToken? cancellation,
   }) async {
     events?.add('download');
     downloads++;
     models.add(model);
     started?.complete();
+    cancellation?.throwIfCancelled();
     final Object? error = failure;
     if (error != null) {
       throw error;
@@ -1047,6 +1185,32 @@ final class _FakeDownloader implements IModelDownloader {
     if (waitFor != null) {
       await waitFor.future;
     }
+  }
+}
+
+final class _CancellationAwareDownloader implements IModelDownloader {
+  _CancellationAwareDownloader({required this.started});
+
+  final Completer<void> started;
+  final Completer<void> _blocker = Completer<void>();
+
+  @override
+  Future<void> download({
+    required ModelDescriptor model,
+    required ModelStagingFile target,
+    ModelDownloadProgress? onProgress,
+    ModelProvisioningCancellationToken? cancellation,
+  }) async {
+    started.complete();
+    if (cancellation == null) {
+      throw StateError('cancellation token is required for this fake');
+    }
+    await Future.any<void>(<Future<void>>[
+      cancellation.whenCancelled.then<void>(
+        (_) => throw const ModelProvisioningCancelledException(),
+      ),
+      _blocker.future,
+    ]);
   }
 }
 

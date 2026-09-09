@@ -20,6 +20,8 @@ AiReadinessSnapshot _snapshot({
   List<String>? supportedAbis,
   ModelReadinessStatus status = ModelReadinessStatus.ready,
   String? lastError,
+  RuntimeReadinessStatus runtimeStatus = RuntimeReadinessStatus.unknown,
+  String? runtimeError,
   DateTime? updatedAt,
 }) {
   return AiReadinessSnapshot(
@@ -33,6 +35,8 @@ AiReadinessSnapshot _snapshot({
     supportedAbis: supportedAbis ?? const <String>['arm64'],
     status: status,
     lastError: lastError,
+    runtimeStatus: runtimeStatus,
+    runtimeError: runtimeError,
     updatedAt: updatedAt ?? DateTime.utc(2026, 9, 3, 8, 30),
   );
 }
@@ -139,6 +143,11 @@ void main() {
         _snapshot(isPhysicalDevice: false),
         _snapshot(status: ModelReadinessStatus.preparing),
         _snapshot(lastError: 'boom'),
+        _snapshot(runtimeStatus: RuntimeReadinessStatus.loading),
+        _snapshot(
+          runtimeStatus: RuntimeReadinessStatus.failed,
+          runtimeError: 'runtime unavailable',
+        ),
         _snapshot(updatedAt: DateTime.utc(2025, 1, 1)),
       ];
       for (final AiReadinessSnapshot variant in variants) {
@@ -166,6 +175,7 @@ void main() {
       final Map<String, Object?> json = snapshot.toJson();
       expect(json['updatedAt'], '2026-09-03T08:30:00.000Z');
       expect(json['status'], 'ready');
+      expect(json['runtimeStatus'], 'unknown');
       expect(json['supportedAbis'], const <String>['arm64', 'x86_64']);
 
       final AiReadinessSnapshot restored = AiReadinessSnapshot.fromJson(json);
@@ -177,7 +187,30 @@ void main() {
       );
       expect(sparseRestored.localPath, isNull);
       expect(sparseRestored.lastError, isNull);
+      expect(sparseRestored.runtimeStatus, RuntimeReadinessStatus.unknown);
+      expect(sparseRestored.runtimeError, isNull);
       expect(sparseRestored, _snapshot());
+    });
+
+    test('round-trips runtime readiness and can update it independently', () {
+      final AiReadinessSnapshot snapshot = _snapshot(
+        runtimeStatus: RuntimeReadinessStatus.failed,
+        runtimeError: 'The local runtime could not start.',
+      );
+
+      final AiReadinessSnapshot restored = AiReadinessSnapshot.fromJson(
+        snapshot.toJson(),
+      );
+      expect(restored.runtimeStatus, RuntimeReadinessStatus.failed);
+      expect(restored.runtimeError, 'The local runtime could not start.');
+
+      final AiReadinessSnapshot ready = snapshot.withRuntimeStatus(
+        RuntimeReadinessStatus.ready,
+      );
+      expect(ready.modelId, snapshot.modelId);
+      expect(ready.status, snapshot.status);
+      expect(ready.runtimeStatus, RuntimeReadinessStatus.ready);
+      expect(ready.runtimeError, isNull);
     });
   });
 
@@ -195,6 +228,11 @@ void main() {
         ('status', _jsonWith((json) => json['status'] = 'downloading')),
         ('localPath', _jsonWith((json) => json['localPath'] = 42)),
         ('lastError', _jsonWith((json) => json['lastError'] = true)),
+        (
+          'runtimeStatus',
+          _jsonWith((json) => json['runtimeStatus'] = 'starting'),
+        ),
+        ('runtimeError', _jsonWith((json) => json['runtimeError'] = false)),
         ('updatedAt', _jsonWith((json) => json['updatedAt'] = 'not-a-date')),
         (
           'supportedAbis',
@@ -223,6 +261,24 @@ void main() {
         () => _snapshot(supportedAbis: const <String>['arm64', '  ']),
         throwsArgumentError,
       );
+    });
+
+    test('accepts a cancelled artifact status', () {
+      expect(
+        _snapshot(status: ModelReadinessStatus.cancelled).status,
+        ModelReadinessStatus.cancelled,
+      );
+    });
+
+    test('old records without runtime fields default to unknown', () {
+      final Map<String, Object?> json = _snapshot().toJson()
+        ..remove('runtimeStatus')
+        ..remove('runtimeError');
+
+      final AiReadinessSnapshot restored = AiReadinessSnapshot.fromJson(json);
+
+      expect(restored.runtimeStatus, RuntimeReadinessStatus.unknown);
+      expect(restored.runtimeError, isNull);
     });
   });
 

@@ -198,6 +198,96 @@ final class LocalModelStorage implements IModelStorage {
     });
   }
 
+  @override
+  Future<int> cleanupStagingFiles({
+    Duration olderThan = const Duration(hours: 24),
+  }) {
+    if (olderThan.isNegative) {
+      throw ArgumentError.value(olderThan, 'olderThan', 'must not be negative');
+    }
+    return _withStagingLock(() async {
+      if (overrideModelPath != null) {
+        return 0;
+      }
+      final Directory directory = await _resolveModelsDirectory(create: false);
+      if (!await directory.exists()) {
+        return 0;
+      }
+
+      final DateTime cutoff = DateTime.now().subtract(olderThan);
+      var removed = 0;
+      await for (final FileSystemEntity entity in directory.list(
+        followLinks: false,
+      )) {
+        if (await FileSystemEntity.type(entity.path, followLinks: false) !=
+            FileSystemEntityType.file) {
+          continue;
+        }
+        final String name = _basename(entity.path);
+        if (!_isRecognizedStagingName(name)) {
+          continue;
+        }
+        final File file = File(entity.path);
+        final FileStat stat;
+        try {
+          stat = await file.stat();
+        } on Object {
+          continue;
+        }
+        if (stat.modified.isAfter(cutoff)) {
+          continue;
+        }
+        try {
+          await file.delete();
+          removed++;
+        } on FileSystemException {
+          // A single stale file must not prevent the next model attempt from
+          // proceeding; the next cleanup can retry it.
+        }
+      }
+      return removed;
+    });
+  }
+
+  @override
+  Future<void> discardModel(ModelDescriptor model) {
+    return _withStagingLock(() async {
+      if (overrideModelPath != null) {
+        return;
+      }
+      _validateFileName(model.fileName);
+      final Directory modelsDirectory = await _resolveModelsDirectory(
+        create: false,
+      );
+      final String modelsPath = _normalizeAbsolutePath(modelsDirectory.path);
+      final String finalPath = _normalizeAbsolutePath(
+        _join(modelsPath, model.fileName),
+      );
+      if (_normalizeAbsolutePath(File(finalPath).parent.path) != modelsPath) {
+        throw const ModelStorageException(
+          'model recovery path must remain inside the app-private model directory',
+        );
+      }
+      if (await FileSystemEntity.type(finalPath, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        return;
+      }
+      if (await FileSystemEntity.type(finalPath, followLinks: false) !=
+          FileSystemEntityType.file) {
+        throw const ModelStorageException(
+          'model recovery target is not a regular file',
+        );
+      }
+      try {
+        await File(finalPath).delete();
+      } on FileSystemException catch (error) {
+        throw ModelStorageException(
+          'failed to discard the invalid model artifact: $error',
+        );
+      }
+    });
+  }
+
   /// Computes the candidate path for [fileName]: the pinned override when set,
   /// otherwise `<app support>/models/<fileName>`.
   Future<String> _resolveCandidatePath(String fileName) async {
@@ -294,6 +384,10 @@ final class LocalModelStorage implements IModelStorage {
     final int timestamp = DateTime.now().microsecondsSinceEpoch;
     final int random = _random.nextInt(1 << 32);
     return '$fileName.$timestamp-$random.part';
+  }
+
+  static bool _isRecognizedStagingName(String name) {
+    return RegExp(r'^.+\.\d+-\d+\.part$').hasMatch(name);
   }
 
   static String _join(String parent, String child) {

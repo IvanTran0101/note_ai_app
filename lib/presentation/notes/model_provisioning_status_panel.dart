@@ -11,10 +11,12 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
     super.key,
     required this.reader,
     this.onRetry,
+    this.onCancel,
   });
 
   final IModelProvisioningReader reader;
   final VoidCallback? onRetry;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +42,7 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
     final NotesCopy copy = NotesCopy.of(context);
     final ThemeData theme = Theme.of(context);
     final bool failed = state.phase == ModelProvisioningPhase.failed;
+    final bool cancelled = state.phase == ModelProvisioningPhase.cancelled;
     final String phaseLabel = copy.provisioningPhase(state.phase);
 
     return Semantics(
@@ -66,7 +69,7 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (!failed) ...<Widget>[
+              if (!failed && !cancelled) ...<Widget>[
                 const SizedBox(height: 10),
                 _progressIndicator(state),
               ],
@@ -85,7 +88,22 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
                   semanticsLabel: _progressText(copy, state),
                 ),
               ],
+              if (cancelled) _cancelledContent(context),
               if (failed) _failureContent(context, state),
+              if (!failed &&
+                  !cancelled &&
+                  onCancel != null &&
+                  _isCancellable(state.phase)) ...<Widget>[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton(
+                    key: const ValueKey<String>('model-provisioning-cancel'),
+                    onPressed: onCancel,
+                    child: Text(copy.provisioningCancel),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -159,6 +177,32 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
     );
+  }
+
+  Widget _cancelledContent(BuildContext context) {
+    final NotesCopy copy = NotesCopy.of(context);
+    if (onRetry == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton(
+          key: const ValueKey<String>('model-provisioning-retry'),
+          onPressed: onRetry,
+          child: Text(copy.provisioningRetry),
+        ),
+      ),
+    );
+  }
+
+  static bool _isCancellable(ModelProvisioningPhase phase) {
+    return phase == ModelProvisioningPhase.detectingDevice ||
+        phase == ModelProvisioningPhase.selectingModel ||
+        phase == ModelProvisioningPhase.checkingExistingModel ||
+        phase == ModelProvisioningPhase.downloading ||
+        phase == ModelProvisioningPhase.verifying;
   }
 
   static String _formatBytes(int bytes) {

@@ -5,6 +5,7 @@
 /// guards with tiny local fixtures instead of contacting a real model host.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'model_provisioning_contract.dart';
@@ -93,7 +94,9 @@ final class HttpModelDownloader implements IModelDownloader {
     required ModelDescriptor model,
     required ModelStagingFile target,
     ModelDownloadProgress? onProgress,
+    ModelProvisioningCancellationToken? cancellation,
   }) async {
+    cancellation?.throwIfCancelled();
     if (target.model != model) {
       throw const ModelDownloadException(
         'staging target does not belong to the selected model',
@@ -114,6 +117,9 @@ final class HttpModelDownloader implements IModelDownloader {
     final ModelDownloadResponse response;
     try {
       response = await _fetch(sourceUri);
+      cancellation?.throwIfCancelled();
+    } on ModelProvisioningCancelledException {
+      rethrow;
     } on ModelDownloadException {
       rethrow;
     } on Object catch (error, stackTrace) {
@@ -146,11 +152,14 @@ final class HttpModelDownloader implements IModelDownloader {
 
     IOSink? sink;
     var receivedBytes = 0;
+    final StreamIterator<List<int>> iterator = StreamIterator<List<int>>(
+      response.body.timeout(requestTimeout),
+    );
     try {
       sink = File(targetPath).openWrite(mode: FileMode.write);
-      await for (final List<int> chunk in response.body.timeout(
-        requestTimeout,
-      )) {
+      while (await _moveNextOrCancel(iterator, cancellation)) {
+        cancellation?.throwIfCancelled();
+        final List<int> chunk = iterator.current;
         receivedBytes += chunk.length;
         if (receivedBytes > model.fileSizeBytes) {
           throw ModelDownloadException(
@@ -164,6 +173,8 @@ final class HttpModelDownloader implements IModelDownloader {
         onProgress?.call(receivedBytes);
       }
       await sink.flush();
+    } on ModelProvisioningCancelledException {
+      rethrow;
     } on ModelDownloadException {
       rethrow;
     } on Object catch (error, stackTrace) {
@@ -174,8 +185,34 @@ final class HttpModelDownloader implements IModelDownloader {
         stackTrace,
       );
     } finally {
+      await iterator.cancel();
       await sink?.close();
     }
+  }
+
+  static Future<bool> _moveNextOrCancel(
+    StreamIterator<List<int>> iterator,
+    ModelProvisioningCancellationToken? cancellation,
+  ) async {
+    if (cancellation == null) {
+      return iterator.moveNext();
+    }
+    cancellation.throwIfCancelled();
+    final _DownloadWaitResult result = await Future.any<_DownloadWaitResult>(
+      <Future<_DownloadWaitResult>>[
+        iterator.moveNext().then(
+          (bool hasNext) => _DownloadWaitResult(hasNext: hasNext),
+        ),
+        cancellation.whenCancelled.then(
+          (_) => const _DownloadWaitResult(cancelled: true),
+        ),
+      ],
+    );
+    if (result.cancelled) {
+      await iterator.cancel();
+      throw const ModelProvisioningCancelledException();
+    }
+    return result.hasNext;
   }
 
   Future<ModelDownloadResponse> _fetch(Uri sourceUri) async {
@@ -216,6 +253,13 @@ final class HttpModelDownloader implements IModelDownloader {
     }
     return uri;
   }
+}
+
+final class _DownloadWaitResult {
+  const _DownloadWaitResult({this.hasNext = false, this.cancelled = false});
+
+  final bool hasNext;
+  final bool cancelled;
 }
 
 /// Creates the native model downloader used by the composition root.

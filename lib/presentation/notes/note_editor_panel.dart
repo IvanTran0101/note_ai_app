@@ -20,6 +20,7 @@ final class NoteEditorPanel extends StatelessWidget {
     this.statusMessage,
     this.provisioningReader,
     this.onProvisioningRetry,
+    this.onProvisioningCancel,
     required this.onSave,
     required this.onDelete,
     required this.onSummarize,
@@ -36,6 +37,7 @@ final class NoteEditorPanel extends StatelessWidget {
   final String? statusMessage;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
+  final VoidCallback? onProvisioningCancel;
   final VoidCallback onSave;
   final VoidCallback? onDelete;
   final VoidCallback? onSummarize;
@@ -122,6 +124,7 @@ final class NoteEditorPanel extends StatelessWidget {
               ModelProvisioningStatusPanel(
                 reader: provisioningReader!,
                 onRetry: onProvisioningRetry,
+                onCancel: onProvisioningCancel,
               ),
             if (error != null) ...<Widget>[
               const SizedBox(height: 12),

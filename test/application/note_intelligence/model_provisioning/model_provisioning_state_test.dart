@@ -25,6 +25,7 @@ void main() {
         ModelProvisioningPhase.loadingRuntime,
         ModelProvisioningPhase.ready,
         ModelProvisioningPhase.failed,
+        ModelProvisioningPhase.cancelled,
       ]);
     });
   });
@@ -199,6 +200,16 @@ void main() {
 
       expect(state.phase, ModelProvisioningPhase.failed);
       expect(state.failure, _downloadFailed);
+    });
+
+    test('accepts a cancelled terminal phase without a failure', () {
+      final ModelProvisioningState state = ModelProvisioningState(
+        phase: ModelProvisioningPhase.cancelled,
+        updatedAt: _updatedAt,
+      );
+
+      expect(state.failure, isNull);
+      expect(state.phase, ModelProvisioningPhase.cancelled);
     });
   });
 

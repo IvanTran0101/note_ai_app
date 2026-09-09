@@ -177,6 +177,77 @@ void main() {
       downloader.close();
     });
 
+    test(
+      'cancellation before fetching stops without creating the target',
+      () async {
+        final ModelDescriptor model = _model();
+        final File targetFile = File('${tempDir.path}/cancelled.part');
+        final ModelProvisioningCancellationToken cancellation =
+            ModelProvisioningCancellationToken()..cancel();
+        var requested = false;
+        final HttpModelDownloader downloader = HttpModelDownloader(
+          responseLoader: (_) async {
+            requested = true;
+            return _response();
+          },
+        );
+
+        await expectLater(
+          downloader.download(
+            model: model,
+            target: _target(model, targetFile.path),
+            cancellation: cancellation,
+          ),
+          throwsA(isA<ModelProvisioningCancelledException>()),
+        );
+
+        expect(requested, isFalse);
+        expect(targetFile.existsSync(), isFalse);
+        downloader.close();
+      },
+    );
+
+    test(
+      'cancellation interrupts a response body waiting for the next chunk',
+      () async {
+        final ModelDescriptor model = _model();
+        final File targetFile = File('${tempDir.path}/cancelled-body.part');
+        final StreamController<List<int>> body = StreamController<List<int>>();
+        final Completer<void> responseRequested = Completer<void>();
+        final ModelProvisioningCancellationToken cancellation =
+            ModelProvisioningCancellationToken();
+        final HttpModelDownloader downloader = HttpModelDownloader(
+          responseLoader: (_) async {
+            responseRequested.complete();
+            return ModelDownloadResponse(
+              statusCode: 200,
+              uri: Uri.parse('https://example.test/model.gguf'),
+              contentLength: 4,
+              body: body.stream,
+            );
+          },
+        );
+
+        final Future<void> pending = downloader.download(
+          model: model,
+          target: _target(model, targetFile.path),
+          cancellation: cancellation,
+        );
+        await responseRequested.future;
+        await pumpEventQueue();
+        cancellation.cancel();
+
+        await expectLater(
+          pending,
+          throwsA(isA<ModelProvisioningCancelledException>()),
+        );
+        await body.close();
+        expect(targetFile.existsSync(), isTrue);
+        expect(await targetFile.length(), 0);
+        downloader.close();
+      },
+    );
+
     test('accepts an HTTPS redirect response', () async {
       final ModelDescriptor model = _model();
       final File targetFile = File('${tempDir.path}/redirected.part');

@@ -5,6 +5,8 @@
 /// access the filesystem, or load the local LLM runtime.
 library;
 
+import 'dart:async';
+
 import 'model_selection.dart';
 import '../device/hardware_detection.dart';
 
@@ -52,6 +54,45 @@ abstract interface class IModelCatalog {
 /// and advisory: an implementation must never require a listener.
 typedef ModelDownloadProgress = void Function(int receivedBytes);
 
+/// Cancellation signal shared by one provisioning operation and its downloader.
+///
+/// The token is intentionally framework-free and can be checked synchronously
+/// between asynchronous phases. Its completion future lets a native stream
+/// implementation stop waiting for the next body chunk when cancellation wins
+/// the race.
+final class ModelProvisioningCancellationToken {
+  final Completer<void> _cancelled = Completer<void>();
+
+  /// Whether cancellation has been requested for this operation.
+  bool get isCancelled => _cancelled.isCompleted;
+
+  /// Completes when [cancel] is first requested.
+  Future<void> get whenCancelled => _cancelled.future;
+
+  /// Requests cancellation. Repeated calls are idempotent.
+  void cancel() {
+    if (!_cancelled.isCompleted) {
+      _cancelled.complete();
+    }
+  }
+
+  /// Throws the typed cancellation error when a phase must stop.
+  void throwIfCancelled() {
+    if (isCancelled) {
+      throw const ModelProvisioningCancelledException();
+    }
+  }
+}
+
+/// Raised when the caller cancels an active model-provisioning attempt.
+final class ModelProvisioningCancelledException implements Exception {
+  /// Creates a cancellation signal with no sensitive detail.
+  const ModelProvisioningCancelledException();
+
+  @override
+  String toString() => 'ModelProvisioningCancelledException';
+}
+
 /// Writes exactly one selected model to a storage-provided staging file.
 abstract interface class IModelDownloader {
   /// Downloads [model] into [target].
@@ -69,6 +110,7 @@ abstract interface class IModelDownloader {
     required ModelDescriptor model,
     required ModelStagingFile target,
     ModelDownloadProgress? onProgress,
+    ModelProvisioningCancellationToken? cancellation,
   });
 }
 
@@ -89,6 +131,12 @@ abstract interface class IModelIntegrityVerifier {
 abstract interface class IModelManager {
   /// Ensures the selected model is available as a verified local file.
   Future<PreparedModel> ensureModelReady();
+
+  /// Requests cancellation of the active provisioning operation.
+  ///
+  /// Returns true when an operation accepted the request, or false when no
+  /// provisioning operation is active. This never cancels native inference.
+  bool cancelProvisioning();
 }
 
 /// Result returned after one model has been selected and integrity-verified.
