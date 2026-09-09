@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../domain/note_intelligence/summary.dart';
+import '../notes/model_provisioning_status_panel.dart';
 
 /// Signature for the summarizer injected into [LocalLlmDebugPage].
 typedef SummarizeFunction = Future<Summary> Function(String content);
@@ -18,10 +20,12 @@ class LocalLlmDebugPage extends StatefulWidget {
     super.key,
     required this.summarize,
     this.loadModelReadiness,
+    this.provisioningReader,
   });
 
   final SummarizeFunction summarize;
   final LoadModelReadiness? loadModelReadiness;
+  final IModelProvisioningReader? provisioningReader;
 
   @override
   State<LocalLlmDebugPage> createState() => _LocalLlmDebugPageState();
@@ -88,7 +92,7 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
         title: const Text('NoteFlow · Local LLM Debug'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,7 +102,13 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
               'model from app-private storage; macOS Debug also accepts the '
               'LOCAL_LLM_MODEL_PATH override.',
             ),
-            if (widget.loadModelReadiness != null) ...<Widget>[
+            if (widget.provisioningReader != null) ...<Widget>[
+              ModelProvisioningStatusPanel(
+                reader: widget.provisioningReader!,
+                onRetry: _onSummarize,
+              ),
+              const SizedBox(height: 12),
+            ] else if (widget.loadModelReadiness != null) ...<Widget>[
               const SizedBox(height: 8),
               FutureBuilder<String?>(
                 future: _readinessFuture,

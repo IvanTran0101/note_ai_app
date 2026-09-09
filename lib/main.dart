@@ -455,6 +455,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         builder: (BuildContext context) {
           return NotesPage(
             applicationService: _noteApplicationService,
+            provisioningReader: _modelProvisioningStatus,
             onOpenSettings: () => _showAppearanceSettings(context),
             onOpenDiagnostics: () {
               Navigator.of(context).push(
@@ -462,6 +463,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                   builder: (_) => LocalLlmDebugPage(
                     summarize: _summarize,
                     loadModelReadiness: _loadModelReadiness,
+                    provisioningReader: _modelProvisioningStatus,
                   ),
                 ),
               );

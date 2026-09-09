@@ -6,6 +6,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_failure.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 import 'package:note_ai_app/presentation/debug/local_llm_debug_page.dart';
 
@@ -65,5 +68,50 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Model status: ready · gemma-3-1b-it'), findsOneWidget);
+  });
+
+  testWidgets('debug page renders live provisioning failure and retry', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.failed,
+        modelId: 'gemma-3-1b-it',
+        failure: const ModelProvisioningFailure(
+          code: ModelProvisioningFailureCode.downloadFailed,
+        ),
+        updatedAt: DateTime.utc(2026, 9, 9),
+      ),
+    );
+    addTearDown(holder.close);
+    var attempts = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LocalLlmDebugPage(
+          summarize: (String content) async {
+            attempts++;
+            return Summary('Summary: $content');
+          },
+          provisioningReader: holder,
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-retry')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('model-provisioning-retry')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(attempts, 1);
+    expect(find.textContaining('Summary:'), findsOneWidget);
   });
 }

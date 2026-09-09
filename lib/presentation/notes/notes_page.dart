@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
+import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
 import 'note_editor_panel.dart';
 import 'notes_application_controller.dart';
@@ -23,6 +25,7 @@ class NotesPage extends StatefulWidget {
     this.controller,
     this.onOpenSettings,
     this.onOpenDiagnostics,
+    this.provisioningReader,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -32,6 +35,7 @@ class NotesPage extends StatefulWidget {
   final NotesApplicationController? controller;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenDiagnostics;
+  final IModelProvisioningReader? provisioningReader;
 
   @override
   State<NotesPage> createState() => _NotesPageState();
@@ -292,9 +296,14 @@ class _NotesPageState extends State<NotesPage> {
       if (!mounted) {
         return;
       }
+      final ModelProvisioningState? provisioningState =
+          widget.provisioningReader?.current;
+      final bool provisioningFailed =
+          provisioningState?.phase == ModelProvisioningPhase.failed;
       setState(
-        () =>
-            _error = _formatError(error, NotesCopy.of(context).summarizeError),
+        () => _error = provisioningFailed
+            ? null
+            : _formatError(error, NotesCopy.of(context).summarizeError),
       );
     } finally {
       if (mounted) {
@@ -464,6 +473,8 @@ class _NotesPageState extends State<NotesPage> {
                   isDirty: _editorDirty,
                   summaryBusy: _summarizing,
                   statusMessage: _statusMessage,
+                  provisioningReader: widget.provisioningReader,
+                  onProvisioningRetry: _summarizeNote,
                   onSave: _saveNote,
                   onDelete: _selectedNoteId == null || _actionBusy
                       ? null

@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_failure.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/presentation/notes/notes_page.dart';
 
@@ -28,12 +31,14 @@ void main() {
     WidgetTester tester,
     _FakeNotesApplicationController controller, {
     VoidCallback? onOpenDiagnostics,
+    ModelProvisioningStatusHolder? provisioningStatus,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: NotesPage(
           controller: controller,
           onOpenDiagnostics: onOpenDiagnostics,
+          provisioningReader: provisioningStatus,
         ),
       ),
     );
@@ -186,6 +191,50 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('open-diagnostics')));
     expect(opened, isTrue);
   });
+
+  testWidgets(
+    'shows provisioning state and retries through the application seam',
+    (WidgetTester tester) async {
+      final _FakeNotesApplicationController controller =
+          _FakeNotesApplicationController(notes: <NoteDto>[buildNote()]);
+      final ModelProvisioningStatusHolder provisioningStatus =
+          ModelProvisioningStatusHolder(
+            initial: ModelProvisioningState(
+              phase: ModelProvisioningPhase.failed,
+              modelId: 'gemma-3-1b-it',
+              failure: const ModelProvisioningFailure(
+                code: ModelProvisioningFailureCode.downloadFailed,
+              ),
+              updatedAt: createdAt,
+            ),
+          );
+      addTearDown(provisioningStatus.close);
+
+      await pumpPage(
+        tester,
+        controller,
+        provisioningStatus: provisioningStatus,
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('model-provisioning-status')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('model-provisioning-retry')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('model-provisioning-retry')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.summarizedNoteId, 'note-1');
+      expect(
+        find.byKey(const ValueKey<String>('summary-card')),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 final class _FakeNotesApplicationController

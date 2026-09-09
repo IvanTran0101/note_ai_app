@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
+import 'model_provisioning_status_panel.dart';
 import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 
@@ -16,6 +18,8 @@ final class NoteEditorPanel extends StatelessWidget {
     this.isDirty = false,
     this.summaryBusy = false,
     this.statusMessage,
+    this.provisioningReader,
+    this.onProvisioningRetry,
     required this.onSave,
     required this.onDelete,
     required this.onSummarize,
@@ -30,6 +34,8 @@ final class NoteEditorPanel extends StatelessWidget {
   final bool isDirty;
   final bool summaryBusy;
   final String? statusMessage;
+  final IModelProvisioningReader? provisioningReader;
+  final VoidCallback? onProvisioningRetry;
   final VoidCallback onSave;
   final VoidCallback? onDelete;
   final VoidCallback? onSummarize;
@@ -112,6 +118,11 @@ final class NoteEditorPanel extends StatelessWidget {
                 ),
               ),
             ],
+            if (provisioningReader != null)
+              ModelProvisioningStatusPanel(
+                reader: provisioningReader!,
+                onRetry: onProvisioningRetry,
+              ),
             if (error != null) ...<Widget>[
               const SizedBox(height: 12),
               Semantics(
