@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 import 'package:note_ai_app/infrastructure/ai/llm_worker_contract.dart';
 import 'package:note_ai_app/infrastructure/note_intelligence/local_summarization_service.dart';
+import 'package:note_ai_app/infrastructure/note_intelligence/note_summary_resource_policy.dart';
 
 final class _FakeLlmWorkerClient implements LlmWorkerClient {
   _FakeLlmWorkerClient({this.result, this.error, this.emptyResult = false});
@@ -82,6 +83,127 @@ void main() {
 
       expect(fake.maxTokens.single, 64);
     });
+
+    test('uses one direct request for a short note', () async {
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
+        result: 'Short summary.',
+      );
+      final LocalSummarizationService service = LocalSummarizationService(
+        workerClient: fake,
+        maxTokens: 32,
+        resourcePolicy: NoteSummaryResourcePolicy(
+          contextSize: 1000,
+          maxOutputTokens: 32,
+          promptReserveTokens: 128,
+          estimatedCharactersPerToken: 2,
+        ),
+      );
+
+      await service.summarize('Short note.');
+
+      expect(fake.userPrompts, hasLength(1));
+      expect(fake.userPrompts.single, contains('<note>'));
+    });
+
+    test('uses chunk-summary-merge for a long note', () async {
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
+        result: 'Section summary.',
+      );
+      final LocalSummarizationService service = LocalSummarizationService(
+        workerClient: fake,
+        maxTokens: 32,
+        resourcePolicy: NoteSummaryResourcePolicy(
+          contextSize: 1200,
+          maxOutputTokens: 32,
+          promptReserveTokens: 256,
+          estimatedCharactersPerToken: 1,
+          maxChunkCount: 8,
+          chunkOutputTokens: 16,
+        ),
+      );
+      final String longNote = List<String>.filled(500, 'important').join(' ');
+
+      await service.summarize(longNote);
+
+      expect(fake.userPrompts.length, greaterThan(2));
+      expect(fake.userPrompts.first, contains('one section of a longer note'));
+      expect(fake.userPrompts.last, contains('<section_summaries>'));
+      for (final String prompt in fake.userPrompts) {
+        expect(prompt, contains('Do not translate'));
+        expect(prompt, contains('primarily Vietnamese'));
+      }
+    });
+
+    test(
+      'recursively merges section summaries when one merge is too large',
+      () async {
+        final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient(
+          result: List<String>.filled(400, 'x').join(),
+        );
+        final LocalSummarizationService service = LocalSummarizationService(
+          workerClient: fake,
+          maxTokens: 32,
+          resourcePolicy: NoteSummaryResourcePolicy(
+            contextSize: 1200,
+            maxOutputTokens: 32,
+            promptReserveTokens: 256,
+            estimatedCharactersPerToken: 1,
+            maxChunkCount: 8,
+            chunkOutputTokens: 16,
+          ),
+        );
+        final String longNote = List<String>.filled(500, 'important').join(' ');
+
+        await service.summarize(longNote);
+
+        // More calls than chunk summaries + one final merge prove that an
+        // intermediate reduction happened before the final merge.
+        expect(fake.userPrompts.length, greaterThan(5));
+        expect(
+          fake.userPrompts
+              .where((String prompt) => prompt.contains('<section_summaries>'))
+              .length,
+          greaterThan(1),
+        );
+      },
+    );
+
+    test('fails with a typed resource error instead of truncating', () async {
+      final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient();
+      final LocalSummarizationService service = LocalSummarizationService(
+        workerClient: fake,
+        maxTokens: 32,
+        resourcePolicy: NoteSummaryResourcePolicy(
+          contextSize: 200,
+          maxOutputTokens: 32,
+          promptReserveTokens: 64,
+          estimatedCharactersPerToken: 1,
+          maxChunkCount: 2,
+          chunkOutputTokens: 16,
+        ),
+      );
+
+      await expectLater(
+        service.summarize(List<String>.filled(1000, 'word').join(' ')),
+        throwsA(isA<NoteSummaryResourceException>()),
+      );
+      expect(fake.userPrompts, isEmpty);
+    });
+
+    test(
+      'propagates the configured model context into the resource policy',
+      () {
+        final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient();
+        final LocalSummarizationService service = LocalSummarizationService(
+          workerClient: fake,
+          maxTokens: 64,
+          contextSize: 2048,
+        );
+
+        expect(service.resourcePolicy.contextSize, 2048);
+        expect(service.resourcePolicy.maxOutputTokens, 64);
+      },
+    );
 
     test('rejects an output token budget outside native limits', () {
       final _FakeLlmWorkerClient fake = _FakeLlmWorkerClient();

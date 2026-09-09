@@ -2,6 +2,7 @@ import '../../domain/note_intelligence/i_note_summarization_service.dart';
 import '../../domain/note_intelligence/summary.dart';
 
 import '../ai/llm_worker_contract.dart';
+import 'note_summary_resource_policy.dart';
 
 /// Gemma-compatible instruction sent in the initial user turn.
 ///
@@ -32,6 +33,29 @@ String _buildSummaryUserPrompt(String note) {
   return '${_summaryUserInstruction.trim()}\n\n<note>\n$note\n</note>';
 }
 
+String _buildSectionSummaryPrompt(String note) {
+  return '${_summaryUserInstruction.trim()}\n\n'
+      'This is one section of a longer note. Summarize only this section '
+      'with the important factual points so another step can merge it.\n\n'
+      '<note>\n$note\n</note>';
+}
+
+String _buildMergePrompt(List<String> sectionSummaries) {
+  final String sections = sectionSummaries
+      .asMap()
+      .entries
+      .map(
+        (MapEntry<int, String> entry) =>
+            '<section index="${entry.key + 1}">\n${entry.value}\n</section>',
+      )
+      .join('\n');
+  return '${_summaryUserInstruction.trim()}\n\n'
+      'Merge the following section summaries into one concise, coherent '
+      'summary of the original note. Preserve important facts and avoid '
+      'introducing information that is not present in the sections.\n\n'
+      '<section_summaries>\n$sections\n</section_summaries>';
+}
+
 /// [INoteSummarizationService] backed by the local LLM worker isolate.
 ///
 /// The [LlmWorkerClient] is injected so unit tests can substitute a fake
@@ -41,7 +65,14 @@ final class LocalSummarizationService implements INoteSummarizationService {
   LocalSummarizationService({
     required this.workerClient,
     this.maxTokens = 128,
-  }) {
+    int contextSize = 2048,
+    NoteSummaryResourcePolicy? resourcePolicy,
+  }) : resourcePolicy =
+           resourcePolicy ??
+           NoteSummaryResourcePolicy(
+             contextSize: contextSize,
+             maxOutputTokens: maxTokens,
+           ) {
     if (maxTokens <= 0 || maxTokens > 512) {
       throw ArgumentError.value(
         maxTokens,
@@ -56,6 +87,9 @@ final class LocalSummarizationService implements INoteSummarizationService {
   /// Maximum number of output tokens requested from the selected model.
   final int maxTokens;
 
+  /// Context-aware policy used to choose direct or chunked summarization.
+  final NoteSummaryResourcePolicy resourcePolicy;
+
   @override
   Future<Summary> summarize(String content) async {
     final String note = content.trim();
@@ -63,14 +97,36 @@ final class LocalSummarizationService implements INoteSummarizationService {
       throw ArgumentError.value(content, 'content', 'must not be blank');
     }
 
+    final List<String> chunks = resourcePolicy.split(note);
+    if (chunks.length == 1) {
+      return Summary(
+        await _generate(
+          _buildSummaryUserPrompt(chunks.single),
+          maxTokens: maxTokens,
+        ),
+      );
+    }
+
+    final List<String> sectionSummaries = <String>[];
+    for (final String chunk in chunks) {
+      sectionSummaries.add(
+        await _generate(
+          _buildSectionSummaryPrompt(chunk),
+          maxTokens: resourcePolicy.chunkOutputTokens,
+        ),
+      );
+    }
+    return Summary(await _mergeSummaries(sectionSummaries));
+  }
+
+  Future<String> _generate(String prompt, {required int maxTokens}) async {
+    // Gemma 3 IT expects system-level instructions in the initial user turn.
+    // The native formatter omits the system role for an empty value.
     final String text = await workerClient.generateChat(
-      // Gemma 3 IT expects system-level instructions in the initial user
-      // turn. The native formatter omits the system role for an empty value.
       systemPrompt: '',
-      userPrompt: _buildSummaryUserPrompt(note),
+      userPrompt: prompt,
       maxTokens: maxTokens,
     );
-
     final String summary = text.trim();
     if (summary.isEmpty) {
       throw StateError(
@@ -78,6 +134,54 @@ final class LocalSummarizationService implements INoteSummarizationService {
         'no output',
       );
     }
-    return Summary(summary);
+    return summary;
+  }
+
+  Future<String> _mergeSummaries(List<String> summaries) async {
+    if (summaries.length == 1) {
+      return summaries.single;
+    }
+
+    final List<List<String>> groups = _groupSummaries(summaries);
+    if (groups.length == 1) {
+      return _generate(_buildMergePrompt(groups.single), maxTokens: maxTokens);
+    }
+
+    final List<String> reduced = <String>[];
+    for (final List<String> group in groups) {
+      reduced.add(
+        await _generate(_buildMergePrompt(group), maxTokens: maxTokens),
+      );
+    }
+    return _mergeSummaries(reduced);
+  }
+
+  List<List<String>> _groupSummaries(List<String> summaries) {
+    final List<List<String>> groups = <List<String>>[];
+    List<String> current = <String>[];
+    var currentCharacters = 0;
+    for (final String summary in summaries) {
+      final int separatorCharacters = current.isEmpty ? 0 : 1;
+      final int candidateCharacters =
+          currentCharacters + separatorCharacters + summary.runes.length;
+      if (current.isNotEmpty &&
+          candidateCharacters > resourcePolicy.maxInputCharacters) {
+        groups.add(List<String>.unmodifiable(current));
+        current = <String>[];
+        currentCharacters = 0;
+      }
+
+      if (summary.runes.length > resourcePolicy.maxInputCharacters) {
+        throw const NoteSummaryResourceException(
+          'A generated section summary is too large to merge on this device.',
+        );
+      }
+      current.add(summary);
+      currentCharacters += (current.length == 1 ? 0 : 1) + summary.runes.length;
+    }
+    if (current.isNotEmpty) {
+      groups.add(List<String>.unmodifiable(current));
+    }
+    return groups;
   }
 }

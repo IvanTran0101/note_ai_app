@@ -339,6 +339,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                     LocalSummarizationService(
                       workerClient: client,
                       maxTokens: maxOutputTokens,
+                      contextSize: contextSize,
                     );
                 _workerClient = client;
                 return NoteSummaryAppService(
