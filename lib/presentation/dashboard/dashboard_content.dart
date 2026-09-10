@@ -128,47 +128,59 @@ final class DashboardContent extends StatelessWidget {
     final ColorScheme colors = Theme.of(context).colorScheme;
     final int totalNotes = overview?.totalNotes ?? notes.length;
     final DateTime updatedAt = overview?.lastUpdatedAt ?? notes.first.updatedAt;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final Widget heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                copy.allNotes,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colors.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4.0),
-              Text(
-                copy.notesCount(totalNotes),
-                key: const ValueKey<String>('dashboard-total-count'),
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: colors.onSurfaceVariant),
-              ),
-              Text(
-                copy.updatedOn(
-                  MaterialLocalizations.of(context)
-                      .formatCompactDate(updatedAt),
-                ),
-                key: const ValueKey<String>('dashboard-last-updated'),
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: colors.onSurfaceVariant),
-              ),
-            ],
-          ),
+        Text(
+          copy.allNotes,
+          style: Theme.of(context).textTheme.headlineMedium
+              ?.copyWith(fontWeight: FontWeight.w700, color: colors.onSurface),
         ),
-        const SizedBox(width: 12.0),
-        FilledButton.icon(
-          key: const ValueKey<String>('dashboard-create-note'),
-          onPressed: onCreateNote,
-          icon: const Icon(Icons.add),
-          label: Text(copy.newNote),
+        const SizedBox(height: 4.0),
+        Text(
+          copy.notesCount(totalNotes),
+          key: const ValueKey<String>('dashboard-total-count'),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        Text(
+          copy.updatedOn(
+            MaterialLocalizations.of(context).formatCompactDate(updatedAt),
+          ),
+          key: const ValueKey<String>('dashboard-last-updated'),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: colors.onSurfaceVariant),
         ),
       ],
+    );
+    final Widget createButton = FilledButton.icon(
+      key: const ValueKey<String>('dashboard-create-note'),
+      onPressed: onCreateNote,
+      icon: const Icon(Icons.add),
+      label: Text(copy.newNote),
+    );
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (constraints.maxWidth < 600.0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              heading,
+              const SizedBox(height: 16.0),
+              Align(alignment: Alignment.centerLeft, child: createButton),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            Expanded(child: heading),
+            const SizedBox(width: 12.0),
+            createButton,
+          ],
+        );
+      },
     );
   }
 
@@ -286,7 +298,10 @@ final class DashboardContent extends StatelessWidget {
 
   int _columnCount(double width) {
     if (width < 600.0) {
-      return 1;
+      // Keep Grid meaningfully different from List on phones. A compact
+      // dashboard still has enough room for two flexible cards after its
+      // horizontal padding; List remains the single-column reading mode.
+      return 2;
     }
     if (width < 840.0) {
       return 2;

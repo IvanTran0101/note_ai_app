@@ -28,6 +28,12 @@ final class NoteDetailEditorForm extends StatelessWidget {
     required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
+    this.onCopySummary,
+    this.onRegenerateSummary,
+    this.copySummaryLabel,
+    this.regenerateSummaryLabel,
+    this.onErrorRetry,
+    this.errorRetryLabel,
   });
 
   final TextEditingController titleController;
@@ -45,6 +51,12 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
+  final VoidCallback? onCopySummary;
+  final VoidCallback? onRegenerateSummary;
+  final String? copySummaryLabel;
+  final String? regenerateSummaryLabel;
+  final VoidCallback? onErrorRetry;
+  final String? errorRetryLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +110,15 @@ final class NoteDetailEditorForm extends StatelessWidget {
               style: TextStyle(color: colors.error),
             ),
           ),
+          if (onErrorRetry != null && errorRetryLabel != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey<String>('note-detail-error-retry'),
+                onPressed: onErrorRetry,
+                child: Text(errorRetryLabel!),
+              ),
+            ),
         ],
         if (statusMessage != null) ...<Widget>[
           const SizedBox(height: 12),
@@ -132,6 +153,10 @@ final class NoteDetailEditorForm extends StatelessWidget {
           hasSavedNote: hasSavedNote,
           summary: summary,
           isStale: summaryStale,
+          onCopy: onCopySummary,
+          onRegenerate: onRegenerateSummary,
+          copyLabel: copySummaryLabel,
+          regenerateLabel: regenerateSummaryLabel,
         ),
       ],
     );

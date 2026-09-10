@@ -46,6 +46,11 @@ final class NotesCopy {
   String get editor => _isVietnamese ? 'Trình soạn thảo' : 'Note editor';
   String get save => _isVietnamese ? 'Lưu ghi chú' : 'Save note';
   String get delete => _isVietnamese ? 'Xóa ghi chú' : 'Delete note';
+  String get deleteTitle => _isVietnamese ? 'Xóa ghi chú?' : 'Delete note?';
+  String get deleteMessage => _isVietnamese
+      ? 'Ghi chú này sẽ bị xóa khỏi thiết bị.'
+      : 'This note will be deleted from this device.';
+  String get cancel => _isVietnamese ? 'Hủy' : 'Cancel';
   String get summarize => _isVietnamese ? 'Tóm tắt ghi chú' : 'Summarize note';
   String get summarizing => _isVietnamese ? 'Đang tóm tắt…' : 'Summarizing…';
   String get titleLabel => _isVietnamese ? 'Tiêu đề' : 'Title';
@@ -71,6 +76,39 @@ final class NotesCopy {
       ? 'Không thể tạo tóm tắt. Vui lòng thử lại.'
       : 'Couldn’t create a summary. Please try again.';
   String get detailPrefix => _isVietnamese ? 'Chi tiết: ' : 'Details: ';
+
+  String get appearanceAndLanguage =>
+      _isVietnamese ? 'Giao diện và ngôn ngữ' : 'Appearance and language';
+  String get theme => _isVietnamese ? 'Giao diện' : 'Theme';
+  String get themeSystem => _isVietnamese ? 'Theo hệ thống' : 'System';
+  String get themeLight => _isVietnamese ? 'Sáng' : 'Light';
+  String get themeDark => _isVietnamese ? 'Tối' : 'Dark';
+  String get language => _isVietnamese ? 'Ngôn ngữ' : 'Language';
+  String get languageSystem => _isVietnamese ? 'Theo hệ thống' : 'System';
+  String get languageVietnamese => _isVietnamese ? 'Tiếng Việt' : 'Vietnamese';
+  String get languageEnglish => _isVietnamese ? 'Tiếng Anh' : 'English';
+
+  String get debugTitle => _isVietnamese
+      ? 'NoteFlow · Chẩn đoán AI cục bộ'
+      : 'NoteFlow · Local AI diagnostics';
+  String get debugDescription => _isVietnamese
+      ? 'Kiểm thử tóm tắt trên thiết bị. Nền tảng di động dùng mô hình trong bộ nhớ riêng của ứng dụng; macOS Debug cũng hỗ trợ đường dẫn LOCAL_LLM_MODEL_PATH.'
+      : 'On-device summarization proof. Mobile platforms use the model in app-private storage; macOS Debug also accepts the LOCAL_LLM_MODEL_PATH override.';
+  String get modelStatus =>
+      _isVietnamese ? 'Trạng thái mô hình' : 'Model status';
+  String get modelStatusLoading => _isVietnamese ? 'đang tải…' : 'loading…';
+  String get modelStatusUnavailable =>
+      _isVietnamese ? 'không khả dụng' : 'unavailable';
+  String get modelNotProvisioned =>
+      _isVietnamese ? 'chưa được thiết lập' : 'not provisioned';
+  String get debugNoteLabel => _isVietnamese
+      ? 'Dán nội dung ghi chú để kiểm thử'
+      : 'Paste note content here';
+  String get debugError => _isVietnamese
+      ? 'Không thể tạo tóm tắt. Vui lòng thử lại.'
+      : 'Couldn’t create a summary. Please try again.';
+  String get debugSummary =>
+      _isVietnamese ? 'Kết quả tóm tắt' : 'Summary result';
 
   String get provisioningStatus =>
       _isVietnamese ? 'Trạng thái thiết lập mô hình' : 'Model setup status';

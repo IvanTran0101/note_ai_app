@@ -118,7 +118,7 @@ void main() {
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
     });
 
-    testWidgets('uses one column on compact widths and several when expanded', (
+    testWidgets('Grid and List use distinct compact layouts', (
       WidgetTester tester,
     ) async {
       final List<NoteDto> notes = <NoteDto>[
@@ -143,7 +143,21 @@ void main() {
       final double compactB = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
           .dy;
-      expect(compactA, isNot(compactB));
+      expect(compactA, compactB);
+
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
+      await tester.pumpAndSettle();
+
+      final double listA = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
+          .dy;
+      final double listB = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
+          .dy;
+      expect(listA, isNot(listB));
+
+      await tester.tap(find.byIcon(Icons.grid_view_outlined));
+      await tester.pumpAndSettle();
 
       tester.view.physicalSize = const Size(1200, 900);
       await tester.pumpAndSettle();
@@ -156,6 +170,62 @@ void main() {
           .dy;
       expect(wideA, wideB);
     });
+
+    for (final int width in <int>[320, 360, 390]) {
+      testWidgets('Vietnamese header fits at ${width}dp', (
+        WidgetTester tester,
+      ) async {
+        final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+        final DashboardController controller = DashboardController(
+          query: _FakeDashboardQuery(_overview(notes: notes)),
+        );
+
+        await _pumpDashboard(
+          tester,
+          dashboardController: controller,
+          notesController: _FakeNotesController(notes: notes),
+          locale: const Locale('vi'),
+          size: Size(width.toDouble(), 568),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Tất cả ghi chú'), findsOneWidget);
+        expect(
+          tester
+              .getSize(
+                find.byKey(const ValueKey<String>('dashboard-create-note')),
+              )
+              .height,
+          greaterThanOrEqualTo(48),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final double textScale in <double>[1.5, 2.0]) {
+      testWidgets(
+        'Dashboard survives ${textScale}x text scale on compact width',
+        (WidgetTester tester) async {
+          final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+          final DashboardController controller = DashboardController(
+            query: _FakeDashboardQuery(_overview(notes: notes)),
+          );
+
+          await _pumpDashboard(
+            tester,
+            dashboardController: controller,
+            notesController: _FakeNotesController(notes: notes),
+            size: const Size(320, 900),
+            textScale: textScale,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(DashboardPage.contentKey), findsOneWidget);
+          expect(find.byType(DashboardNoteCard), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
 
     testWidgets('shows the empty state and creates the first note', (
       WidgetTester tester,
@@ -322,6 +392,47 @@ void main() {
 
       expect(opened?.id, 'a');
       expect(_cardFor(tester, 'a').selected, isTrue);
+    });
+
+    testWidgets('selected card uses selected contrast and semantics', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(id: 'a', title: 'Alpha', content: 'Alpha body'),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('dashboard-note-a')));
+      await tester.pump();
+
+      final ThemeData theme = Theme.of(
+        tester.element(find.byType(DashboardPage)),
+      );
+      final Text title = tester.widget<Text>(find.text('Alpha'));
+      final Card card = tester.widget<Card>(
+        find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+      );
+      expect(card.color, theme.colorScheme.primaryContainer);
+      expect(title.style?.color, theme.colorScheme.onPrimaryContainer);
+
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey<String>('dashboard-note-semantics-a')),
+            )
+            .flagsCollection
+            .isSelected
+            .toBoolOrNull(),
+        isTrue,
+      );
     });
 
     testWidgets('reloads projections only when a detail result requests it', (
@@ -496,6 +607,7 @@ Future<void> _pumpDashboard(
   VoidCallback? onOpenDiagnostics,
   Locale locale = const Locale('en'),
   Size size = const Size(1200, 900),
+  double textScale = 1.0,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -514,25 +626,34 @@ Future<void> _pumpDashboard(
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
-      home: DashboardPage(
-        dashboardController: dashboardController,
-        notesController: notesController,
-        onOpenNote:
-            onOpenNoteResult ??
-            (onOpenNote == null
-                ? (NoteDto _) => null
-                : (NoteDto note) {
-                    onOpenNote(note);
+      home: Builder(
+        builder: (BuildContext context) {
+          final Widget page = DashboardPage(
+            dashboardController: dashboardController,
+            notesController: notesController,
+            onOpenNote:
+                onOpenNoteResult ??
+                (onOpenNote == null
+                    ? (NoteDto _) => null
+                    : (NoteDto note) {
+                        onOpenNote(note);
+                        return null;
+                      }),
+            onCreateNote: onCreateNote == null
+                ? () => null
+                : () {
+                    onCreateNote();
                     return null;
-                  }),
-        onCreateNote: onCreateNote == null
-            ? () => null
-            : () {
-                onCreateNote();
-                return null;
-              },
-        onOpenSettings: onOpenSettings,
-        onOpenDiagnostics: onOpenDiagnostics,
+                  },
+            onOpenSettings: onOpenSettings,
+            onOpenDiagnostics: onOpenDiagnostics,
+          );
+          return MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(textScale)),
+            child: page,
+          );
+        },
       ),
     ),
   );

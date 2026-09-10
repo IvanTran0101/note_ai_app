@@ -34,6 +34,12 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
+    this.onCopySummary,
+    this.onRegenerateSummary,
+    this.copySummaryLabel,
+    this.regenerateSummaryLabel,
+    this.onErrorRetry,
+    this.errorRetryLabel,
     required this.isSaving,
     required this.isSummarizing,
     required this.canSave,
@@ -63,6 +69,12 @@ final class NoteDetailSurface extends StatelessWidget {
   final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
+  final VoidCallback? onCopySummary;
+  final VoidCallback? onRegenerateSummary;
+  final String? copySummaryLabel;
+  final String? regenerateSummaryLabel;
+  final VoidCallback? onErrorRetry;
+  final String? errorRetryLabel;
 
   final bool isSaving;
   final bool isSummarizing;
@@ -108,6 +120,12 @@ final class NoteDetailSurface extends StatelessWidget {
                   onProvisioningCancel: onProvisioningCancel,
                   summary: summary,
                   summaryStale: summaryStale,
+                  onCopySummary: onCopySummary,
+                  onRegenerateSummary: onRegenerateSummary,
+                  copySummaryLabel: copySummaryLabel,
+                  regenerateSummaryLabel: regenerateSummaryLabel,
+                  onErrorRetry: onErrorRetry,
+                  errorRetryLabel: errorRetryLabel,
                 ),
               ),
             ),

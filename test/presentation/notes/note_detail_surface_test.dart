@@ -118,17 +118,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final Size size in <Size>[const Size(390, 844), const Size(1024, 700)]) {
-    testWidgets('renders without overflow at 1.5 text scale on '
-        '${size.width.toInt()}x${size.height.toInt()}', (
-      WidgetTester tester,
-    ) async {
-      await pumpSurface(tester, size: size, textScale: 1.5, isDirty: true);
+  for (final Size size in <Size>[
+    const Size(320, 568),
+    const Size(360, 800),
+    const Size(390, 844),
+    const Size(568, 320),
+  ]) {
+    for (final double textScale in <double>[1.0, 1.3, 1.5, 2.0]) {
+      testWidgets('renders without overflow at ${textScale}x text scale on '
+          '${size.width.toInt()}x${size.height.toInt()}', (
+        WidgetTester tester,
+      ) async {
+        await pumpSurface(
+          tester,
+          size: size,
+          textScale: textScale,
+          isDirty: true,
+        );
 
-      expect(find.byKey(titleFieldKey), findsOneWidget);
-      expect(find.byKey(contentFieldKey), findsOneWidget);
-      expect(find.byType(NoteDetailActionBar), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.byKey(titleFieldKey), findsOneWidget);
+        expect(find.byKey(contentFieldKey), findsOneWidget);
+        expect(find.byType(NoteDetailActionBar), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
   }
 }

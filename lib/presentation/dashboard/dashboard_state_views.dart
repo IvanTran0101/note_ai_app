@@ -205,22 +205,47 @@ final class DashboardInlineError extends StatelessWidget {
         margin: EdgeInsets.zero,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.info_outline, color: colors.onErrorContainer),
-              const SizedBox(width: 8.0),
-              Expanded(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget icon = Icon(
+                Icons.info_outline,
+                color: colors.onErrorContainer,
+              );
+              final Widget message = Expanded(
                 child: Text(
                   copy.loadError,
                   style: TextStyle(color: colors.onErrorContainer),
                 ),
-              ),
-              TextButton(
+              );
+              final Widget retry = TextButton(
                 key: const ValueKey<String>('dashboard-retry'),
                 onPressed: onRetry,
                 child: Text(copy.retry),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 420.0) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        icon,
+                        const SizedBox(width: 8.0),
+                        message,
+                      ],
+                    ),
+                    Align(alignment: Alignment.centerRight, child: retry),
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  icon,
+                  const SizedBox(width: 8.0),
+                  message,
+                  retry,
+                ],
+              );
+            },
           ),
         ),
       ),

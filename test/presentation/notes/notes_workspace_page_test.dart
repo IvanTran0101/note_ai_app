@@ -83,6 +83,24 @@ void main() {
     );
   });
 
+  testWidgets('compact detail keeps exactly one titled AppBar', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpWorkspace(tester, controller, size: const Size(390, 844));
+
+    expect(find.byType(AppBar), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(NoteDetailPage.backKey), findsOneWidget);
+    expect(find.text('First note'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'expanded workspace opens the same detail surface beside the list',
     (WidgetTester tester) async {

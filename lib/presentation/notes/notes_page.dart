@@ -222,6 +222,37 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
+  Future<void> _confirmDeleteNote() async {
+    final String? noteId = _selectedNoteId;
+    if (noteId == null || _actionBusy) {
+      return;
+    }
+    final NotesCopy copy = NotesCopy.of(context);
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(copy.deleteTitle),
+          content: Text(copy.deleteMessage),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(copy.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey<String>('notes-delete-confirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(copy.delete),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true && mounted) {
+      await _deleteNote();
+    }
+  }
+
   Future<void> _deleteNote() async {
     final String? noteId = _selectedNoteId;
     if (noteId == null || _deleting) {
@@ -373,15 +404,7 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
-  String _formatError(Object error, String message) {
-    final String detail = error is StateError
-        ? error.message.toString().trim()
-        : '';
-    if (detail.isEmpty || detail == 'null') {
-      return message;
-    }
-    return '$message ${NotesCopy.of(context).detailPrefix}$detail';
-  }
+  String _formatError(Object _, String message) => message;
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
@@ -492,7 +515,9 @@ class _NotesPageState extends State<NotesPage> {
       onProvisioningRetry: _summarizeNote,
       onProvisioningCancel: widget.onProvisioningCancel,
       onSave: _saveNote,
-      onDelete: _selectedNoteId == null || _actionBusy ? null : _deleteNote,
+      onDelete: _selectedNoteId == null || _actionBusy
+          ? null
+          : _confirmDeleteNote,
       onSummarize: _selectedNoteId == null || _actionBusy
           ? null
           : _summarizeNote,
@@ -522,9 +547,10 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Widget _settingsAction() {
+    final NotesCopy copy = NotesCopy.of(context);
     return IconButton(
       key: const ValueKey<String>('open-settings'),
-      tooltip: 'Appearance and language / Giao diện và ngôn ngữ',
+      tooltip: copy.appearanceAndLanguage,
       icon: const Icon(Icons.tune_outlined),
       onPressed: widget.onOpenSettings,
     );

@@ -157,6 +157,11 @@ void main() {
     await pumpPage(tester, controller);
     await tester.tap(find.byKey(const ValueKey<String>('delete-note')));
     await tester.pumpAndSettle();
+    expect(find.text('Delete note?'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('notes-delete-confirm')),
+    );
+    await tester.pumpAndSettle();
 
     expect(controller.notes, isEmpty);
     expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
@@ -174,7 +179,11 @@ void main() {
     await pumpPage(tester, controller);
 
     expect(find.byKey(const ValueKey<String>('notes-error')), findsOneWidget);
-    expect(find.textContaining('storage unavailable'), findsWidgets);
+    expect(find.textContaining('storage unavailable'), findsNothing);
+    expect(
+      find.text('Couldn’t load notes. Please try again.'),
+      findsWidgets,
+    );
     expect(find.byKey(const ValueKey<String>('retry-notes')), findsOneWidget);
   });
 

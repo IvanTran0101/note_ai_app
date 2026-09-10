@@ -84,6 +84,15 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       margin: const EdgeInsets.symmetric(vertical: 6.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
     ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(48.0, 48.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.0),
+        ),
+      ),
+    ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
       fillColor: colorScheme.surfaceContainerHighest,
@@ -452,6 +461,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   Future<void> _showAppearanceSettings(BuildContext context) async {
     ThemeMode selectedTheme = _themeMode;
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
+    final NotesCopy copy = NotesCopy.of(context);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -466,29 +476,29 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     Text(
-                      'Appearance & language / Giao diện & ngôn ngữ',
+                      copy.appearanceAndLanguage,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 20),
                     DropdownButtonFormField<ThemeMode>(
                       key: ValueKey<ThemeMode>(selectedTheme),
                       initialValue: selectedTheme,
-                      decoration: const InputDecoration(
-                        labelText: 'Theme / Giao diện',
+                      decoration: InputDecoration(
+                        labelText: copy.theme,
                         border: OutlineInputBorder(),
                       ),
-                      items: const <DropdownMenuItem<ThemeMode>>[
+                      items: <DropdownMenuItem<ThemeMode>>[
                         DropdownMenuItem(
                           value: ThemeMode.system,
-                          child: Text('System / Theo hệ thống'),
+                          child: Text(copy.themeSystem),
                         ),
                         DropdownMenuItem(
                           value: ThemeMode.light,
-                          child: Text('Light / Sáng'),
+                          child: Text(copy.themeLight),
                         ),
                         DropdownMenuItem(
                           value: ThemeMode.dark,
-                          child: Text('Dark / Tối'),
+                          child: Text(copy.themeDark),
                         ),
                       ],
                       onChanged: (ThemeMode? value) {
@@ -503,22 +513,22 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                     DropdownButtonFormField<_NoteFlowLanguageChoice>(
                       key: ValueKey<_NoteFlowLanguageChoice>(selectedLanguage),
                       initialValue: selectedLanguage,
-                      decoration: const InputDecoration(
-                        labelText: 'Language / Ngôn ngữ',
+                      decoration: InputDecoration(
+                        labelText: copy.language,
                         border: OutlineInputBorder(),
                       ),
-                      items: const <DropdownMenuItem<_NoteFlowLanguageChoice>>[
+                      items: <DropdownMenuItem<_NoteFlowLanguageChoice>>[
                         DropdownMenuItem(
                           value: _NoteFlowLanguageChoice.system,
-                          child: Text('System / Theo hệ thống'),
+                          child: Text(copy.languageSystem),
                         ),
                         DropdownMenuItem(
                           value: _NoteFlowLanguageChoice.vietnamese,
-                          child: Text('Tiếng Việt'),
+                          child: Text(copy.languageVietnamese),
                         ),
                         DropdownMenuItem(
                           value: _NoteFlowLanguageChoice.english,
-                          child: Text('English'),
+                          child: Text(copy.languageEnglish),
                         ),
                       ],
                       onChanged: (_NoteFlowLanguageChoice? value) {
