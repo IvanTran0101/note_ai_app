@@ -8,6 +8,7 @@ import 'application/note_intelligence/model_provisioning/model_provisioning_runt
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
+import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/note_intelligence/summary.dart';
 import 'domain/notes/note_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
@@ -24,14 +25,23 @@ import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
+import 'presentation/dashboard/dashboard_controller.dart';
+import 'presentation/dashboard/dashboard_localizations.dart';
+import 'presentation/dashboard/dashboard_page.dart';
+import 'presentation/notes/note_detail_localizations.dart';
+import 'presentation/notes/note_detail_page.dart';
+import 'presentation/notes/note_detail_route_result.dart';
 import 'presentation/notes/notes_localizations.dart';
-import 'presentation/notes/notes_page.dart';
+import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
+import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/workspace/workspace_localizations.dart';
+import 'presentation/workspace/workspace_shell.dart';
 
-const String _noteFlowFontFamily = 'SF Mono';
+const String _noteFlowFontFamily = 'Inter';
 const List<String> _noteFlowFontFallback = <String>[
-  'Menlo',
-  'Monaco',
+  'Roboto',
+  'Arial',
   'monospace',
 ];
 const Color _noteFlowSeedColor = Color(0xFF5B4FA6);
@@ -184,6 +194,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         now: _nowUtc,
         summarizeContent: _summarize,
       );
+  late final NotesApplicationController _notesController =
+      NoteApplicationServiceController(_noteApplicationService);
+  late final DashboardController _dashboardController = DashboardController(
+    query: GetDashboardOverview(
+      noteRepository: _noteRepository,
+      ownerId: _localOwnerId,
+    ),
+    recentLimit: 20,
+  );
+  final GlobalKey<WorkspaceShellState> _workspaceShellKey =
+      GlobalKey<WorkspaceShellState>();
   late final IModelStorage _modelStorage = createModelStorage(
     overrideModelPath: _aiConfiguration.modelPathOverride,
   );
@@ -214,6 +235,22 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
 
   void _cancelModelProvisioning() {
     _modelManager.cancelProvisioning();
+  }
+
+  Future<NoteDetailRouteResult?> _openNoteDetail(
+    BuildContext context,
+    NoteDto? note,
+  ) async {
+    return Navigator.of(context).push<NoteDetailRouteResult>(
+      MaterialPageRoute<NoteDetailRouteResult>(
+        builder: (_) => NoteDetailPage(
+          notesController: _notesController,
+          note: note,
+          provisioningReader: _modelProvisioningStatus,
+          onProvisioningCancel: _cancelModelProvisioning,
+        ),
+      ),
+    );
   }
 
   String _generateNoteId() {
@@ -512,6 +549,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       locale: _selectedLocale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         NotesCopy.delegate,
+        NoteDetailCopy.delegate,
+        DashboardCopy.delegate,
+        WorkspaceCopy.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -519,23 +559,45 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
       home: Builder(
         builder: (BuildContext context) {
-          return NotesPage(
-            applicationService: _noteApplicationService,
-            provisioningReader: _modelProvisioningStatus,
-            onProvisioningCancel: _cancelModelProvisioning,
-            onOpenSettings: () => _showAppearanceSettings(context),
-            onOpenDiagnostics: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => LocalLlmDebugPage(
-                    summarize: _summarize,
-                    loadModelReadiness: _loadModelReadiness,
-                    provisioningReader: _modelProvisioningStatus,
-                    onProvisioningCancel: _cancelModelProvisioning,
+          return WorkspaceShell(
+            key: _workspaceShellKey,
+            dashboard: DashboardPage(
+              dashboardController: _dashboardController,
+              notesController: _notesController,
+              onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
+              onCreateNote: () => _openNoteDetail(context, null),
+              onOpenSettings: () => _showAppearanceSettings(context),
+              onOpenDiagnostics: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LocalLlmDebugPage(
+                      summarize: _summarize,
+                      loadModelReadiness: _loadModelReadiness,
+                      provisioningReader: _modelProvisioningStatus,
+                      onProvisioningCancel: _cancelModelProvisioning,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
+            notes: NotesWorkspacePage(
+              applicationService: _noteApplicationService,
+              provisioningReader: _modelProvisioningStatus,
+              onProvisioningCancel: _cancelModelProvisioning,
+              onOpenSettings: () => _showAppearanceSettings(context),
+              onOpenDiagnostics: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LocalLlmDebugPage(
+                      summarize: _summarize,
+                      loadModelReadiness: _loadModelReadiness,
+                      provisioningReader: _modelProvisioningStatus,
+                      onProvisioningCancel: _cancelModelProvisioning,
+                    ),
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

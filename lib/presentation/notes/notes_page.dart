@@ -9,6 +9,7 @@ import 'note_editor_panel.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
 import 'notes_localizations.dart';
+import 'responsive_notes_workspace.dart';
 
 export 'notes_application_controller.dart' show NotesApplicationController;
 
@@ -49,6 +50,7 @@ class _NotesPageState extends State<NotesPage> {
 
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
+  bool _editingNewNote = false;
   String? _error;
   String? _summary;
   String? _statusMessage;
@@ -107,8 +109,10 @@ class _NotesPageState extends State<NotesPage> {
 
       if (selected == null) {
         _clearEditor();
+        _editingNewNote = false;
       } else {
         _populateEditor(selected);
+        _editingNewNote = false;
       }
 
       setState(() {
@@ -138,6 +142,7 @@ class _NotesPageState extends State<NotesPage> {
     _populateEditor(note);
     setState(() {
       _selectedNoteId = note.id;
+      _editingNewNote = false;
       _error = null;
       _summary = null;
       _statusMessage = null;
@@ -152,6 +157,7 @@ class _NotesPageState extends State<NotesPage> {
     _clearEditor();
     setState(() {
       _selectedNoteId = null;
+      _editingNewNote = true;
       _error = null;
       _summary = null;
       _statusMessage = null;
@@ -245,8 +251,10 @@ class _NotesPageState extends State<NotesPage> {
       final NoteDto? next = remaining.isEmpty ? null : remaining.first;
       if (next == null) {
         _clearEditor();
+        _editingNewNote = false;
       } else {
         _populateEditor(next);
+        _editingNewNote = false;
       }
       setState(() {
         _notes = List<NoteDto>.unmodifiable(remaining);
@@ -336,6 +344,7 @@ class _NotesPageState extends State<NotesPage> {
     setState(() {
       _notes = List<NoteDto>.unmodifiable(next);
       _selectedNoteId = note.id;
+      _editingNewNote = false;
       _error = null;
     });
   }
@@ -455,61 +464,61 @@ class _NotesPageState extends State<NotesPage> {
                 child: const CircularProgressIndicator(),
               ),
             )
-          : LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final Widget listPanel = NotesListPanel(
-                  notes: _notes,
-                  selectedNoteId: _selectedNoteId,
-                  error: _error,
-                  actionBusy: _actionBusy,
-                  onNewNote: _startNewNote,
-                  onSelectNote: _selectNote,
-                  onRetry: _loadNotes,
-                );
-                final Widget editor = NoteEditorPanel(
-                  titleController: _titleController,
-                  contentController: _contentController,
-                  hasSelectedNote: _selectedNoteId != null,
-                  actionBusy: _actionBusy,
-                  error: _error,
-                  summary: _summary,
-                  isDirty: _editorDirty,
-                  summaryBusy: _summarizing,
-                  statusMessage: _statusMessage,
-                  provisioningReader: widget.provisioningReader,
-                  onProvisioningRetry: _summarizeNote,
-                  onProvisioningCancel: widget.onProvisioningCancel,
-                  onSave: _saveNote,
-                  onDelete: _selectedNoteId == null || _actionBusy
-                      ? null
-                      : _deleteNote,
-                  onSummarize: _selectedNoteId == null || _actionBusy
-                      ? null
-                      : _summarizeNote,
-                );
-                if (constraints.maxWidth < 700) {
-                  return Column(
-                    children: <Widget>[
-                      SizedBox(
-                        height: constraints.maxHeight < 720 ? 180 : 230,
-                        child: listPanel,
-                      ),
-                      const Divider(height: 1),
-                      Expanded(child: editor),
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    SizedBox(width: 300, child: listPanel),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: editor),
-                  ],
-                );
-              },
-            ),
+          : _buildWorkspace(copy),
     );
+  }
+
+  Widget _buildWorkspace(NotesCopy copy) {
+    final Widget listPanel = NotesListPanel(
+      notes: _notes,
+      selectedNoteId: _selectedNoteId,
+      error: _error,
+      actionBusy: _actionBusy,
+      onNewNote: _startNewNote,
+      onSelectNote: _selectNote,
+      onRetry: _loadNotes,
+    );
+    final Widget editor = NoteEditorPanel(
+      titleController: _titleController,
+      contentController: _contentController,
+      hasSelectedNote: _selectedNoteId != null,
+      actionBusy: _actionBusy,
+      error: _error,
+      summary: _summary,
+      isDirty: _editorDirty,
+      summaryBusy: _summarizing,
+      statusMessage: _statusMessage,
+      provisioningReader: widget.provisioningReader,
+      onProvisioningRetry: _summarizeNote,
+      onProvisioningCancel: widget.onProvisioningCancel,
+      onSave: _saveNote,
+      onDelete: _selectedNoteId == null || _actionBusy ? null : _deleteNote,
+      onSummarize: _selectedNoteId == null || _actionBusy
+          ? null
+          : _summarizeNote,
+    );
+    return ResponsiveNotesWorkspace(
+      list: listPanel,
+      detail: editor,
+      hasSelection: _selectedNoteId != null || _editingNewNote,
+      onCompactBack: _handleCompactBack,
+      compactBackLabel: copy.notes,
+    );
+  }
+
+  void _handleCompactBack() {
+    if (_editorDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return;
+    }
+    _clearEditor();
+    setState(() {
+      _selectedNoteId = null;
+      _editingNewNote = false;
+      _summary = null;
+      _error = null;
+      _statusMessage = null;
+    });
   }
 
   Widget _settingsAction() {
