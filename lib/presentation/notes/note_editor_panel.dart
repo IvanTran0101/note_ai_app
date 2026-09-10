@@ -95,7 +95,7 @@ final class NoteEditorPanel extends StatelessWidget {
                   onPressed: onDelete,
                   child: Text(copy.delete),
                 ),
-                OutlinedButton(
+                FilledButton.tonal(
                   key: const ValueKey<String>('summarize-note'),
                   onPressed: isDirty || summaryBusy ? null : onSummarize,
                   child: Text(summaryBusy ? copy.summarizing : copy.summarize),

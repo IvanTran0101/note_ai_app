@@ -72,7 +72,7 @@ void main() {
     expect(find.text('Note saved.'), findsOneWidget);
     expect(
       tester
-          .widget<OutlinedButton>(
+          .widget<FilledButton>(
             find.byKey(const ValueKey<String>('note-detail-summarize')),
           )
           .onPressed,
@@ -140,7 +140,7 @@ void main() {
       );
       expect(
         tester
-            .widget<OutlinedButton>(
+            .widget<FilledButton>(
               find.byKey(const ValueKey<String>('note-detail-summarize')),
             )
             .onPressed,
@@ -168,6 +168,75 @@ void main() {
       );
     },
   );
+
+  testWidgets('summary exposes copy and regenerate actions', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-copy-summary')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-regenerate-summary')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('note-detail-copy-summary')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-copy-summary')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-status')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-regenerate-summary')),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.summarizeCalls, 2);
+  });
+
+  testWidgets('summary failure exposes a retry action', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    )..summarizeFailuresRemaining = 1;
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Couldn’t create a summary. Please try again.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-error-retry')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-error-retry')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.summaryKey), findsOneWidget);
+    expect(controller.summarizeCalls, 2);
+  });
 
   testWidgets('dirty back offers Cancel and Discard', (
     WidgetTester tester,
@@ -276,6 +345,8 @@ final class _FakeNotesController implements NotesApplicationController {
   int renameCalls = 0;
   int replaceContentCalls = 0;
   String? summarizedNoteId;
+  int summarizeCalls = 0;
+  int summarizeFailuresRemaining = 0;
   int _nextId = 1;
 
   @override
@@ -325,7 +396,12 @@ final class _FakeNotesController implements NotesApplicationController {
   @override
   Future<String> summarizeNote(String noteId) async {
     final NoteDto note = _find(noteId);
+    summarizeCalls++;
     summarizedNoteId = noteId;
+    if (summarizeFailuresRemaining > 0) {
+      summarizeFailuresRemaining--;
+      throw StateError('summary unavailable');
+    }
     return 'Summary of ${note.content}';
   }
 

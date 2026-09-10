@@ -41,8 +41,15 @@ final class DashboardNoteCard extends StatelessWidget {
     final String preview = _preview(note.content);
     final String updatedDate = MaterialLocalizations.of(context)
         .formatCompactDate(note.updatedAt);
+    final Color foreground = selected
+        ? colors.onPrimaryContainer
+        : colors.onSurface;
+    final Color secondaryForeground = selected
+        ? colors.onPrimaryContainer
+        : colors.onSurfaceVariant;
 
     return Semantics(
+      key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
       button: true,
       selected: selected,
       label: copy.noteSemantics(title: title, preview: preview),
@@ -73,7 +80,7 @@ final class DashboardNoteCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: colors.onSurface,
+                      color: foreground,
                     ),
                   ),
                   const SizedBox(height: 8.0),
@@ -81,18 +88,16 @@ final class DashboardNoteCard extends StatelessWidget {
                     preview,
                     maxLines: layout == DashboardNoteCardLayout.grid ? 3 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      height: 1.35,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: secondaryForeground, height: 1.35),
                   ),
                   const SizedBox(height: 12.0),
                   Text(
                     copy.updatedOn(updatedDate),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium
-                        ?.copyWith(color: colors.onSurfaceVariant),
+                        ?.copyWith(color: secondaryForeground),
                   ),
                 ],
               ),

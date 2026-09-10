@@ -76,7 +76,7 @@ void main() {
     );
     expect(
       tester
-          .widget<OutlinedButton>(
+          .widget<FilledButton>(
             find.byKey(const ValueKey<String>('note-detail-summarize')),
           )
           .onPressed,

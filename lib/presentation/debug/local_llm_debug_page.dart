@@ -4,6 +4,7 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../domain/note_intelligence/summary.dart';
 import '../notes/model_provisioning_status_panel.dart';
+import '../notes/notes_localizations.dart';
 
 /// Signature for the summarizer injected into [LocalLlmDebugPage].
 typedef SummarizeFunction = Future<Summary> Function(String content);
@@ -96,21 +97,15 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
 
   @override
   Widget build(BuildContext context) {
+    final NotesCopy copy = NotesCopy.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('NoteFlow · Local LLM Debug'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+      appBar: AppBar(title: Text(copy.debugTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text(
-              'On-device summarization proof. Native platforms resolve the '
-              'model from app-private storage; macOS Debug also accepts the '
-              'LOCAL_LLM_MODEL_PATH override.',
-            ),
+            Text(copy.debugDescription),
             if (widget.provisioningReader != null) ...<Widget>[
               ModelProvisioningStatusPanel(
                 reader: widget.provisioningReader!,
@@ -125,12 +120,14 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
                 builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
                   final String label;
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    label = 'Model status: loading…';
+                    label = '${copy.modelStatus}: ${copy.modelStatusLoading}';
                   } else if (snapshot.hasError) {
-                    label = 'Model status: unavailable';
+                    label =
+                        '${copy.modelStatus}: ${copy.modelStatusUnavailable}';
                   } else {
                     label =
-                        'Model status: ${snapshot.data ?? 'not provisioned'}';
+                        '${copy.modelStatus}: '
+                        '${snapshot.data ?? copy.modelNotProvisioned}';
                   }
                   return Text(
                     label,
@@ -141,18 +138,21 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
             ],
             const SizedBox(height: 12),
             TextField(
+              key: const ValueKey<String>('debug-note-field'),
               controller: _noteController,
               minLines: 5,
               maxLines: 10,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: OutlineInputBorder(),
-                hintText: 'Paste note content here…',
+                labelText: copy.debugNoteLabel,
+                alignLabelWithHint: true,
               ),
             ),
             const SizedBox(height: 12),
             FilledButton(
+              key: const ValueKey<String>('debug-summarize'),
               onPressed: _busy ? null : _onSummarize,
-              child: const Text('Summarize'),
+              child: Text(copy.summarize),
             ),
             const SizedBox(height: 16),
             if (_busy) ...<Widget>[
@@ -160,15 +160,29 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
               const SizedBox(height: 8),
             ],
             if (_error != null)
-              Text(
-                'Error: $_error',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  '${copy.debugError} $_error',
+                  key: const ValueKey<String>('debug-error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             if (_result != null)
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(_result!),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        copy.debugSummary,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(_result!),
+                    ],
+                  ),
                 ),
               ),
           ],

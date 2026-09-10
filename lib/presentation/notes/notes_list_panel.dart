@@ -27,28 +27,43 @@ final class NotesListPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NotesCopy copy = NotesCopy.of(context);
+    final ColorScheme colors = Theme.of(context).colorScheme;
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      color: colors.surfaceContainerLowest,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    copy.notes,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                OutlinedButton.icon(
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final Widget title = Text(
+                  copy.notes,
+                  style: Theme.of(context).textTheme.titleLarge,
+                );
+                final Widget create = OutlinedButton.icon(
                   key: const ValueKey<String>('new-note'),
                   onPressed: actionBusy ? null : onNewNote,
                   icon: const Icon(Icons.add),
                   label: Text(copy.newNote),
-                ),
-              ],
+                );
+                if (constraints.maxWidth < 420) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      title,
+                      const SizedBox(height: 8),
+                      Align(alignment: Alignment.centerLeft, child: create),
+                    ],
+                  );
+                }
+                return Row(
+                  children: <Widget>[
+                    Expanded(child: title),
+                    create,
+                  ],
+                );
+              },
             ),
             if (error != null) ...<Widget>[
               const SizedBox(height: 8),
@@ -99,25 +114,39 @@ final class NotesListPanel extends StatelessWidget {
                       itemBuilder: (BuildContext context, int index) {
                         final NoteDto note = notes[index];
                         final bool selected = note.id == selectedNoteId;
-                        return ListTile(
-                          key: ValueKey<String>('note-${note.id}'),
+                        return Semantics(
                           selected: selected,
-                          selectedTileColor: Theme.of(context)
-                              .colorScheme
-                              .primaryContainer,
-                          title: Text(
-                            note.title.trim().isEmpty
-                                ? copy.untitled
-                                : note.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          button: true,
+                          label:
+                              '${note.title.trim().isEmpty ? copy.untitled : note.title}. ${_preview(note.content, copy)}',
+                          child: ListTile(
+                            key: ValueKey<String>('note-${note.id}'),
+                            selected: selected,
+                            selectedTileColor: colors.primaryContainer,
+                            title: Text(
+                              note.title.trim().isEmpty
+                                  ? copy.untitled
+                                  : note.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: selected
+                                    ? colors.onPrimaryContainer
+                                    : colors.onSurface,
+                              ),
+                            ),
+                            subtitle: Text(
+                              _preview(note.content, copy),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: selected
+                                    ? colors.onPrimaryContainer
+                                    : colors.onSurfaceVariant,
+                              ),
+                            ),
+                            onTap: actionBusy ? null : () => onSelectNote(note),
                           ),
-                          subtitle: Text(
-                            _preview(note.content, copy),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: actionBusy ? null : () => onSelectNote(note),
                         );
                       },
                     ),

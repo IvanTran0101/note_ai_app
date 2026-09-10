@@ -180,7 +180,7 @@ class WorkspaceShellState extends State<WorkspaceShell> {
               label: Text(
                 _labelFor(copy, destination),
                 key: WorkspaceShell.destinationKey(destination),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -210,7 +210,7 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                   padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 12.0),
                   child: Text(
                     copy.workspaceTitle,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: titleStyle?.copyWith(
                       color: colors.onSurfaceVariant,

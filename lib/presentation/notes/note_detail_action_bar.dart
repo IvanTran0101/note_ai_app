@@ -80,7 +80,7 @@ final class NoteDetailActionBar extends StatelessWidget {
                     button: true,
                     enabled: summarizeEnabled,
                     label: isSummarizing ? summarizingLabel : summarizeLabel,
-                    child: OutlinedButton.icon(
+                    child: FilledButton.tonalIcon(
                       key: const ValueKey<String>('note-detail-summarize'),
                       onPressed: summarizeEnabled ? onSummarize : null,
                       icon: isSummarizing

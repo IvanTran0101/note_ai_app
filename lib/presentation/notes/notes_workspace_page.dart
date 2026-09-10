@@ -182,22 +182,12 @@ final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
   @override
   Widget build(BuildContext context) {
     final NotesCopy copy = NotesCopy.of(context);
+    final bool compact =
+        MediaQuery.sizeOf(context).width <
+        ResponsiveNotesWorkspace.compactBreakpoint;
+    final bool compactDetailActive = compact && _showDetail;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(copy.title),
-        actions:
-            widget.onOpenSettings == null && widget.onOpenDiagnostics == null
-            ? null
-            : <Widget>[
-                if (widget.onOpenSettings != null) _settingsAction(),
-                if (widget.onOpenDiagnostics != null)
-                  TextButton(
-                    key: const ValueKey<String>('open-diagnostics'),
-                    onPressed: widget.onOpenDiagnostics,
-                    child: Text(copy.diagnostics),
-                  ),
-              ],
-      ),
+      appBar: compactDetailActive ? null : _buildWorkspaceAppBar(copy),
       body: _loading
           ? Center(
               key: const ValueKey<String>('notes-workspace-loading'),
@@ -217,13 +207,30 @@ final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
                 onSelectNote: _selectNote,
                 onRetry: _loadNotes,
               ),
-              detail: _buildDetail(copy),
+              detail: _buildDetail(copy, showAppBar: compact),
               hasSelection: _showDetail,
             ),
     );
   }
 
-  Widget _buildDetail(NotesCopy copy) {
+  PreferredSizeWidget _buildWorkspaceAppBar(NotesCopy copy) {
+    return AppBar(
+      title: Text(copy.title),
+      actions: widget.onOpenSettings == null && widget.onOpenDiagnostics == null
+          ? null
+          : <Widget>[
+              if (widget.onOpenSettings != null) _settingsAction(),
+              if (widget.onOpenDiagnostics != null)
+                TextButton(
+                  key: const ValueKey<String>('open-diagnostics'),
+                  onPressed: widget.onOpenDiagnostics,
+                  child: Text(copy.diagnostics),
+                ),
+            ],
+    );
+  }
+
+  Widget _buildDetail(NotesCopy copy, {required bool showAppBar}) {
     if (!_showDetail) {
       return Center(
         key: const ValueKey<String>('notes-workspace-detail-empty'),
@@ -238,16 +245,17 @@ final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
       note: _selectedNote,
       provisioningReader: widget.provisioningReader,
       onProvisioningCancel: widget.onProvisioningCancel,
-      showAppBar: true,
+      showAppBar: showAppBar,
       onEmbeddedExit: _handleDetailExit,
       onDirtyChanged: _handleDetailDirtyChanged,
     );
   }
 
   Widget _settingsAction() {
+    final NotesCopy copy = NotesCopy.of(context);
     return IconButton(
       key: const ValueKey<String>('open-settings'),
-      tooltip: 'Appearance and language / Giao diện và ngôn ngữ',
+      tooltip: copy.appearanceAndLanguage,
       icon: const Icon(Icons.tune_outlined),
       onPressed: widget.onOpenSettings,
     );

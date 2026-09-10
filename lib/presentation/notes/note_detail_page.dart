@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
@@ -70,6 +71,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _summarizing = false;
   bool _didPersist = false;
   bool _lastReportedDirty = false;
+  bool _summaryError = false;
 
   @override
   void initState() {
@@ -131,6 +133,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _saving = true;
       _error = null;
       _statusMessage = null;
+      _summaryError = false;
     });
 
     try {
@@ -197,6 +200,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _summarizing = true;
       _error = null;
       _statusMessage = null;
+      _summaryError = false;
     });
 
     try {
@@ -210,6 +214,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         _summary = summary;
         _summaryStale = false;
         _statusMessage = copy.summarized;
+        _summaryError = false;
       });
     } on Object {
       if (!mounted) {
@@ -221,7 +226,10 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
           provisioningState?.phase == ModelProvisioningPhase.failed ||
           provisioningState?.phase == ModelProvisioningPhase.cancelled;
       if (!provisioningFailed) {
-        setState(() => _error = copy.summarizeError);
+        setState(() {
+          _error = copy.summarizeError;
+          _summaryError = true;
+        });
       }
     } finally {
       if (mounted) {
@@ -298,6 +306,30 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     }
   }
 
+  Future<void> _copySummary() async {
+    final String? summary = _summary;
+    if (summary == null) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final String copiedMessage = NoteDetailCopy.of(context).copied;
+    setState(() {
+      _statusMessage = copiedMessage;
+      _error = null;
+    });
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(copiedMessage)));
+    try {
+      await Clipboard.setData(ClipboardData(text: summary));
+    } on Object {
+      // Keep the in-app feedback usable in widget tests and hosts without a
+      // clipboard channel. The native clipboard remains best effort.
+    }
+  }
+
   void _pop({NoteDetailExitReason? reason}) {
     if (mounted) {
       final NoteDetailExitReason exitReason =
@@ -322,7 +354,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   @override
   Widget build(BuildContext context) {
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final String pageTitle = _note == null ? copy.newNote : copy.editNote;
+    final String pageTitle = _note == null
+        ? copy.newNote
+        : (_note!.title.trim().isEmpty ? copy.editNote : _note!.title);
     final Widget surface = _buildSurface(copy);
     final Widget content = widget.onEmbeddedExit != null
         ? Column(
@@ -353,6 +387,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   PreferredSizeWidget _buildAppBar(NoteDetailCopy copy, String pageTitle) {
+    final VoidCallback? moreAction = _moreAction(copy);
     return AppBar(
       leading: IconButton(
         key: NoteDetailPage.backKey,
@@ -360,7 +395,26 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         onPressed: _actionBusy ? null : () => unawaited(_handleBack()),
         icon: const Icon(Icons.arrow_back),
       ),
-      title: Text(pageTitle),
+      title: Text(pageTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      actions: moreAction == null
+          ? null
+          : <Widget>[
+              IconButton(
+                key: const ValueKey<String>('note-detail-more'),
+                tooltip: copy.more,
+                onPressed: moreAction,
+                icon: const Icon(Icons.more_horiz),
+              ),
+            ],
+    );
+  }
+
+  VoidCallback? _moreAction(NoteDetailCopy copy) {
+    if (_note == null || _actionBusy) {
+      return null;
+    }
+    return () => unawaited(
+      runNoteDetailMoreActions(context: context, copy: copy, onDelete: _delete),
     );
   }
 
@@ -381,21 +435,19 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       onProvisioningCancel: widget.onProvisioningCancel,
       summary: _summary,
       summaryStale: _summaryStale,
+      onCopySummary: _summary == null ? null : () => unawaited(_copySummary()),
+      onRegenerateSummary: _canSummarize ? () => unawaited(_summarize()) : null,
+      copySummaryLabel: copy.copySummary,
+      regenerateSummaryLabel: copy.regenerate,
+      onErrorRetry: _summaryError ? () => unawaited(_summarize()) : null,
+      errorRetryLabel: copy.retry,
       isSaving: _saving,
       isSummarizing: _summarizing,
       canSave: _canSave,
       canSummarize: _canSummarize,
       onSave: _canSave ? () => unawaited(_save()) : null,
       onSummarize: _canSummarize ? () => unawaited(_summarize()) : null,
-      onMore: _note == null || _actionBusy
-          ? null
-          : () => unawaited(
-              runNoteDetailMoreActions(
-                context: context,
-                copy: copy,
-                onDelete: _delete,
-              ),
-            ),
+      onMore: widget.showAppBar ? null : _moreAction(copy),
       saveLabel: copy.save,
       summarizeLabel: copy.summarize,
       moreLabel: copy.more,
