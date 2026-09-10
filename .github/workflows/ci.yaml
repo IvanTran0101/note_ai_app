@@ -22,8 +22,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Analyze app
+        run: flutter analyze lib test
 
-      - name: Test
+      - name: Install local_llm_bridge dependencies
+        working-directory: packages/local_llm_bridge
+        run: dart pub get
+
+      - name: Analyze local_llm_bridge
+        working-directory: packages/local_llm_bridge
+        run: dart analyze lib test tool
+
+      - name: Test app
         run: flutter test
+
+      - name: Test local_llm_bridge
+        working-directory: packages/local_llm_bridge
+        run: dart test
