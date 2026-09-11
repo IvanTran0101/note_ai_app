@@ -3,6 +3,9 @@
     {
       "name": "Default",
       "files": [
+        "noteflow-system.architecture.json",
+        "noteflow-system.html",
+        "noteflow-system.visual-check.json",
         ".vscode/changelists.json"
       ]
     }
