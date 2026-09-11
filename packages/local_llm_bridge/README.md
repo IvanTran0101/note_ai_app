@@ -47,20 +47,20 @@ On Web both throw `UnsupportedError`.
   returns complete UTF-8 text. The context is cleared before each request.
 * `runtime.generateChat(systemPrompt, userPrompt)` — performs one independent
   greedy chat generation. The native facade formats the prompts with the
-  model's own `tokenizer.chat_template` (retrieved through
-  `llama_model_chat_template`) and appends the assistant turn start
-  (`llama_chat_apply_template` with `add_ass=true`), then reuses the same
-  one-shot generation path as `generate`. If `systemPrompt` is empty, only a
-  user turn is emitted; this supports Gemma 3 IT's user/model prompt format.
-  No template is hardcoded in Dart; a model without a usable chat template
-  fails with an explicit `LocalLlmBridgeException`.
+  model's own `tokenizer.chat_template` through llama.cpp's modern
+  Jinja/PEG chat layer. The assistant generation prompt is appended according
+  to the template embedded in the GGUF, then the same one-shot generation
+  path as `generate` is reused. If `systemPrompt` is empty, only a user turn
+  is emitted. No template is hardcoded in Dart or in the bridge; a model
+  without a usable chat template fails with an explicit
+  `LocalLlmBridgeException`.
 * `runtime.close()` — releases the model and context. It is safe to call more
   than once.
 
 Raw `generate` passes prompts through as complete prompts. Chat formatting
-(and the assistant turn start) is owned by the native chat path, which only
-supports the template families recognized by the pinned llama.cpp v0.3.0
-`llama_chat_apply_template`. Streaming, cancellation, and isolate
+(and the assistant turn start) is owned by the native chat path, which uses
+the Jinja/PEG implementation shipped in the pinned llama.cpp v0.3.0 common
+layer. Streaming, cancellation, and isolate
 orchestration are outside this synchronous runtime slice.
 
 ## Binding to native code
@@ -100,4 +100,9 @@ dart run tool/runtime_smoke_check.dart \
 # Chat path (generateChat, applies the model's own chat template)
 dart run tool/runtime_smoke_check.dart \
   /Volumes/Kingsman/Projects/Schools/NoteFlow/gemma-3-1b-it-Q4_K_M.gguf --chat
+
+# The same chat path also supports the Gemma 4 E2B GGUF through its embedded
+# Jinja/PEG template (the model stays outside the repository).
+dart run tool/runtime_smoke_check.dart \
+  /Volumes/Kingsman/Projects/Schools/NoteFlow/gemma-4-E2B_q4_0-it.gguf --chat
 ```
