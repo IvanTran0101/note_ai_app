@@ -118,13 +118,31 @@ List<String> _llamaCppSources(Uri packageRoot, Architecture? architecture) => [
   ..._directSources(packageRoot, '$_llamaRoot/src/models', '.cpp'),
 ];
 
-Map<String, String?> _nativeDefines() => const {
+const Map<String, String?> _baseNativeDefines = {
   'GGML_VERSION': '"$_ggmlVersion"',
   'GGML_COMMIT': '"$_llamaCommit"',
   'GGML_SCHED_MAX_COPIES': '4',
   'GGML_USE_CPU': null,
   'LLAMA_VERSION': '"$_llamaVersion"',
   'LLAMA_COMMIT': '"$_llamaCommit"',
+};
+
+/// Mirrors llama.cpp/ggml's POSIX feature-test definitions.
+///
+/// The upstream CMake build enables these definitions before compiling the
+/// C/C++ ggml targets. Without them, a strict Linux `-std=c11` build hides
+/// declarations for `getline`, `posix_memalign`, and `M_PI`, even though the
+/// same sources compile with the platform defaults on macOS.
+Map<String, String?> _nativeDefines(OS targetOS) => {
+  ..._baseNativeDefines,
+  if (targetOS == OS.linux || targetOS == OS.android) ...{
+    '_XOPEN_SOURCE': '600',
+    '_GNU_SOURCE': null,
+  },
+  if (targetOS == OS.macOS || targetOS == OS.iOS) ...{
+    '_XOPEN_SOURCE': '600',
+    '_DARWIN_C_SOURCE': null,
+  },
 };
 
 List<String> _threadFlags(OS targetOS) =>
@@ -155,7 +173,7 @@ void main(List<String> args) async {
 
     final architecture = input.config.code.targetArchitecture;
     final includes = _nativeIncludes();
-    final defines = _nativeDefines();
+    final defines = _nativeDefines(input.config.code.targetOS);
     final flags = _threadFlags(input.config.code.targetOS);
 
     final ggmlCBuilder = CBuilder.library(
