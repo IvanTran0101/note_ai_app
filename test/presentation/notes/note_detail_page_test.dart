@@ -64,7 +64,11 @@ void main() {
       'A new note body',
     );
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
+    );
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(controller.notes.single.title, 'A new note');
@@ -102,14 +106,10 @@ void main() {
     );
     expect(find.byKey(NoteDetailPage.dirtyKey), findsOneWidget);
     expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('note-detail-save')),
-          )
-          .onPressed,
-      isNotNull,
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
     );
-    await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(controller.renameCalls, 1);
@@ -147,7 +147,7 @@ void main() {
         isNull,
       );
 
-      await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey<String>('note-detail-summarize')),
@@ -238,6 +238,26 @@ void main() {
     expect(controller.summarizeCalls, 2);
   });
 
+  testWidgets('autosaves when both editor fields lose focus', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Saved after focus loss',
+    );
+    await tester.pump();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+
+    expect(controller.renameCalls, 1);
+    expect(controller.notes.single.title, 'Saved after focus loss');
+  });
+
   testWidgets('dirty back offers Cancel and Discard', (
     WidgetTester tester,
   ) async {
@@ -250,6 +270,7 @@ void main() {
       'Unsaved title',
     );
     await tester.pump();
+    expect(controller.renameCalls, 0);
     expect(
       tester.widget<IconButton>(find.byKey(NoteDetailPage.backKey)).onPressed,
       isNotNull,
@@ -260,20 +281,25 @@ void main() {
         .onPressed;
     expect(back, isNotNull);
     back!();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Save changes before leaving?'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey<String>('note-detail-back-cancel')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.renameCalls, 0);
 
     final VoidCallback? backAgain = tester
         .widget<IconButton>(find.byKey(NoteDetailPage.backKey))
         .onPressed;
     expect(backAgain, isNotNull);
     backAgain!();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.renameCalls, 0);
     await tester.tap(
       find.byKey(const ValueKey<String>('note-detail-back-discard')),
     );
@@ -333,7 +359,10 @@ void main() {
     expect(find.text('Ghi chú mới'), findsOneWidget);
     expect(find.text('Tiêu đề'), findsOneWidget);
     expect(find.text('Nội dung'), findsOneWidget);
-    expect(find.text('Lưu'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
+    );
   });
 }
 

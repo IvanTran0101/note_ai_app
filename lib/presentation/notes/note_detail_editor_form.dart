@@ -15,6 +15,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     super.key,
     required this.titleController,
     required this.contentController,
+    this.titleFocusNode,
     required this.contentFocusNode,
     required this.contentFieldContextKey,
     required this.copy,
@@ -38,6 +39,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
 
   final TextEditingController titleController;
   final TextEditingController contentController;
+  final FocusNode? titleFocusNode;
   final FocusNode contentFocusNode;
   final GlobalKey contentFieldContextKey;
   final NoteDetailCopy copy;
@@ -67,6 +69,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
         TextField(
           key: const ValueKey<String>('note-detail-title-field'),
           controller: titleController,
+          focusNode: titleFocusNode,
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(labelText: copy.titleLabel),
         ),

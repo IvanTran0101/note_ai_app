@@ -65,7 +65,11 @@ void main() {
       'Created from the compact workspace',
     );
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
+    );
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(controller.notes.single.title, 'Mobile note');
