@@ -2612,6 +2612,13 @@ static bool ggml_thread_apply_priority(int32_t prio) {
 // TODO: this may not work on BSD, to be verified
 
 static bool ggml_thread_apply_affinity(const bool * mask) {
+#ifdef __ANDROID__
+    // Android's NDK does not expose the Linux cpu_set_t affinity API used by
+    // this optional optimization on every supported API level. Keep the
+    // default scheduler on Android; llama.cpp remains fully functional.
+    UNUSED(mask);
+    return true;
+#else
     cpu_set_t cpuset;
     int err;
 
@@ -2624,20 +2631,14 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
         }
     }
 
-#ifdef __ANDROID__
-    err = sched_setaffinity(0, sizeof(cpuset), &cpuset);
-    if (err < 0) {
-        err = errno;
-    }
-#else
     err = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-#endif
     if (err != 0) {
         fprintf(stderr, "warn: failed to set affinity mask 0x%llx : %s (%d)\n", (unsigned long long)mask, strerror(err), err);
         return false;
     }
 
     return true;
+#endif
 }
 
 static bool ggml_thread_apply_priority(int32_t prio) {

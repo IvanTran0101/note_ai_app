@@ -151,7 +151,7 @@ List<String> _threadFlags(OS targetOS) =>
     : const [];
 
 List<String> _systemLibraries(OS targetOS) => switch (targetOS) {
-  OS.android => const ['dl'],
+  OS.android => const ['dl', 'm'],
   OS.linux => const ['dl', 'm'],
   _ => const [],
 };
