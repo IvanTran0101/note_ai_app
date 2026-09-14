@@ -61,11 +61,40 @@ List<String> _cpuArchitectureSources(Architecture? architecture) {
 
 List<String> _nativeIncludes() => const [
   'src',
+  _llamaRoot,
   '$_llamaRoot/include',
+  '$_llamaRoot/common',
+  '$_llamaRoot/vendor',
+  '$_llamaRoot/vendor/nlohmann',
+  '$_llamaRoot/vendor/sheredom',
   '$_llamaRoot/ggml/include',
   '$_llamaRoot/ggml/src',
   '$_llamaRoot/ggml/src/ggml-cpu',
   '$_llamaRoot/src',
+];
+
+/// Modern llama.cpp chat-template support. The legacy public
+/// `llama_chat_apply_template` API is intentionally not used for the bridge:
+/// it only recognizes a fixed list of templates and cannot render the
+/// Gemma 4 Jinja/PEG template embedded in the GGUF metadata.
+List<String> _commonChatSources() => const [
+  '$_llamaRoot/common/chat.cpp',
+  '$_llamaRoot/common/chat-auto-parser-generator.cpp',
+  '$_llamaRoot/common/chat-auto-parser-helpers.cpp',
+  '$_llamaRoot/common/chat-diff-analyzer.cpp',
+  '$_llamaRoot/common/chat-peg-parser.cpp',
+  '$_llamaRoot/common/json-schema-to-grammar.cpp',
+  '$_llamaRoot/common/json.cpp',
+  '$_llamaRoot/common/log.cpp',
+  '$_llamaRoot/common/peg-parser.cpp',
+  '$_llamaRoot/common/trie.cpp',
+  '$_llamaRoot/common/unicode.cpp',
+  '$_llamaRoot/common/jinja/caps.cpp',
+  '$_llamaRoot/common/jinja/lexer.cpp',
+  '$_llamaRoot/common/jinja/parser.cpp',
+  '$_llamaRoot/common/jinja/runtime.cpp',
+  '$_llamaRoot/common/jinja/string.cpp',
+  '$_llamaRoot/common/jinja/value.cpp',
 ];
 
 List<String> _ggmlCSources(Architecture? architecture) => [
@@ -80,6 +109,7 @@ List<String> _ggmlCSources(Architecture? architecture) => [
 
 List<String> _llamaCppSources(Uri packageRoot, Architecture? architecture) => [
   'src/local_llm_bridge.cpp',
+  ..._commonChatSources(),
   ..._directSources(packageRoot, '$_llamaRoot/ggml/src', '.cpp'),
   ..._directSources(packageRoot, '$_llamaRoot/ggml/src/ggml-cpu', '.cpp'),
   for (final source in _cpuArchitectureSources(architecture))
@@ -88,7 +118,7 @@ List<String> _llamaCppSources(Uri packageRoot, Architecture? architecture) => [
   ..._directSources(packageRoot, '$_llamaRoot/src/models', '.cpp'),
 ];
 
-Map<String, String?> _nativeDefines() => const {
+const Map<String, String?> _baseNativeDefines = {
   'GGML_VERSION': '"$_ggmlVersion"',
   'GGML_COMMIT': '"$_llamaCommit"',
   'GGML_SCHED_MAX_COPIES': '4',
@@ -97,13 +127,31 @@ Map<String, String?> _nativeDefines() => const {
   'LLAMA_COMMIT': '"$_llamaCommit"',
 };
 
+/// Mirrors llama.cpp/ggml's POSIX feature-test definitions.
+///
+/// The upstream CMake build enables these definitions before compiling the
+/// C/C++ ggml targets. Without them, a strict Linux `-std=c11` build hides
+/// declarations for `getline`, `posix_memalign`, and `M_PI`, even though the
+/// same sources compile with the platform defaults on macOS.
+Map<String, String?> _nativeDefines(OS targetOS) => {
+  ..._baseNativeDefines,
+  if (targetOS == OS.linux || targetOS == OS.android) ...{
+    '_XOPEN_SOURCE': '600',
+    '_GNU_SOURCE': null,
+  },
+  if (targetOS == OS.macOS || targetOS == OS.iOS) ...{
+    '_XOPEN_SOURCE': '600',
+    '_DARWIN_C_SOURCE': null,
+  },
+};
+
 List<String> _threadFlags(OS targetOS) =>
     targetOS == OS.android || targetOS == OS.linux
     ? const ['-pthread']
     : const [];
 
 List<String> _systemLibraries(OS targetOS) => switch (targetOS) {
-  OS.android => const ['dl'],
+  OS.android => const ['dl', 'm'],
   OS.linux => const ['dl', 'm'],
   _ => const [],
 };
@@ -125,7 +173,7 @@ void main(List<String> args) async {
 
     final architecture = input.config.code.targetArchitecture;
     final includes = _nativeIncludes();
-    final defines = _nativeDefines();
+    final defines = _nativeDefines(input.config.code.targetOS);
     final flags = _threadFlags(input.config.code.targetOS);
 
     final ggmlCBuilder = CBuilder.library(

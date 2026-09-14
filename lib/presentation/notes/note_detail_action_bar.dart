@@ -60,22 +60,25 @@ final class NoteDetailActionBar extends StatelessWidget {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
-                  Semantics(
-                    button: true,
-                    enabled: saveEnabled,
-                    label: isSaving ? savingLabel : saveLabel,
-                    child: FilledButton.icon(
-                      key: const ValueKey<String>('note-detail-save'),
-                      onPressed: saveEnabled ? onSave : null,
-                      icon: isSaving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_outlined),
-                      label: Text(isSaving ? savingLabel : saveLabel),
+                  if (onSave != null)
+                    Semantics(
+                      button: true,
+                      enabled: saveEnabled,
+                      label: isSaving ? savingLabel : saveLabel,
+                      child: FilledButton.icon(
+                        key: const ValueKey<String>('note-detail-save'),
+                        onPressed: saveEnabled ? onSave : null,
+                        icon: isSaving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(isSaving ? savingLabel : saveLabel),
+                      ),
                     ),
-                  ),
                   Semantics(
                     button: true,
                     enabled: summarizeEnabled,

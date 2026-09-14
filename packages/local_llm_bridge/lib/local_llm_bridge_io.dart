@@ -106,8 +106,8 @@ final class LocalLlmBridgeRuntime {
   /// Generates a complete chat response with deterministic greedy sampling.
   ///
   /// The native side formats [systemPrompt] and [userPrompt] with the model's
-  /// `tokenizer.chat_template` (retrieved through
-  /// `llama_model_chat_template`) and appends the assistant turn start. If
+  /// `tokenizer.chat_template` through llama.cpp's modern Jinja/PEG chat
+  /// layer, including the template-specific assistant generation prompt. If
   /// [systemPrompt] is empty, only a user turn is formatted. No template is
   /// hardcoded here; models without a usable chat template fail with a
   /// [LocalLlmBridgeException].

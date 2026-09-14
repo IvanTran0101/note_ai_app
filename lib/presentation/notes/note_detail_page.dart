@@ -54,10 +54,14 @@ final class NoteDetailPage extends StatefulWidget {
 }
 
 final class _NoteDetailPageState extends State<NoteDetailPage> {
+  static const Duration _autosaveDelay = Duration(seconds: 3);
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _contentFocusNode = FocusNode();
   final GlobalKey _contentFieldContextKey = GlobalKey();
+  Timer? _autosaveTimer;
 
   late NoteDto? _note;
   late String _savedTitle;
@@ -72,6 +76,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _didPersist = false;
   bool _lastReportedDirty = false;
   bool _summaryError = false;
+  bool _backConfirmationVisible = false;
+  bool _ignoreNextEditorFocusLoss = false;
 
   @override
   void initState() {
@@ -83,6 +89,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _contentController.text = _savedContent;
     _titleController.addListener(_editorChanged);
     _contentController.addListener(_editorChanged);
+    _titleFocusNode.addListener(_titleFocusChanged);
     _contentFocusNode.addListener(_contentFocusChanged);
   }
 
@@ -98,12 +105,14 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   void _editorChanged() {
     if (mounted) {
+      _ignoreNextEditorFocusLoss = false;
       setState(() {
         if (_summary != null && _isDirty) {
           _summaryStale = true;
         }
       });
       _notifyDirtyChanged();
+      _scheduleAutosave();
     }
   }
 
@@ -121,14 +130,58 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       focusNode: _contentFocusNode,
       fieldKey: _contentFieldContextKey,
     );
+    _saveWhenEditorLosesFocus();
   }
 
-  Future<bool> _save() async {
-    if (_actionBusy || (!_canSave && _note != null)) {
+  void _titleFocusChanged() {
+    _saveWhenEditorLosesFocus();
+  }
+
+  void _saveWhenEditorLosesFocus() {
+    if (_ignoreNextEditorFocusLoss &&
+        !_titleFocusNode.hasFocus &&
+        !_contentFocusNode.hasFocus) {
+      _ignoreNextEditorFocusLoss = false;
+      return;
+    }
+    if (!_backConfirmationVisible &&
+        !_titleFocusNode.hasFocus &&
+        !_contentFocusNode.hasFocus) {
+      _scheduleAutosave(immediate: true);
+    }
+  }
+
+  void _scheduleAutosave({bool immediate = false}) {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    if (!mounted || !_isDirty) {
+      return;
+    }
+    if (immediate) {
+      unawaited(_save(automatic: true));
+      return;
+    }
+    _autosaveTimer = Timer(_autosaveDelay, () {
+      _autosaveTimer = null;
+      unawaited(_save(automatic: true));
+    });
+  }
+
+  Future<bool> _save({bool automatic = false}) async {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    if (_actionBusy) {
+      if (automatic) {
+        _scheduleAutosave();
+      }
+      return false;
+    }
+    if (!_canSave && _note != null) {
       return false;
     }
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    bool persisted = false;
     setState(() {
       _saving = true;
       _error = null;
@@ -175,6 +228,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         _didPersist = true;
       });
       _notifyDirtyChanged();
+      persisted = true;
       return true;
     } on Object {
       if (!mounted) {
@@ -185,6 +239,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     } finally {
       if (mounted) {
         setState(() => _saving = false);
+        if (persisted && _isDirty) {
+          _scheduleAutosave();
+        }
       }
     }
   }
@@ -248,12 +305,20 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     }
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    _backConfirmationVisible = true;
     final NoteDetailBackDecision? action = await showNoteDetailBackConfirmation(
       context: context,
       copy: copy,
     );
+    _backConfirmationVisible = false;
+    _ignoreNextEditorFocusLoss = true;
 
     if (!mounted || action == null || action == NoteDetailBackDecision.cancel) {
+      if (mounted && _isDirty) {
+        _scheduleAutosave();
+      }
       return;
     }
     if (action == NoteDetailBackDecision.discard) {
@@ -331,6 +396,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   void _pop({NoteDetailExitReason? reason}) {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
     if (mounted) {
       final NoteDetailExitReason exitReason =
           reason ??
@@ -422,6 +489,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     return NoteDetailSurface(
       titleController: _titleController,
       contentController: _contentController,
+      titleFocusNode: _titleFocusNode,
       contentFocusNode: _contentFocusNode,
       contentFieldContextKey: _contentFieldContextKey,
       copy: copy,
@@ -443,9 +511,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       errorRetryLabel: copy.retry,
       isSaving: _saving,
       isSummarizing: _summarizing,
-      canSave: _canSave,
+      canSave: false,
       canSummarize: _canSummarize,
-      onSave: _canSave ? () => unawaited(_save()) : null,
+      onSave: null,
       onSummarize: _canSummarize ? () => unawaited(_summarize()) : null,
       onMore: widget.showAppBar ? null : _moreAction(copy),
       saveLabel: copy.save,
@@ -458,11 +526,14 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    _autosaveTimer?.cancel();
     _titleController.removeListener(_editorChanged);
     _contentController.removeListener(_editorChanged);
+    _titleFocusNode.removeListener(_titleFocusChanged);
     _contentFocusNode.removeListener(_contentFocusChanged);
     _titleController.dispose();
     _contentController.dispose();
+    _titleFocusNode.dispose();
     _contentFocusNode.dispose();
     super.dispose();
   }

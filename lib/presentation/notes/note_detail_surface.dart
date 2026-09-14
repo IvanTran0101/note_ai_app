@@ -21,6 +21,7 @@ final class NoteDetailSurface extends StatelessWidget {
     super.key,
     required this.titleController,
     required this.contentController,
+    this.titleFocusNode,
     required this.contentFocusNode,
     required this.contentFieldContextKey,
     required this.copy,
@@ -56,6 +57,7 @@ final class NoteDetailSurface extends StatelessWidget {
 
   final TextEditingController titleController;
   final TextEditingController contentController;
+  final FocusNode? titleFocusNode;
   final FocusNode contentFocusNode;
   final GlobalKey contentFieldContextKey;
   final NoteDetailCopy copy;
@@ -107,6 +109,7 @@ final class NoteDetailSurface extends StatelessWidget {
                 child: NoteDetailEditorForm(
                   titleController: titleController,
                   contentController: contentController,
+                  titleFocusNode: titleFocusNode,
                   contentFocusNode: contentFocusNode,
                   contentFieldContextKey: contentFieldContextKey,
                   copy: copy,

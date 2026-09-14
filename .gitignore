@@ -54,3 +54,25 @@ AGENTS.md
 /.agents
 skills-lock.json
 /.claude
+
+# Local secrets, credentials, and signing material
+.env
+.env.*
+!.env.example
+!.env.*.example
+/secrets/
+/credentials/
+**/secrets/
+**/credentials/
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key
+*.crt
+*.cer
+*.der
+/android/local.properties
+google-services.json
+GoogleService-Info.plist
