@@ -6,7 +6,22 @@
         "noteflow-system.architecture.json",
         "noteflow-system.html",
         "noteflow-system.visual-check.json",
-        ".vscode/changelists.json"
+        ".vscode/changelists.json",
+        ".github/workflows/ci.yaml",
+        ".gitignore",
+        "lib/presentation/notes/note_detail_action_bar.dart",
+        "lib/presentation/notes/note_detail_editor_form.dart",
+        "lib/presentation/notes/note_detail_page.dart",
+        "lib/presentation/notes/note_detail_surface.dart",
+        "packages/local_llm_bridge/README.md",
+        "packages/local_llm_bridge/hook/build.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge_bindings_generated.dart",
+        "packages/local_llm_bridge/lib/local_llm_bridge_io.dart",
+        "packages/local_llm_bridge/src/local_llm_bridge.cpp",
+        "packages/local_llm_bridge/src/local_llm_bridge.h",
+        "packages/local_llm_bridge/third_party/llama.cpp-0.3.0/ggml/src/ggml-cpu/ggml-cpu.c",
+        "test/presentation/notes/note_detail_page_test.dart",
+        "test/presentation/notes/notes_workspace_page_test.dart"
       ]
     }
   ],
