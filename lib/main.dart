@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'application/auth/current_user.dart';
+import 'application/auth/current_user_session.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
@@ -195,17 +195,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
-  late final ICurrentUser _currentUser = StaticCurrentUser(
-    identity: AuthIdentity(
-      userId: 'local-user',
-      email: 'local-user@noteflow.local',
-      isEmailVerified: true,
-    ),
-  );
+  // Temporary Phase 3 bootstrap: keep the existing local note flow usable
+  // until a real authentication adapter and Presentation auth flow exist.
+  late final CurrentUserSession _currentUserSession = CurrentUserSession()
+    ..setIdentity(
+      AuthIdentity(
+        userId: 'local-user',
+        email: 'local-user@noteflow.local',
+        isEmailVerified: true,
+      ),
+    );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
-        currentUser: _currentUser,
+        currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
@@ -215,7 +218,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   late final DashboardController _dashboardController = DashboardController(
     query: GetDashboardOverview(
       noteRepository: _noteRepository,
-      currentUser: _currentUser,
+      currentUser: _currentUserSession,
     ),
     recentLimit: 20,
   );
