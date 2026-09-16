@@ -1,0 +1,19 @@
+{
+  "name": "note_ai_app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NoteFlow AWS Amplify Gen 2 backend scaffold (auth only, non-deploy)",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p amplify"
+  },
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.25.0",
+    "@aws-amplify/backend-cli": "^1.10.0",
+    "@types/aws-lambda": "^8.10.163",
+    "aws-cdk-lib": "2.268.0",
+    "constructs": "^10.8.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  }
+}

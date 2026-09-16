@@ -41,6 +41,10 @@ import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
 const String _noteFlowFontFamily = 'Inter';
+const String _noteFlowAuthMode = String.fromEnvironment(
+  'NOTEFLOW_AUTH_MODE',
+  defaultValue: 'local',
+);
 const List<String> _noteFlowFontFallback = <String>[
   'Roboto',
   'Arial',
@@ -195,16 +199,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
-  // Temporary Phase 3 bootstrap: keep the existing local note flow usable
-  // until a real authentication adapter and Presentation auth flow exist.
-  late final CurrentUserSession _currentUserSession = CurrentUserSession()
-    ..setIdentity(
-      AuthIdentity(
-        userId: 'local-user',
-        email: 'local-user@noteflow.local',
-        isEmailVerified: true,
-      ),
-    );
+  // Local mode keeps the existing note flow usable. Cognito mode deliberately
+  // starts empty; Phase 4's initializer and restore workflow will populate it.
+  late final CurrentUserSession _currentUserSession =
+      _createCurrentUserSession();
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
@@ -246,6 +244,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     modelProvisioningReporter: _modelProvisioningStatus,
   );
   bool _disposed = false;
+
+  CurrentUserSession _createCurrentUserSession() {
+    if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
+      throw StateError(
+        'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
+        'Use local or cognito.',
+      );
+    }
+
+    final CurrentUserSession session = CurrentUserSession();
+    if (_noteFlowAuthMode == 'local') {
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'local-user',
+          email: 'local-user@noteflow.local',
+          isEmailVerified: true,
+        ),
+      );
+    }
+    return session;
+  }
 
   Future<Summary> _summarize(String content) async {
     final NoteSummaryAppService service = await _ensureService();

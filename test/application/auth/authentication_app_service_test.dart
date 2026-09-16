@@ -4,6 +4,7 @@ import 'package:note_ai_app/application/auth/authentication_app_service.dart';
 import 'package:note_ai_app/application/auth/current_user.dart';
 import 'package:note_ai_app/application/auth/current_user_session.dart';
 import 'package:note_ai_app/domain/auth/auth_identity.dart';
+import 'package:note_ai_app/domain/auth/authentication_failure.dart';
 import 'package:note_ai_app/domain/auth/authentication_service.dart';
 import 'package:note_ai_app/domain/users/user_profile.dart';
 import 'package:note_ai_app/domain/users/user_profile_repository.dart';
@@ -193,25 +194,61 @@ void main() {
       },
     );
 
-    test(
-      'keeps the registration when the verification dispatch fails',
-      () async {
-        authentication.loginResult = identity(isEmailVerified: false);
-        authentication.failures['requestEmailVerification'] = Exception(
-          'dispatch failed',
-        );
+    test('keeps the registration when the verification dispatch is temporarily '
+        'unavailable', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      authentication.failures['requestEmailVerification'] =
+          const AuthenticationFailure(
+            AuthenticationFailureCode.temporarilyUnavailable,
+          );
 
-        final RegistrationResult result = await service.register(input);
+      final RegistrationResult result = await service.register(input);
 
-        expect(
-          result.verificationDispatchStatus,
-          VerificationDispatchStatus.pending,
-        );
-        expect(result.user.userId, 'user-1');
-        expect(session.userId, 'user-1');
-        expect(profiles.saved.single.userId, 'user-1');
-      },
-    );
+      expect(
+        result.verificationDispatchStatus,
+        VerificationDispatchStatus.pending,
+      );
+      expect(result.user.userId, 'user-1');
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
+
+    test('propagates a non-temporary verification dispatch failure', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      const AuthenticationFailure failure = AuthenticationFailure(
+        AuthenticationFailureCode.unsupportedChallenge,
+      );
+      authentication.failures['requestEmailVerification'] = failure;
+
+      await expectLater(
+        () => service.register(input),
+        throwsA(
+          isA<AuthenticationFailure>().having(
+            (AuthenticationFailure exception) => exception.code,
+            'code',
+            AuthenticationFailureCode.unsupportedChallenge,
+          ),
+        ),
+      );
+
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
+
+    test('propagates an untyped verification dispatch failure', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      authentication.failures['requestEmailVerification'] = Exception(
+        'dispatch failed',
+      );
+
+      await expectLater(
+        () => service.register(input),
+        throwsA(isA<Exception>()),
+      );
+
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
 
     test('publishes the session only after the profile is saved', () async {
       authentication.loginResult = identity(isEmailVerified: true);

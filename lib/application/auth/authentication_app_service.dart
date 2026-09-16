@@ -8,6 +8,7 @@
 library;
 
 import '../../domain/auth/auth_identity.dart';
+import '../../domain/auth/authentication_failure.dart';
 import '../../domain/auth/authentication_service.dart';
 import '../../domain/users/user_profile.dart';
 import '../../domain/users/user_profile_repository.dart';
@@ -18,8 +19,9 @@ import 'current_user_session.dart';
 abstract interface class IAuthenticationAppService {
   /// Registers [input], signs the new account in, and creates its profile.
   ///
-  /// Registration is complete once the profile is saved; a verification
-  /// dispatch failure is reported through the result rather than thrown.
+  /// Registration is complete once the profile is saved; only a temporary
+  /// verification dispatch failure is reported through the result, while every
+  /// other failure still reaches the caller.
   Future<RegistrationResult> register(RegisterInput input);
 
   /// Authenticates [input] and publishes the identity to the session.
@@ -239,16 +241,19 @@ final class AuthenticationAppService implements IAuthenticationAppService {
 
   /// Maps the verification dispatch outcome without failing the registration.
   ///
-  /// Temporary broad mapping: the provider-neutral contract has no typed
-  /// dispatch failure yet, so any [Exception] degrades to
-  /// [VerificationDispatchStatus.pending]. Narrow it once provider-neutral
-  /// failures exist; [Error]s still propagate.
+  /// Only [AuthenticationFailureCode.temporarilyUnavailable] is known to clear
+  /// on its own, so only that code degrades to
+  /// [VerificationDispatchStatus.pending]. Every other typed failure, untyped
+  /// failure, and [Error] reaches the caller unchanged.
   Future<VerificationDispatchStatus> _dispatchEmailVerification() async {
     try {
       await authenticationService.requestEmailVerification();
       return VerificationDispatchStatus.requested;
-    } on Exception {
-      return VerificationDispatchStatus.pending;
+    } on AuthenticationFailure catch (failure) {
+      if (failure.code == AuthenticationFailureCode.temporarilyUnavailable) {
+        return VerificationDispatchStatus.pending;
+      }
+      rethrow;
     }
   }
 
