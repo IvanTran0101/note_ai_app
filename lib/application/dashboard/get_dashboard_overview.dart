@@ -1,10 +1,11 @@
+import '../auth/current_user.dart';
 import '../../domain/notes/note_repository.dart';
 import '../notes/note_application.dart';
 import 'dashboard_overview.dart';
 
 /// Application query contract consumed by the Presentation Dashboard state.
 abstract interface class IDashboardOverviewQuery {
-  /// Loads an overview for the configured owner and recent-note limit.
+  /// Loads an overview for the authenticated user and recent-note limit.
   Future<DashboardOverview> execute({required int recentLimit});
 }
 
@@ -13,17 +14,17 @@ abstract interface class IDashboardOverviewQuery {
 /// The query owns projection concerns such as ordering and limiting. It does
 /// not introduce a Dashboard Domain concept or change note persistence.
 final class GetDashboardOverview implements IDashboardOverviewQuery {
-  /// Creates a query for notes owned by [ownerId].
+  /// Creates a query for notes owned by the current user.
   const GetDashboardOverview({
     required this.noteRepository,
-    required this.ownerId,
+    required this.currentUser,
   });
 
   /// Existing Domain repository contract used as the source of truth.
   final INoteRepository noteRepository;
 
-  /// Owner whose notes are included in the projection.
-  final String ownerId;
+  /// Current identity used to scope the projection.
+  final ICurrentUser currentUser;
 
   @override
   Future<DashboardOverview> execute({required int recentLimit}) async {
@@ -35,7 +36,8 @@ final class GetDashboardOverview implements IDashboardOverviewQuery {
       );
     }
 
-    final List<NoteDto> notes = (await noteRepository.findByOwnerId(ownerId))
+    final String userId = currentUser.requiredUserId;
+    final List<NoteDto> notes = (await noteRepository.findByOwnerId(userId))
         .map(NoteDto.fromDomain)
         .toList();
     notes.sort(_compareByUpdatedAtDescending);

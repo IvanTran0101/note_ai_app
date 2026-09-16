@@ -4,11 +4,13 @@ import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'application/auth/current_user.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
+import 'domain/auth/auth_identity.dart';
 import 'domain/note_intelligence/summary.dart';
 import 'domain/notes/note_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
@@ -181,8 +183,6 @@ class NoteFlowApp extends StatefulWidget {
 }
 
 class _NoteFlowAppState extends State<NoteFlowApp> {
-  static const String _localOwnerId = 'local-user';
-
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
   LlmWorkerClient? _workerClient;
@@ -195,10 +195,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
+  late final ICurrentUser _currentUser = StaticCurrentUser(
+    identity: AuthIdentity(
+      userId: 'local-user',
+      email: 'local-user@noteflow.local',
+      isEmailVerified: true,
+    ),
+  );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
-        ownerId: _localOwnerId,
+        currentUser: _currentUser,
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
@@ -208,7 +215,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   late final DashboardController _dashboardController = DashboardController(
     query: GetDashboardOverview(
       noteRepository: _noteRepository,
-      ownerId: _localOwnerId,
+      currentUser: _currentUser,
     ),
     recentLimit: 20,
   );

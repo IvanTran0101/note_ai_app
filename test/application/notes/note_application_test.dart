@@ -1,10 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/auth/current_user.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
 import 'package:note_ai_app/domain/notes/note.dart';
 import 'package:note_ai_app/domain/notes/note_repository.dart';
 
 final DateTime _createdAt = DateTime.utc(2026, 9, 3, 10);
+
+final class _FakeCurrentUser implements ICurrentUser {
+  _FakeCurrentUser(this.identity);
+
+  @override
+  AuthIdentity? identity;
+
+  @override
+  bool get isAuthenticated => identity != null;
+
+  @override
+  String? get userId => identity?.userId;
+
+  @override
+  String get requiredUserId {
+    final String? currentUserId = userId;
+    if (currentUserId == null) {
+      throw const UnauthenticatedException();
+    }
+    return currentUserId;
+  }
+}
 
 final class _FakeNoteRepository implements INoteRepository {
   _FakeNoteRepository({Iterable<Note> initial = const <Note>[]})
@@ -84,17 +108,27 @@ Note _note({
 
 NoteApplicationService _service(
   _FakeNoteRepository repository, {
-  String ownerId = 'local-user',
+  _FakeCurrentUser? currentUser,
   NoteIdGenerator generateId = _defaultId,
   NoteClock now = _defaultNow,
   SummarizeNoteContent summarizeContent = _defaultSummary,
 }) {
   return NoteApplicationService(
     noteRepository: repository,
-    ownerId: ownerId,
+    currentUser: currentUser ?? _authenticatedUser(),
     generateId: generateId,
     now: now,
     summarizeContent: summarizeContent,
+  );
+}
+
+_FakeCurrentUser _authenticatedUser([String userId = 'local-user']) {
+  return _FakeCurrentUser(
+    AuthIdentity(
+      userId: userId,
+      email: '$userId@example.test',
+      isEmailVerified: true,
+    ),
   );
 }
 
@@ -157,6 +191,75 @@ void main() {
 
       await expectLater(_service(repository).listNotes(), throwsA(same(error)));
     });
+
+    test(
+      'resolves the owner from the current user on every use case',
+      () async {
+        final _FakeNoteRepository repository = _FakeNoteRepository(
+          initial: <Note>[
+            _note(id: 'user-a-note', ownerId: 'user-a'),
+            _note(id: 'user-b-note', ownerId: 'user-b'),
+          ],
+        );
+        final _FakeCurrentUser currentUser = _authenticatedUser('user-a');
+        final NoteApplicationService service = _service(
+          repository,
+          currentUser: currentUser,
+        );
+
+        expect((await service.listNotes()).map((note) => note.id), <String>[
+          'user-a-note',
+        ]);
+
+        currentUser.identity = AuthIdentity(
+          userId: 'user-b',
+          email: 'user-b@example.test',
+          isEmailVerified: true,
+        );
+
+        expect((await service.listNotes()).map((note) => note.id), <String>[
+          'user-b-note',
+        ]);
+        final NoteDto created = await service.createNote(
+          title: 'User B note',
+          content: 'Content',
+        );
+        expect(created.ownerId, 'user-b');
+      },
+    );
+
+    test(
+      'rejects unauthenticated requests before repository side effects',
+      () async {
+        int generateIdCalls = 0;
+        final _FakeNoteRepository repository = _FakeNoteRepository();
+        final NoteApplicationService service = _service(
+          repository,
+          currentUser: _FakeCurrentUser(null),
+          generateId: () {
+            generateIdCalls++;
+            return 'should-not-be-created';
+          },
+        );
+
+        await expectLater(
+          service.listNotes(),
+          throwsA(isA<UnauthenticatedException>()),
+        );
+        await expectLater(
+          service.createNote(title: 'Title', content: 'Content'),
+          throwsA(isA<UnauthenticatedException>()),
+        );
+        await expectLater(
+          service.deleteNote('note-1'),
+          throwsA(isA<UnauthenticatedException>()),
+        );
+
+        expect(repository.findByOwnerIdCalls, 0);
+        expect(repository.findByIdCalls, 0);
+        expect(generateIdCalls, 0);
+      },
+    );
   });
 
   group('NoteApplicationService.createNote', () {

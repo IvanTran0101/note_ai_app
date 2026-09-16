@@ -1,6 +1,7 @@
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_repository.dart';
+import '../auth/current_user.dart';
 
 /// Creates identifiers for newly created notes.
 typedef NoteIdGenerator = String Function();
@@ -77,8 +78,7 @@ final class NoteNotFoundException implements Exception {
   String toString() => 'NoteNotFoundException: note "$noteId" was not found';
 }
 
-/// Raised when the current local owner attempts to access another owner's
-/// note.
+/// Raised when the current user attempts to access another owner's note.
 final class NoteOwnershipException implements Exception {
   const NoteOwnershipException({
     required this.noteId,
@@ -106,21 +106,22 @@ final class NoteOwnershipException implements Exception {
 final class NoteApplicationService {
   NoteApplicationService({
     required this.noteRepository,
-    required this.ownerId,
+    required this.currentUser,
     required this.generateId,
     required this.now,
     required this.summarizeContent,
   });
 
   final INoteRepository noteRepository;
-  final String ownerId;
+  final ICurrentUser currentUser;
   final NoteIdGenerator generateId;
   final NoteClock now;
   final SummarizeNoteContent summarizeContent;
 
-  /// Lists the notes owned by the configured local owner.
+  /// Lists the notes owned by the authenticated user.
   Future<List<NoteDto>> listNotes() async {
-    final List<Note> notes = await noteRepository.findByOwnerId(ownerId);
+    final String userId = currentUser.requiredUserId;
+    final List<Note> notes = await noteRepository.findByOwnerId(userId);
     return notes.map(NoteDto.fromDomain).toList(growable: false);
   }
 
@@ -129,9 +130,10 @@ final class NoteApplicationService {
     required String title,
     required String content,
   }) async {
+    final String userId = currentUser.requiredUserId;
     final Note note = Note.create(
       id: generateId(),
-      ownerId: ownerId,
+      ownerId: userId,
       title: title,
       content: content,
       now: now().toUtc(),
@@ -145,7 +147,8 @@ final class NoteApplicationService {
     required String noteId,
     required String title,
   }) async {
-    final Note note = await _requireOwnedNote(noteId);
+    final String userId = currentUser.requiredUserId;
+    final Note note = await _requireOwnedNote(noteId, userId);
     note.rename(title, now().toUtc());
     await noteRepository.save(note);
     return NoteDto.fromDomain(note);
@@ -157,7 +160,8 @@ final class NoteApplicationService {
     required String noteId,
     required String content,
   }) async {
-    final Note note = await _requireOwnedNote(noteId);
+    final String userId = currentUser.requiredUserId;
+    final Note note = await _requireOwnedNote(noteId, userId);
     note.replaceContent(content, now().toUtc());
     await noteRepository.save(note);
     return NoteDto.fromDomain(note);
@@ -165,25 +169,27 @@ final class NoteApplicationService {
 
   /// Deletes an owned note.
   Future<void> deleteNote(String noteId) async {
-    await _requireOwnedNote(noteId);
+    final String userId = currentUser.requiredUserId;
+    await _requireOwnedNote(noteId, userId);
     await noteRepository.deleteById(noteId);
   }
 
   /// Summarizes an owned note without mutating or persisting it.
   Future<Summary> summarizeNote(String noteId) async {
-    final Note note = await _requireOwnedNote(noteId);
+    final String userId = currentUser.requiredUserId;
+    final Note note = await _requireOwnedNote(noteId, userId);
     return summarizeContent(note.content);
   }
 
-  Future<Note> _requireOwnedNote(String noteId) async {
+  Future<Note> _requireOwnedNote(String noteId, String expectedOwnerId) async {
     final Note? note = await noteRepository.findById(noteId);
     if (note == null) {
       throw NoteNotFoundException(noteId);
     }
-    if (note.ownerId != ownerId) {
+    if (note.ownerId != expectedOwnerId) {
       throw NoteOwnershipException(
         noteId: noteId,
-        expectedOwnerId: ownerId,
+        expectedOwnerId: expectedOwnerId,
         actualOwnerId: note.ownerId,
       );
     }
