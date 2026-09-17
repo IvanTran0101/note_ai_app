@@ -42,7 +42,7 @@ import '../../domain/users/user_profile_repository.dart';
 /// The signature matches the Web stub factory so the conditional facade can
 /// swap them by platform. Tests inject a temporary file through
 /// [FileUserProfileRepository.file]. This factory is intentionally not wired
-/// into `main.dart`.
+/// into the Cognito-mode composition root.
 IUserProfileRepository createUserProfileRepository() {
   return FileUserProfileRepository();
 }

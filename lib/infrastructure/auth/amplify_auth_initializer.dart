@@ -1,11 +1,9 @@
 /// One-time Amplify Auth Cognito configuration for the NoteFlow app.
 ///
-/// The composition root owns the Amplify configuration and passes it in as a
-/// [String]; this library never imports a generated `amplify_outputs.dart`,
-/// because the deployed AWS backend outputs are not part of the repository yet.
-/// Together with the rest of `lib/infrastructure/auth/`, this is the only code
-/// that touches Amplify — Domain, Application, and Presentation stay
-/// provider-neutral.
+/// The composition root owns the generated Amplify configuration and passes it
+/// in as a [String]. Together with the rest of `lib/infrastructure/auth/`, this
+/// is the only code that touches Amplify — Domain, Application, and Presentation
+/// stay provider-neutral.
 library;
 
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';

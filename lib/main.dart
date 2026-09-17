@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'amplify_outputs.dart';
+import 'application/auth/authentication_app_service.dart';
 import 'application/auth/current_user_session.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
@@ -21,11 +23,15 @@ import 'infrastructure/ai/model_manager.dart';
 import 'infrastructure/ai/model_provisioning_contract.dart';
 import 'infrastructure/ai/model_selection.dart';
 import 'infrastructure/ai/model_storage.dart';
+import 'infrastructure/auth/amplify_auth_initializer.dart';
+import 'infrastructure/auth/cognito_authentication_service.dart';
 import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/users/user_profile_repository.dart'
+    as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
@@ -170,8 +176,43 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
   );
 }
 
-void main() {
-  runApp(const NoteFlowApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final CurrentUserSession currentUserSession =
+      await _bootstrapCurrentUserSession();
+  runApp(NoteFlowApp(currentUserSession: currentUserSession));
+}
+
+Future<CurrentUserSession> _bootstrapCurrentUserSession() async {
+  if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
+    throw StateError(
+      'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
+      'Use local or cognito.',
+    );
+  }
+
+  final CurrentUserSession session = CurrentUserSession();
+  if (_noteFlowAuthMode == 'local') {
+    session.setIdentity(
+      AuthIdentity(
+        userId: 'local-user',
+        email: 'local-user@noteflow.local',
+        isEmailVerified: true,
+      ),
+    );
+    return session;
+  }
+
+  await configureAmplifyAuthCognito(amplifyConfig: amplifyConfig);
+  final AuthenticationAppService authenticationAppService =
+      AuthenticationAppService(
+        authenticationService: const CognitoAuthenticationService(),
+        currentUserSession: session,
+        userProfileRepository: user_profile_infrastructure
+            .createUserProfileRepository(),
+      );
+  await authenticationAppService.restoreSession();
+  return session;
 }
 
 /// Root composition for the local-LLM summarization proof.
@@ -180,7 +221,9 @@ void main() {
 /// its Domain summarization contract and the debug page only receives a
 /// summarization function.
 class NoteFlowApp extends StatefulWidget {
-  const NoteFlowApp({super.key});
+  const NoteFlowApp({super.key, required this.currentUserSession});
+
+  final CurrentUserSession currentUserSession;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
@@ -199,10 +242,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
-  // Local mode keeps the existing note flow usable. Cognito mode deliberately
-  // starts empty; Phase 4's initializer and restore workflow will populate it.
-  late final CurrentUserSession _currentUserSession =
-      _createCurrentUserSession();
+  late final CurrentUserSession _currentUserSession = widget.currentUserSession;
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
@@ -244,27 +284,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     modelProvisioningReporter: _modelProvisioningStatus,
   );
   bool _disposed = false;
-
-  CurrentUserSession _createCurrentUserSession() {
-    if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
-      throw StateError(
-        'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
-        'Use local or cognito.',
-      );
-    }
-
-    final CurrentUserSession session = CurrentUserSession();
-    if (_noteFlowAuthMode == 'local') {
-      session.setIdentity(
-        AuthIdentity(
-          userId: 'local-user',
-          email: 'local-user@noteflow.local',
-          isEmailVerified: true,
-        ),
-      );
-    }
-    return session;
-  }
 
   Future<Summary> _summarize(String content) async {
     final NoteSummaryAppService service = await _ensureService();
