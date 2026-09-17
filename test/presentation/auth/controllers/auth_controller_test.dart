@@ -167,6 +167,21 @@ void main() {
       expect(controller.state.status, AuthStatus.authenticated);
     },
   );
+
+  test(
+    'local compatibility logout clears the session without a provider',
+    () async {
+      controller.dispose();
+      controller = AuthController(
+        authenticationAppService: null,
+        initialUser: testUser,
+      );
+
+      await controller.logout();
+
+      expect(controller.state.status, AuthStatus.unauthenticated);
+    },
+  );
 }
 
 const AuthUserDto testUser = AuthUserDto(

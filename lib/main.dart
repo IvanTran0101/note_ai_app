@@ -36,6 +36,7 @@ import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
 import 'presentation/auth/auth_localizations.dart';
+import 'presentation/auth/auth_pages.dart';
 import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
@@ -48,6 +49,7 @@ import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
 import 'presentation/routing/app_router.dart';
+import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
@@ -552,10 +554,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     };
   }
 
+  Future<void> _logout() async {
+    try {
+      await widget.authController.logout();
+    } on Object {
+      // AuthController clears local state even when provider sign-out fails;
+      // the router will move the user to the public login route.
+    }
+  }
+
   Future<void> _showAppearanceSettings(BuildContext context) async {
     ThemeMode selectedTheme = _themeMode;
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
     final NotesCopy copy = NotesCopy.of(context);
+    final AuthCopy authCopy = AuthCopy.of(context);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -633,6 +645,24 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                         setState(() => _languageChoice = value);
                       },
                     ),
+                    const SizedBox(height: 24),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.lock_outline),
+                      label: Text(authCopy.changePassword),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(AppRoutes.changePassword);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.logout),
+                      label: Text(authCopy.logout),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(_logout());
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -667,45 +697,52 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   }
 
   Widget _buildWorkspace(BuildContext context) {
-    return WorkspaceShell(
-      key: _workspaceShellKey,
-      dashboard: DashboardPage(
-        dashboardController: _dashboardController,
-        notesController: _notesController,
-        onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
-        onCreateNote: () => _openNoteDetail(context, null),
-        onOpenSettings: () => _showAppearanceSettings(context),
-        onOpenDiagnostics: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LocalLlmDebugPage(
-                summarize: _summarize,
-                loadModelReadiness: _loadModelReadiness,
-                provisioningReader: _modelProvisioningStatus,
-                onProvisioningCancel: _cancelModelProvisioning,
-              ),
+    return Column(
+      children: <Widget>[
+        EmailVerificationBanner(controller: widget.authController),
+        Expanded(
+          child: WorkspaceShell(
+            key: _workspaceShellKey,
+            dashboard: DashboardPage(
+              dashboardController: _dashboardController,
+              notesController: _notesController,
+              onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
+              onCreateNote: () => _openNoteDetail(context, null),
+              onOpenSettings: () => _showAppearanceSettings(context),
+              onOpenDiagnostics: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LocalLlmDebugPage(
+                      summarize: _summarize,
+                      loadModelReadiness: _loadModelReadiness,
+                      provisioningReader: _modelProvisioningStatus,
+                      onProvisioningCancel: _cancelModelProvisioning,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
-      notes: NotesWorkspacePage(
-        applicationService: _noteApplicationService,
-        provisioningReader: _modelProvisioningStatus,
-        onProvisioningCancel: _cancelModelProvisioning,
-        onOpenSettings: () => _showAppearanceSettings(context),
-        onOpenDiagnostics: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LocalLlmDebugPage(
-                summarize: _summarize,
-                loadModelReadiness: _loadModelReadiness,
-                provisioningReader: _modelProvisioningStatus,
-                onProvisioningCancel: _cancelModelProvisioning,
-              ),
+            notes: NotesWorkspacePage(
+              applicationService: _noteApplicationService,
+              provisioningReader: _modelProvisioningStatus,
+              onProvisioningCancel: _cancelModelProvisioning,
+              onOpenSettings: () => _showAppearanceSettings(context),
+              onOpenDiagnostics: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LocalLlmDebugPage(
+                      summarize: _summarize,
+                      loadModelReadiness: _loadModelReadiness,
+                      provisioningReader: _modelProvisioningStatus,
+                      onProvisioningCancel: _cancelModelProvisioning,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 

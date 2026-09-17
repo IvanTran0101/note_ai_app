@@ -68,7 +68,7 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.verifyEmail,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Verify email');
+          return VerifyEmailPage(controller: authController);
         },
       ),
       GoRoute(
@@ -92,7 +92,7 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.changePassword,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Change password');
+          return ChangePasswordPage(controller: authController);
         },
       ),
     ],
@@ -204,19 +204,5 @@ final class _AuthStartupPage extends StatelessWidget {
     } on Object {
       // AuthController already exposes the safe mapped error in state.
     }
-  }
-}
-
-final class _AuthPlaceholderPage extends StatelessWidget {
-  const _AuthPlaceholderPage({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: const Center(child: Text('Authentication UI is coming in M5.3.')),
-    );
   }
 }

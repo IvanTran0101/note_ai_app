@@ -75,7 +75,67 @@ void main() {
     expect(find.byKey(ForgotPasswordPage.submitKey), findsOneWidget);
     expect(find.text('Reset your password'), findsOneWidget);
   });
+
+  testWidgets('verification banner is visible only for unverified users', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+      initialUser: testUser,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: EmailVerificationBanner(controller: controller)),
+    );
+    expect(find.byKey(EmailVerificationBanner.bannerKey), findsOneWidget);
+
+    final AuthController verifiedController = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+      initialUser: verifiedUser,
+    );
+    addTearDown(verifiedController.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EmailVerificationBanner(controller: verifiedController),
+      ),
+    );
+    expect(find.byKey(EmailVerificationBanner.bannerKey), findsNothing);
+  });
+
+  testWidgets('change-password page renders its protected form', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+      initialUser: testUser,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ChangePasswordPage(controller: controller)),
+    );
+
+    expect(
+      find.byKey(ChangePasswordPage.currentPasswordFieldKey),
+      findsOneWidget,
+    );
+    expect(find.byKey(ChangePasswordPage.submitKey), findsOneWidget);
+    expect(find.text('Change password'), findsAtLeastNWidgets(1));
+  });
 }
+
+const AuthUserDto testUser = AuthUserDto(
+  userId: 'user-1',
+  email: 'user@example.com',
+  isEmailVerified: false,
+);
+
+const AuthUserDto verifiedUser = AuthUserDto(
+  userId: 'user-1',
+  email: 'user@example.com',
+  isEmailVerified: true,
+);
 
 final class _FakeAuthenticationAppService implements IAuthenticationAppService {
   @override

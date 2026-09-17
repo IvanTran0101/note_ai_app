@@ -63,6 +63,38 @@ final class AuthCopy {
   String get alreadyHaveAccount =>
       _isVietnamese ? 'Đã có tài khoản?' : 'Already have an account?';
   String get backToLogin => _isVietnamese ? 'Về đăng nhập' : 'Back to log in';
+  String get verifyEmailTitle =>
+      _isVietnamese ? 'Xác nhận email' : 'Verify your email';
+  String get verifyEmailSubtitle => _isVietnamese
+      ? 'Xác nhận email để bảo vệ tài khoản và khôi phục mật khẩu.'
+      : 'Verify your email to secure your account and recover your password.';
+  String get verifyEmailBannerTitle =>
+      _isVietnamese ? 'Hãy xác nhận email' : 'Verify your email';
+  String get verifyEmailBannerBody => _isVietnamese
+      ? 'Xác nhận email để bảo vệ tài khoản của bạn.'
+      : 'Confirm your email to keep your account secure.';
+  String get resendVerification => _isVietnamese ? 'Gửi lại mã' : 'Resend code';
+  String get refreshVerification =>
+      _isVietnamese ? 'Kiểm tra lại' : 'Refresh status';
+  String get openVerification => _isVietnamese ? 'Xác nhận' : 'Verify';
+  String get loginToVerify => _isVietnamese
+      ? 'Hãy đăng nhập để xác nhận email của tài khoản.'
+      : 'Log in to verify the email on your account.';
+  String get changePassword =>
+      _isVietnamese ? 'Đổi mật khẩu' : 'Change password';
+  String get changePasswordSubtitle => _isVietnamese
+      ? 'Cập nhật mật khẩu cho tài khoản của bạn.'
+      : 'Update the password for your account.';
+  String get currentPassword =>
+      _isVietnamese ? 'Mật khẩu hiện tại' : 'Current password';
+  String get currentPasswordRequired => _isVietnamese
+      ? 'Vui lòng nhập mật khẩu hiện tại.'
+      : 'Current password is required.';
+  String get backToWorkspace =>
+      _isVietnamese ? 'Về không gian làm việc' : 'Back to workspace';
+  String get passwordChanged =>
+      _isVietnamese ? 'Đã đổi mật khẩu.' : 'Password changed.';
+  String get logout => _isVietnamese ? 'Đăng xuất' : 'Log out';
 
   String get emailRequired =>
       _isVietnamese ? 'Vui lòng nhập email.' : 'Email is required.';

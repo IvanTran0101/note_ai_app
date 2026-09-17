@@ -88,6 +88,10 @@ final class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     _ensureActive();
     _ensureNotBusy();
+    if (authenticationAppService == null) {
+      _emit(const AuthState.unauthenticated());
+      return;
+    }
     _emit(_busyState());
     try {
       await _service.logout();

@@ -551,6 +551,362 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
   }
 }
 
+final class VerifyEmailPage extends StatefulWidget {
+  const VerifyEmailPage({super.key, required this.controller});
+
+  static const Key codeFieldKey = ValueKey<String>('auth-verify-code');
+  static const Key submitKey = ValueKey<String>('auth-verify-submit');
+
+  final AuthController controller;
+
+  @override
+  State<VerifyEmailPage> createState() => _VerifyEmailPageState();
+}
+
+final class _VerifyEmailPageState extends State<VerifyEmailPage> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _codeController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final AuthCopy copy = AuthCopy.of(context);
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (BuildContext context, Widget? child) {
+        final AuthState state = widget.controller.state;
+        if (!state.isAuthenticated) {
+          return _AuthFormScaffold(
+            title: copy.verifyEmailTitle,
+            subtitle: copy.verifyEmailSubtitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(copy.loginToVerify),
+                const SizedBox(height: 20.0),
+                FilledButton(
+                  onPressed: () => context.go(AppRoutes.login),
+                  child: Text(copy.loginAction),
+                ),
+              ],
+            ),
+          );
+        }
+        return _AuthFormScaffold(
+          title: copy.verifyEmailTitle,
+          subtitle: copy.verifyEmailSubtitle,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _AuthErrorMessage(error: state.error),
+                _authField(
+                  key: VerifyEmailPage.codeFieldKey,
+                  controller: _codeController,
+                  label: copy.verificationCode,
+                  textInputAction: TextInputAction.done,
+                  validator: (String? value) =>
+                      _required(value, copy.verificationCodeRequired),
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 20.0),
+                _authSubmitButton(
+                  key: VerifyEmailPage.submitKey,
+                  label: copy.openVerification,
+                  busy: state.isBusy,
+                  onPressed: _submit,
+                ),
+                const SizedBox(height: 8.0),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: <Widget>[
+                    TextButton(
+                      onPressed: state.isBusy ? null : _resend,
+                      child: Text(copy.resendVerification),
+                    ),
+                    TextButton(
+                      onPressed: state.isBusy ? null : _refresh,
+                      child: Text(copy.refreshVerification),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    try {
+      final AuthUserDto user = await widget.controller.confirmVerification(
+        code: _codeController.text,
+      );
+      if (mounted && user.isEmailVerified) {
+        context.go(AppRoutes.home);
+      }
+    } on Object {
+      // The controller publishes a safe error for the form to render.
+    }
+  }
+
+  Future<void> _resend() async {
+    try {
+      await widget.controller.resendVerification();
+    } on Object {
+      // The controller publishes a safe error for the form to render.
+    }
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final AuthUserDto user = await widget.controller.refreshIdentity();
+      if (mounted && user.isEmailVerified) {
+        context.go(AppRoutes.home);
+      }
+    } on Object {
+      // The controller publishes a safe error for the form to render.
+    }
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+}
+
+final class ChangePasswordPage extends StatefulWidget {
+  const ChangePasswordPage({super.key, required this.controller});
+
+  static const Key currentPasswordFieldKey = ValueKey<String>(
+    'auth-change-current-password',
+  );
+  static const Key passwordFieldKey = ValueKey<String>('auth-change-password');
+  static const Key confirmPasswordFieldKey = ValueKey<String>(
+    'auth-change-confirm-password',
+  );
+  static const Key submitKey = ValueKey<String>('auth-change-submit');
+
+  final AuthController controller;
+
+  @override
+  State<ChangePasswordPage> createState() => _ChangePasswordPageState();
+}
+
+final class _ChangePasswordPageState extends State<ChangePasswordPage> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _currentPasswordController =
+      TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final AuthCopy copy = AuthCopy.of(context);
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (BuildContext context, Widget? child) {
+        final AuthState state = widget.controller.state;
+        return _AuthFormScaffold(
+          title: copy.changePassword,
+          subtitle: copy.changePasswordSubtitle,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _AuthErrorMessage(error: state.error),
+                _authField(
+                  key: ChangePasswordPage.currentPasswordFieldKey,
+                  controller: _currentPasswordController,
+                  label: copy.currentPassword,
+                  obscureText: true,
+                  textInputAction: TextInputAction.next,
+                  validator: (String? value) =>
+                      _required(value, copy.currentPasswordRequired),
+                ),
+                const SizedBox(height: 12.0),
+                _authField(
+                  key: ChangePasswordPage.passwordFieldKey,
+                  controller: _passwordController,
+                  label: copy.password,
+                  obscureText: true,
+                  textInputAction: TextInputAction.next,
+                  validator: (String? value) =>
+                      _required(value, copy.passwordRequired),
+                ),
+                const SizedBox(height: 12.0),
+                _authField(
+                  key: ChangePasswordPage.confirmPasswordFieldKey,
+                  controller: _confirmPasswordController,
+                  label: copy.confirmPassword,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  validator: (String? value) {
+                    final String? requiredError = _required(
+                      value,
+                      copy.passwordRequired,
+                    );
+                    if (requiredError != null) {
+                      return requiredError;
+                    }
+                    return value == _passwordController.text
+                        ? null
+                        : copy.passwordConfirmationMismatch;
+                  },
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 20.0),
+                _authSubmitButton(
+                  key: ChangePasswordPage.submitKey,
+                  label: copy.changePassword,
+                  busy: state.isBusy,
+                  onPressed: _submit,
+                ),
+                const SizedBox(height: 8.0),
+                TextButton(
+                  onPressed: state.isBusy
+                      ? null
+                      : () => context.go(AppRoutes.home),
+                  child: Text(copy.backToWorkspace),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    try {
+      await widget.controller.changePassword(
+        currentPassword: _currentPasswordController.text,
+        newPassword: _passwordController.text,
+        confirmPassword: _confirmPasswordController.text,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AuthCopy.of(context).passwordChanged)),
+        );
+      }
+    } on Object {
+      // The controller publishes a safe error for the form to render.
+    }
+  }
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+}
+
+final class EmailVerificationBanner extends StatelessWidget {
+  const EmailVerificationBanner({super.key, required this.controller});
+
+  static const Key bannerKey = ValueKey<String>('email-verification-banner');
+  static const Key resendKey = ValueKey<String>('email-verification-resend');
+  static const Key refreshKey = ValueKey<String>('email-verification-refresh');
+
+  final AuthController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (BuildContext context, Widget? child) {
+        final AuthState state = controller.state;
+        if (!state.isAuthenticated || state.user?.isEmailVerified != false) {
+          return const SizedBox.shrink();
+        }
+        final AuthCopy copy = AuthCopy.of(context);
+        final ColorScheme colors = Theme.of(context).colorScheme;
+        final String? error = copy.errorMessage(state.error);
+        return Material(
+          key: EmailVerificationBanner.bannerKey,
+          color: colors.secondaryContainer,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  Icons.mark_email_unread_outlined,
+                  color: colors.onSecondaryContainer,
+                ),
+                const SizedBox(width: 12.0),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        copy.verifyEmailBannerTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Text(copy.verifyEmailBannerBody),
+                      if (error != null)
+                        Text(error, style: TextStyle(color: colors.error)),
+                      Wrap(
+                        spacing: 4.0,
+                        children: <Widget>[
+                          TextButton(
+                            key: EmailVerificationBanner.resendKey,
+                            onPressed: state.isBusy ? null : () => _resend(),
+                            child: Text(copy.resendVerification),
+                          ),
+                          TextButton(
+                            key: EmailVerificationBanner.refreshKey,
+                            onPressed: state.isBusy ? null : () => _refresh(),
+                            child: Text(copy.refreshVerification),
+                          ),
+                          TextButton(
+                            onPressed: state.isBusy
+                                ? null
+                                : () => context.go(AppRoutes.verifyEmail),
+                            child: Text(copy.openVerification),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _resend() async {
+    try {
+      await controller.resendVerification();
+    } on Object {
+      // The controller publishes a safe error for the banner to render.
+    }
+  }
+
+  Future<void> _refresh() async {
+    try {
+      await controller.refreshIdentity();
+    } on Object {
+      // The controller publishes a safe error for the banner to render.
+    }
+  }
+}
+
 final class _AuthFormScaffold extends StatelessWidget {
   const _AuthFormScaffold({
     required this.title,
