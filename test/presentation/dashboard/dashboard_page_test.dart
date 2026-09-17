@@ -593,6 +593,102 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(DashboardNoteCard), findsOneWidget);
     });
+
+    testWidgets('reload reads fresh notes and overview data', (
+      WidgetTester tester,
+    ) async {
+      final NoteDto first = _buildNote(id: 'a', title: 'Alpha');
+      final NoteDto added = _buildNote(id: 'b', title: 'Beta');
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: <NoteDto>[first],
+      );
+      final _FakeDashboardQuery query = _FakeDashboardQuery(
+        _overview(notes: <NoteDto>[first]),
+      );
+      final DashboardController controller = DashboardController(query: query);
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: notesController,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DashboardNoteCard), findsOneWidget);
+      expect(find.text('Beta'), findsNothing);
+      final int notesCallsBefore = notesController.listNotesCalls;
+      final int queryCallsBefore = query.calls;
+
+      // The data behind the already-mounted page changes.
+      notesController.notes.add(added);
+      query.result = _overview(notes: <NoteDto>[first, added]);
+
+      final DashboardPageState page = tester.state<DashboardPageState>(
+        find.byType(DashboardPage),
+      );
+      await page.reload();
+      await tester.pumpAndSettle();
+
+      expect(notesController.listNotesCalls, greaterThan(notesCallsBefore));
+      expect(query.calls, greaterThan(queryCallsBefore));
+      expect(find.byType(DashboardNoteCard), findsNWidgets(2));
+      expect(find.text('Beta'), findsOneWidget);
+      expect(find.text('2 notes'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shares an in-flight reload instead of repeating the request', (
+      WidgetTester tester,
+    ) async {
+      final NoteDto first = _buildNote(id: 'a', title: 'Alpha');
+      final NoteDto added = _buildNote(id: 'b', title: 'Beta');
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: <NoteDto>[first],
+      );
+      final _FakeDashboardQuery query = _FakeDashboardQuery(
+        _overview(notes: <NoteDto>[first]),
+      );
+      final DashboardController controller = DashboardController(query: query);
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: notesController,
+      );
+      await tester.pumpAndSettle();
+
+      final int notesCallsBefore = notesController.listNotesCalls;
+      final int queryCallsBefore = query.calls;
+
+      // Hold the next request open so both reloads overlap.
+      final Completer<void> gate = Completer<void>();
+      notesController.listNotesGate = gate;
+      notesController.notes.add(added);
+      query.result = _overview(notes: <NoteDto>[first, added]);
+
+      final DashboardPageState page = tester.state<DashboardPageState>(
+        find.byType(DashboardPage),
+      );
+      final Future<void> firstReload = page.reload();
+      final Future<void> secondReload = page.reload();
+      await tester.pump();
+
+      // The second reload joined the first request instead of issuing its own.
+      expect(notesController.listNotesCalls, notesCallsBefore + 1);
+      expect(query.calls, queryCallsBefore + 1);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      await firstReload;
+      await secondReload;
+
+      // One shared request still delivers the fresh data to both callers.
+      expect(notesController.listNotesCalls, notesCallsBefore + 1);
+      expect(query.calls, queryCallsBefore + 1);
+      expect(find.byType(DashboardNoteCard), findsNWidgets(2));
+      expect(find.text('Beta'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -724,8 +820,20 @@ final class _FakeNotesController implements NotesApplicationController {
   final List<NoteDto> notes;
   final Object? listNotesError;
 
+  /// When set, [listNotes] stays pending until the completer completes so a
+  /// test can observe the page while a reload request is in flight.
+  Completer<void>? listNotesGate;
+
+  /// Number of [listNotes] calls, used to prove reloads are coalesced.
+  int listNotesCalls = 0;
+
   @override
   Future<List<NoteDto>> listNotes() async {
+    listNotesCalls++;
+    final Completer<void>? gate = listNotesGate;
+    if (gate != null) {
+      await gate.future;
+    }
     final Object? error = listNotesError;
     if (error != null) {
       throw error;

@@ -3,12 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 
+import 'amplify_outputs.dart';
+import 'application/auth/authentication_app_service.dart';
+import 'application/auth/auth_models.dart';
+import 'application/auth/current_user_session.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
+import 'domain/auth/auth_identity.dart';
 import 'domain/note_intelligence/summary.dart';
 import 'domain/notes/note_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
@@ -19,12 +25,19 @@ import 'infrastructure/ai/model_manager.dart';
 import 'infrastructure/ai/model_provisioning_contract.dart';
 import 'infrastructure/ai/model_selection.dart';
 import 'infrastructure/ai/model_storage.dart';
+import 'infrastructure/auth/amplify_auth_initializer.dart';
+import 'infrastructure/auth/cognito_authentication_service.dart';
 import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/users/user_profile_repository.dart'
+    as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
+import 'presentation/auth/auth_localizations.dart';
+import 'presentation/auth/auth_pages.dart';
+import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
 import 'presentation/dashboard/dashboard_page.dart';
@@ -35,10 +48,16 @@ import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/routing/app_router.dart';
+import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
 const String _noteFlowFontFamily = 'Inter';
+const String _noteFlowAuthMode = String.fromEnvironment(
+  'NOTEFLOW_AUTH_MODE',
+  defaultValue: 'cognito',
+);
 const List<String> _noteFlowFontFallback = <String>[
   'Roboto',
   'Arial',
@@ -164,8 +183,59 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
   );
 }
 
-void main() {
-  runApp(const NoteFlowApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final ({AuthController authController, CurrentUserSession currentUserSession})
+  bootstrap = await _bootstrapAuth();
+  runApp(
+    NoteFlowApp(
+      authController: bootstrap.authController,
+      currentUserSession: bootstrap.currentUserSession,
+    ),
+  );
+}
+
+Future<({AuthController authController, CurrentUserSession currentUserSession})>
+_bootstrapAuth() async {
+  if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
+    throw StateError(
+      'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
+      'Use local or cognito.',
+    );
+  }
+
+  final CurrentUserSession session = CurrentUserSession();
+  if (_noteFlowAuthMode == 'local') {
+    session.setIdentity(
+      AuthIdentity(
+        userId: 'local-user',
+        email: 'local-user@noteflow.local',
+        isEmailVerified: true,
+      ),
+    );
+    return (
+      currentUserSession: session,
+      authController: AuthController(
+        authenticationAppService: null,
+        initialUser: AuthUserDto.fromIdentity(session.identity!),
+      ),
+    );
+  }
+
+  await configureAmplifyAuthCognito(amplifyConfig: amplifyConfig);
+  final AuthenticationAppService authenticationAppService =
+      AuthenticationAppService(
+        authenticationService: const CognitoAuthenticationService(),
+        currentUserSession: session,
+        userProfileRepository: user_profile_infrastructure
+            .createUserProfileRepository(),
+      );
+  return (
+    currentUserSession: session,
+    authController: AuthController(
+      authenticationAppService: authenticationAppService,
+    ),
+  );
 }
 
 /// Root composition for the local-LLM summarization proof.
@@ -174,15 +244,20 @@ void main() {
 /// its Domain summarization contract and the debug page only receives a
 /// summarization function.
 class NoteFlowApp extends StatefulWidget {
-  const NoteFlowApp({super.key});
+  const NoteFlowApp({
+    super.key,
+    required this.authController,
+    required this.currentUserSession,
+  });
+
+  final AuthController authController;
+  final CurrentUserSession currentUserSession;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
 }
 
 class _NoteFlowAppState extends State<NoteFlowApp> {
-  static const String _localOwnerId = 'local-user';
-
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
   LlmWorkerClient? _workerClient;
@@ -195,10 +270,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       createAiConfigurationStore();
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository();
+  late final CurrentUserSession _currentUserSession = widget.currentUserSession;
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
-        ownerId: _localOwnerId,
+        currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
@@ -208,12 +284,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   late final DashboardController _dashboardController = DashboardController(
     query: GetDashboardOverview(
       noteRepository: _noteRepository,
-      ownerId: _localOwnerId,
+      currentUser: _currentUserSession,
     ),
     recentLimit: 20,
   );
   final GlobalKey<WorkspaceShellState> _workspaceShellKey =
       GlobalKey<WorkspaceShellState>();
+  final GlobalKey<DashboardPageState> _dashboardPageKey =
+      GlobalKey<DashboardPageState>();
+  final GlobalKey<NotesWorkspacePageState> _notesPageKey =
+      GlobalKey<NotesWorkspacePageState>();
   late final IModelStorage _modelStorage = createModelStorage(
     overrideModelPath: _aiConfiguration.modelPathOverride,
   );
@@ -235,7 +315,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     aiConfigurationStore: _aiConfigurationStore,
     modelProvisioningReporter: _modelProvisioningStatus,
   );
+  late final GoRouter _router;
   bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = createAppRouter(
+      authController: widget.authController,
+      workspaceBuilder: _buildWorkspace,
+    );
+    unawaited(_initializeAuth());
+  }
+
+  Future<void> _initializeAuth() async {
+    try {
+      await widget.authController.initialize();
+    } on Object {
+      // AuthController retains the safe mapped startup error for the router's
+      // splash/retry page; startup must not become an uncaught async error.
+    }
+  }
 
   Future<Summary> _summarize(String content) async {
     final NoteSummaryAppService service = await _ensureService();
@@ -458,10 +558,35 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     };
   }
 
+  Future<void> _logout() async {
+    try {
+      await widget.authController.logout();
+    } on Object {
+      // AuthController clears local state even when provider sign-out fails;
+      // the router will move the user to the public login route.
+    }
+  }
+
+  void _reloadWorkspaceDestination(WorkspaceDestination destination) {
+    switch (destination) {
+      case WorkspaceDestination.dashboard:
+        final DashboardPageState? page = _dashboardPageKey.currentState;
+        if (page != null) {
+          unawaited(page.reload());
+        }
+      case WorkspaceDestination.notes:
+        final NotesWorkspacePageState? page = _notesPageKey.currentState;
+        if (page != null) {
+          unawaited(page.reload());
+        }
+    }
+  }
+
   Future<void> _showAppearanceSettings(BuildContext context) async {
     ThemeMode selectedTheme = _themeMode;
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
     final NotesCopy copy = NotesCopy.of(context);
+    final AuthCopy authCopy = AuthCopy.of(context);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -539,6 +664,24 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                         setState(() => _languageChoice = value);
                       },
                     ),
+                    const SizedBox(height: 24),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.lock_outline),
+                      label: Text(authCopy.changePassword),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(AppRoutes.changePassword);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.logout),
+                      label: Text(authCopy.logout),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(_logout());
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -551,13 +694,14 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'NoteFlow',
       theme: _buildNoteFlowTheme(Brightness.light),
       darkTheme: _buildNoteFlowTheme(Brightness.dark),
       themeMode: _themeMode,
       locale: _selectedLocale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
         DashboardCopy.delegate,
@@ -567,11 +711,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
-      home: Builder(
-        builder: (BuildContext context) {
-          return WorkspaceShell(
+      routerConfig: _router,
+    );
+  }
+
+  Widget _buildWorkspace(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        EmailVerificationBanner(controller: widget.authController),
+        Expanded(
+          child: WorkspaceShell(
             key: _workspaceShellKey,
+            onDestinationChanged: _reloadWorkspaceDestination,
             dashboard: DashboardPage(
+              key: _dashboardPageKey,
               dashboardController: _dashboardController,
               notesController: _notesController,
               onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
@@ -591,6 +744,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
               },
             ),
             notes: NotesWorkspacePage(
+              key: _notesPageKey,
               applicationService: _noteApplicationService,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,
@@ -608,15 +762,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                 );
               },
             ),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _router.dispose();
+    widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;
     if (client != null) {
       unawaited(client.dispose());

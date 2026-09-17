@@ -1,11 +1,45 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/auth/current_user.dart';
 import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
 import 'package:note_ai_app/domain/notes/note.dart';
 import 'package:note_ai_app/domain/notes/note_repository.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 9, 10, 9);
+
+final class _FakeCurrentUser implements ICurrentUser {
+  _FakeCurrentUser(this.identity);
+
+  @override
+  AuthIdentity? identity;
+
+  @override
+  bool get isAuthenticated => identity != null;
+
+  @override
+  String? get userId => identity?.userId;
+
+  @override
+  String get requiredUserId {
+    final String? currentUserId = userId;
+    if (currentUserId == null) {
+      throw const UnauthenticatedException();
+    }
+    return currentUserId;
+  }
+}
+
+_FakeCurrentUser _authenticatedUser([String userId = 'local-user']) {
+  return _FakeCurrentUser(
+    AuthIdentity(
+      userId: userId,
+      email: '$userId@example.test',
+      isEmailVerified: true,
+    ),
+  );
+}
 
 void main() {
   group('GetDashboardOverview', () {
@@ -22,7 +56,7 @@ void main() {
       ]);
       final GetDashboardOverview ownerQuery = GetDashboardOverview(
         noteRepository: repository,
-        ownerId: 'local-user',
+        currentUser: _authenticatedUser(),
       );
 
       final DashboardOverview overview = await ownerQuery.execute(
@@ -45,7 +79,7 @@ void main() {
       ]);
       final DashboardOverview overview = await GetDashboardOverview(
         noteRepository: repository,
-        ownerId: 'local-user',
+        currentUser: _authenticatedUser(),
       ).execute(recentLimit: 5);
 
       expect(overview.recentNotes.map((note) => note.id), <String>[
@@ -59,7 +93,7 @@ void main() {
       () async {
         final DashboardOverview overview = await GetDashboardOverview(
           noteRepository: _FakeNoteRepository(const <Note>[]),
-          ownerId: 'local-user',
+          currentUser: _authenticatedUser(),
         ).execute(recentLimit: 5);
 
         expect(overview.isEmpty, isTrue);
@@ -81,7 +115,7 @@ void main() {
         );
         final GetDashboardOverview query = GetDashboardOverview(
           noteRepository: repository,
-          ownerId: 'local-user',
+          currentUser: _authenticatedUser(),
         );
 
         await expectLater(
@@ -100,10 +134,25 @@ void main() {
       await expectLater(
         GetDashboardOverview(
           noteRepository: repository,
-          ownerId: 'local-user',
+          currentUser: _authenticatedUser(),
         ).execute(recentLimit: 5),
         throwsA(same(error)),
       );
+    });
+
+    test('rejects an unauthenticated dashboard request', () async {
+      final _FakeNoteRepository repository = _FakeNoteRepository(
+        const <Note>[],
+      );
+
+      await expectLater(
+        GetDashboardOverview(
+          noteRepository: repository,
+          currentUser: _FakeCurrentUser(null),
+        ).execute(recentLimit: 5),
+        throwsA(isA<UnauthenticatedException>()),
+      );
+      expect(repository.findByOwnerIdCalls, 0);
     });
   });
 }

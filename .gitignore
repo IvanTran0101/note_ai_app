@@ -47,6 +47,10 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
+# Amplify Gen 2 backend tooling (generated local state only)
+/node_modules/
+/.amplify/
+
 # Local agent instructions and generated workspace files
 /pack/
 /_agent_ops/

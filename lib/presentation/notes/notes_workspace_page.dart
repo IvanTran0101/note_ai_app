@@ -39,16 +39,17 @@ final class NotesWorkspacePage extends StatefulWidget {
   final VoidCallback? onProvisioningCancel;
 
   @override
-  State<NotesWorkspacePage> createState() => _NotesWorkspacePageState();
+  NotesWorkspacePageState createState() => NotesWorkspacePageState();
 }
 
-final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
+final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
   bool _editingNewNote = false;
   bool _detailDirty = false;
   Object? _error;
   bool _loading = true;
+  Future<void>? _loadInFlight;
 
   NotesApplicationController get _application {
     final NotesApplicationController? controller = widget.controller;
@@ -80,10 +81,31 @@ final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
   @override
   void initState() {
     super.initState();
-    unawaited(_loadNotes());
+    unawaited(reload());
   }
 
-  Future<void> _loadNotes() async {
+  /// Reloads the list after the page becomes active.
+  Future<void> reload() {
+    final Future<void>? inFlight = _loadInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final Future<void> started = _loadNotesInternal();
+    _loadInFlight = started;
+    return _clearLoadInFlight(started);
+  }
+
+  Future<void> _clearLoadInFlight(Future<void> operation) async {
+    try {
+      await operation;
+    } finally {
+      if (identical(_loadInFlight, operation)) {
+        _loadInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _loadNotesInternal() async {
     try {
       final List<NoteDto> notes = await _application.listNotes();
       if (!mounted) {
@@ -205,7 +227,7 @@ final class _NotesWorkspacePageState extends State<NotesWorkspacePage> {
                 actionBusy: false,
                 onNewNote: _startNewNote,
                 onSelectNote: _selectNote,
-                onRetry: _loadNotes,
+                onRetry: reload,
               ),
               detail: _buildDetail(copy, showAppBar: compact),
               hasSelection: _showDetail,

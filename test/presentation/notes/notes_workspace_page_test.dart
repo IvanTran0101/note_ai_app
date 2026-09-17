@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -171,6 +173,69 @@ void main() {
       'Unsaved title',
     );
   });
+
+  testWidgets('reload reads fresh notes for the list', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpWorkspace(tester, controller, size: const Size(390, 844));
+
+    expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('note-note-2')), findsNothing);
+    final int callsBefore = controller.listNotesCalls;
+
+    // The data behind the already-mounted page changes.
+    controller.notes.add(buildNote(id: 'note-2', title: 'Second'));
+
+    final NotesWorkspacePageState page = tester.state<NotesWorkspacePageState>(
+      find.byType(NotesWorkspacePage),
+    );
+    await page.reload();
+    await tester.pumpAndSettle();
+
+    expect(controller.listNotesCalls, greaterThan(callsBefore));
+    expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shares an in-flight reload instead of repeating the request', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpWorkspace(tester, controller, size: const Size(390, 844));
+
+    final int callsBefore = controller.listNotesCalls;
+
+    // Hold the next request open so both reloads overlap.
+    final Completer<void> gate = Completer<void>();
+    controller.listNotesGate = gate;
+    controller.notes.add(buildNote(id: 'note-2', title: 'Second'));
+
+    final NotesWorkspacePageState page = tester.state<NotesWorkspacePageState>(
+      find.byType(NotesWorkspacePage),
+    );
+    final Future<void> firstReload = page.reload();
+    final Future<void> secondReload = page.reload();
+    await tester.pump();
+
+    // The second reload joined the first request instead of issuing its own.
+    expect(controller.listNotesCalls, callsBefore + 1);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+    await firstReload;
+    await secondReload;
+
+    // One shared request still delivers the fresh data to both callers.
+    expect(controller.listNotesCalls, callsBefore + 1);
+    expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final class _FakeNotesController implements NotesApplicationController {
@@ -180,8 +245,22 @@ final class _FakeNotesController implements NotesApplicationController {
   final List<NoteDto> notes;
   int _nextId = 1;
 
+  /// When set, [listNotes] stays pending until the completer completes so a
+  /// test can observe the page while a reload request is in flight.
+  Completer<void>? listNotesGate;
+
+  /// Number of [listNotes] calls, used to prove reloads are coalesced.
+  int listNotesCalls = 0;
+
   @override
-  Future<List<NoteDto>> listNotes() async => List<NoteDto>.of(notes);
+  Future<List<NoteDto>> listNotes() async {
+    listNotesCalls++;
+    final Completer<void>? gate = listNotesGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return List<NoteDto>.of(notes);
+  }
 
   @override
   Future<NoteDto> createNote({

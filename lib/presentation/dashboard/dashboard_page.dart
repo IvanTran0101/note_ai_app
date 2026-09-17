@@ -82,10 +82,10 @@ final class DashboardPage extends StatefulWidget {
   static const Key errorKey = ValueKey<String>('dashboard-error');
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  DashboardPageState createState() => DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+final class DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchController = TextEditingController();
 
   List<NoteDto> _notes = const <NoteDto>[];
@@ -96,12 +96,13 @@ class _DashboardPageState extends State<DashboardPage> {
   DashboardLayout _layout = DashboardLayout.grid;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
+  Future<void>? _loadInFlight;
 
   @override
   void initState() {
     super.initState();
     widget.dashboardController.addListener(_onOverviewStateChanged);
-    unawaited(_load());
+    unawaited(reload());
   }
 
   @override
@@ -110,11 +111,32 @@ class _DashboardPageState extends State<DashboardPage> {
     if (oldWidget.dashboardController != widget.dashboardController) {
       oldWidget.dashboardController.removeListener(_onOverviewStateChanged);
       widget.dashboardController.addListener(_onOverviewStateChanged);
-      unawaited(_load());
+      unawaited(reload());
     }
   }
 
-  Future<void> _load() async {
+  /// Reloads notes and the Dashboard overview after the page becomes active.
+  Future<void> reload() {
+    final Future<void>? inFlight = _loadInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final Future<void> started = _loadInternal();
+    _loadInFlight = started;
+    return _clearLoadInFlight(started);
+  }
+
+  Future<void> _clearLoadInFlight(Future<void> operation) async {
+    try {
+      await operation;
+    } finally {
+      if (identical(_loadInFlight, operation)) {
+        _loadInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _loadInternal() async {
     if (mounted) {
       setState(() {
         _loadingNotes = true;
@@ -175,7 +197,7 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() => _selectedNoteId = note.id);
     final NoteDetailRouteResult? result = await widget.onOpenNote(note);
     if (mounted && (result?.shouldRefresh ?? false)) {
-      await _load();
+      await reload();
     }
   }
 
@@ -186,7 +208,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _openCreateNote() async {
     final NoteDetailRouteResult? result = await widget.onCreateNote();
     if (mounted && (result?.shouldRefresh ?? false)) {
-      await _load();
+      await reload();
     }
   }
 
@@ -244,10 +266,10 @@ class _DashboardPageState extends State<DashboardPage> {
       return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
     }
     if (_notesError != null && _notes.isEmpty) {
-      return DashboardNotesErrorView(copy: copy, onRetry: _load);
+      return DashboardNotesErrorView(copy: copy, onRetry: reload);
     }
     if (_hasError && _notes.isEmpty) {
-      return DashboardErrorView(copy: copy, onRetry: _load);
+      return DashboardErrorView(copy: copy, onRetry: reload);
     }
     if (!_loadingNotes && _notes.isEmpty) {
       return DashboardEmptyView(copy: copy, onCreateNote: _createNote);
@@ -271,8 +293,8 @@ class _DashboardPageState extends State<DashboardPage> {
           setState(() => _layout = value),
       onOpenNote: (NoteDto note) => unawaited(_openNote(note)),
       onCreateNote: _createNote,
-      onRetry: _load,
-      onRefresh: _load,
+      onRetry: reload,
+      onRefresh: reload,
     );
   }
 
