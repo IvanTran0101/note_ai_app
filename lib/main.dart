@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 
 import 'amplify_outputs.dart';
 import 'application/auth/authentication_app_service.dart';
+import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
@@ -33,6 +35,7 @@ import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
+import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
 import 'presentation/dashboard/dashboard_page.dart';
@@ -43,6 +46,7 @@ import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/routing/app_router.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
@@ -178,12 +182,18 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final CurrentUserSession currentUserSession =
-      await _bootstrapCurrentUserSession();
-  runApp(NoteFlowApp(currentUserSession: currentUserSession));
+  final ({AuthController authController, CurrentUserSession currentUserSession})
+  bootstrap = await _bootstrapAuth();
+  runApp(
+    NoteFlowApp(
+      authController: bootstrap.authController,
+      currentUserSession: bootstrap.currentUserSession,
+    ),
+  );
 }
 
-Future<CurrentUserSession> _bootstrapCurrentUserSession() async {
+Future<({AuthController authController, CurrentUserSession currentUserSession})>
+_bootstrapAuth() async {
   if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
     throw StateError(
       'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
@@ -200,7 +210,13 @@ Future<CurrentUserSession> _bootstrapCurrentUserSession() async {
         isEmailVerified: true,
       ),
     );
-    return session;
+    return (
+      currentUserSession: session,
+      authController: AuthController(
+        authenticationAppService: null,
+        initialUser: AuthUserDto.fromIdentity(session.identity!),
+      ),
+    );
   }
 
   await configureAmplifyAuthCognito(amplifyConfig: amplifyConfig);
@@ -211,8 +227,12 @@ Future<CurrentUserSession> _bootstrapCurrentUserSession() async {
         userProfileRepository: user_profile_infrastructure
             .createUserProfileRepository(),
       );
-  await authenticationAppService.restoreSession();
-  return session;
+  return (
+    currentUserSession: session,
+    authController: AuthController(
+      authenticationAppService: authenticationAppService,
+    ),
+  );
 }
 
 /// Root composition for the local-LLM summarization proof.
@@ -221,8 +241,13 @@ Future<CurrentUserSession> _bootstrapCurrentUserSession() async {
 /// its Domain summarization contract and the debug page only receives a
 /// summarization function.
 class NoteFlowApp extends StatefulWidget {
-  const NoteFlowApp({super.key, required this.currentUserSession});
+  const NoteFlowApp({
+    super.key,
+    required this.authController,
+    required this.currentUserSession,
+  });
 
+  final AuthController authController;
   final CurrentUserSession currentUserSession;
 
   @override
@@ -283,7 +308,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     aiConfigurationStore: _aiConfigurationStore,
     modelProvisioningReporter: _modelProvisioningStatus,
   );
+  late final GoRouter _router;
   bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = createAppRouter(
+      authController: widget.authController,
+      workspaceBuilder: _buildWorkspace,
+    );
+    unawaited(_initializeAuth());
+  }
+
+  Future<void> _initializeAuth() async {
+    try {
+      await widget.authController.initialize();
+    } on Object {
+      // AuthController retains the safe mapped startup error for the router's
+      // splash/retry page; startup must not become an uncaught async error.
+    }
+  }
 
   Future<Summary> _summarize(String content) async {
     final NoteSummaryAppService service = await _ensureService();
@@ -599,7 +644,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'NoteFlow',
       theme: _buildNoteFlowTheme(Brightness.light),
       darkTheme: _buildNoteFlowTheme(Brightness.dark),
@@ -615,46 +660,46 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
-      home: Builder(
-        builder: (BuildContext context) {
-          return WorkspaceShell(
-            key: _workspaceShellKey,
-            dashboard: DashboardPage(
-              dashboardController: _dashboardController,
-              notesController: _notesController,
-              onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
-              onCreateNote: () => _openNoteDetail(context, null),
-              onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LocalLlmDebugPage(
-                      summarize: _summarize,
-                      loadModelReadiness: _loadModelReadiness,
-                      provisioningReader: _modelProvisioningStatus,
-                      onProvisioningCancel: _cancelModelProvisioning,
-                    ),
-                  ),
-                );
-              },
+      routerConfig: _router,
+    );
+  }
+
+  Widget _buildWorkspace(BuildContext context) {
+    return WorkspaceShell(
+      key: _workspaceShellKey,
+      dashboard: DashboardPage(
+        dashboardController: _dashboardController,
+        notesController: _notesController,
+        onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
+        onCreateNote: () => _openNoteDetail(context, null),
+        onOpenSettings: () => _showAppearanceSettings(context),
+        onOpenDiagnostics: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LocalLlmDebugPage(
+                summarize: _summarize,
+                loadModelReadiness: _loadModelReadiness,
+                provisioningReader: _modelProvisioningStatus,
+                onProvisioningCancel: _cancelModelProvisioning,
+              ),
             ),
-            notes: NotesWorkspacePage(
-              applicationService: _noteApplicationService,
-              provisioningReader: _modelProvisioningStatus,
-              onProvisioningCancel: _cancelModelProvisioning,
-              onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LocalLlmDebugPage(
-                      summarize: _summarize,
-                      loadModelReadiness: _loadModelReadiness,
-                      provisioningReader: _modelProvisioningStatus,
-                      onProvisioningCancel: _cancelModelProvisioning,
-                    ),
-                  ),
-                );
-              },
+          );
+        },
+      ),
+      notes: NotesWorkspacePage(
+        applicationService: _noteApplicationService,
+        provisioningReader: _modelProvisioningStatus,
+        onProvisioningCancel: _cancelModelProvisioning,
+        onOpenSettings: () => _showAppearanceSettings(context),
+        onOpenDiagnostics: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LocalLlmDebugPage(
+                summarize: _summarize,
+                loadModelReadiness: _loadModelReadiness,
+                provisioningReader: _modelProvisioningStatus,
+                onProvisioningCancel: _cancelModelProvisioning,
+              ),
             ),
           );
         },
@@ -665,6 +710,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void dispose() {
     _disposed = true;
+    _router.dispose();
+    widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;
     if (client != null) {
       unawaited(client.dispose());

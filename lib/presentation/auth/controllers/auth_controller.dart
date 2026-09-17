@@ -15,18 +15,32 @@ final class AuthController extends ChangeNotifier {
   AuthController({
     required this.authenticationAppService,
     AuthUserDto? initialUser,
-  }) : _state = initialUser == null
+  }) : assert(
+         authenticationAppService != null || initialUser != null,
+         'Provide an app service or an initial compatibility user.',
+       ),
+       _state = initialUser == null
            ? const AuthState.initializing()
            : AuthState.authenticated(user: initialUser),
        _initializationCompleted = initialUser != null;
 
-  final IAuthenticationAppService authenticationAppService;
+  /// Null only for the local compatibility bootstrap, where [initialUser]
+  /// already represents the authenticated demo session.
+  final IAuthenticationAppService? authenticationAppService;
 
   AuthState _state;
   bool _disposed = false;
   bool _initializationCompleted;
 
   AuthState get state => _state;
+
+  IAuthenticationAppService get _service {
+    final IAuthenticationAppService? service = authenticationAppService;
+    if (service == null) {
+      throw StateError('Authentication is unavailable in local mode.');
+    }
+    return service;
+  }
 
   /// Restores the provider session once. A failed initialization can be
   /// retried; a completed initialization is idempotent.
@@ -37,7 +51,7 @@ final class AuthController extends ChangeNotifier {
     }
     _emit(const AuthState.initializing(isBusy: true));
     try {
-      final AuthUserDto? user = await authenticationAppService.restoreSession();
+      final AuthUserDto? user = await _service.restoreSession();
       _initializationCompleted = true;
       _emit(
         user == null
@@ -53,7 +67,7 @@ final class AuthController extends ChangeNotifier {
 
   Future<AuthUserDto> login(LoginInput input) {
     return _execute(
-      operation: () => authenticationAppService.login(input),
+      operation: () => _service.login(input),
       onSuccess: (AuthUserDto user) {
         _initializationCompleted = true;
         return AuthState.authenticated(user: user);
@@ -63,7 +77,7 @@ final class AuthController extends ChangeNotifier {
 
   Future<RegistrationResult> register(RegisterInput input) {
     return _execute(
-      operation: () => authenticationAppService.register(input),
+      operation: () => _service.register(input),
       onSuccess: (RegistrationResult result) {
         _initializationCompleted = true;
         return AuthState.authenticated(user: result.user);
@@ -76,7 +90,7 @@ final class AuthController extends ChangeNotifier {
     _ensureNotBusy();
     _emit(_busyState());
     try {
-      await authenticationAppService.logout();
+      await _service.logout();
       _emit(const AuthState.unauthenticated());
     } on Object catch (error, stackTrace) {
       // AuthenticationAppService clears its local session in finally, even
@@ -88,27 +102,24 @@ final class AuthController extends ChangeNotifier {
 
   Future<AuthUserDto> refreshIdentity() {
     return _execute(
-      operation: authenticationAppService.refreshIdentity,
+      operation: _service.refreshIdentity,
       onSuccess: (AuthUserDto user) => AuthState.authenticated(user: user),
     );
   }
 
   Future<void> resendVerification() {
-    return _executeVoid(authenticationAppService.resendEmailVerification);
+    return _executeVoid(_service.resendEmailVerification);
   }
 
   Future<AuthUserDto> confirmVerification({required String code}) {
     return _execute(
-      operation: () =>
-          authenticationAppService.confirmEmailVerification(code: code),
+      operation: () => _service.confirmEmailVerification(code: code),
       onSuccess: (AuthUserDto user) => AuthState.authenticated(user: user),
     );
   }
 
   Future<void> requestPasswordReset({required String email}) {
-    return _executeVoid(
-      () => authenticationAppService.requestPasswordReset(email: email),
-    );
+    return _executeVoid(() => _service.requestPasswordReset(email: email));
   }
 
   Future<void> confirmPasswordReset({
@@ -118,7 +129,7 @@ final class AuthController extends ChangeNotifier {
     required String confirmPassword,
   }) {
     return _executeVoid(
-      () => authenticationAppService.confirmPasswordReset(
+      () => _service.confirmPasswordReset(
         email: email,
         code: code,
         newPassword: newPassword,
@@ -133,7 +144,7 @@ final class AuthController extends ChangeNotifier {
     required String confirmPassword,
   }) {
     return _executeVoid(
-      () => authenticationAppService.changePassword(
+      () => _service.changePassword(
         currentPassword: currentPassword,
         newPassword: newPassword,
         confirmPassword: confirmPassword,

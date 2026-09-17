@@ -64,6 +64,7 @@ dependencies:
   # both are pinned to the same minor range.
   amplify_flutter: ^2.15.0
   amplify_auth_cognito: ^2.15.0
+  go_router: ^18.0.1
 
 dev_dependencies:
   flutter_test:
