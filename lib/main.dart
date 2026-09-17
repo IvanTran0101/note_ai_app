@@ -35,6 +35,7 @@ import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
+import 'presentation/auth/auth_localizations.dart';
 import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
@@ -651,6 +652,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       themeMode: _themeMode,
       locale: _selectedLocale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
         DashboardCopy.delegate,

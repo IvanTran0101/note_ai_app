@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth_pages.dart';
 import '../auth/controllers/auth_controller.dart';
 import '../auth/controllers/auth_state.dart';
 import 'app_routes.dart';
@@ -30,25 +31,38 @@ GoRouter createAppRouter({
       GoRoute(
         path: AppRoutes.login,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Log in');
+          return LoginPage(
+            controller: authController,
+            redirect: state.uri.queryParameters['redirect'],
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.register,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Create account');
+          return RegisterPage(
+            controller: authController,
+            redirect: state.uri.queryParameters['redirect'],
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Forgot password');
+          return ForgotPasswordPage(
+            controller: authController,
+            redirect: state.uri.queryParameters['redirect'],
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.resetPassword,
         builder: (BuildContext context, GoRouterState state) {
-          return const _AuthPlaceholderPage(title: 'Reset password');
+          return ResetPasswordPage(
+            controller: authController,
+            initialEmail: state.uri.queryParameters['email'],
+            redirect: state.uri.queryParameters['redirect'],
+          );
         },
       ),
       GoRoute(
