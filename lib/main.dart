@@ -56,7 +56,7 @@ import 'presentation/workspace/workspace_shell.dart';
 const String _noteFlowFontFamily = 'Inter';
 const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
-  defaultValue: 'local',
+  defaultValue: 'cognito',
 );
 const List<String> _noteFlowFontFallback = <String>[
   'Roboto',
