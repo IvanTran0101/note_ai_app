@@ -290,6 +290,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   );
   final GlobalKey<WorkspaceShellState> _workspaceShellKey =
       GlobalKey<WorkspaceShellState>();
+  final GlobalKey<DashboardPageState> _dashboardPageKey =
+      GlobalKey<DashboardPageState>();
+  final GlobalKey<NotesWorkspacePageState> _notesPageKey =
+      GlobalKey<NotesWorkspacePageState>();
   late final IModelStorage _modelStorage = createModelStorage(
     overrideModelPath: _aiConfiguration.modelPathOverride,
   );
@@ -563,6 +567,21 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     }
   }
 
+  void _reloadWorkspaceDestination(WorkspaceDestination destination) {
+    switch (destination) {
+      case WorkspaceDestination.dashboard:
+        final DashboardPageState? page = _dashboardPageKey.currentState;
+        if (page != null) {
+          unawaited(page.reload());
+        }
+      case WorkspaceDestination.notes:
+        final NotesWorkspacePageState? page = _notesPageKey.currentState;
+        if (page != null) {
+          unawaited(page.reload());
+        }
+    }
+  }
+
   Future<void> _showAppearanceSettings(BuildContext context) async {
     ThemeMode selectedTheme = _themeMode;
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
@@ -703,7 +722,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         Expanded(
           child: WorkspaceShell(
             key: _workspaceShellKey,
+            onDestinationChanged: _reloadWorkspaceDestination,
             dashboard: DashboardPage(
+              key: _dashboardPageKey,
               dashboardController: _dashboardController,
               notesController: _notesController,
               onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
@@ -723,6 +744,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
               },
             ),
             notes: NotesWorkspacePage(
+              key: _notesPageKey,
               applicationService: _noteApplicationService,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,

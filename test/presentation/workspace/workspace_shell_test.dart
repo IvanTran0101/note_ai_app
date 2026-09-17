@@ -99,6 +99,78 @@ void main() {
     expect(find.text('Notes page').hitTestable(), findsOneWidget);
   });
 
+  testWidgets('notifies only when the active destination really changes', (
+    WidgetTester tester,
+  ) async {
+    final List<WorkspaceDestination> changes = <WorkspaceDestination>[];
+    final GlobalKey<WorkspaceShellState> shellKey =
+        GlobalKey<WorkspaceShellState>();
+    await pumpShell(
+      tester,
+      size: const Size(1200, 900),
+      shellKey: shellKey,
+      onDestinationChanged: changes.add,
+    );
+
+    // Re-selecting the active destination through the public API is a no-op.
+    shellKey.currentState!.showDestination(WorkspaceDestination.dashboard);
+    await tester.pumpAndSettle();
+    expect(changes, isEmpty);
+    expect(stackIndex(tester), 0);
+
+    // Tapping the already-active sidebar item is a no-op too.
+    await tester.tap(find.byKey(WorkspaceShell.dashboardDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, isEmpty);
+    expect(stackIndex(tester), 0);
+
+    // A real change notifies exactly once.
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, <WorkspaceDestination>[WorkspaceDestination.notes]);
+    expect(stackIndex(tester), 1);
+
+    // Re-selecting the now-active destination does not notify again.
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, <WorkspaceDestination>[WorkspaceDestination.notes]);
+
+    // Switching back reports only the new destination.
+    await tester.tap(find.byKey(WorkspaceShell.dashboardDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, <WorkspaceDestination>[
+      WorkspaceDestination.notes,
+      WorkspaceDestination.dashboard,
+    ]);
+    expect(stackIndex(tester), 0);
+  });
+
+  testWidgets('re-selecting the active rail destination does not notify', (
+    WidgetTester tester,
+  ) async {
+    final List<WorkspaceDestination> changes = <WorkspaceDestination>[];
+    await pumpShell(
+      tester,
+      size: const Size(700, 900),
+      onDestinationChanged: changes.add,
+    );
+
+    await tester.tap(find.byKey(WorkspaceShell.dashboardDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, isEmpty);
+    expect(stackIndex(tester), 0);
+
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, <WorkspaceDestination>[WorkspaceDestination.notes]);
+    expect(stackIndex(tester), 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(changes, <WorkspaceDestination>[WorkspaceDestination.notes]);
+    expect(stackIndex(tester), 1);
+  });
+
   testWidgets('compact width hides navigation and fills with the page', (
     WidgetTester tester,
   ) async {
