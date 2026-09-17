@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/auth_models.dart';
 import 'package:note_ai_app/application/auth/authentication_app_service.dart';
@@ -14,7 +16,10 @@ void main() {
     controller = AuthController(authenticationAppService: service);
   });
 
-  tearDown(() => controller.dispose());
+  tearDown(() {
+    controller.dispose();
+    service.authState.close();
+  });
 
   test('starts in initializing state without a user', () {
     expect(controller.state.status, AuthStatus.initializing);
@@ -182,6 +187,85 @@ void main() {
       expect(controller.state.status, AuthStatus.unauthenticated);
     },
   );
+
+  group('auth state stream', () {
+    test('subscribes to the service stream on construction', () {
+      expect(service.hasAuthStateListener, isTrue);
+    });
+
+    test('publishes an authenticated state for a signed-in event', () async {
+      await controller.initialize();
+      expect(controller.state.status, AuthStatus.unauthenticated);
+
+      service.authState.add(testUser);
+      await pumpEventQueue();
+
+      expect(controller.state.status, AuthStatus.authenticated);
+      expect(controller.state.user, testUser);
+      expect(controller.state.isAuthenticated, isTrue);
+      expect(controller.state.error, isNull);
+    });
+
+    test('publishes an unauthenticated state for a null event', () async {
+      await controller.initialize();
+      service.authState.add(testUser);
+      await pumpEventQueue();
+      expect(controller.state.status, AuthStatus.authenticated);
+
+      service.authState.add(null);
+      await pumpEventQueue();
+
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      expect(controller.state.user, isNull);
+      expect(controller.state.error, isNull);
+    });
+
+    test('maps a stream failure to a presentation error', () async {
+      await controller.initialize();
+
+      service.authState.addError(
+        const AuthenticationFailure(
+          AuthenticationFailureCode.identityUnavailable,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        controller.state.error,
+        const AuthPresentationError(
+          AuthPresentationErrorCode.identityUnavailable,
+        ),
+      );
+      expect(
+        controller.state.error.toString(),
+        contains('identityUnavailable'),
+      );
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      expect(controller.state.user, isNull);
+    });
+
+    test('cancels the subscription and stops reacting after dispose', () async {
+      final FakeAuthenticationAppService streamedService =
+          FakeAuthenticationAppService();
+      final AuthController streamedController = AuthController(
+        authenticationAppService: streamedService,
+      );
+      addTearDown(streamedService.authState.close);
+
+      expect(streamedService.hasAuthStateListener, isTrue);
+
+      streamedController.dispose();
+      await pumpEventQueue();
+
+      expect(streamedService.hasAuthStateListener, isFalse);
+      streamedService.authState.add(testUser);
+      await pumpEventQueue();
+
+      expect(streamedController.state.status, AuthStatus.initializing);
+      expect(streamedController.state.user, isNull);
+      expect(streamedController.state.error, isNull);
+    });
+  });
 }
 
 const AuthUserDto testUser = AuthUserDto(
@@ -201,6 +285,12 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
     verificationDispatchStatus: VerificationDispatchStatus.notRequired,
   );
   LoginInput? loginInput;
+
+  /// Application auth-state events the fake replays to its observer.
+  final StreamController<AuthUserDto?> authState =
+      StreamController<AuthUserDto?>.broadcast();
+
+  bool get hasAuthStateListener => authState.hasListener;
 
   void _record(String name) {
     calls.add(name);
@@ -233,6 +323,9 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
     _record('restoreSession');
     return restoreResult;
   }
+
+  @override
+  Stream<AuthUserDto?> observeAuthState() => authState.stream;
 
   @override
   Future<AuthUserDto> refreshIdentity() async {

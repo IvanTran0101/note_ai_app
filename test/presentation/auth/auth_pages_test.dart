@@ -159,6 +159,9 @@ final class _FakeAuthenticationAppService implements IAuthenticationAppService {
   }
 
   @override
+  Stream<AuthUserDto?> observeAuthState() => const Stream<AuthUserDto?>.empty();
+
+  @override
   Future<AuthUserDto> refreshIdentity() async {
     throw UnimplementedError();
   }

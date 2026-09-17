@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/auth_models.dart';
 import 'package:note_ai_app/application/auth/authentication_app_service.dart';
@@ -24,6 +26,7 @@ void main() {
       currentUserSession: session,
       userProfileRepository: profiles,
     );
+    addTearDown(authentication.authState.close);
   });
 
   group('login', () {
@@ -115,6 +118,115 @@ void main() {
 
         await expectLater(service.restoreSession, throwsA(isA<Exception>()));
 
+        expect(session.identity, same(previous));
+      },
+    );
+  });
+
+  group('observeAuthState', () {
+    test('does not publish or clear the session before an event arrives', () {
+      final AuthIdentity previous = identity(userId: 'user-9');
+      session.setIdentity(previous);
+
+      service.observeAuthState();
+
+      expect(session.identity, same(previous));
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('maps a signed-in identity into the session and the event', () async {
+      final AuthIdentity signedIn = identity(isEmailVerified: true);
+      final Future<List<AuthUserDto?>> received = service
+          .observeAuthState()
+          .take(1)
+          .toList();
+      // Let the returned stream attach to the provider stream before emitting.
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+
+      final List<AuthUserDto?> events = await received;
+      expect(events, hasLength(1));
+      expect(events.single?.userId, 'user-1');
+      expect(events.single?.email, 'user@example.com');
+      expect(events.single?.isEmailVerified, isTrue);
+      expect(session.identity, same(signedIn));
+      expect(session.userId, 'user-1');
+      expect(session.isAuthenticated, isTrue);
+    });
+
+    test(
+      'maps a null sign-out to a null event and clears the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Future<List<AuthUserDto?>> received = service
+            .observeAuthState()
+            .take(1)
+            .toList();
+        await pumpEventQueue();
+
+        authentication.authState.add(null);
+
+        expect(await received, <AuthUserDto?>[null]);
+        expect(session.identity, isNull);
+        expect(session.userId, isNull);
+        expect(session.isAuthenticated, isFalse);
+      },
+    );
+
+    test('publishes every provider event in order', () async {
+      final AuthIdentity signedIn = identity(userId: 'user-2');
+      final Future<List<AuthUserDto?>> received = service
+          .observeAuthState()
+          .take(2)
+          .toList();
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+      authentication.authState.add(null);
+
+      final List<AuthUserDto?> events = await received;
+      expect(events.map((AuthUserDto? user) => user?.userId), <String?>[
+        'user-2',
+        null,
+      ]);
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test('updates the session before delivering the mapped user', () async {
+      final AuthIdentity signedIn = identity();
+      AuthIdentity? identityAtDelivery;
+      final Future<void> delivered = service.observeAuthState().first.then((
+        AuthUserDto? _,
+      ) {
+        identityAtDelivery = session.identity;
+      });
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+      await delivered;
+
+      expect(identityAtDelivery, same(signedIn));
+    });
+
+    test(
+      'propagates a provider stream failure without touching the session',
+      () async {
+        final AuthIdentity previous = identity(userId: 'user-9');
+        session.setIdentity(previous);
+        final Completer<Object> failure = Completer<Object>();
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen(
+              (AuthUserDto? _) {},
+              onError: (Object error) => failure.complete(error),
+            );
+        addTearDown(subscription.cancel);
+        await pumpEventQueue();
+
+        authentication.authState.addError(Exception('stream failed'));
+
+        expect(await failure.future, isA<Exception>());
         expect(session.identity, same(previous));
       },
     );
@@ -522,6 +634,10 @@ final class FakeAuthenticationService implements IAuthenticationService {
   AuthIdentity loginResult = identity();
   AuthIdentity refreshResult = identity();
 
+  /// Provider auth-state events the fake replays to its observer.
+  final StreamController<AuthIdentity?> authState =
+      StreamController<AuthIdentity?>.broadcast();
+
   String? input(String key) => inputs[key] as String?;
 
   int countOf(String call) =>
@@ -562,8 +678,7 @@ final class FakeAuthenticationService implements IAuthenticationService {
   }
 
   @override
-  Stream<AuthIdentity?> observeAuthState() =>
-      const Stream<AuthIdentity?>.empty();
+  Stream<AuthIdentity?> observeAuthState() => authState.stream;
 
   @override
   Future<void> requestEmailVerification() async {

@@ -33,6 +33,9 @@ abstract interface class IAuthenticationAppService {
   /// Restores the provider's current identity into the session, if any.
   Future<AuthUserDto?> restoreSession();
 
+  /// Emits provider session changes and keeps the local session in sync.
+  Stream<AuthUserDto?> observeAuthState();
+
   /// Reloads the authenticated identity and publishes it to the session.
   Future<AuthUserDto> refreshIdentity();
 
@@ -158,6 +161,20 @@ final class AuthenticationAppService implements IAuthenticationAppService {
     }
     currentUserSession.setIdentity(identity);
     return AuthUserDto.fromIdentity(identity);
+  }
+
+  @override
+  Stream<AuthUserDto?> observeAuthState() {
+    return authenticationService.observeAuthState().map((
+      AuthIdentity? identity,
+    ) {
+      if (identity == null) {
+        currentUserSession.clear();
+        return null;
+      }
+      currentUserSession.setIdentity(identity);
+      return AuthUserDto.fromIdentity(identity);
+    });
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../application/auth/auth_models.dart';
@@ -22,7 +24,15 @@ final class AuthController extends ChangeNotifier {
        _state = initialUser == null
            ? const AuthState.initializing()
            : AuthState.authenticated(user: initialUser),
-       _initializationCompleted = initialUser != null;
+       _initializationCompleted = initialUser != null {
+    final IAuthenticationAppService? service = authenticationAppService;
+    if (service != null) {
+      _authStateSubscription = service.observeAuthState().listen(
+        _onAuthStateChanged,
+        onError: _onAuthStateError,
+      );
+    }
+  }
 
   /// Null only for the local compatibility bootstrap, where [initialUser]
   /// already represents the authenticated demo session.
@@ -31,8 +41,28 @@ final class AuthController extends ChangeNotifier {
   AuthState _state;
   bool _disposed = false;
   bool _initializationCompleted;
+  StreamSubscription<AuthUserDto?>? _authStateSubscription;
 
   AuthState get state => _state;
+
+  void _onAuthStateChanged(AuthUserDto? user) {
+    if (_disposed) {
+      return;
+    }
+    _initializationCompleted = true;
+    _emit(
+      user == null
+          ? const AuthState.unauthenticated()
+          : AuthState.authenticated(user: user),
+    );
+  }
+
+  void _onAuthStateError(Object error, StackTrace stackTrace) {
+    if (_disposed) {
+      return;
+    }
+    _emit(_failureState(error));
+  }
 
   IAuthenticationAppService get _service {
     final IAuthenticationAppService? service = authenticationAppService;
@@ -299,6 +329,12 @@ final class AuthController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    final StreamSubscription<AuthUserDto?>? subscription =
+        _authStateSubscription;
+    _authStateSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
     super.dispose();
   }
 }

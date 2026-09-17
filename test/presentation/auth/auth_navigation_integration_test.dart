@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/auth_models.dart';
@@ -180,6 +182,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(LoginPage.submitKey), findsOneWidget);
   });
+
+  testWidgets('a provider sign-out event redirects the workspace to login', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthenticationAppService service =
+        _FakeAuthenticationAppService()..restoreResult = verifiedUser;
+    final AuthController controller = AuthController(
+      authenticationAppService: service,
+    );
+    await controller.initialize();
+    final router = createAppRouter(
+      authController: controller,
+      workspaceBuilder: (_) => const Text('Workspace'),
+    );
+    addTearDown(router.dispose);
+    addTearDown(controller.dispose);
+    addTearDown(service.authState.close);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    router.go(AppRoutes.home);
+    await tester.pumpAndSettle();
+    expect(find.text('Workspace'), findsOneWidget);
+
+    service.authState.add(null);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(LoginPage.submitKey), findsOneWidget);
+    expect(find.text('Workspace'), findsNothing);
+  });
 }
 
 const AuthUserDto verifiedUser = AuthUserDto(
@@ -207,6 +238,13 @@ final class _FakeAuthenticationAppService implements IAuthenticationAppService {
   int passwordResetRequests = 0;
   int passwordResetConfirmations = 0;
   int changePasswordCalls = 0;
+
+  /// Application auth-state events the fake replays to its observer.
+  final StreamController<AuthUserDto?> authState =
+      StreamController<AuthUserDto?>.broadcast();
+
+  @override
+  Stream<AuthUserDto?> observeAuthState() => authState.stream;
 
   @override
   Future<RegistrationResult> register(RegisterInput input) async {
