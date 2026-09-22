@@ -79,10 +79,10 @@ void main() {
       );
       expect(find.text('Recents'), findsOneWidget);
       expect(find.bySemanticsLabel('Recents'), findsOneWidget);
-      final SemanticsData data = tester
-          .getSemantics(find.byType(NoteFlowSectionLabel))
-          .getSemanticsData();
-      expect(data.hasFlag(SemanticsFlag.isHeader), isTrue);
+      final SemanticsNode node = tester.getSemantics(
+        find.byType(NoteFlowSectionLabel),
+      );
+      expect(node.flagsCollection.isHeader, isTrue);
     });
   });
 
@@ -102,10 +102,10 @@ void main() {
       expect(find.bySemanticsLabel('Notes'), findsOneWidget);
       await tester.tap(find.text('Notes'));
       expect(tapped, isTrue);
-      final SemanticsData data = tester
-          .getSemantics(find.byType(NoteFlowSidebarRow))
-          .getSemanticsData();
-      expect(data.hasFlag(SemanticsFlag.isSelected), isTrue);
+      final SemanticsNode node = tester.getSemantics(
+        find.byType(NoteFlowSidebarRow),
+      );
+      expect(node.flagsCollection.isSelected.toBoolOrNull(), isTrue);
     });
 
     testWidgets('disabled row does not fire callback', (tester) async {

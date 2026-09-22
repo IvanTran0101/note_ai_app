@@ -197,6 +197,20 @@ Spacing scale (plan §4.1): 4/8/12/16/24/32/48. Radius: rows/inputs 6–8px,
 dialogs/cards 8–12px. Motion: hover/focus/selection ≤ 200 ms ease-out, disabled
 under `disableAnimations`.
 
+## Input & keyboard decisions (Step 9)
+
+- `Ctrl/Cmd+S` is **not bound**: the page flow is autosave-only (no manual
+  save callback is wired — `onSave` is null per the Step 6 reconciliation), so
+  a save shortcut would either do nothing or change persistence behaviour.
+  Revisit only if a real manual-save contract returns.
+- Escape closes dialogs and bottom sheets (Material default); Android back
+  pops them via `PopScope`/route semantics. No other new shortcuts are added
+  (plan §Step 9).
+- Icon-only controls (sidebar collapse, compact menu, settings, diagnostics,
+  back) all carry tooltips that double as accessible labels; action-bar and
+  menu items expose human labels only — asserted by
+  `test/presentation/common/accessibility_contract_test.dart`.
+
 ## Tolerance & diff protocol
 
 - Same DPR, viewport, theme, locale, seed data, scroll offset on both sides.
