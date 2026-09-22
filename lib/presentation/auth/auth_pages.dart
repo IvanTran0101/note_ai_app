@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../application/auth/auth_models.dart';
+import '../notes/notes_theme_tokens.dart';
 import '../routing/app_routes.dart';
 import 'auth_localizations.dart';
 import 'controllers/auth_controller.dart';
@@ -832,21 +833,26 @@ final class EmailVerificationBanner extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final AuthCopy copy = AuthCopy.of(context);
-        final ColorScheme colors = Theme.of(context).colorScheme;
+        final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
         final String? error = copy.errorMessage(state.error);
         return Material(
           key: EmailVerificationBanner.bannerKey,
-          color: colors.secondaryContainer,
+          color: tokens.subtleSurface,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
+            padding: const EdgeInsets.fromLTRB(
+              NoteFlowSpacing.lg,
+              NoteFlowSpacing.md,
+              NoteFlowSpacing.lg,
+              NoteFlowSpacing.sm,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Icon(
                   Icons.mark_email_unread_outlined,
-                  color: colors.onSecondaryContainer,
+                  color: tokens.textSecondary,
                 ),
-                const SizedBox(width: 12.0),
+                const SizedBox(width: NoteFlowSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -857,7 +863,7 @@ final class EmailVerificationBanner extends StatelessWidget {
                       ),
                       Text(copy.verifyEmailBannerBody),
                       if (error != null)
-                        Text(error, style: TextStyle(color: colors.error)),
+                        Text(error, style: TextStyle(color: tokens.error)),
                       Wrap(
                         spacing: 4.0,
                         children: <Widget>[
@@ -920,32 +926,38 @@ final class _AuthFormScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return Scaffold(
+      backgroundColor: tokens.subtleSurface,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(NoteFlowSpacing.xl),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440.0),
-              child: Card(
-                color: colors.surfaceContainerLow,
+              constraints: const BoxConstraints(maxWidth: 400.0),
+              child: Material(
+                color: tokens.pageSurface,
+                borderRadius: BorderRadius.circular(NoteFlowRadius.dialog),
                 child: Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.all(NoteFlowSpacing.xl),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       Text(
                         title,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: tokens.textPrimary,
+                            ),
                       ),
-                      const SizedBox(height: 8.0),
+                      const SizedBox(height: NoteFlowSpacing.sm),
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                            ?.copyWith(color: tokens.textSecondary),
                       ),
-                      const SizedBox(height: 24.0),
+                      const SizedBox(height: NoteFlowSpacing.xl),
                       child,
                     ],
                   ),
@@ -970,16 +982,26 @@ final class _AuthErrorMessage extends StatelessWidget {
     if (message == null) {
       return const SizedBox.shrink();
     }
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16.0),
-      padding: const EdgeInsets.all(12.0),
+      margin: const EdgeInsets.only(bottom: NoteFlowSpacing.lg),
+      padding: const EdgeInsets.all(NoteFlowSpacing.md),
       decoration: BoxDecoration(
-        color: colors.errorContainer,
-        borderRadius: BorderRadius.circular(12.0),
+        color: tokens.subtleSurface,
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+        border: Border.all(color: tokens.error),
       ),
-      child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.error_outline, size: 18, color: tokens.error),
+          const SizedBox(width: NoteFlowSpacing.sm),
+          Expanded(
+            child: Text(message, style: TextStyle(color: tokens.error)),
+          ),
+        ],
+      ),
     );
   }
 }

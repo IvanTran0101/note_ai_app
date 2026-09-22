@@ -508,7 +508,7 @@ Một trong các lỗi sau làm step fail dù tổng điểm cao:
 | 5. Notes list/detail frame | [x] | [x] | pending Step 10 | `DONE` |
 | 6. Page editor | [x] | [x] | pending Step 10 | `DONE` |
 | 7. Menus/overlays/status | [x] | [x] | pending Step 10 | `DONE` |
-| 8. Auth UI | [ ] | [ ] | [ ] | `TODO` |
+| 8. Auth UI | [x] | [x] | 9 (pending visual QA) | `DONE` |
 | 9. Accessibility/localization | [ ] | [ ] | [ ] | `TODO` |
 | 10. Device visual QA | [ ] | [ ] | [ ] | `TODO` |
 | 11. Regression/build/handoff | [ ] | [ ] | [ ] | `TODO` |
