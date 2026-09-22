@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'note_detail_localizations.dart';
+import 'notes_theme_tokens.dart';
 
 /// Shows the final confirmation for deleting a note.
+///
+/// The confirm action is styled as a destructive button and always carries
+/// [confirmKey] so tests and semantics can target it.
 Future<bool?> showNoteDetailDeleteConfirmation({
   required BuildContext context,
   required NoteDetailCopy copy,
@@ -11,6 +15,7 @@ Future<bool?> showNoteDetailDeleteConfirmation({
   return showDialog<bool>(
     context: context,
     builder: (BuildContext context) {
+      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
       return AlertDialog(
         title: Text(copy.deleteTitle),
         content: Text(copy.deleteMessage),
@@ -21,6 +26,10 @@ Future<bool?> showNoteDetailDeleteConfirmation({
           ),
           FilledButton(
             key: confirmKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: tokens.error,
+              foregroundColor: tokens.onDestructive,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(copy.delete),
           ),

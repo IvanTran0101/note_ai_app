@@ -353,6 +353,38 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
+  testWidgets('more sheet and delete dialog dismiss without side effects', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+
+    // Tapping the barrier dismisses the sheet without running any action.
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    // The delete confirmation can be cancelled from its dialog.
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(NoteDetailPage.moreDeleteKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete note?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete note?'), findsNothing);
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.notes, hasLength(1));
+  });
+
   testWidgets('renders Vietnamese detail copy', (WidgetTester tester) async {
     await pumpPage(tester, _FakeNotesController(), locale: const Locale('vi'));
 
