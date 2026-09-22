@@ -24,19 +24,10 @@ void main() {
     test('pins the official Gemma 4 E2B Q4_0 artifact metadata', () {
       expect(gemma4E2bItQ4_0Model.id, 'gemma-4-e2b-it');
       expect(gemma4E2bItQ4_0Model.version, kGemma4E2bItQ4_0Revision);
-      expect(
-        gemma4E2bItQ4_0Model.fileName,
-        'gemma-4-E2B_q4_0-it.gguf',
-      );
-      expect(
-        gemma4E2bItQ4_0Model.downloadUrl,
-        kGemma4E2bItQ4_0DownloadUrl,
-      );
+      expect(gemma4E2bItQ4_0Model.fileName, 'gemma-4-E2B_q4_0-it.gguf');
+      expect(gemma4E2bItQ4_0Model.downloadUrl, kGemma4E2bItQ4_0DownloadUrl);
       expect(gemma4E2bItQ4_0Model.downloadUrl, startsWith('https://'));
-      expect(
-        gemma4E2bItQ4_0Model.fileSizeBytes,
-        kGemma4E2bItQ4_0FileSizeBytes,
-      );
+      expect(gemma4E2bItQ4_0Model.fileSizeBytes, kGemma4E2bItQ4_0FileSizeBytes);
       expect(gemma4E2bItQ4_0Model.sha256, kGemma4E2bItQ4_0Sha256);
       expect(gemma4E2bItQ4_0Model.quantization, 'Q4_0');
       expect(gemma4E2bItQ4_0Model.contextSize, 4096);

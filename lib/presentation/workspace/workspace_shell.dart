@@ -490,10 +490,7 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                     key: WorkspaceShell.diagnosticsKey,
                     tooltip: copy.diagnostics,
                     onPressed: widget.onOpenDiagnostics,
-                    icon: const Icon(
-                      Icons.bug_report_outlined,
-                      size: 20,
-                    ),
+                    icon: const Icon(Icons.bug_report_outlined, size: 20),
                   ),
                 if (widget.onOpenSettings != null)
                   IconButton(

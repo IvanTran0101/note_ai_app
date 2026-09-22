@@ -180,10 +180,7 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('notes-error')), findsOneWidget);
     expect(find.textContaining('storage unavailable'), findsNothing);
-    expect(
-      find.text('Couldn’t load notes. Please try again.'),
-      findsWidgets,
-    );
+    expect(find.text('Couldn’t load notes. Please try again.'), findsWidgets);
     expect(find.byKey(const ValueKey<String>('retry-notes')), findsOneWidget);
   });
 
