@@ -55,9 +55,22 @@ Test-gate shim cho Windows: xem `docs/ui-upgrade-baseline.md` (trỏ
 
 | Target | Kết quả |
 | --- | --- |
-| `flutter build web` | PASS |
-| `flutter build apk --release` | NOT RUN — máy thiếu Android toolchain (cmdline-tools, theo `flutter doctor`); cần chạy ở môi trường có Android SDK + JDK 17 |
-| `flutter build macos` / `ios --no-codesign` | NOT RUN — không có macOS runner |
+| `flutter build web` | PASS (cả 2 chế độ auth) |
+| `flutter build apk --release` | **PASS** — `build/app/outputs/flutter-apk/app-release.apk` (87.5MB), JDK 17 |
+| `flutter build macos` / `ios --no-codesign` | NOT RUN — không có macOS runner (plan: "nếu có runner") |
+
+### Môi trường build đã cài cho APK (ngoài repo)
+
+- Android SDK tại `%LOCALAPPDATA%\Android\Sdk`: cmdline-tools, platform-tools,
+  `platforms;android-36`, `build-tools;36.0.0`, `ndk;27.0.12077973`
+  (sdkmanager, licenses đã accept).
+- Build với `JAVA_HOME` trỏ JDK 17+ (máy mặc định JAVA_HOME=JDK 11 — plan yêu
+  cầu xử lý ở môi trường build, không sửa Gradle trong repo).
+- R8 thiếu class annotation của Tink (qua `amplify_secure_storage`): fix bằng
+  Gradle init script `~/.gradle/init.d/noteflow-r8.gradle` +
+  `~/.gradle/noteflow-missing-rules.pro` (đúng nội dung AGP sinh trong
+  `build/app/outputs/mapping/release/missing_rules.txt`). Khi repo tự đưa keep
+  rules vào `android/app/proguard-rules.pro` thì xóa hai file này.
 
 ## Known limitations
 
@@ -69,3 +82,5 @@ Test-gate shim cho Windows: xem `docs/ui-upgrade-baseline.md` (trỏ
    (web data layer local mode fail — hạ tầng).
 4. `native_toolchain_c` pub cache bị vá `runInShell: false` ở máy này (môi
    trường, không phải repo) — mất khi `pub cache repair`.
+5. `flutter build macos` / `ios` chưa chạy được (không có macOS runner) — cần
+   bổ sung trước khi release như plan §9 DoD.
