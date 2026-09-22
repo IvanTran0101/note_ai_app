@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'notes_theme_tokens.dart';
+
 /// Mobile-first actions for the Note Detail editor.
 ///
-/// The widget is intentionally independent from Note/Application contracts so
-/// it can be placed in a Scaffold bottomNavigationBar and tested in isolation.
-/// Scaffold's resizeToAvoidBottomInset moves that slot above the IME; SafeArea
-/// protects it from the home indicator without creating a second scroll owner.
+/// Rendered as a flat Notion-style toolbar: page surface with a hairline top
+/// divider instead of a raised bar. The widget is intentionally independent
+/// from Note/Application contracts so it can be placed in a Scaffold
+/// bottomNavigationBar and tested in isolation. Scaffold's
+/// resizeToAvoidBottomInset moves that slot above the IME; SafeArea protects
+/// it from the home indicator without creating a second scroll owner.
 final class NoteDetailActionBar extends StatelessWidget {
   const NoteDetailActionBar({
     super.key,
@@ -38,7 +42,7 @@ final class NoteDetailActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final bool saveEnabled =
         canSave && !isSaving && !isSummarizing && onSave != null;
     final bool summarizeEnabled =
@@ -46,73 +50,85 @@ final class NoteDetailActionBar extends StatelessWidget {
     final bool moreEnabled = !isSaving && !isSummarizing && onMore != null;
 
     return Material(
-      color: colors.surfaceContainer,
-      elevation: 2,
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  if (onSave != null)
+      color: tokens.pageSurface,
+      elevation: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: tokens.divider)),
+        ),
+        child: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(
+            NoteFlowSpacing.md,
+            NoteFlowSpacing.sm,
+            NoteFlowSpacing.md,
+            NoteFlowSpacing.sm,
+          ),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: NoteFlowSpacing.sm,
+                  runSpacing: NoteFlowSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    if (onSave != null)
+                      Semantics(
+                        button: true,
+                        enabled: saveEnabled,
+                        label: isSaving ? savingLabel : saveLabel,
+                        child: FilledButton.icon(
+                          key: const ValueKey<String>('note-detail-save'),
+                          onPressed: saveEnabled ? onSave : null,
+                          icon: isSaving
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: Text(isSaving ? savingLabel : saveLabel),
+                        ),
+                      ),
                     Semantics(
                       button: true,
-                      enabled: saveEnabled,
-                      label: isSaving ? savingLabel : saveLabel,
-                      child: FilledButton.icon(
-                        key: const ValueKey<String>('note-detail-save'),
-                        onPressed: saveEnabled ? onSave : null,
-                        icon: isSaving
+                      enabled: summarizeEnabled,
+                      label: isSummarizing ? summarizingLabel : summarizeLabel,
+                      child: FilledButton.tonalIcon(
+                        key: const ValueKey<String>('note-detail-summarize'),
+                        onPressed: summarizeEnabled ? onSummarize : null,
+                        icon: isSummarizing
                             ? const SizedBox.square(
                                 dimension: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.save_outlined),
-                        label: Text(isSaving ? savingLabel : saveLabel),
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(
+                          isSummarizing ? summarizingLabel : summarizeLabel,
+                        ),
                       ),
                     ),
-                  Semantics(
-                    button: true,
-                    enabled: summarizeEnabled,
-                    label: isSummarizing ? summarizingLabel : summarizeLabel,
-                    child: FilledButton.tonalIcon(
-                      key: const ValueKey<String>('note-detail-summarize'),
-                      onPressed: summarizeEnabled ? onSummarize : null,
-                      icon: isSummarizing
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.auto_awesome_outlined),
-                      label: Text(
-                        isSummarizing ? summarizingLabel : summarizeLabel,
+                    if (onMore != null)
+                      Semantics(
+                        button: true,
+                        enabled: moreEnabled,
+                        label: moreLabel,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey<String>('note-detail-more'),
+                          onPressed: moreEnabled ? onMore : null,
+                          icon: const Icon(Icons.more_horiz),
+                          label: Text(moreLabel),
+                        ),
                       ),
-                    ),
-                  ),
-                  if (onMore != null)
-                    Semantics(
-                      button: true,
-                      enabled: moreEnabled,
-                      label: moreLabel,
-                      child: OutlinedButton.icon(
-                        key: const ValueKey<String>('note-detail-more'),
-                        onPressed: moreEnabled ? onMore : null,
-                        icon: const Icon(Icons.more_horiz),
-                        label: Text(moreLabel),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

@@ -506,7 +506,7 @@ Một trong các lỗi sau làm step fail dù tổng điểm cao:
 | 3. Shell/sidebar | [x] | [x] | pending Step 10 | `DONE` |
 | 4. Dashboard/Recents | [x] | [x] | pending Step 10 | `DONE` |
 | 5. Notes list/detail frame | [x] | [x] | pending Step 10 | `DONE` |
-| 6. Page editor | [ ] | [ ] | [ ] | `TODO` |
+| 6. Page editor | [x] | [x] | pending Step 10 | `DONE` |
 | 7. Menus/overlays/status | [ ] | [ ] | [ ] | `TODO` |
 | 8. Auth UI | [ ] | [ ] | [ ] | `TODO` |
 | 9. Accessibility/localization | [ ] | [ ] | [ ] | `TODO` |

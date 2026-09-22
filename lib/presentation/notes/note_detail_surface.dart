@@ -4,6 +4,7 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import 'note_detail_action_bar.dart';
 import 'note_detail_editor_form.dart';
 import 'note_detail_localizations.dart';
+import 'notes_theme_tokens.dart';
 
 /// Pure layout surface for the Note Detail editor.
 ///
@@ -102,7 +103,12 @@ final class NoteDetailSurface extends StatelessWidget {
           child: SingleChildScrollView(
             key: scrollKey,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(
+              NoteFlowSpacing.lg,
+              NoteFlowSpacing.lg,
+              NoteFlowSpacing.lg,
+              NoteFlowSpacing.xl,
+            ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 760),
