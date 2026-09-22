@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'dashboard_localizations.dart';
 
 /// Visual density used by a Dashboard note card.
 enum DashboardNoteCardLayout { list, grid }
 
 /// A responsive, accessible preview card for one note.
+///
+/// List layout renders a Notion-style page row (icon, title, light preview);
+/// grid layout renders a flat preview card. Both share the same semantics and
+/// data contract.
 final class DashboardNoteCard extends StatelessWidget {
   const DashboardNoteCard({
     super.key,
@@ -36,6 +41,7 @@ final class DashboardNoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final String title = note.title.trim().isEmpty ? copy.untitled : note.title;
     final String preview = _preview(note.content);
@@ -43,10 +49,10 @@ final class DashboardNoteCard extends StatelessWidget {
         .formatCompactDate(note.updatedAt);
     final Color foreground = selected
         ? colors.onPrimaryContainer
-        : colors.onSurface;
+        : tokens.textPrimary;
     final Color secondaryForeground = selected
         ? colors.onPrimaryContainer
-        : colors.onSurfaceVariant;
+        : tokens.textMuted;
 
     return Semantics(
       key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
@@ -57,54 +63,139 @@ final class DashboardNoteCard extends StatelessWidget {
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        color: selected ? colors.primaryContainer : colors.surface,
+        color: selected ? colors.primaryContainer : tokens.pageSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.card),
           side: BorderSide(
-            color: selected ? colors.primary : colors.outlineVariant,
-            width: selected ? 2.0 : 1.0,
+            color: selected ? tokens.focusRing : tokens.divider,
+            width: selected ? 1.5 : 1.0,
           ),
         ),
         child: InkWell(
           onTap: () => onTap(note),
+          hoverColor: tokens.subtleSurface,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 136.0),
+            constraints: BoxConstraints(
+              minHeight: layout == DashboardNoteCardLayout.grid ? 128.0 : 64.0,
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: foreground,
+              padding: layout == DashboardNoteCardLayout.grid
+                  ? const EdgeInsets.all(NoteFlowSpacing.lg)
+                  : const EdgeInsets.symmetric(
+                      horizontal: NoteFlowSpacing.md,
+                      vertical: NoteFlowSpacing.sm,
                     ),
-                  ),
-                  const SizedBox(height: 8.0),
-                  Text(
-                    preview,
-                    maxLines: layout == DashboardNoteCardLayout.grid ? 3 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: secondaryForeground, height: 1.35),
-                  ),
-                  const SizedBox(height: 12.0),
-                  Text(
-                    copy.updatedOn(updatedDate),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium
-                        ?.copyWith(color: secondaryForeground),
-                  ),
-                ],
-              ),
+              child: layout == DashboardNoteCardLayout.grid
+                  ? _buildGrid(
+                      context,
+                      title: title,
+                      preview: preview,
+                      updatedDate: updatedDate,
+                      foreground: foreground,
+                      secondaryForeground: secondaryForeground,
+                    )
+                  : _buildList(
+                      context,
+                      title: title,
+                      preview: preview,
+                      updatedDate: updatedDate,
+                      foreground: foreground,
+                      secondaryForeground: secondaryForeground,
+                    ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGrid(
+    BuildContext context, {
+    required String title,
+    required String preview,
+    required String updatedDate,
+    required Color foreground,
+    required Color secondaryForeground,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+        ),
+        const SizedBox(height: NoteFlowSpacing.sm),
+        Text(
+          preview,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: secondaryForeground, height: 1.35),
+        ),
+        const SizedBox(height: NoteFlowSpacing.md),
+        Text(
+          copy.updatedOn(updatedDate),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium
+              ?.copyWith(color: secondaryForeground),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context, {
+    required String title,
+    required String preview,
+    required String updatedDate,
+    required Color foreground,
+    required Color secondaryForeground,
+  }) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Icon(
+          Icons.description_outlined,
+          size: 20,
+          color: selected ? foreground : tokens.textMuted,
+        ),
+        const SizedBox(width: NoteFlowSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: secondaryForeground),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: NoteFlowSpacing.md),
+        Text(
+          copy.updatedOn(updatedDate),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(color: secondaryForeground),
+        ),
+      ],
     );
   }
 

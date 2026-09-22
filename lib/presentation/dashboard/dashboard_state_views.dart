@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../notes/notes_theme_tokens.dart';
 import 'dashboard_localizations.dart';
 
 /// Loading state for Dashboard content.
@@ -10,7 +11,7 @@ final class DashboardLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return ListView(
       padding: const EdgeInsets.all(20.0),
       children: <Widget>[
@@ -23,21 +24,27 @@ final class DashboardLoadingView extends StatelessWidget {
               Container(
                 height: 34.0,
                 width: 180.0,
-                color: colors.surfaceContainerHighest,
+                decoration: BoxDecoration(
+                  color: tokens.subtleSurface,
+                  borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+                ),
               ),
               const SizedBox(height: 12.0),
               Container(
                 height: 18.0,
                 width: 120.0,
-                color: colors.surfaceContainerHighest,
+                decoration: BoxDecoration(
+                  color: tokens.subtleSurface,
+                  borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+                ),
               ),
               const SizedBox(height: 24.0),
               for (int index = 0; index < 4; index++) ...<Widget>[
                 Container(
                   height: 136.0,
                   decoration: BoxDecoration(
-                    color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16.0),
+                    color: tokens.subtleSurface,
+                    borderRadius: BorderRadius.circular(NoteFlowRadius.card),
                   ),
                 ),
                 if (index < 3) const SizedBox(height: 12.0),
@@ -63,7 +70,7 @@ final class DashboardEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
@@ -74,7 +81,11 @@ final class DashboardEmptyView extends StatelessWidget {
             key: const ValueKey<String>('dashboard-empty'),
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(Icons.note_alt_outlined, size: 56.0, color: colors.primary),
+              Icon(
+                Icons.note_alt_outlined,
+                size: 56.0,
+                color: tokens.textMuted,
+              ),
               const SizedBox(height: 16.0),
               Text(
                 copy.noNotes,

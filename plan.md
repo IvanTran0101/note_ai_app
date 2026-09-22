@@ -504,7 +504,7 @@ Một trong các lỗi sau làm step fail dù tổng điểm cao:
 | 1. Reference matrix | [x] | [x] | — | `DONE` |
 | 2. Tokens/primitives | [x] | [x] | pending Step 10 | `DONE` |
 | 3. Shell/sidebar | [x] | [x] | pending Step 10 | `DONE` |
-| 4. Dashboard/Recents | [ ] | [ ] | [ ] | `TODO` |
+| 4. Dashboard/Recents | [x] | [x] | pending Step 10 | `DONE` |
 | 5. Notes list/detail frame | [ ] | [ ] | [ ] | `TODO` |
 | 6. Page editor | [ ] | [ ] | [ ] | `TODO` |
 | 7. Menus/overlays/status | [ ] | [ ] | [ ] | `TODO` |

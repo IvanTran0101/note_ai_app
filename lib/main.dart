@@ -79,6 +79,10 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       ).copyWith(
         primary: tokens.link,
         onPrimary: isDark ? const Color(0xFF191919) : const Color(0xFFFFFFFF),
+        primaryContainer: tokens.selectedSurface,
+        onPrimaryContainer: tokens.textPrimary,
+        secondaryContainer: tokens.selectedSurface,
+        onSecondaryContainer: tokens.textPrimary,
         error: tokens.error,
         outline: tokens.divider,
         surface: tokens.pageSurface,

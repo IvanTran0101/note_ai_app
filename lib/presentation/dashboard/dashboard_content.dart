@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../application/dashboard/dashboard_overview.dart';
 import '../../application/notes/note_application.dart';
+import '../common/note_flow_primitives.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
 import 'dashboard_state_views.dart';
@@ -84,20 +86,29 @@ final class DashboardContent extends StatelessWidget {
         children: <Widget>[
           if (searchOpen) ...<Widget>[
             _buildSearchField(context),
-            const SizedBox(height: 16.0),
+            const SizedBox(height: NoteFlowSpacing.lg),
           ],
           _buildHeader(context),
-          const SizedBox(height: 20.0),
+          const SizedBox(height: NoteFlowSpacing.xl),
           _buildControls(context),
           if (hasError) ...<Widget>[
-            const SizedBox(height: 16.0),
+            const SizedBox(height: NoteFlowSpacing.lg),
             DashboardInlineError(copy: copy, onRetry: onRetry),
           ],
-          const SizedBox(height: 20.0),
+          const SizedBox(height: NoteFlowSpacing.xl),
           if (filteredNotes.isEmpty && searchText.trim().isNotEmpty)
             DashboardFilteredEmptyView(copy: copy, onClear: onClearSearch)
-          else
+          else ...<Widget>[
+            if (searchText.trim().isEmpty)
+              NoteFlowSectionLabel(
+                label: copy.recentlyUpdated,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NoteFlowSpacing.xs,
+                  vertical: NoteFlowSpacing.xs,
+                ),
+              ),
             _buildNoteCollection(context, filteredNotes),
+          ],
         ],
       ),
     );
@@ -207,16 +218,16 @@ final class DashboardContent extends StatelessWidget {
               ],
           child: Container(
             constraints: const BoxConstraints(minHeight: 48.0),
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
             decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).colorScheme.outline),
-              borderRadius: BorderRadius.circular(20.0),
+              border: Border.all(color: NoteFlowUiTokens.of(context).divider),
+              borderRadius: BorderRadius.circular(NoteFlowRadius.input),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(Icons.sort),
-                const SizedBox(width: 8.0),
+                const Icon(Icons.sort, size: 20),
+                const SizedBox(width: NoteFlowSpacing.sm),
                 Text(
                   sort == DashboardSort.updated
                       ? copy.sortUpdated
@@ -262,7 +273,8 @@ final class DashboardContent extends StatelessWidget {
               selected: items[index].id == selectedNoteId,
               onTap: onOpenNote,
             ),
-            if (index < items.length - 1) const SizedBox(height: 12.0),
+            if (index < items.length - 1)
+              const SizedBox(height: NoteFlowSpacing.xs),
           ],
         ],
       );
