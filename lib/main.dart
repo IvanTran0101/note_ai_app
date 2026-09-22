@@ -59,23 +59,41 @@ const String _noteFlowAuthMode = String.fromEnvironment(
   defaultValue: 'cognito',
 );
 const List<String> _noteFlowFontFallback = <String>[
+  'Segoe UI',
   'Roboto',
   'Arial',
-  'monospace',
 ];
 const Color _noteFlowSeedColor = Color(0xFF5B4FA6);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
 
 ThemeData _buildNoteFlowTheme(Brightness brightness) {
-  final ColorScheme colorScheme = ColorScheme.fromSeed(
-    seedColor: _noteFlowSeedColor,
-    brightness: brightness,
-  );
-  final BorderRadius fieldRadius = BorderRadius.circular(12.0);
-  final BorderSide fieldBorder = BorderSide(color: colorScheme.outline);
+  final bool isDark = brightness == Brightness.dark;
+  final NoteFlowUiTokens tokens = isDark
+      ? NoteFlowUiTokens.dark()
+      : NoteFlowUiTokens.light();
+  final ColorScheme colorScheme =
+      ColorScheme.fromSeed(
+        seedColor: _noteFlowSeedColor,
+        brightness: brightness,
+      ).copyWith(
+        primary: tokens.link,
+        onPrimary: isDark ? const Color(0xFF191919) : const Color(0xFFFFFFFF),
+        error: tokens.error,
+        outline: tokens.divider,
+        surface: tokens.pageSurface,
+        onSurface: tokens.textPrimary,
+        onSurfaceVariant: tokens.textSecondary,
+        surfaceContainerLowest: tokens.pageSurface,
+        surfaceContainerLow: tokens.sidebarSurface,
+        surfaceContainer: tokens.elevatedSurface,
+        surfaceContainerHigh: tokens.elevatedSurface,
+        surfaceContainerHighest: tokens.subtleSurface,
+      );
+  final BorderRadius fieldRadius = BorderRadius.circular(NoteFlowRadius.input);
+  final BorderSide fieldBorder = BorderSide(color: tokens.divider);
   final BorderSide focusedFieldBorder = BorderSide(
-    color: colorScheme.primary,
+    color: tokens.focusRing,
     width: 2.0,
   );
 
@@ -85,39 +103,44 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     useMaterial3: true,
     extensions: <ThemeExtension<dynamic>>[
       NoteFlowSemanticColors.fromColorScheme(colorScheme),
+      tokens,
     ],
     fontFamily: _noteFlowFontFamily,
     fontFamilyFallback: _noteFlowFontFallback,
     appBarTheme: AppBarThemeData(
-      backgroundColor: colorScheme.surface,
-      foregroundColor: colorScheme.onSurface,
+      backgroundColor: tokens.pageSurface,
+      foregroundColor: tokens.textPrimary,
       elevation: 0.0,
-      scrolledUnderElevation: 2.0,
-      surfaceTintColor: colorScheme.surfaceTint,
+      scrolledUnderElevation: 1.0,
+      surfaceTintColor: Colors.transparent,
+      toolbarHeight: 44.0,
       centerTitle: true,
     ),
     cardTheme: CardThemeData(
-      color: colorScheme.surfaceContainerLow,
-      surfaceTintColor: colorScheme.surfaceTint,
+      color: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
       elevation: 0.0,
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+      margin: const EdgeInsets.symmetric(vertical: NoteFlowSpacing.sm),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+        side: BorderSide(color: tokens.divider),
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest,
+      fillColor: tokens.subtleSurface,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16.0,
-        vertical: 14.0,
+        horizontal: NoteFlowSpacing.lg,
+        vertical: NoteFlowSpacing.md + 2,
       ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
@@ -133,52 +156,85 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: fieldRadius,
-        borderSide: BorderSide(color: colorScheme.error),
+        borderSide: BorderSide(color: tokens.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: fieldRadius,
-        borderSide: BorderSide(color: colorScheme.error, width: 2.0),
+        borderSide: BorderSide(color: tokens.error, width: 2.0),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
+    listTileTheme: ListTileThemeData(
+      iconColor: tokens.textSecondary,
+      textColor: tokens.textPrimary,
+      minTileHeight: 44.0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.dialog),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(NoteFlowRadius.dialog),
+        ),
+      ),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: colorScheme.inverseSurface,
+        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+      ),
+      textStyle: TextStyle(color: colorScheme.onInverseSurface, fontSize: 12.0),
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
-      color: colorScheme.primary,
-      linearTrackColor: colorScheme.surfaceContainerHighest,
-      circularTrackColor: colorScheme.surfaceContainerHighest,
+      color: tokens.link,
+      linearTrackColor: tokens.subtleSurface,
+      circularTrackColor: tokens.subtleSurface,
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: colorScheme.inverseSurface,
       contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
       actionTextColor: colorScheme.inversePrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
-      insetPadding: const EdgeInsets.all(16.0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+      ),
+      insetPadding: const EdgeInsets.all(NoteFlowSpacing.lg),
     ),
   );
 }
