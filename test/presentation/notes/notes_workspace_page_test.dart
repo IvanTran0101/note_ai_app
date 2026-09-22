@@ -41,6 +41,33 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  for (final int width in <int>[360, 375, 390]) {
+    testWidgets('compact list renders without overflow at ${width}dp', (
+      WidgetTester tester,
+    ) async {
+      final _FakeNotesController controller = _FakeNotesController(
+        notes: <NoteDto>[
+          buildNote(),
+          buildNote(
+            id: 'note-2',
+            title:
+                'Second note with a much longer title that must ellipsize '
+                'safely on narrow screens',
+          ),
+        ],
+      );
+      await pumpWorkspace(
+        tester,
+        controller,
+        size: Size(width.toDouble(), 800),
+      );
+
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('compact create flow returns to the note list after save', (
     WidgetTester tester,
   ) async {

@@ -9,6 +9,7 @@ import 'note_detail_route_result.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
 import 'notes_localizations.dart';
+import 'notes_theme_tokens.dart';
 import 'responsive_notes_workspace.dart';
 
 /// Responsive list/detail workspace for the shell's Notes destination.
@@ -254,9 +255,21 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   Widget _buildDetail(NotesCopy copy, {required bool showAppBar}) {
     if (!_showDetail) {
+      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
       return Center(
         key: const ValueKey<String>('notes-workspace-detail-empty'),
-        child: Text(copy.createFirstNote),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.description_outlined, size: 40, color: tokens.textMuted),
+            const SizedBox(height: NoteFlowSpacing.sm),
+            Text(
+              copy.createFirstNote,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: tokens.textSecondary),
+            ),
+          ],
+        ),
       );
     }
     return NoteDetailPage(

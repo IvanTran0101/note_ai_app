@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import 'notes_localizations.dart';
+import 'notes_theme_tokens.dart';
 
 /// Displays the saved Note projections and the list-level actions.
+///
+/// Rows render as Notion-style page rows: page icon, title, light preview and
+/// a token-based selected background. All keys and callbacks are unchanged.
 final class NotesListPanel extends StatelessWidget {
   const NotesListPanel({
     super.key,
@@ -27,11 +31,12 @@ final class NotesListPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NotesCopy copy = NotesCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
     return Material(
-      color: colors.surfaceContainerLowest,
+      color: tokens.sidebarSurface,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(NoteFlowSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -39,12 +44,15 @@ final class NotesListPanel extends StatelessWidget {
               builder: (BuildContext context, BoxConstraints constraints) {
                 final Widget title = Text(
                   copy.notes,
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: tokens.textPrimary,
+                  ),
                 );
                 final Widget create = OutlinedButton.icon(
                   key: const ValueKey<String>('new-note'),
                   onPressed: actionBusy ? null : onNewNote,
-                  icon: const Icon(Icons.add),
+                  icon: const Icon(Icons.add, size: 20),
                   label: Text(copy.newNote),
                 );
                 if (constraints.maxWidth < 420) {
@@ -52,7 +60,7 @@ final class NotesListPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       title,
-                      const SizedBox(height: 8),
+                      const SizedBox(height: NoteFlowSpacing.sm),
                       Align(alignment: Alignment.centerLeft, child: create),
                     ],
                   );
@@ -66,13 +74,13 @@ final class NotesListPanel extends StatelessWidget {
               },
             ),
             if (error != null) ...<Widget>[
-              const SizedBox(height: 8),
+              const SizedBox(height: NoteFlowSpacing.sm),
               Text(
                 error!,
                 key: const ValueKey<String>('notes-list-error'),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: tokens.error),
               ),
               if (notes.isEmpty)
                 Align(
@@ -84,7 +92,7 @@ final class NotesListPanel extends StatelessWidget {
                   ),
                 ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: NoteFlowSpacing.sm),
             Expanded(
               child: notes.isEmpty
                   ? Center(
@@ -95,11 +103,15 @@ final class NotesListPanel extends StatelessWidget {
                           Icon(
                             Icons.note_alt_outlined,
                             size: 40,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: tokens.textMuted,
                           ),
-                          const SizedBox(height: 8),
-                          Text(copy.noNotes),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: NoteFlowSpacing.sm),
+                          Text(
+                            copy.noNotes,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: tokens.textSecondary),
+                          ),
+                          const SizedBox(height: NoteFlowSpacing.xs),
                           TextButton(
                             key: const ValueKey<String>('new-note-empty'),
                             onPressed: actionBusy ? null : onNewNote,
@@ -110,7 +122,8 @@ final class NotesListPanel extends StatelessWidget {
                     )
                   : ListView.separated(
                       itemCount: notes.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: NoteFlowSpacing.xs),
                       itemBuilder: (BuildContext context, int index) {
                         final NoteDto note = notes[index];
                         final bool selected = note.id == selectedNoteId;
@@ -123,27 +136,46 @@ final class NotesListPanel extends StatelessWidget {
                             key: ValueKey<String>('note-${note.id}'),
                             selected: selected,
                             selectedTileColor: colors.primaryContainer,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                NoteFlowRadius.row,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: NoteFlowSpacing.md,
+                              vertical: 2,
+                            ),
+                            leading: Icon(
+                              Icons.description_outlined,
+                              size: 20,
+                              color: selected
+                                  ? colors.onPrimaryContainer
+                                  : tokens.textMuted,
+                            ),
                             title: Text(
                               note.title.trim().isEmpty
                                   ? copy.untitled
                                   : note.title,
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: selected
-                                    ? colors.onPrimaryContainer
-                                    : colors.onSurface,
-                              ),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: selected
+                                        ? colors.onPrimaryContainer
+                                        : tokens.textPrimary,
+                                  ),
                             ),
                             subtitle: Text(
                               _preview(note.content, copy),
-                              maxLines: 3,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: selected
-                                    ? colors.onPrimaryContainer
-                                    : colors.onSurfaceVariant,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: selected
+                                        ? colors.onPrimaryContainer
+                                        : tokens.textMuted,
+                                  ),
                             ),
                             onTap: actionBusy ? null : () => onSelectNote(note),
                           ),

@@ -225,6 +225,11 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       ),
       textStyle: TextStyle(color: colorScheme.onInverseSurface, fontSize: 12.0),
     ),
+    dividerTheme: DividerThemeData(
+      color: tokens.divider,
+      thickness: 1.0,
+      space: 1.0,
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: tokens.link,
       linearTrackColor: tokens.subtleSurface,
