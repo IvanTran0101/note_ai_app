@@ -15,6 +15,8 @@ void main() {
     required Size size,
     WorkspaceDestination initialDestination = WorkspaceDestination.dashboard,
     ValueChanged<WorkspaceDestination>? onDestinationChanged,
+    VoidCallback? onOpenSettings,
+    VoidCallback? onOpenDiagnostics,
     Key? shellKey,
     Locale locale = const Locale('en'),
   }) async {
@@ -41,6 +43,8 @@ void main() {
           notes: const _StubPage(key: _notesPageKey, label: 'Notes page'),
           initialDestination: initialDestination,
           onDestinationChanged: onDestinationChanged,
+          onOpenSettings: onOpenSettings,
+          onOpenDiagnostics: onOpenDiagnostics,
         ),
       ),
     );
@@ -290,6 +294,64 @@ void main() {
     expect(find.text('Bảng điều khiển'), findsOneWidget);
     expect(find.text('Ghi chú'), findsOneWidget);
     expect(find.text('Không gian làm việc'), findsOneWidget);
+  });
+
+  testWidgets('collapsing the sidebar keeps pages alive and restores', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(tester, size: const Size(1200, 900));
+    expect(find.byKey(WorkspaceShell.sidebarKey), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(WorkspaceShell.sidebarKey), findsNothing);
+    expect(find.text('Dashboard page').hitTestable(), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Notes page').hitTestable(), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.sidebarKey), findsOneWidget);
+    expect(find.text('Notes page').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('compact menu sheet switches destinations', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(tester, size: const Size(480, 900));
+    expect(find.byKey(WorkspaceShell.compactMenuKey), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Notes page').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('footer settings and diagnostics fire their callbacks', (
+    WidgetTester tester,
+  ) async {
+    bool settingsOpened = false;
+    bool diagnosticsOpened = false;
+    await pumpShell(
+      tester,
+      size: const Size(1200, 900),
+      onOpenSettings: () => settingsOpened = true,
+      onOpenDiagnostics: () => diagnosticsOpened = true,
+    );
+
+    await tester.tap(find.byKey(WorkspaceShell.settingsKey));
+    await tester.pumpAndSettle();
+    expect(settingsOpened, isTrue);
+
+    await tester.tap(find.byKey(WorkspaceShell.diagnosticsKey));
+    await tester.pumpAndSettle();
+    expect(diagnosticsOpened, isTrue);
   });
 
   test('localization alias and delegate cover en and vi', () {

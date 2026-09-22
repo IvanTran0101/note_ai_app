@@ -779,6 +779,19 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
           child: WorkspaceShell(
             key: _workspaceShellKey,
             onDestinationChanged: _reloadWorkspaceDestination,
+            onOpenSettings: () => _showAppearanceSettings(context),
+            onOpenDiagnostics: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LocalLlmDebugPage(
+                    summarize: _summarize,
+                    loadModelReadiness: _loadModelReadiness,
+                    provisioningReader: _modelProvisioningStatus,
+                    onProvisioningCancel: _cancelModelProvisioning,
+                  ),
+                ),
+              );
+            },
             dashboard: DashboardPage(
               key: _dashboardPageKey,
               dashboardController: _dashboardController,

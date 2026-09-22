@@ -500,10 +500,10 @@ Một trong các lỗi sau làm step fail dù tổng điểm cao:
 
 | Step | Commit riêng | Test pass | Visual score | Status |
 | --- | --- | --- | --- | --- |
-| 0. Baseline | [ ] | [x] 576+/1 skip | — | `DONE` |
-| 1. Reference matrix | [ ] | [x] | — | `DONE` |
-| 2. Tokens/primitives | [ ] | [x] | pending Step 10 | `DONE` |
-| 3. Shell/sidebar | [ ] | [ ] | [ ] | `TODO` |
+| 0. Baseline | [x] | [x] 576+/1 skip | — | `DONE` |
+| 1. Reference matrix | [x] | [x] | — | `DONE` |
+| 2. Tokens/primitives | [x] | [x] | pending Step 10 | `DONE` |
+| 3. Shell/sidebar | [x] | [x] | pending Step 10 | `DONE` |
 | 4. Dashboard/Recents | [ ] | [ ] | [ ] | `TODO` |
 | 5. Notes list/detail frame | [ ] | [ ] | [ ] | `TODO` |
 | 6. Page editor | [ ] | [ ] | [ ] | `TODO` |
