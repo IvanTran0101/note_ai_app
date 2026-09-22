@@ -111,7 +111,7 @@ final class NoteDetailSurface extends StatelessWidget {
             ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+                constraints: const BoxConstraints(maxWidth: 720),
                 child: NoteDetailEditorForm(
                   titleController: titleController,
                   contentController: contentController,

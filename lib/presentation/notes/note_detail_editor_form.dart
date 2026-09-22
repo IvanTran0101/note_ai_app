@@ -64,7 +64,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final TextStyle? titleStyle = Theme.of(context).textTheme.headlineMedium;
+    final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -75,6 +75,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
           focusNode: titleFocusNode,
           textInputAction: TextInputAction.next,
           style: titleStyle?.copyWith(
+            fontSize: 40,
             fontWeight: FontWeight.w700,
             color: tokens.textPrimary,
             height: 1.2,
@@ -99,7 +100,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
             key: const ValueKey<String>('note-detail-content-field'),
             controller: contentController,
             focusNode: contentFocusNode,
-            minLines: 10,
+            minLines: 6,
             maxLines: null,
             keyboardType: TextInputType.multiline,
             textCapitalization: TextCapitalization.sentences,

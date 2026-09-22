@@ -510,7 +510,7 @@ Một trong các lỗi sau làm step fail dù tổng điểm cao:
 | 7. Menus/overlays/status | [x] | [x] | pending Step 10 | `DONE` |
 | 8. Auth UI | [x] | [x] | 9 (pending visual QA) | `DONE` |
 | 9. Accessibility/localization | [x] | [x] | — | `DONE` |
-| 10. Device visual QA | [ ] | [ ] | [ ] | `TODO` |
+| 10. Device visual QA | [x] | [x] | 95 | `DONE` |
 | 11. Regression/build/handoff | [ ] | [ ] | [ ] | `TODO` |
 
 ---

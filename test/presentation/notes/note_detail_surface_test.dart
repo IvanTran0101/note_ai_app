@@ -110,9 +110,10 @@ void main() {
     expect(find.byKey(saveKey), findsOneWidget);
     expect(find.byKey(summarizeKey), findsOneWidget);
 
-    // Wide layouts keep the editor centered and capped at 760 logical pixels.
+    // Wide layouts keep the editor centered and capped at 720 logical pixels
+    // (measured Notion content width is 708-720px).
     final Finder form = find.byType(NoteDetailEditorForm);
-    expect(tester.getSize(form).width, 760);
+    expect(tester.getSize(form).width, 720);
     expect(tester.getCenter(form).dx, 512);
     expect(find.byType(Scaffold), findsNothing);
     expect(tester.takeException(), isNull);
