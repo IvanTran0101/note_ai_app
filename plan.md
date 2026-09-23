@@ -2,8 +2,8 @@
 
 > **Trạng thái:** Kế hoạch thực thi, chưa phải bằng chứng đã implement.
 >
-> **Baseline rechecked 2026-09-23:** branch `TuanKiet2`, HEAD `2ae48ac` before
-> the current auth viewport-background change. The working tree also contains
+> **Baseline rechecked 2026-09-23:** branch `TuanKiet2`, HEAD `7987fe4` before
+> the current typography asset pass. The working tree also contains
 > pre-existing unrelated generated/untracked artifacts; inspect status and
 > stage only the exact UI/test/doc tranche.
 >
@@ -561,6 +561,29 @@ rubric score: the four captures do not cover all auth states, accessibility,
 or target platforms, so no auth or app-wide numeric score is assigned. The
 available evidence does not establish the `>=95/100` gate.
 
+Typography follow-up on 2026-09-23: the app theme requested the `Inter` family,
+but the checkout contained no Inter font asset or pubspec font registration.
+The UI-only asset pass bundles the Inter variable font and OFL license and
+registers the family in `pubspec.yaml`; it adds no package and changes no auth,
+note, route, or data flow. FontTools confirms the `opsz` 14–32 and `wght`
+100–900 axes and Vietnamese glyph coverage (font SHA-256
+`29160A80FF49DDCAB2C97711247E08B1FAB27A484A329CE8B813D820DC559031`).
+`flutter analyze --no-pub lib` passes, and the current presentation suite passes
+191/191 with the temporary test-only `local_llm_bridge` shim and restored
+package-config hash below. The Web release build passes (Flutter 3.47.5,
+399.1s); `FontManifest.json`, the font, and OFL file are present in its output.
+The Android release APK also passes (92,217,544 bytes; 1,758.1s), and its
+archive contains the same font and license. Capture 86 shows the bundled font
+rendered in the 1280×720 light Web Home; this page displays the existing Web
+storage limitation and contains no loaded or persisted note. The unfiltered
+`flutter analyze --no-pub` still reports 42 existing issues in the unrelated
+`local_llm_bridge` tests and temporary output shim; no files in those areas are
+part of this asset change. iOS/macOS builds and device rendering remain
+unverified because this Windows environment lists only Windows, Chrome, and
+Edge in `flutter devices --machine`. These checks close the Web/Android font
+packaging gap only; they do not establish full cross-platform typography or the
+95-point visual gate.
+
 Current Login uses 38px compact/72px desktop top padding. Register starts with
 Email, followed by Display name, Password, and Confirm password; it uses 76px
 compact/32px desktop top padding and a 496px desktop panel, with the existing
@@ -640,7 +663,7 @@ checks state retention only; it does not verify Web persistence or the overall
 | --- | --- | --- | --- |
 | 0. Baseline | Current checkout and browser load/error states inspected; saved browser note and complete runtime baseline not verified | `PARTIAL` | Record actual create/edit/save/delete/auth behavior against reachable backend, without changing it |
 | 1. Reference matrix | Live Notion page opened read-only; official Library, keyboard, search, auth, and web docs fetched; direct sign-up page is JavaScript-only; one shared editor anchor checked; no paired diff for each supported viewport | `PARTIAL` | Complete same-size paired comparisons for supported surfaces and states |
-| 2. Tokens/primitives | Theme/presentation edits applied; targeted analyzer and widget tests pass | `IN_PROGRESS` | Recheck light/dark screenshots, text contrast, and all shared components after final styling |
+| 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
 | 3. Shell/sidebar | Current-source captures 71–73 and 77 show the 280px desktop sidebar, 80px tablet rail, and compact navigation sheet; collapsed desktop still uses its 44×44px reopen overlay; one live Notion title anchor is within 2px vertically | `IN_PROGRESS` | Complete paired open/collapsed/rail comparisons and run physical-device checks |
 | 4. Dashboard/Recents | Current-source Web Home captures 70 and 78 show the explicit storage-unavailable state at desktop and phone widths; no loaded note data is available in this Web build | `PARTIAL` | Compare Home's supported states with Notion and verify controller-backed loaded data on a supported native target |
 | 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
@@ -649,7 +672,7 @@ checks state retention only; it does not verify Web persistence or the overall
 | 8. Auth UI | Login captures 66/69 and pre-refinement Register captures 67/68 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; debug capture 85 predates the current viewport-background fix; Register places Email first and asserts its 32px desktop panel top; auth suite passes 11/11 and full presentation suite 191/191 while preserving controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Capture current Register in a release build at desktop/phone/tablet sizes; pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
 | 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
-| 11. Regression/build/handoff | Current-source Web release build passes (Flutter 3.47.5, 304.7s) and current-source Android release APK passes (87.5 MB, 316.0s); Web preview shows the existing Home/Web-storage-limitation state; no current-source Register release recapture; `test/presentation` passes 191/191 with the temporary test shim and restored package-config hash | `IN_PROGRESS` | Capture current Register in a release build without overriding auth state; complete remaining visual/accessibility gates; use an Apple runner for iOS/macOS builds and device QA; audit the final allowlisted diff |
+| 11. Regression/build/handoff | Current-source Web release build with Inter passes (Flutter 3.47.5, 399.1s); Android release APK passes (92,217,544 bytes, 1,758.1s); capture 86 shows Web Home and its existing storage limitation; `flutter analyze --no-pub lib` passes and presentation suite passes 191/191 with restored package-config hash; unfiltered root analyze reports 42 unrelated shim/package-test issues; iOS/macOS builds unverified | `IN_PROGRESS` | Capture current Register in a release build without overriding auth state; complete remaining visual/accessibility gates; use an Apple runner for iOS/macOS builds and device QA; audit the final allowlisted diff |
 
 ---
 

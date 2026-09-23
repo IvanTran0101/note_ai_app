@@ -100,6 +100,7 @@ entered, so no note was persisted. Other screenshots remain from the
 | `83-noteflow-verify-email-1280x800-current.png` | Current-source verify-email page while signed out; Login CTA shown | 1280×800 | light |
 | `84-noteflow-verify-email-390x844-current.png` | Same signed-out verify-email page | 390×844 | light |
 | `85-noteflow-register-1280x800-debug-current.png` | Current Register after email-first and 32px panel-top refinements; debug ribbon is visible and excluded from fidelity scoring | 1280×800 | light |
+| `86-noteflow-home-1280x720-current-inter-font.png` | Current release Web Home after bundling Inter; explicit Web storage limitation; no note loaded | 1280×720 | light |
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 
@@ -471,3 +472,25 @@ score by itself.
   `dart format --output=none --set-exit-if-changed` on the 27 modified Dart
   files: PASS, 0 changed. Current-source presentation suite: PASS, 189/189,
   with the temporary test-only shim and restored package-config SHA above.
+
+### Inter font asset follow-up — 2026-09-23
+
+- Bundled `assets/fonts/Inter-Variable.ttf` and its SIL OFL license in
+  `pubspec.yaml`; FontTools confirmed variable `opsz`/`wght` axes and Vietnamese
+  glyph coverage. The asset adds no dependency and changes no application,
+  domain, infrastructure, auth, route, or persistence code.
+- `flutter analyze --no-pub lib`: PASS. Current presentation suite: PASS,
+  191/191 with the temporary test-only `local_llm_bridge` shim and restored
+  `.dart_tool/package_config.json` SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+  The unfiltered root `flutter analyze --no-pub` reports 42 existing issues in
+  the unrelated bridge tests and temporary output shim.
+- Web release build: PASS (Flutter 3.47.5, 399.1s); its font manifest and output
+  include Inter and OFL. Android release APK: PASS (92,217,544 bytes,
+  1,758.1s); the APK archive includes both assets.
+- Capture `86` is the current light-theme Web Home at 1280×720, served from that
+  release build. It verifies rendered typography on this one Web screen only;
+  the existing message says Web cannot load or save notes. No note was loaded
+  or persisted. iOS/macOS builds and runtime rendering remain unverified on
+  this Windows host. This capture does not provide a Notion pixel diff or a
+  numeric fidelity score, and does not establish the `>=95/100` gate.
