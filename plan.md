@@ -565,9 +565,13 @@ temporary test-only `local_llm_bridge` package-root shim;
 `.dart_tool/package_config.json` was restored to SHA-256
 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 Widget assertions cover 393×852, 1280×800, and 768×1024 layout bounds. A
-separate full presentation-suite rerun after the last spacing refinement did
-not finish because of a transient Windows disk-full error and a hanging auth
-navigation test; do not count that rerun as a pass.
+later current-source run of `flutter test --no-pub test/presentation
+--reporter compact --timeout 60s` passed 189/189 using a temporary test-only
+package-root shim for the unrelated native `local_llm_bridge` hook. The package
+config was restored byte-for-byte to SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. An
+earlier run had hit a transient disk-full error and stalled; it is superseded
+by this completed presentation-suite run.
 
 Web warning follow-up on 2026-09-23: the editor keeps the explicit notice that
 draft changes cannot be saved and will be lost when leaving, but uses a muted
@@ -629,7 +633,7 @@ checks state retention only; it does not verify Web persistence or the overall
 | 8. Auth UI | Current-source captures 66–69 are paired by viewport with Notion references 20/22/24/26; focused auth page tests pass 9/9 and preserve controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Compare validation/busy/error/forgot/reset/verify/change-password states and verify tablet/auth accessibility without adding unsupported auth choices |
 | 9. Accessibility/localization | Existing semantics and locale tests are evidence only for covered widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0–2.0 text scale, keyboard and touch-target gates on final UI |
 | 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
-| 11. Regression/build/handoff | Current-source Web release and Android release APK builds pass (87.5 MB); `flutter analyze --no-pub lib/main.dart lib/presentation` passes; Dart format reports 27 modified presentation/test files unchanged; auth page tests pass 9/9. The latest full presentation-suite rerun did not finish after disk-full and a hanging auth-navigation test; an earlier 189/189 run predates final auth spacing | `IN_PROGRESS` | Re-run presentation/auth/routing tests successfully, complete visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |
+| 11. Regression/build/handoff | Current-source Web release and Android release APK builds pass (87.5 MB); `flutter analyze --no-pub lib/main.dart lib/presentation` passes; Dart format reports 27 modified presentation/test files unchanged; current-source `test/presentation` passes 189/189 with the temporary test shim and restored package-config hash | `IN_PROGRESS` | Complete remaining visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |
 
 ---
 

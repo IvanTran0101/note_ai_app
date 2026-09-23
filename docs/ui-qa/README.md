@@ -379,10 +379,13 @@ score by itself.
 - The visual review is qualitative only. The captures do not cover all auth
   states, accessibility, or all target platforms, so no numeric auth or app
   score is assigned and the app-wide `>=95/100` gate is not established.
-- The full presentation suite rerun after the latest spacing refinement did not
-  complete: it hit a transient Windows disk-full error and hung in an auth
-  navigation test. Do not count that run as a pass. The focused auth page suite
-  passed 9/9; the package-config SHA-256 was restored to the recorded baseline.
+- After an earlier rerun hit a transient disk-full error and stalled in auth
+  navigation, the current-source command
+  `flutter test --no-pub test/presentation --reporter compact --timeout 60s`
+  passed 189/189 using the temporary test-only package-root shim. The auth page
+  suite passes 9/9 within that run; `.dart_tool/package_config.json` was
+  restored byte-for-byte to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 
 ### Current shell and Notes responsive review — 2026-09-23
 
@@ -402,5 +405,5 @@ score by itself.
   connected, and iOS/macOS builds require an Apple runner.
 - `flutter analyze --no-pub lib/main.dart lib/presentation`: PASS, no issues.
   `dart format --output=none --set-exit-if-changed` on the 27 modified Dart
-  files: PASS, 0 changed. The latest full presentation-suite rerun did not
-  complete; see the auth follow-up above. No new full-suite pass is claimed.
+  files: PASS, 0 changed. Current-source presentation suite: PASS, 189/189,
+  with the temporary test-only shim and restored package-config SHA above.
