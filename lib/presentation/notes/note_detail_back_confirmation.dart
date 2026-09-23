@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'note_detail_confirmation_dialog.dart';
 import 'note_detail_localizations.dart';
 import 'notes_theme_tokens.dart';
 
@@ -19,7 +20,8 @@ Future<NoteDetailBackDecision?> showNoteDetailBackConfirmation({
     context: context,
     builder: (BuildContext context) {
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-      return AlertDialog(
+      return buildNoteDetailConfirmationDialog(
+        context: context,
         title: Text(canSave ? copy.dirtyBackTitle : copy.unsavedChanges),
         content: Text(
           canSave ? copy.dirtyBackMessage : copy.persistenceUnavailable,
