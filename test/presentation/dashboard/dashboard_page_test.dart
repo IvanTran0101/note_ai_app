@@ -112,12 +112,31 @@ void main() {
         findsOneWidget,
       );
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      final Card firstCard = tester.widget<Card>(
+        find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+      );
+      expect(firstCard.elevation, 0);
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+            )
+            .height,
+        greaterThanOrEqualTo(56),
+      );
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.grid);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+          matching: find.byIcon(Icons.description_outlined),
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
@@ -144,7 +163,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.toolbarHeight, 48);
+      expect(appBar.toolbarHeight, 44);
       expect(find.text('NoteFlow / Home'), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
 
@@ -155,8 +174,9 @@ void main() {
                 NoteFlowLayout.dashboardContentMaxWidth,
       );
       expect(pageColumn, findsOneWidget);
-      expect(tester.getSize(pageColumn).width, 756);
-      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(366, 4));
+      expect(tester.getSize(pageColumn).width, 960);
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(264, 4));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(108, 4));
       expect(tester.takeException(), isNull);
     });
 

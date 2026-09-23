@@ -576,3 +576,33 @@ score by itself.
   connected. iOS/macOS native builds and runtime checks remain unavailable on
   this Windows host. An earlier build attempt had a transient Dart out-of-memory
   error; no Gradle or backend source was changed.
+
+### Home/Dashboard Step 4 refresh — 2026-09-24
+
+- Desktop Home now uses a 44px top bar, a 960px content column, and a 64px top
+  inset; compact layouts keep their 32px inset. Note rows are flat and at least
+  56px tall. The grid uses the existing page marker. Loading, empty, and error
+  states follow the Home content geometry. The section stays `Recently updated`
+  because the existing note model has no visit-history field.
+- This tranche changes Dashboard presentation and presentation tests only.
+  Existing controllers, sort/filter behavior, callbacks, keys, note fields,
+  storage, and API contracts remain in place.
+- `flutter analyze --no-pub lib/presentation/dashboard
+  lib/presentation/notes/notes_theme_tokens.dart
+  test/presentation/dashboard/dashboard_page_test.dart
+  test/presentation/common/accessibility_contract_test.dart`: PASS, no issues.
+  Dashboard tests: PASS, 37/37. Full presentation suite: PASS, 194/194. Test
+  runs use the temporary ignored `local_llm_bridge` shim to bypass the existing
+  native MSVC hook-linker failure; `.dart_tool/package_config.json` was restored
+  after each run to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- Fresh local-auth Web release: PASS (132.2s). Android release APK: PASS
+  (88.0 MB, 74.7s). These are compile results. `flutter devices` reports only
+  Windows, Chrome, and Edge; `flutter emulators` finds no AVD. There is no
+  Android runtime evidence. Native iOS/macOS builds and runtime checks were not
+  available on this Windows host.
+- Same-state, same-viewport Notion Home screenshots are not paired with a
+  loaded NoteFlow Home. The current Web storage limitation and widget-test
+  fixtures cannot stand in for a persisted note. No numeric score is assigned;
+  the plan's `>=95/100` gate remains unproven and Step 4's visual comparison
+  checklist stays open.

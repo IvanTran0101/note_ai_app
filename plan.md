@@ -343,17 +343,31 @@ Files chính: `workspace_shell.dart`, `workspace_localizations.dart`, token/them
 
 **Mục tiêu:** dashboard nhìn như Home/Recents của Notion nhưng dùng dữ liệu NoteFlow thật.
 
-Files chính: `dashboard_page.dart`, `dashboard_content.dart`, `dashboard_note_card.dart`, dashboard localizations.
+Files chính: `dashboard_page.dart`, `dashboard_content.dart`, `dashboard_note_card.dart`,
+`dashboard_state_views.dart`, dashboard localizations.
 
-- [ ] Giữ `DashboardController`, `NotesApplicationController`, `onOpenNote`, `onCreateNote`.
-- [ ] Header: title, search toggle/field, create note, settings/diagnostics đang có.
-- [ ] Chia visual sections: overview, Recents, empty/error/loading; không thêm nguồn dữ liệu mới.
-- [ ] Note row/card chuyển sang page-row style, preview nhẹ và selected/hover state rõ.
-- [ ] Giữ layout toggle hiện có, chỉ thay icon/placement/style.
-- [ ] Giữ key `dashboard-search-field`, `dashboard-search-toggle`, `dashboard-create-note`, `dashboard-content`, các key state/error/empty.
-- [ ] Không hiển thị timestamp hoặc metadata nếu `NoteDto` không cung cấp.
+- [x] Giữ `DashboardController`, `NotesApplicationController`, `onOpenNote`, `onCreateNote`;
+  không đổi sort/filter/create/open/reload data flow.
+- [x] Giữ title, search toggle/field, New note, sort/layout controls, settings/diagnostics
+  callbacks và mọi `ValueKey` hiện hữu.
+- [x] Chỉ hiển thị phần Home có dữ liệu NoteFlow: note count, supported update date,
+  sort theo `updatedAt`/`createdAt`, preview và hai layout List/Grid. `NoteDto` không có
+  visit history nên section phải ghi `Recently updated`, không giả là `Recently visited`.
+- [x] Desktop dùng top bar 44px và Dashboard content column tối đa 960px với inset trên
+  64px; compact giữ inset trên 32px. 960px là target cho trang Recent rộng hơn editor,
+  chưa phải anchor đo được từ ảnh Notion.
+- [x] List row bỏ card elevation, giữ icon/title/preview/update date và selected/hover;
+  row chạm được tối thiểu 56px. Grid giữ layout toggle hiện có và thêm page marker chung,
+  không thêm icon field vào model.
+- [x] Loading skeleton theo header, controls và note rows của loaded view; empty/error,
+  Web storage limitation và filtered-empty giữ copy/callback/state semantics.
+- [ ] Capture cùng viewport/theme cho loaded List/Grid, loading, empty, error, search và
+  selected states; pair với Notion Home và chấm từng anchor. Không lấy widget-test fixture
+  hoặc Web storage error làm bằng chứng runtime có note data.
 
-**Pass:** create/open/search/retry/empty/error giữ behavior; dashboard đạt visual score riêng tối thiểu 95.
+**Pass:** create/open/search/sort/retry/empty/error/loading behavior tests pass; same-state
+visual comparison đạt tối thiểu 95/100 trên từng viewport/target được hỗ trợ. Chưa đánh dấu
+Pass khi chưa có cặp ảnh và rubric đã chấm.
 
 ### Step 5 — Làm lại Notes list và chuyển sang editor
 

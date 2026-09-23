@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_action_bar.dart';
@@ -69,41 +70,50 @@ void main() {
     });
   });
 
-  group('icon-only controls', () {
-    testWidgets('sidebar visibility controls and footer carry tooltips', (
-      WidgetTester tester,
-    ) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('en'),
-          supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            WorkspaceCopy.delegate,
-          ],
-          home: WorkspaceShell(
-            dashboard: const SizedBox(),
-            notes: const SizedBox(),
-            onOpenSettings: () {},
-            onOpenDiagnostics: () {},
+  group('accessible navigation controls', () {
+    testWidgets(
+      'sidebar toggle has a tooltip and footer rows are labeled buttons',
+      (WidgetTester tester) async {
+        final SemanticsHandle handle = tester.ensureSemantics();
+        tester.view.physicalSize = const Size(1200, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+            localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+              WorkspaceCopy.delegate,
+            ],
+            home: WorkspaceShell(
+              dashboard: const SizedBox(),
+              notes: const SizedBox(),
+              onOpenSettings: () {},
+              onOpenDiagnostics: () {},
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byTooltip('Hide sidebar'), findsOneWidget);
-      expect(find.byTooltip('Settings'), findsOneWidget);
-      expect(find.byTooltip('Diagnostics'), findsOneWidget);
+        expect(find.byTooltip('Hide sidebar'), findsOneWidget);
+        for (final (Key key, String label) in <(Key, String)>[
+          (WorkspaceShell.settingsKey, 'Settings'),
+          (WorkspaceShell.diagnosticsKey, 'Diagnostics'),
+        ]) {
+          final SemanticsNode node = tester.getSemantics(find.byKey(key));
+          expect(node.label, label);
+          expect(node.flagsCollection.isButton, isTrue);
+        }
 
-      await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Open sidebar'), findsOneWidget);
+        await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Open sidebar'), findsOneWidget);
 
-      await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Hide sidebar'), findsOneWidget);
-    });
+        await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Hide sidebar'), findsOneWidget);
+        handle.dispose();
+      },
+    );
   });
 }

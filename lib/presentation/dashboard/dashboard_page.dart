@@ -243,7 +243,7 @@ final class DashboardPageState extends State<DashboardPage> {
       appBar: compact && widget.embeddedInWorkspace
           ? null
           : AppBar(
-              toolbarHeight: wide ? 48 : null,
+              toolbarHeight: wide ? 44 : null,
               title: Text(
                 '${copy.workspaceLabel} / ${copy.title}',
                 key: const ValueKey<String>('dashboard-page-breadcrumb'),

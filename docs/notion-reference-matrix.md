@@ -26,6 +26,18 @@ NoteFlow must continue to expose only its existing Dashboard/Notes data, search
 callback, and auth callbacks. In particular, block shortcuts are not added to
 the current plain-text editor.
 
+### Notion Home structure recheck — 2026-09-24
+
+Read-only accessibility-tree inspection of the signed-in Home route showed a
+Home heading followed by Recently visited, Learn, Upcoming events, and Featured
+templates. No page names or private page text were copied into this repository.
+Only the recent-page grouping is a visual reference for NoteFlow. NoteFlow has
+`createdAt` and `updatedAt`, but no last-visited field; the corresponding
+section therefore remains `Recently updated`/`Cập nhật gần đây`. Learn,
+Upcoming events, Featured templates, and their controls are omitted because
+they have no NoteFlow contract. This was a structural observation only, not a
+saved pixel reference or a scored visual pair.
+
 The 2026-09-24 sidebar guide describes a Home tab with sections such as Recents,
 Favorites, Teamspaces, Shared, Private, and Notion apps. These are not NoteFlow
 contracts. The current shell therefore keeps only its real Home and Notes

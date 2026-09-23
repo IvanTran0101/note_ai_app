@@ -60,6 +60,9 @@ final class DashboardNoteCard extends StatelessWidget {
       child: Card(
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         clipBehavior: Clip.antiAlias,
         color: selected
             ? tokens.selectedSurface
@@ -78,7 +81,7 @@ final class DashboardNoteCard extends StatelessWidget {
           hoverColor: tokens.subtleSurface,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: layout == DashboardNoteCardLayout.grid ? 128.0 : 64.0,
+              minHeight: layout == DashboardNoteCardLayout.grid ? 128.0 : 56.0,
             ),
             child: Padding(
               padding: layout == DashboardNoteCardLayout.grid
@@ -119,15 +122,32 @@ final class DashboardNoteCard extends StatelessWidget {
     required Color foreground,
     required Color secondaryForeground,
   }) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                Icons.description_outlined,
+                size: 18,
+                color: selected ? foreground : tokens.textMuted,
+              ),
+            ),
+            const SizedBox(width: NoteFlowSpacing.sm),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
         Text(

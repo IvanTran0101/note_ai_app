@@ -13,47 +13,143 @@ final class DashboardLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(20.0),
-      children: <Widget>[
-        Semantics(
-          liveRegion: true,
-          label: copy.loadingNotes,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Container(
-                height: 34.0,
-                width: 180.0,
-                decoration: BoxDecoration(
-                  color: tokens.subtleSurface,
-                  borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-                ),
-              ),
-              const SizedBox(height: 12.0),
-              Container(
-                height: 18.0,
-                width: 120.0,
-                decoration: BoxDecoration(
-                  color: tokens.subtleSurface,
-                  borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-                ),
-              ),
-              const SizedBox(height: 24.0),
-              for (int index = 0; index < 4; index++) ...<Widget>[
-                Container(
-                  height: 136.0,
-                  decoration: BoxDecoration(
-                    color: tokens.subtleSurface,
-                    borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+    return _DashboardStatePage(
+      copy: copy,
+      child: Semantics(
+        liveRegion: true,
+        container: true,
+        label: copy.loadingNotes,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _DashboardSkeletonBar(
+                        color: tokens.subtleSurface,
+                        width: 180,
+                        height: 48,
+                      ),
+                      const SizedBox(height: NoteFlowSpacing.sm),
+                      _DashboardSkeletonBar(
+                        color: tokens.subtleSurface,
+                        width: 260,
+                        height: 12,
+                      ),
+                    ],
                   ),
                 ),
-                if (index < 3) const SizedBox(height: 12.0),
+                const SizedBox(width: NoteFlowSpacing.md),
+                _DashboardSkeletonBar(
+                  color: tokens.subtleSurface,
+                  width: 120,
+                  height: 44,
+                  radius: NoteFlowRadius.input,
+                ),
               ],
+            ),
+            const SizedBox(height: NoteFlowSpacing.xl),
+            Row(
+              children: <Widget>[
+                _DashboardSkeletonBar(
+                  color: tokens.subtleSurface,
+                  width: 104,
+                  height: 48,
+                  radius: NoteFlowRadius.input,
+                ),
+                const SizedBox(width: NoteFlowSpacing.sm),
+                _DashboardSkeletonBar(
+                  color: tokens.subtleSurface,
+                  width: 128,
+                  height: 48,
+                  radius: NoteFlowRadius.input,
+                ),
+              ],
+            ),
+            const SizedBox(height: NoteFlowSpacing.xl),
+            _DashboardSkeletonBar(
+              color: tokens.subtleSurface,
+              width: 144,
+              height: 18,
+            ),
+            const SizedBox(height: NoteFlowSpacing.sm),
+            for (int index = 0; index < 4; index++) ...<Widget>[
+              _DashboardLoadingNoteRow(color: tokens.subtleSurface),
+              if (index < 3)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NoteFlowSpacing.xl,
+                  ),
+                  child: Divider(height: 1, color: tokens.divider),
+                ),
             ],
-          ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+final class _DashboardLoadingNoteRow extends StatelessWidget {
+  const _DashboardLoadingNoteRow({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: Row(
+        children: <Widget>[
+          _DashboardSkeletonBar(color: color, width: 20, height: 20),
+          const SizedBox(width: NoteFlowSpacing.md),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _DashboardSkeletonBar(color: color, width: 180, height: 12),
+                const SizedBox(height: NoteFlowSpacing.xs),
+                _DashboardSkeletonBar(color: color, width: 320, height: 10),
+              ],
+            ),
+          ),
+          const SizedBox(width: NoteFlowSpacing.md),
+          _DashboardSkeletonBar(color: color, width: 64, height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+final class _DashboardSkeletonBar extends StatelessWidget {
+  const _DashboardSkeletonBar({
+    required this.color,
+    required this.width,
+    required this.height,
+    this.radius = NoteFlowRadius.row,
+  });
+
+  final Color color;
+  final double width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      ),
     );
   }
 }
@@ -207,7 +303,9 @@ final class _DashboardStatePage extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
-                compact ? NoteFlowSpacing.xxl : NoteFlowLayout.editorTopPadding,
+                compact
+                    ? NoteFlowSpacing.xxl
+                    : NoteFlowLayout.dashboardTopPadding,
                 compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                 NoteFlowSpacing.xxxl,
               ),
