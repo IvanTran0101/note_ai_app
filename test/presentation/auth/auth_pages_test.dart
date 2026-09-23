@@ -196,6 +196,7 @@ void main() {
       );
       expect(desktopPanel, findsOneWidget);
       expect(tester.getRect(desktopPanel).width, 496);
+      expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
       expect(
         tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
         inInclusiveRange(356, 360),

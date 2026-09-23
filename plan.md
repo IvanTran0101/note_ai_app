@@ -559,12 +559,16 @@ or target platforms, so no auth or app-wide numeric score is assigned. The
 available evidence does not establish the `>=95/100` gate.
 
 Current Login uses 38px compact/72px desktop top padding; Register uses 76px
-compact/40px desktop top padding and a 496px desktop panel, with the existing
+compact/32px desktop top padding and a 496px desktop panel, with the existing
 32px fallback for short viewports. The auth page suite passes 9/9 with the
 temporary test-only `local_llm_bridge` package-root shim;
 `.dart_tool/package_config.json` was restored to SHA-256
 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Widget assertions cover 393×852, 1280×800, and 768×1024 layout bounds. A
+Widget assertions cover 393×852, 1280×800, and 768×1024 layout bounds; the
+desktop registration panel top is constrained to 28–36px around the 32px
+Notion reference anchor. Screenshot 67 predates this adjustment; the local-auth
+preview rendered Home after navigation to `/register`, so fresh browser visual
+capture remains pending. I did not override auth state. A
 later current-source run of `flutter test --no-pub test/presentation
 --reporter compact --timeout 60s` passed 189/189 using a temporary test-only
 package-root shim for the unrelated native `local_llm_bridge` hook. The package
@@ -630,7 +634,7 @@ checks state retention only; it does not verify Web persistence or the overall
 | 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
-| 8. Auth UI | Current-source Login/Register captures 66–69 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show the existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; focused auth page tests pass 9/9 and preserve controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
+| 8. Auth UI | Current-source Login/Register captures 66–69 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show the existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; Register's 32px desktop panel top is asserted against the reference anchor; focused auth page tests pass 9/9 and preserve controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Recapture Register after the 8px adjustment; pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
 | 9. Accessibility/localization | Existing semantics and locale tests are evidence only for covered widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0–2.0 text scale, keyboard and touch-target gates on final UI |
 | 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
 | 11. Regression/build/handoff | Current-source Web release and Android release APK builds pass (87.5 MB); `flutter analyze --no-pub lib/main.dart lib/presentation` passes; Dart format reports 27 modified presentation/test files unchanged; current-source `test/presentation` passes 189/189 with the temporary test shim and restored package-config hash | `IN_PROGRESS` | Complete remaining visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |

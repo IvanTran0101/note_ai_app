@@ -367,8 +367,9 @@ score by itself.
 
 - Register now uses a 496px panel on widths of 600px and above; phone layout
   remains panel-free. Login uses 38px compact and 72px desktop top padding;
-  Register uses 76px compact and 40px desktop top padding, with the existing
-  32px fallback on short viewports.
+  Register uses 76px compact and 32px desktop top padding, with the existing
+  32px fallback on short viewports. Its desktop panel top is constrained to
+  28–36px by the auth widget test to match the Notion signup reference at 32px.
 - `flutter test --no-pub test/presentation/auth/auth_pages_test.dart`: PASS,
   9/9. An earlier `test/presentation` run passed 189/189 before the final auth
   spacing refinement. Tests use a temporary test-only `local_llm_bridge` shim; the
@@ -393,6 +394,13 @@ score by itself.
   document current states only; they are not paired with same-state Notion
   references and do not cover validation, busy, error, success, or
   change-password states.
+- Register geometry refinement: the desktop panel top padding now matches the
+  Notion signup reference at 32px (previously 40px); the focused auth page suite
+  passes 9/9, including a 28–36px panel-top assertion. A fresh release screenshot
+  was not captured in this local-auth preview: after navigating to `/register`,
+  the browser rendered Home. I did not override the auth state; capture `67`
+  predates this 8px refinement and must not be treated as its visual
+  verification.
 - After an earlier rerun hit a transient disk-full error and stalled in auth
   navigation, the current-source command
   `flutter test --no-pub test/presentation --reporter compact --timeout 60s`
