@@ -37,6 +37,11 @@ final class _LoginPageState extends State<LoginPage> {
         return _AuthFormScaffold(
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
+          compactTopPadding: 38,
+          compactBrandTitleSpacing: 34,
+          compactTitleSubtitleSpacing: 0,
+          compactContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.xs,
+          desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
           child: Form(
             key: _formKey,
             child: Column(
@@ -47,6 +52,7 @@ final class _LoginPageState extends State<LoginPage> {
                   key: LoginPage.emailFieldKey,
                   controller: _emailController,
                   label: copy.email,
+                  hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
@@ -57,6 +63,7 @@ final class _LoginPageState extends State<LoginPage> {
                   key: LoginPage.passwordFieldKey,
                   controller: _passwordController,
                   label: copy.password,
+                  hintText: copy.passwordHint,
                   obscureText: true,
                   autofillHints: const <String>[AutofillHints.password],
                   textInputAction: TextInputAction.done,
@@ -78,9 +85,9 @@ final class _LoginPageState extends State<LoginPage> {
                     child: Text(copy.forgotPassword),
                   ),
                 ),
-                const Divider(height: 24.0),
+                const SizedBox(height: 12.0),
                 _AuthLinkRow(
-                  prompt: copy.createAccount,
+                  prompt: copy.newToNoteFlow,
                   action: copy.registerAction,
                   onPressed: state.isBusy ? null : _openRegister,
                 ),
@@ -173,6 +180,13 @@ final class _RegisterPageState extends State<RegisterPage> {
         return _AuthFormScaffold(
           title: copy.registerTitle,
           subtitle: copy.registerSubtitle,
+          compactTopPadding: 76,
+          desktopTopPadding: 40,
+          compactBrandTitleSpacing: NoteFlowSpacing.xxl,
+          compactTitleSubtitleSpacing: 0,
+          compactContentSpacing: NoteFlowSpacing.xl,
+          desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -183,6 +197,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                   key: RegisterPage.displayNameFieldKey,
                   controller: _displayNameController,
                   label: copy.displayName,
+                  hintText: copy.displayNameHint,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
                       _required(value, copy.displayNameRequired),
@@ -192,6 +207,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                   key: RegisterPage.emailFieldKey,
                   controller: _emailController,
                   label: copy.email,
+                  hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autofillHints: const <String>[AutofillHints.username],
@@ -203,6 +219,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                   key: RegisterPage.passwordFieldKey,
                   controller: _passwordController,
                   label: copy.password,
+                  hintText: copy.passwordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.next,
                   autofillHints: const <String>[AutofillHints.newPassword],
@@ -214,6 +231,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                   key: RegisterPage.confirmPasswordFieldKey,
                   controller: _confirmPasswordController,
                   label: copy.confirmPassword,
+                  hintText: copy.confirmPasswordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   autofillHints: const <String>[AutofillHints.newPassword],
@@ -334,6 +352,7 @@ final class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   key: ForgotPasswordPage.emailFieldKey,
                   controller: _emailController,
                   label: copy.email,
+                  hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.done,
                   autofillHints: const <String>[AutofillHints.username],
@@ -447,6 +466,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   key: ResetPasswordPage.emailFieldKey,
                   controller: _emailController,
                   label: copy.email,
+                  hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
@@ -457,6 +477,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   key: ResetPasswordPage.codeFieldKey,
                   controller: _codeController,
                   label: copy.verificationCode,
+                  hintText: copy.verificationCodeHint,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
                       _required(value, copy.verificationCodeRequired),
@@ -466,6 +487,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   key: ResetPasswordPage.passwordFieldKey,
                   controller: _passwordController,
                   label: copy.password,
+                  hintText: copy.passwordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
@@ -476,6 +498,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   key: ResetPasswordPage.confirmPasswordFieldKey,
                   controller: _confirmPasswordController,
                   label: copy.confirmPassword,
+                  hintText: copy.confirmPasswordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   validator: (String? value) {
@@ -605,6 +628,7 @@ final class _VerifyEmailPageState extends State<VerifyEmailPage> {
                   key: VerifyEmailPage.codeFieldKey,
                   controller: _codeController,
                   label: copy.verificationCode,
+                  hintText: copy.verificationCodeHint,
                   textInputAction: TextInputAction.done,
                   validator: (String? value) =>
                       _required(value, copy.verificationCodeRequired),
@@ -727,6 +751,7 @@ final class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   key: ChangePasswordPage.currentPasswordFieldKey,
                   controller: _currentPasswordController,
                   label: copy.currentPassword,
+                  hintText: copy.currentPasswordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
@@ -737,6 +762,7 @@ final class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   key: ChangePasswordPage.passwordFieldKey,
                   controller: _passwordController,
                   label: copy.password,
+                  hintText: copy.passwordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.next,
                   validator: (String? value) =>
@@ -747,6 +773,7 @@ final class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   key: ChangePasswordPage.confirmPasswordFieldKey,
                   controller: _confirmPasswordController,
                   label: copy.confirmPassword,
+                  hintText: copy.confirmPasswordHint,
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   validator: (String? value) {
@@ -918,52 +945,171 @@ final class _AuthFormScaffold extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.compactTopPadding = 32,
+    this.desktopTopPadding = 72,
+    this.compactBrandTitleSpacing = 36,
+    this.compactTitleSubtitleSpacing = NoteFlowSpacing.sm,
+    this.compactContentSpacing = 32,
+    this.desktopContentSpacing = 32,
+    this.desktopPanel = false,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final double compactTopPadding;
+  final double desktopTopPadding;
+  final double compactBrandTitleSpacing;
+  final double compactTitleSubtitleSpacing;
+  final double compactContentSpacing;
+  final double desktopContentSpacing;
+  final bool desktopPanel;
 
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    return Scaffold(
-      backgroundColor: tokens.subtleSurface,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(NoteFlowSpacing.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400.0),
-              child: Material(
-                color: tokens.pageSurface,
-                borderRadius: BorderRadius.circular(NoteFlowRadius.dialog),
-                child: Padding(
-                  padding: const EdgeInsets.all(NoteFlowSpacing.xl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: tokens.textPrimary,
+    final ThemeData baseTheme = Theme.of(context);
+    final ThemeData authTheme = baseTheme.copyWith(
+      scaffoldBackgroundColor: tokens.pageSurface,
+      inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: tokens.pageSurface,
+        isDense: true,
+        hintStyle: baseTheme.textTheme.bodyMedium?.copyWith(
+          color: tokens.textMuted,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: NoteFlowSpacing.md,
+          vertical: NoteFlowSpacing.sm + NoteFlowSpacing.xs,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: tokens.link,
+          foregroundColor: tokens.pageSurface,
+          disabledBackgroundColor: tokens.subtleSurface,
+          disabledForegroundColor: tokens.textMuted,
+          minimumSize: const Size(48.0, 44.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(NoteFlowRadius.input),
+          ),
+        ),
+      ),
+    );
+
+    return Theme(
+      data: authTheme,
+      child: Scaffold(
+        backgroundColor: tokens.pageSurface,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool compactWidth = constraints.maxWidth < 600;
+              final double topPadding = constraints.maxHeight < 600
+                  ? 32
+                  : compactWidth
+                  ? compactTopPadding
+                  : desktopTopPadding;
+              final double brandTitleSpacing = compactWidth
+                  ? compactBrandTitleSpacing
+                  : NoteFlowSpacing.xxl;
+              final double contentSpacing = compactWidth
+                  ? compactContentSpacing
+                  : desktopContentSpacing;
+              final bool showDesktopPanel = desktopPanel && !compactWidth;
+              final Widget formColumn = ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          Icons.note_alt_outlined,
+                          size: 25,
+                          color: tokens.textPrimary,
+                        ),
+                        const SizedBox(width: NoteFlowSpacing.sm),
+                        Text(
+                          'NoteFlow',
+                          style: baseTheme.textTheme.titleMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: brandTitleSpacing),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: baseTheme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                    SizedBox(
+                      height: compactWidth ? compactTitleSubtitleSpacing : 0,
+                    ),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: baseTheme.textTheme.titleLarge?.copyWith(
+                        fontSize: 20,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textMuted,
+                      ),
+                    ),
+                    SizedBox(height: contentSpacing),
+                    child,
+                  ],
+                ),
+              );
+              final Widget pageContent = showDesktopPanel
+                  ? SizedBox(
+                      width: 496,
+                      child: Container(
+                        key: const ValueKey<String>(
+                          'auth-register-desktop-panel',
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 68,
+                          vertical: 48,
+                        ),
+                        decoration: BoxDecoration(
+                          color: tokens.elevatedSurface,
+                          borderRadius: BorderRadius.circular(
+                            NoteFlowRadius.dialog,
+                          ),
+                          border: Border.all(color: tokens.divider),
+                          boxShadow: const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 8),
                             ),
+                          ],
+                        ),
+                        child: formColumn,
                       ),
-                      const SizedBox(height: NoteFlowSpacing.sm),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: tokens.textSecondary),
-                      ),
-                      const SizedBox(height: NoteFlowSpacing.xl),
-                      child,
-                    ],
+                    )
+                  : formColumn;
+              return ColoredBox(
+                color: showDesktopPanel
+                    ? tokens.sidebarSurface
+                    : tokens.pageSurface,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(24, topPadding, 24, 24),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: pageContent,
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -1056,6 +1202,7 @@ Widget _authField({
   required Key key,
   required TextEditingController controller,
   required String label,
+  String? hintText,
   required String? Function(String?) validator,
   bool obscureText = false,
   TextInputType? keyboardType,
@@ -1063,15 +1210,41 @@ Widget _authField({
   Iterable<String>? autofillHints,
   ValueChanged<String>? onFieldSubmitted,
 }) {
-  return TextFormField(
-    key: key,
-    controller: controller,
-    decoration: InputDecoration(labelText: label),
-    obscureText: obscureText,
-    keyboardType: keyboardType,
-    textInputAction: textInputAction,
-    autofillHints: autofillHints,
-    validator: validator,
+  return Builder(
+    builder: (BuildContext context) {
+      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: NoteFlowSpacing.sm),
+            child: ExcludeSemantics(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          Semantics(
+            label: label,
+            child: TextFormField(
+              key: key,
+              controller: controller,
+              decoration: InputDecoration(hintText: hintText),
+              obscureText: obscureText,
+              keyboardType: keyboardType,
+              textInputAction: textInputAction,
+              autofillHints: autofillHints,
+              validator: validator,
+            ),
+          ),
+        ],
+      );
+    },
   );
 }
 

@@ -28,8 +28,8 @@ final class AuthCopy {
   String get registerTitle =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create your account';
   String get registerSubtitle => _isVietnamese
-      ? 'Lưu ghi chú và truy cập chúng trên các thiết bị của bạn.'
-      : 'Save your notes and access them across your devices.';
+      ? 'Truy cập ghi chú trên mọi thiết bị.'
+      : 'Access your notes on every device.';
   String get forgotTitle =>
       _isVietnamese ? 'Đặt lại mật khẩu' : 'Reset your password';
   String get forgotSubtitle => _isVietnamese
@@ -49,6 +49,19 @@ final class AuthCopy {
   String get verificationCode =>
       _isVietnamese ? 'Mã xác nhận' : 'Verification code';
 
+  String get emailHint =>
+      _isVietnamese ? 'Nhập địa chỉ email của bạn' : 'Enter your email address';
+  String get displayNameHint =>
+      _isVietnamese ? 'Nhập tên hiển thị' : 'Enter your name';
+  String get passwordHint =>
+      _isVietnamese ? 'Nhập mật khẩu' : 'Enter your password';
+  String get confirmPasswordHint =>
+      _isVietnamese ? 'Nhập lại mật khẩu' : 'Re-enter your password';
+  String get verificationCodeHint =>
+      _isVietnamese ? 'Nhập mã xác nhận' : 'Enter the verification code';
+  String get currentPasswordHint =>
+      _isVietnamese ? 'Nhập mật khẩu hiện tại' : 'Enter your current password';
+
   String get loginAction => _isVietnamese ? 'Đăng nhập' : 'Log in';
   String get registerAction =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create account';
@@ -60,6 +73,8 @@ final class AuthCopy {
       _isVietnamese ? 'Quên mật khẩu?' : 'Forgot password?';
   String get createAccount =>
       _isVietnamese ? 'Tạo tài khoản mới' : 'Create an account';
+  String get newToNoteFlow =>
+      _isVietnamese ? 'Mới sử dụng NoteFlow?' : 'New to NoteFlow?';
   String get alreadyHaveAccount =>
       _isVietnamese ? 'Đã có tài khoản?' : 'Already have an account?';
   String get backToLogin => _isVietnamese ? 'Về đăng nhập' : 'Back to log in';

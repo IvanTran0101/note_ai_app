@@ -87,6 +87,7 @@ void main() {
       find.byKey(RegisterPage.confirmPasswordFieldKey),
       'password',
     );
+    await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
     await tester.tap(find.byKey(RegisterPage.submitKey));
     await tester.pumpAndSettle();
 
@@ -133,6 +134,7 @@ void main() {
       find.byKey(ResetPasswordPage.confirmPasswordFieldKey),
       'new-password',
     );
+    await tester.ensureVisible(find.byKey(ResetPasswordPage.submitKey));
     await tester.tap(find.byKey(ResetPasswordPage.submitKey));
     await tester.pumpAndSettle();
 
