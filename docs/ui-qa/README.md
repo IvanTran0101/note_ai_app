@@ -93,6 +93,12 @@ entered, so no note was persisted. Other screenshots remain from the
 | `76-noteflow-notes-1440x900-current.png` | Current-source Notes with desktop sidebar | 1440×900 | light |
 | `77-noteflow-compact-navigation-390x844-current.png` | Compact navigation sheet with Notes selected | 390×844 | light |
 | `78-noteflow-home-390x844-current.png` | Current-source Home with Web storage limitation | 390×844 | light |
+| `79-noteflow-forgot-password-1280x800-current.png` | Current-source reset-code request screen (heading: “Reset your password”) | 1280×800 | light |
+| `80-noteflow-forgot-password-390x844-current.png` | Same reset-code request screen | 390×844 | light |
+| `81-noteflow-reset-password-1280x800-current.png` | Current-source new-password form; demo email is supplied by the URL | 1280×800 | light |
+| `82-noteflow-reset-password-390x844-current.png` | Same new-password form | 390×844 | light |
+| `83-noteflow-verify-email-1280x800-current.png` | Current-source verify-email page while signed out; Login CTA shown | 1280×800 | light |
+| `84-noteflow-verify-email-390x844-current.png` | Same signed-out verify-email page | 390×844 | light |
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 
@@ -379,6 +385,14 @@ score by itself.
 - The visual review is qualitative only. The captures do not cover all auth
   states, accessibility, or all target platforms, so no numeric auth or app
   score is assigned and the app-wide `>=95/100` gate is not established.
+- Auth route follow-up: captures `79`–`84` record the existing reset-code
+  request, new-password form, and signed-out verify-email page at 1280×800 and
+  390×844. The reset form's `demo@example.com` value came from a URL parameter;
+  no auth form was submitted and no backend response was simulated. The
+  verify-email screen offers Login in this signed-out state. These captures
+  document current states only; they are not paired with same-state Notion
+  references and do not cover validation, busy, error, success, or
+  change-password states.
 - After an earlier rerun hit a transient disk-full error and stalled in auth
   navigation, the current-source command
   `flutter test --no-pub test/presentation --reporter compact --timeout 60s`
