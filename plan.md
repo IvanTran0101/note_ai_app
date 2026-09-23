@@ -2,8 +2,8 @@
 
 > **Trạng thái:** Kế hoạch thực thi, chưa phải bằng chứng đã implement.
 >
-> **Baseline rechecked 2026-09-24:** branch `TuanKiet2`, HEAD and
-> `origin/TuanKiet2` both `0185b2b2` before this auth presentation follow-up.
+> **Audit starting point 2026-09-24:** branch `TuanKiet2`, HEAD and
+> `origin/TuanKiet2` both `4b09a64` before the current workspace-shell tranche.
 > At review start, the working tree contained the pending auth UI/test tranche, an unrelated
 > modified macOS generated registrant, and existing untracked QA artifacts.
 > Stage only the exact UI/test/doc files for each tranche.
@@ -324,14 +324,17 @@ Checklist:
 
 Files chính: `workspace_shell.dart`, `workspace_localizations.dart`, token/theme files.
 
-- [ ] Giữ `WorkspaceDestination`, `showDestination`, IndexedStack và `onDestinationChanged`.
-- [ ] Desktop: workspace header, search affordance, section labels, Recents/Favorites visual rows và profile/settings footer.
-- [ ] Map chỉ Dashboard/Notes vào dữ liệu hiện có; không tạo page giả.
-- [ ] Active row có nền, icon, text weight và focus ring đúng reference.
-- [ ] Sidebar collapse/expand không làm mất page state.
-- [ ] Medium: rail/list navigation giữ label và keyboard focus.
-- [ ] Compact: dùng hamburger/drawer hoặc sheet local; back system/gesture phải về list đúng state.
-- [ ] Thêm tooltip và semantics cho icon-only controls.
+- [x] Giữ `WorkspaceDestination`, `showDestination`, IndexedStack và `onDestinationChanged` (18 shell widget tests pass).
+- [x] Desktop: static workspace identity header, search affordance, section label, the existing Home/Notes rows, and labeled Settings/Diagnostics footer actions when their callbacks are supplied (captures 115–117, 121).
+- [x] Do not add Favorites, profile identity, workspace switching, or Recents rows to the sidebar unless NoteFlow gains matching product contracts; existing Dashboard content may keep its real recent-note section.
+- [x] Map chỉ Dashboard/Notes vào dữ liệu hiện có; không tạo page giả.
+- [x] Active row có nền, icon và text weight rõ (Home/Notes active states in captures 115/116).
+- [ ] Xác minh focus ring của active/sidebar row khớp reference và thấy rõ bằng keyboard.
+- [x] Sidebar collapse/expand không làm mất page state (existing collapse and breakpoint-retention tests pass; capture 117 verifies collapsed geometry).
+- [x] Medium rail giữ labels và selected state (capture 120; shell widget tests pass).
+- [x] Compact dùng hamburger và bottom sheet cục bộ (capture 118; destination-switch test passes).
+- [ ] Kiểm tra keyboard focus của rail và system back/gesture trên thiết bị.
+- [x] Icon-only controls đang có tooltip/semantics; không thêm control tương tác mới.
 - [ ] Kiểm tra sidebar ở light/dark, text dài EN/VI và dynamic text.
 
 **Pass:** shell giống reference ở desktop; mobile không có navigation chrome thừa; route/state tests cũ vẫn pass.
@@ -701,15 +704,15 @@ app and do not establish the `>=95/100` release gate.
 | 0. Baseline | Current checkout and browser load/error states inspected; saved browser note and complete runtime baseline not verified | `PARTIAL` | Record actual create/edit/save/delete/auth behavior against reachable backend, without changing it |
 | 1. Reference matrix | Live workspace-page observations retained with their original dates; public Login/Sign up captures 111–114 are same-size 1280×800 and 390×844; old files 24/26 are actually 1280×720; one editor anchor is paired, but workspace surface states still lack complete same-state diffs | `PARTIAL` | Pair shell, Home, list/editor, menus and overlays at supported viewports; keep auth comparison limited to supported controls |
 | 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
-| 3. Shell/sidebar | Current-source captures 71–73 and 77 show the 280px desktop sidebar, 80px tablet rail, and compact navigation sheet; collapsed desktop still uses its 44×44px reopen overlay; one live Notion title anchor is within 2px vertically | `IN_PROGRESS` | Complete paired open/collapsed/rail comparisons and run physical-device checks |
+| 3. Shell/sidebar | Release Web build after shell polish captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. `workspace_shell_test.dart` passes 18/18 using a test-only bridge package root; `.dart_tool/package_config.json` restored to SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`; Web release build passes (69.5s). | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels, run Android runtime checks and Apple builds/device checks; no Favorites/profile/workspace-switching controls |
 | 4. Dashboard/Recents | Current-source Web Home captures 70 and 78 show the explicit storage-unavailable state at desktop and phone widths; no loaded note data is available in this Web build | `PARTIAL` | Compare Home's supported states with Notion and verify controller-backed loaded data on a supported native target |
 | 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
 | 8. Auth UI | Release captures 104–110 cover the current email/password/details steps at desktop/phone/tablet; public same-size Notion refs 111–114; Register mobile CTA matches pixel rows and desktop CTA now matches after a presentation-only spacing adjustment; auth behavior contracts retained; full presentation suite 193/193 | `IN_PROGRESS` | Capture desktop Register details and supported validation/busy/error/success/change-password states; finish accessibility/localization checks; record only supported-control comparison and keep overall score unassigned |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
-| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; Windows runner folder is absent. Runtime discovery lists Windows, Chrome and Edge only, with no Android device/emulator. Current Web release auth captures cover 390×844, 768×1024 and 1280×800; Android release APK compiles. No iOS/macOS runner is available on this Windows host; there is no complete paired diff for Home, Notes, editor, menus or overlays | `PARTIAL` | Run Android on a connected device/emulator; build and test iOS/macOS on an Apple runner; complete paired screenshots and responsive/accessibility checks for all supported UI states |
-| 11. Regression/build/handoff | Current-source Web release build passes (74.2s); Android release APK passes (87.9 MB, 142.4s). Current presentation suite passes 193/193 with the temporary test-only bridge shim and restored package-config hash; targeted auth analysis, format check and diff check pass. Auth captures 104–110 and same-size public Notion refs 111–114 are current. Direct Flutter test startup still hits unrelated native bridge link error LNK1136; iOS/macOS builds and Android runtime are unverified | `IN_PROGRESS` | Continue the remaining UI tranches and verify each build/test set; run full supported runtime/device matrix when Android hardware and an Apple runner are available; audit allowlisted final diff before each push |
+| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows runner folder. Runtime discovery lists Windows, Chrome and Edge only, with no Android device/emulator. Current shell Web captures 115–121 cover Home/Notes, expanded/collapsed sidebar, compact menu/header, tablet rail and 1024px expanded layout; the APK compiles, but no Android runtime session exists. No iOS/macOS runner is available on this Windows host; Home/list/editor/menus/overlays still lack complete same-state Notion pairs | `PARTIAL` | Run Android on a connected device/emulator; build and test iOS/macOS on an Apple runner; complete paired screenshots and responsive/accessibility checks for all supported UI states |
+| 11. Regression/build/handoff | Workspace shell suite passes 18/18 with a temporary test-only bridge package root and restored package-config SHA-256; `flutter analyze --no-pub lib/main.dart lib/presentation` passes (124.7s); targeted shell analyzer/format/diff checks pass. Current-source Web release passes (shell tranche 69.5s); Android release APK passes (87.9 MB, 211.1s; JDK 17). Captures 115–121 are DPR 1 and their PNG dimensions match filenames. Direct native-hook test startup still fails on unrelated `llama-vocab.obj` (`LNK1136`); iOS/macOS builds and Android runtime remain unverified | `IN_PROGRESS` | Continue remaining UI tranches; run native device/platform matrix when Android hardware and an Apple runner are available; audit exact allowlisted diff before each push |
 
 ---
 

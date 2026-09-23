@@ -1,4 +1,4 @@
-# UI Visual QA — Step 10 (baseline 2026-09-22; follow-up 2026-09-23)
+# UI Visual QA — Step 10 (baseline 2026-09-22; follow-up 2026-09-24)
 
 Captures run against the release web build at DPR 1. The 2026-09-22 baseline
 used Chrome 153; the 2026-09-23 editor follow-up used Microsoft Edge for `03`–`05`
@@ -105,10 +105,37 @@ entered, so no note was persisted. Other screenshots remain from the
 | `112-notion-signup-1280x800-reference-live-20260924.png` | Fresh public Notion Sign up reference; live route, no form submitted | 1280×800 | light |
 | `113-notion-signup-390x844-reference-live-20260924.png` | Fresh public Notion Sign up reference; live route, no form submitted | 390×844 | light |
 | `114-notion-login-390x844-reference-live-20260924.png` | Fresh public Notion Login reference; live route, no form submitted | 390×844 | light |
+| `115-noteflow-home-1440x900-shell-current-20260924.png` | Current release Web Home, expanded sidebar with workspace identity and labeled footer actions | 1440×900 | light |
+| `116-noteflow-notes-1440x900-shell-current-20260924.png` | Current release Web Notes destination with Notes active and the existing Web storage limitation | 1440×900 | light |
+| `117-noteflow-sidebar-collapsed-1440x900-current-20260924.png` | Current release Web Home with the desktop sidebar collapsed | 1440×900 | light |
+| `118-noteflow-sidebar-compact-menu-390x844-current-20260924.png` | Current release Web compact navigation bottom sheet | 390×844 | light |
+| `119-noteflow-sidebar-compact-bar-390x844-current-20260924.png` | Current release Web compact workspace header | 390×844 | light |
+| `120-noteflow-sidebar-medium-768x1024-current-20260924.png` | Current release Web medium-width NavigationRail | 768×1024 | light |
+| `121-noteflow-sidebar-expanded-1024x768-current-20260924.png` | Current release Web expanded sidebar at a compact desktop viewport | 1024×768 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
 same-size authentication comparisons.
+
+## Workspace shell tranche — 2026-09-24
+
+The current source Web release build passed in 69.5s with local-auth preview
+mode and was reviewed at DPR 1. Captures 115–121 show the updated workspace
+identity mark, Workspace section label, Home/Notes destination states, labeled
+Settings/Diagnostics footer rows, collapsed sidebar, medium NavigationRail,
+compact header and compact navigation sheet. These captures validate NoteFlow
+layout and responsiveness only; they are not pixel pairs against a Notion
+sidebar screenshot and do not establish the 95-point score.
+
+`flutter analyze --no-pub` on the shell/localization/test files passed. The
+direct widget test command stopped before assertions because the unrelated
+`local_llm_bridge` native hook failed on `llama-vocab.obj` (`LNK1136`). Rerunning
+with a temporary test-only package root passed `workspace_shell_test.dart`
+18/18; `.dart_tool/package_config.json` was restored to SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. No
+backend, domain, application, infrastructure, route, persistence, or auth
+controller files were changed. Android/iOS/macOS runtime checks remain
+outstanding; this tranche's screenshot captures are Web-only.
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 

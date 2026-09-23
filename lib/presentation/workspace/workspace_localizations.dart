@@ -43,7 +43,8 @@ final class WorkspaceCopy {
   String get workspaceTitle => 'NoteFlow';
 
   /// Visible section for the two existing top-level destinations.
-  String get pagesSection => _isVietnamese ? 'Trang' : 'Pages';
+  String get pagesSection =>
+      _isVietnamese ? 'Không gian làm việc' : 'Workspace';
 
   /// Existing Dashboard search action.
   String get search => _isVietnamese ? 'Tìm kiếm' : 'Search';

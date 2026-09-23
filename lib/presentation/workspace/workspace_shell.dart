@@ -522,6 +522,24 @@ class WorkspaceShellState extends State<WorkspaceShell> {
       ),
       child: Row(
         children: <Widget>[
+          Semantics(
+            excludeSemantics: true,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: tokens.selectedSurface,
+                borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.description_outlined,
+                size: 16,
+                color: tokens.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: NoteFlowSpacing.sm),
           Expanded(
             child: Text(
               copy.workspaceTitle,
@@ -530,7 +548,7 @@ class WorkspaceShellState extends State<WorkspaceShell> {
               style: titleStyle?.copyWith(
                 color: tokens.textSecondary,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.4,
+                letterSpacing: 0.1,
               ),
             ),
           ),
@@ -550,29 +568,38 @@ class WorkspaceShellState extends State<WorkspaceShell> {
     if (widget.onOpenSettings == null && widget.onOpenDiagnostics == null) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: NoteFlowSpacing.sm,
-        vertical: NoteFlowSpacing.sm,
-      ),
-      child: Row(
-        children: <Widget>[
-          if (widget.onOpenDiagnostics != null)
-            IconButton(
-              key: WorkspaceShell.diagnosticsKey,
-              tooltip: copy.diagnostics,
-              onPressed: widget.onOpenDiagnostics,
-              icon: const Icon(Icons.bug_report_outlined, size: 20),
-            ),
-          if (widget.onOpenSettings != null)
-            IconButton(
-              key: WorkspaceShell.settingsKey,
-              tooltip: copy.settings,
-              onPressed: widget.onOpenSettings,
-              icon: const Icon(Icons.settings_outlined, size: 20),
-            ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: NoteFlowSpacing.sm,
+            vertical: NoteFlowSpacing.sm,
+          ),
+          child: Column(
+            children: <Widget>[
+              if (widget.onOpenDiagnostics != null)
+                NoteFlowSidebarRow(
+                  key: WorkspaceShell.diagnosticsKey,
+                  label: copy.diagnostics,
+                  icon: Icons.bug_report_outlined,
+                  onTap: widget.onOpenDiagnostics,
+                  dense: true,
+                ),
+              if (widget.onOpenSettings != null)
+                NoteFlowSidebarRow(
+                  key: WorkspaceShell.settingsKey,
+                  label: copy.settings,
+                  icon: Icons.settings_outlined,
+                  onTap: widget.onOpenSettings,
+                  dense: true,
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

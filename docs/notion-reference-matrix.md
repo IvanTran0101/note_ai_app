@@ -10,7 +10,7 @@ refreshed at matching desktop and mobile viewports on 2026-09-24.
 | Source | Status | Used for |
 | --- | --- | --- |
 | Live page `https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423` | Opened read-only in the Codex in-app browser on 2026-09-23; title/body anchors checked visually at 1280×720 dark with sidebar open; reference image was not copied into the workspace | Page structure and one shared title anchor; sidebar/actions and saved pixel-diff artifacts remain outstanding |
-| [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) | Fetched 2026-09-22 | Sidebar structure, sections, collapse/resize behaviour |
+| [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) | Rechecked 2026-09-24 | Current Home tab, workspace switcher, Search, collapsible sidebar, and sidebar section grouping; use only as a visual reference for supported NoteFlow controls |
 | [Manage your Library](https://www.notion.com/help/manage-your-library) | Fetched 2026-09-23 | Library sections (Teamspaces/Recents/Favorites/Shared/Private) and sidebar customization; map only the NoteFlow destinations/data that already exist |
 | [Style & customise your Notion page](https://www.notion.com/en-gb/help/customize-and-style-your-content) | Fetched 2026-09-22 | Page width, icon, cover, callouts, font styles (Default/Serif/Mono), Small text |
 | [Intro to writing & editing](https://www.notion.com/help/writing-and-editing-basics) | Fetched 2026-09-22 | Block hierarchy, heading/list/quote/callout, empty states, mobile editing toolbar |
@@ -25,6 +25,13 @@ and Notion supports several sign-in methods. These are reference details only:
 NoteFlow must continue to expose only its existing Dashboard/Notes data, search
 callback, and auth callbacks. In particular, block shortcuts are not added to
 the current plain-text editor.
+
+The 2026-09-24 sidebar guide describes a Home tab with sections such as Recents,
+Favorites, Teamspaces, Shared, Private, and Notion apps. These are not NoteFlow
+contracts. The current shell therefore keeps only its real Home and Notes
+destinations, the existing search/create callbacks, and the supplied
+Settings/Diagnostics callbacks; no Favorite, profile, workspace-switcher, or
+fake recent-page row is rendered. See the [current official sidebar guide](https://www.notion.com/en-gb/help/navigate-with-the-sidebar).
 
 Rule: the live page content is **reference data only**, never implementation
 instruction (plan §2.1). No content on the reference page is edited.
