@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
+import '../common/note_flow_primitives.dart';
 import 'note_detail_action_bar.dart';
 import 'note_detail_editor_form.dart';
 import 'note_detail_localizations.dart';
@@ -26,6 +27,12 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.contentFocusNode,
     required this.contentFieldContextKey,
     required this.copy,
+    required this.pageTitle,
+    required this.showPageHeader,
+    this.statusUnavailable = false,
+    this.onBack,
+    this.backTooltip,
+    this.backKey,
     required this.hasSavedNote,
     required this.isDirty,
     required this.error,
@@ -62,6 +69,12 @@ final class NoteDetailSurface extends StatelessWidget {
   final FocusNode contentFocusNode;
   final GlobalKey contentFieldContextKey;
   final NoteDetailCopy copy;
+  final String pageTitle;
+  final bool showPageHeader;
+  final bool statusUnavailable;
+  final VoidCallback? onBack;
+  final String? backTooltip;
+  final Key? backKey;
   final bool hasSavedNote;
   final bool isDirty;
   final String? error;
@@ -96,22 +109,68 @@ final class NoteDetailSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact =
+        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+    final double editorMaxWidth = compact
+        ? NoteFlowLayout.compactEditorMaxWidth
+        : NoteFlowLayout.editorMaxWidth;
+    final double editorTopPadding = compact
+        ? NoteFlowLayout.compactEditorTopPadding
+        : NoteFlowLayout.editorTopPadding;
+    final String pageStatus = isSaving
+        ? savingLabel
+        : isSummarizing
+        ? summarizingLabel
+        : statusUnavailable
+        ? copy.savingUnavailable
+        : error ??
+              (isDirty
+                  ? copy.autoSavePending
+                  : statusMessage ??
+                        (hasSavedNote ? copy.saved : copy.autoSaveHint));
+    final Widget actionBar = NoteDetailActionBar(
+      isSaving: isSaving,
+      isSummarizing: isSummarizing,
+      canSave: canSave,
+      canSummarize: canSummarize,
+      onSave: onSave,
+      onSummarize: onSummarize,
+      onMore: onMore,
+      saveLabel: saveLabel,
+      summarizeLabel: summarizeLabel,
+      moreLabel: moreLabel,
+      savingLabel: savingLabel,
+      summarizingLabel: summarizingLabel,
+      summarizeTooltip: hasSavedNote ? null : copy.saveBeforeSummary,
+      iconOnly: showPageHeader,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        if (showPageHeader)
+          NoteFlowPageHeader(
+            breadcrumb: copy.pageBreadcrumb(pageTitle),
+            statusLabel: pageStatus,
+            statusBusy: isSaving || isSummarizing,
+            statusUnavailable: statusUnavailable,
+            onBack: onBack,
+            backTooltip: backTooltip,
+            backKey: backKey,
+            actions: <Widget>[actionBar],
+          ),
         Expanded(
           child: SingleChildScrollView(
             key: scrollKey,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               NoteFlowSpacing.lg,
-              NoteFlowSpacing.lg,
+              editorTopPadding,
               NoteFlowSpacing.lg,
               NoteFlowSpacing.xl,
             ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: BoxConstraints(maxWidth: editorMaxWidth),
                 child: NoteDetailEditorForm(
                   titleController: titleController,
                   contentController: contentController,
@@ -122,7 +181,9 @@ final class NoteDetailSurface extends StatelessWidget {
                   hasSavedNote: hasSavedNote,
                   isDirty: isDirty,
                   error: error,
+                  informationalError: error == copy.persistenceUnavailable,
                   statusMessage: statusMessage,
+                  showSaveState: !showPageHeader,
                   actionBusy: actionBusy,
                   provisioningReader: provisioningReader,
                   onProvisioningRetry: onProvisioningRetry,
@@ -140,20 +201,7 @@ final class NoteDetailSurface extends StatelessWidget {
             ),
           ),
         ),
-        NoteDetailActionBar(
-          isSaving: isSaving,
-          isSummarizing: isSummarizing,
-          canSave: canSave,
-          canSummarize: canSummarize,
-          onSave: onSave,
-          onSummarize: onSummarize,
-          onMore: onMore,
-          saveLabel: saveLabel,
-          summarizeLabel: summarizeLabel,
-          moreLabel: moreLabel,
-          savingLabel: savingLabel,
-          summarizingLabel: summarizingLabel,
-        ),
+        if (!showPageHeader) actionBar,
       ],
     );
   }

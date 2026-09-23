@@ -27,6 +27,7 @@ final class DashboardPage extends StatefulWidget {
     required this.notesController,
     required this.onOpenNote,
     required this.onCreateNote,
+    this.embeddedInWorkspace = false,
     this.onOpenSettings,
     this.onOpenDiagnostics,
   });
@@ -48,6 +49,9 @@ final class DashboardPage extends StatefulWidget {
   /// The callback may be asynchronous so the Dashboard can refresh after the
   /// detail route is dismissed.
   final FutureOr<NoteDetailRouteResult?> Function() onCreateNote;
+
+  /// Whether navigation and global actions are supplied by the host shell.
+  final bool embeddedInWorkspace;
 
   /// Opens the existing appearance settings flow.
   final VoidCallback? onOpenSettings;
@@ -93,7 +97,7 @@ final class DashboardPageState extends State<DashboardPage> {
   bool _loadingNotes = true;
   bool _searchOpen = false;
   String _searchText = '';
-  DashboardLayout _layout = DashboardLayout.grid;
+  DashboardLayout _layout = DashboardLayout.list;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
   Future<void>? _loadInFlight;
@@ -186,6 +190,14 @@ final class DashboardPageState extends State<DashboardPage> {
     });
   }
 
+  /// Opens the existing local Dashboard search flow without toggling it off.
+  void openSearch() {
+    if (_searchOpen) {
+      return;
+    }
+    setState(() => _searchOpen = true);
+  }
+
   void _clearSearch() {
     setState(() {
       _searchText = '';
@@ -222,33 +234,50 @@ final class DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final DashboardCopy copy = DashboardCopy.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final double width = MediaQuery.sizeOf(context).width;
+    final bool compact = width < 600;
+    final bool wide = width >= 840;
+    final bool expanded = width >= 840 && widget.embeddedInWorkspace;
     return Scaffold(
       backgroundColor: colors.surface,
-      appBar: AppBar(
-        title: Text(copy.title),
-        actions: <Widget>[
-          IconButton(
-            key: DashboardPage.searchToggleKey,
-            tooltip: _searchOpen ? copy.closeSearch : copy.search,
-            icon: Icon(_searchOpen ? Icons.close : Icons.search),
-            onPressed: _toggleSearch,
-          ),
-          if (widget.onOpenSettings != null)
-            IconButton(
-              key: DashboardPage.settingsKey,
-              tooltip: copy.settings,
-              icon: const Icon(Icons.tune_outlined),
-              onPressed: widget.onOpenSettings,
+      appBar: compact && widget.embeddedInWorkspace
+          ? null
+          : AppBar(
+              toolbarHeight: wide ? 48 : null,
+              title: Text(
+                '${copy.workspaceLabel} / ${copy.title}',
+                key: const ValueKey<String>('dashboard-page-breadcrumb'),
+              ),
+              titleTextStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+              actions: <Widget>[
+                if (!expanded || !widget.embeddedInWorkspace)
+                  IconButton(
+                    key: DashboardPage.searchToggleKey,
+                    tooltip: _searchOpen ? copy.closeSearch : copy.search,
+                    icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                    onPressed: _toggleSearch,
+                  ),
+                if ((!expanded || !widget.embeddedInWorkspace) &&
+                    widget.onOpenSettings != null)
+                  IconButton(
+                    key: DashboardPage.settingsKey,
+                    tooltip: copy.settings,
+                    icon: const Icon(Icons.tune_outlined),
+                    onPressed: widget.onOpenSettings,
+                  ),
+                if ((!expanded || !widget.embeddedInWorkspace) &&
+                    widget.onOpenDiagnostics != null)
+                  IconButton(
+                    key: DashboardPage.diagnosticsKey,
+                    tooltip: copy.diagnostics,
+                    icon: const Icon(Icons.monitor_heart_outlined),
+                    onPressed: widget.onOpenDiagnostics,
+                  ),
+              ],
             ),
-          if (widget.onOpenDiagnostics != null)
-            IconButton(
-              key: DashboardPage.diagnosticsKey,
-              tooltip: copy.diagnostics,
-              icon: const Icon(Icons.monitor_heart_outlined),
-              onPressed: widget.onOpenDiagnostics,
-            ),
-        ],
-      ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return _buildBody(context, constraints, copy);
@@ -266,7 +295,12 @@ final class DashboardPageState extends State<DashboardPage> {
       return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
     }
     if (_notesError != null && _notes.isEmpty) {
-      return DashboardNotesErrorView(copy: copy, onRetry: reload);
+      final bool storageUnavailable = _notesError is UnsupportedError;
+      return DashboardNotesErrorView(
+        copy: copy,
+        message: storageUnavailable ? copy.storageUnavailable : null,
+        onRetry: storageUnavailable ? null : reload,
+      );
     }
     if (_hasError && _notes.isEmpty) {
       return DashboardErrorView(copy: copy, onRetry: reload);

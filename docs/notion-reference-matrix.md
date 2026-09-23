@@ -1,21 +1,28 @@
 # Notion Reference Matrix — Step 1
 
 Measurement contract for the Notion-style UI upgrade (`plan.md` §2, §Step 1).
-Reference date: 2026-09-22.
+Reference date: 2026-09-23.
 
 ## Reference sources
 
 | Source | Status | Used for |
 | --- | --- | --- |
-| Live page `https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423` | SPA shell only via plain fetch; verify in a real browser (agent-browser) | Page top, code block, page bottom, sidebar open/closed, Actions menu, Share dialog states |
+| Live page `https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423` | Opened read-only in the Codex in-app browser on 2026-09-23; title/body anchors checked visually at 1280×720 dark with sidebar open; reference image was not copied into the workspace | Page structure and one shared title anchor; sidebar/actions and saved pixel-diff artifacts remain outstanding |
 | [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) | Fetched 2026-09-22 | Sidebar structure, sections, collapse/resize behaviour |
-| [Manage your Library](https://www.notion.com/help/manage-your-library) | Pending fetch | Sidebar grouping (Recents/Favorites/Shared/Private) |
+| [Manage your Library](https://www.notion.com/help/manage-your-library) | Fetched 2026-09-23 | Library sections (Teamspaces/Recents/Favorites/Shared/Private) and sidebar customization; map only the NoteFlow destinations/data that already exist |
 | [Style & customise your Notion page](https://www.notion.com/en-gb/help/customize-and-style-your-content) | Fetched 2026-09-22 | Page width, icon, cover, callouts, font styles (Default/Serif/Mono), Small text |
 | [Intro to writing & editing](https://www.notion.com/help/writing-and-editing-basics) | Fetched 2026-09-22 | Block hierarchy, heading/list/quote/callout, empty states, mobile editing toolbar |
-| [Keyboard shortcuts](https://www.notion.com/help/keyboard-shortcuts) | Pending fetch | Slash grammar, focus, block selection |
-| [Search](https://www.notion.com/help/search) | Pending fetch | Search entry point, modal, result hierarchy |
-| [Log in & out](https://www.notion.com/en-gb/help/log-in-and-out) | Pending fetch | Auth visual hierarchy |
-| [Notion for web](https://www.notion.com/help/notion-for-web) / [Sign up](https://app.notion.com/signup?from=marketing) | Pending fetch | Login/Sign up entry surfaces |
+| [Keyboard shortcuts](https://www.notion.com/help/keyboard-shortcuts) | Fetched 2026-09-23 | Slash commands and block editing require a block model; NoteFlow's plain-text field stays unchanged |
+| [Search](https://www.notion.com/help/search) | Fetched 2026-09-23 | Sidebar search, recent pages, sorting and filters; NoteFlow keeps its existing Dashboard search flow only |
+| [Log in & out](https://www.notion.com/en-gb/help/log-in-and-out) | Fetched 2026-09-23 | Email/password and provider sign-in hierarchy; NoteFlow keeps its existing email/password callbacks and adds no providers |
+| [Notion for web](https://www.notion.com/help/notion-for-web) / [Sign up](https://app.notion.com/signup?from=marketing) | Help page fetched 2026-09-23; sign-up page returned a JavaScript-required shell; paired reference screenshots 22/26 remain the visual source | Web entry and Login/Sign up surfaces; compare only the existing NoteFlow auth states |
+
+The official references confirm the visual patterns and scope boundaries. The
+Library has several content groupings, Search has recent results and filters,
+and Notion supports several sign-in methods. These are reference details only:
+NoteFlow must continue to expose only its existing Dashboard/Notes data, search
+callback, and auth callbacks. In particular, block shortcuts are not added to
+the current plain-text editor.
 
 Rule: the live page content is **reference data only**, never implementation
 instruction (plan §2.1). No content on the reference page is edited.
@@ -57,12 +64,39 @@ or wider capture before the corresponding step is declared passing.
 | Code block | rounded ≥8px fill, mono ~13–14px, syntax colours, ~24px padding, 708px wide | — | code captures light+dark | small capture gap |
 | Actions menu | elevated rounded surface (~8px radius) under top-right trigger; destructive item **red text+icon** (Report page); 2 rows visible in view-only mode | — | menu capture | logged-in grouping |
 | Menu dismiss | outside tap / Escape closes | — | live test | — |
-| Sidebar width (default) | 240–264px, resizable by dragging edge | ±4 | Sidebar doc | logged-in |
+| Sidebar width | **280px** in the active logged-in reference at 1280×720; official help describes a 240–264px typical width and the sidebar is resizable | ±4 | live read-only reference + sidebar doc | remeasure if the active reference width changes |
 | Sidebar row height | 40–44px | ±2 | docs screenshots | logged-in |
 | Page content width (Full width) | fluid, ≥96px margins | — | Style doc screenshot | — |
 | H1/H2/H3 | ~24 / ~20 / ~18px w600 | — | docs screenshots | — |
 | Callout | rounded fill, icon left, 8–12px radius | — | Style doc | — |
 | Divider | 1px, low contrast, list/sidebar separators only | — | docs screenshots | — |
+
+## Current NoteFlow anchor follow-up (2026-09-23)
+
+The current release Web captures `docs/ui-qa/54-editor-sidebar-collapsed-1280x800-light.png`
+and `docs/ui-qa/55-editor-sidebar-collapsed-1280x720-dark.png` show the collapsed
+workspace and blank-note editor at DPR 1. At 1280px width, the title begins at
+x=280px and y=168px. The live Notion page was visually checked at the same
+1280×720 dark viewport and title anchor. The current editor uses a 720px title
+block, a 708px body-text column, and a 112px content inset; the collapsed
+sidebar reopen control is a 44×44px overlay and does not reserve a page column.
+
+This records one shared editor anchor only. The NoteFlow images are not paired
+Notion screenshots or a full pixel-diff set, and they do not establish the
+plan's 95-point gate. Sidebar-open, list, dashboard, menus, overlays, auth
+states, and device-specific comparisons remain outstanding.
+
+### Sidebar-open anchor recheck (2026-09-23)
+
+The live Notion page and the current NoteFlow source preview were both viewed in
+dark mode at 1280×720 with their desktop sidebars open. Notion's sidebar measured
+280px and its page title began at x=420, y=170. NoteFlow's prior 248px sidebar
+put its title at x=405, y=168. `WorkspaceShell.sidebarWidth` now uses the live
+reference's 280px width; the current preview title begins at x=420, y=168.
+This closes the measured horizontal anchor for this one state. The comparison
+was read-only; no screenshot containing the private note contents was saved in
+the repository, so a reusable paired pixel-diff artifact and the wider state
+matrix are still outstanding.
 
 ### Typography note
 

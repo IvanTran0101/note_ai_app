@@ -63,7 +63,7 @@ const List<String> _noteFlowFontFallback = <String>[
   'Roboto',
   'Arial',
 ];
-const Color _noteFlowSeedColor = Color(0xFF5B4FA6);
+const Color _noteFlowSeedColor = Color(0xFF2383E2);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
 
@@ -118,7 +118,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       scrolledUnderElevation: 1.0,
       surfaceTintColor: Colors.transparent,
       toolbarHeight: 44.0,
-      centerTitle: true,
+      centerTitle: false,
     ),
     cardTheme: CardThemeData(
       color: tokens.elevatedSurface,
@@ -132,6 +132,10 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        backgroundColor: tokens.textPrimary,
+        foregroundColor: tokens.pageSurface,
+        disabledBackgroundColor: tokens.subtleSurface,
+        disabledForegroundColor: tokens.textMuted,
         minimumSize: const Size(48.0, 44.0),
         padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
@@ -169,6 +173,8 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
+        backgroundColor: tokens.textPrimary,
+        foregroundColor: tokens.pageSurface,
         minimumSize: const Size(48.0, 44.0),
         padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
@@ -178,6 +184,8 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
+        foregroundColor: tokens.textSecondary,
+        side: BorderSide(color: tokens.divider),
         minimumSize: const Size(48.0, 44.0),
         padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
@@ -422,9 +430,33 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
           note: note,
           provisioningReader: _modelProvisioningStatus,
           onProvisioningCancel: _cancelModelProvisioning,
+          showAppBar: false,
         ),
       ),
     );
+  }
+
+  Future<NoteDetailRouteResult?> _openNoteInWorkspace(
+    BuildContext context, {
+    NoteDto? note,
+  }) async {
+    final NotesWorkspacePageState? notesPage = _notesPageKey.currentState;
+    final bool preserveUnsavedChanges = notesPage?.hasUnsavedChanges ?? false;
+    _workspaceShellKey.currentState?.showDestination(
+      WorkspaceDestination.notes,
+    );
+    if (notesPage == null) {
+      return _openNoteDetail(context, note);
+    }
+    if (!preserveUnsavedChanges) {
+      await notesPage.reload();
+    }
+    if (note == null) {
+      notesPage.startNewNote();
+    } else {
+      notesPage.openNote(note);
+    }
+    return null;
   }
 
   String _generateNoteId() {
@@ -641,7 +673,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         }
       case WorkspaceDestination.notes:
         final NotesWorkspacePageState? page = _notesPageKey.currentState;
-        if (page != null) {
+        if (page != null && !page.hasUnsavedChanges) {
           unawaited(page.reload());
         }
     }
@@ -788,6 +820,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
           child: WorkspaceShell(
             key: _workspaceShellKey,
             onDestinationChanged: _reloadWorkspaceDestination,
+            onOpenSearch: () {
+              _workspaceShellKey.currentState?.showDestination(
+                WorkspaceDestination.dashboard,
+              );
+              _dashboardPageKey.currentState?.openSearch();
+            },
+            onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
             onOpenSettings: () => _showAppearanceSettings(context),
             onOpenDiagnostics: () {
               Navigator.of(context).push(
@@ -803,10 +842,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
             },
             dashboard: DashboardPage(
               key: _dashboardPageKey,
+              embeddedInWorkspace: true,
               dashboardController: _dashboardController,
               notesController: _notesController,
-              onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
-              onCreateNote: () => _openNoteDetail(context, null),
+              onOpenNote: (NoteDto note) =>
+                  _openNoteInWorkspace(context, note: note),
+              onCreateNote: () => _openNoteInWorkspace(context),
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: () {
                 Navigator.of(context).push(
@@ -823,6 +864,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
             ),
             notes: NotesWorkspacePage(
               key: _notesPageKey,
+              embeddedInWorkspace: true,
               applicationService: _noteApplicationService,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,

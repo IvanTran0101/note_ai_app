@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'notes_theme_tokens.dart';
+
 /// Presentation-only layout frame for the Notes destination.
 ///
 /// The frame does not know how notes are loaded or edited. It receives already
 /// composed list/detail widgets and only adapts their placement to the
-/// available width.
+/// available width. Wider layouts use the available canvas for either the list
+/// or the selected page instead of showing a second navigation pane.
 final class ResponsiveNotesWorkspace extends StatelessWidget {
   const ResponsiveNotesWorkspace({
     super.key,
@@ -15,8 +18,8 @@ final class ResponsiveNotesWorkspace extends StatelessWidget {
     this.compactBackLabel = 'Back to notes',
   });
 
-  static const double compactBreakpoint = 600;
-  static const double expandedBreakpoint = 840;
+  static const double compactBreakpoint = NoteFlowLayout.compactBreakpoint;
+  static const double expandedBreakpoint = NoteFlowLayout.expandedBreakpoint;
   static const double mediumListWidth = 320;
   static const double expandedListWidth = 336;
 
@@ -45,70 +48,36 @@ final class ResponsiveNotesWorkspace extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
-        if (width < compactBreakpoint) {
-          return _buildCompact();
-        }
-        if (width < expandedBreakpoint) {
-          return _buildSplit(
-            surfaceKey: mediumKey,
-            listWidth: _mediumListWidth(width),
-          );
-        }
-        return _buildSplit(
-          surfaceKey: expandedKey,
-          listWidth: expandedListWidth,
+        final bool compact = width < compactBreakpoint;
+        final Key surfaceKey = compact
+            ? compactKey
+            : width < expandedBreakpoint
+            ? mediumKey
+            : expandedKey;
+        final Key contentKey = hasSelection ? detailPaneKey : listPaneKey;
+        final Widget content = hasSelection ? detail : list;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            KeyedSubtree(
+              key: surfaceKey,
+              child: compact && hasSelection && onCompactBack != null
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        tooltip: compactBackLabel,
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: onCompactBack,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            Expanded(
+              child: KeyedSubtree(key: contentKey, child: content),
+            ),
+          ],
         );
       },
     );
-  }
-
-  Widget _buildCompact() {
-    final Widget child = hasSelection ? detail : list;
-    if (!hasSelection || onCompactBack == null) {
-      return KeyedSubtree(key: compactKey, child: child);
-    }
-    return KeyedSubtree(
-      key: compactKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              tooltip: compactBackLabel,
-              icon: const Icon(Icons.arrow_back),
-              onPressed: onCompactBack,
-            ),
-          ),
-          Expanded(child: detail),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSplit({required Key surfaceKey, required double listWidth}) {
-    return KeyedSubtree(
-      key: surfaceKey,
-      child: Row(
-        key: const ValueKey<String>('responsive-notes-split-row'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          SizedBox(key: listPaneKey, width: listWidth, child: list),
-          const VerticalDivider(width: 1, thickness: 1),
-          Expanded(key: detailPaneKey, child: detail),
-        ],
-      ),
-    );
-  }
-
-  double _mediumListWidth(double availableWidth) {
-    final double proportional = availableWidth * 0.38;
-    if (proportional < 280) {
-      return 280;
-    }
-    if (proportional > mediumListWidth) {
-      return mediumListWidth;
-    }
-    return proportional;
   }
 }

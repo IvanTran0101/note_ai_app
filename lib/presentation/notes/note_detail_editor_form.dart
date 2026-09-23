@@ -23,7 +23,9 @@ final class NoteDetailEditorForm extends StatelessWidget {
     required this.hasSavedNote,
     required this.isDirty,
     required this.error,
+    this.informationalError = false,
     required this.statusMessage,
+    this.showSaveState = true,
     required this.actionBusy,
     required this.provisioningReader,
     required this.onProvisioningRetry,
@@ -47,7 +49,9 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool hasSavedNote;
   final bool isDirty;
   final String? error;
+  final bool informationalError;
   final String? statusMessage;
+  final bool showSaveState;
   final bool actionBusy;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
@@ -73,6 +77,8 @@ final class NoteDetailEditorForm extends StatelessWidget {
           key: const ValueKey<String>('note-detail-title-field'),
           controller: titleController,
           focusNode: titleFocusNode,
+          minLines: 1,
+          maxLines: null,
           textInputAction: TextInputAction.next,
           style: titleStyle?.copyWith(
             fontSize: 40,
@@ -81,7 +87,13 @@ final class NoteDetailEditorForm extends StatelessWidget {
             height: 1.2,
           ),
           decoration: InputDecoration(
-            labelText: copy.titleLabel,
+            hintText: copy.titleLabel,
+            hintStyle: titleStyle?.copyWith(
+              fontSize: 40,
+              fontWeight: FontWeight.w700,
+              color: tokens.textMuted,
+              height: 1.2,
+            ),
             filled: false,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
@@ -96,31 +108,42 @@ final class NoteDetailEditorForm extends StatelessWidget {
         const SizedBox(height: NoteFlowSpacing.sm),
         Container(
           key: contentFieldContextKey,
-          child: TextField(
-            key: const ValueKey<String>('note-detail-content-field'),
-            controller: contentController,
-            focusNode: contentFocusNode,
-            minLines: 6,
-            maxLines: null,
-            keyboardType: TextInputType.multiline,
-            textCapitalization: TextCapitalization.sentences,
-            style: bodyStyle?.copyWith(color: tokens.textPrimary, height: 1.5),
-            decoration: InputDecoration(
-              labelText: copy.contentLabel,
-              alignLabelWithHint: true,
-              filled: false,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              focusedErrorBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: NoteFlowSpacing.sm,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: NoteFlowLayout.editorTextMaxWidth,
+              ),
+              child: TextField(
+                key: const ValueKey<String>('note-detail-content-field'),
+                controller: contentController,
+                focusNode: contentFocusNode,
+                minLines: 6,
+                maxLines: null,
+                keyboardType: TextInputType.multiline,
+                textCapitalization: TextCapitalization.sentences,
+                style: bodyStyle?.copyWith(
+                  color: tokens.textPrimary,
+                  height: 1.5,
+                ),
+                decoration: InputDecoration(
+                  hintText: copy.contentLabel,
+                  hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: NoteFlowSpacing.sm,
+                  ),
+                ),
               ),
             ),
           ),
         ),
-        if (isDirty) ...<Widget>[
+        if (isDirty && showSaveState) ...<Widget>[
           const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
@@ -152,9 +175,33 @@ final class NoteDetailEditorForm extends StatelessWidget {
               decoration: BoxDecoration(
                 color: tokens.subtleSurface,
                 borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-                border: Border.all(color: tokens.error),
+                border: Border.all(
+                  color: informationalError ? tokens.divider : tokens.error,
+                ),
               ),
-              child: Text(error!, style: TextStyle(color: tokens.error)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    informationalError
+                        ? Icons.cloud_off_outlined
+                        : Icons.error_outline,
+                    size: 18,
+                    color: informationalError ? tokens.textMuted : tokens.error,
+                  ),
+                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color: informationalError
+                            ? tokens.textSecondary
+                            : tokens.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (onErrorRetry != null && errorRetryLabel != null)
@@ -167,7 +214,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
               ),
             ),
         ],
-        if (statusMessage != null) ...<Widget>[
+        if (statusMessage != null && showSaveState) ...<Widget>[
           const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,

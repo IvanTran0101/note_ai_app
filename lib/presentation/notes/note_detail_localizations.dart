@@ -24,6 +24,7 @@ final class NoteDetailCopy {
 
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
   String get editNote => _isVietnamese ? 'Chỉnh sửa ghi chú' : 'Edit note';
+  String pageBreadcrumb(String pageTitle) => 'NoteFlow / $pageTitle';
   String get back => _isVietnamese ? 'Quay lại' : 'Back';
   String get save => _isVietnamese ? 'Lưu' : 'Save';
   String get saving => _isVietnamese ? 'Đang lưu…' : 'Saving…';
@@ -43,11 +44,35 @@ final class NoteDetailCopy {
       ? 'Tóm tắt đã cũ vì ghi chú đã thay đổi.'
       : 'This summary is out of date because the note changed.';
   String get saveBeforeSummary => _isVietnamese
-      ? 'Lưu ghi chú để có thể tạo tóm tắt.'
-      : 'Save the note before creating a summary.';
+      ? kIsWeb
+            ? 'Phiên bản Web không hỗ trợ lưu ghi chú nên không thể tạo tóm tắt.'
+            : 'Ghi chú sẽ được tạo tự động khi bạn nhập. Sau đó, bạn có thể tạo tóm tắt.'
+      : kIsWeb
+      ? 'Summaries are unavailable because this Web build cannot save notes.'
+      : 'Your note is created automatically as you type. You can summarize it once it is created.';
+  String get autoSaveHint => _isVietnamese
+      ? kIsWeb
+            ? 'Web không hỗ trợ lưu ghi chú'
+            : 'Tự động lưu khi bạn nhập'
+      : kIsWeb
+      ? 'Saving unavailable on Web'
+      : 'Saves automatically as you type';
+  String get autoSavePending => _isVietnamese
+      ? kIsWeb
+            ? 'Thay đổi chưa được lưu trên Web'
+            : 'Thay đổi sẽ được tự động lưu'
+      : kIsWeb
+      ? 'Changes are not saved on Web'
+      : 'Changes will save automatically';
+  String get persistenceUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ lưu ghi chú. Thay đổi trong bản nháp sẽ mất khi bạn rời trang.'
+      : 'This Web build cannot save notes. Changes in this draft will be lost when you leave.';
+  String get savingUnavailable => _isVietnamese
+      ? 'Web không hỗ trợ lưu ghi chú'
+      : 'Saving unavailable on Web';
   String get noSummary => _isVietnamese
-      ? 'Chưa có tóm tắt. Bạn có thể tạo tóm tắt sau khi lưu ghi chú.'
-      : 'No summary yet. Save the note to create one.';
+      ? 'Chưa có tóm tắt. Chọn Tóm tắt để tạo một bản.'
+      : 'No summary yet. Select Summarize to create one.';
   String get unsavedChanges =>
       _isVietnamese ? 'Bạn có thay đổi chưa lưu.' : 'You have unsaved changes.';
   String get dirtyBackTitle => _isVietnamese

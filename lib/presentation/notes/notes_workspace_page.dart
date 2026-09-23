@@ -12,17 +12,18 @@ import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 import 'responsive_notes_workspace.dart';
 
-/// Responsive list/detail workspace for the shell's Notes destination.
+/// Responsive Notes workspace for the shell's Notes destination.
 ///
-/// This page owns only Presentation selection state. Note mutations and AI
-/// calls continue to flow through [NotesApplicationController]. On compact
-/// screens the frame shows one surface at a time; on wider screens it keeps a
-/// list pane and a focused Note Detail pane side by side.
+/// This page owns only presentation selection state. Note mutations and AI
+/// calls continue to flow through [NotesApplicationController]. Every
+/// breakpoint uses the Notes content area for one surface at a time: the list
+/// or the focused Note Detail page.
 final class NotesWorkspacePage extends StatefulWidget {
   const NotesWorkspacePage({
     super.key,
     this.applicationService,
     this.controller,
+    this.embeddedInWorkspace = false,
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.provisioningReader,
@@ -34,6 +35,7 @@ final class NotesWorkspacePage extends StatefulWidget {
 
   final NoteApplicationService? applicationService;
   final NotesApplicationController? controller;
+  final bool embeddedInWorkspace;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenDiagnostics;
   final IModelProvisioningReader? provisioningReader;
@@ -44,6 +46,9 @@ final class NotesWorkspacePage extends StatefulWidget {
 }
 
 final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
+  String? _detailKeyIdentity;
+  GlobalKey<State<StatefulWidget>> _detailWidgetKey =
+      GlobalKey<State<StatefulWidget>>();
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
   bool _editingNewNote = false;
@@ -77,12 +82,30 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     return null;
   }
 
+  Key _detailKeyFor(String identity) {
+    if (_detailKeyIdentity != identity) {
+      _detailKeyIdentity = identity;
+      _detailWidgetKey = GlobalKey<State<StatefulWidget>>(
+        debugLabel: 'notes-workspace-detail-$identity',
+      );
+    }
+    return _detailWidgetKey;
+  }
+
+  /// Whether the current inline detail has edits that have not been saved.
+  bool get hasUnsavedChanges => _detailDirty;
+
   bool get _showDetail => _editingNewNote || _selectedNote != null;
 
   @override
   void initState() {
     super.initState();
     unawaited(reload());
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   /// Reloads the list after the page becomes active.
@@ -151,7 +174,31 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     setState(() {
       _selectedNoteId = null;
       _editingNewNote = true;
+    });
+  }
+
+  /// Opens the existing create-note editor inside the workspace shell.
+  void startNewNote() => _startNewNote();
+
+  /// Selects an existing note in the workspace editor.
+  void openNote(NoteDto note) {
+    if (_detailDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return;
+    }
+    final List<NoteDto> next = List<NoteDto>.of(_notes);
+    final int index = next.indexWhere((NoteDto item) => item.id == note.id);
+    if (index == -1) {
+      next.add(note);
+    } else {
+      next[index] = note;
+    }
+    setState(() {
+      _notes = List<NoteDto>.unmodifiable(next);
+      _selectedNoteId = note.id;
+      _editingNewNote = false;
       _error = null;
+      _loading = false;
     });
   }
 
@@ -192,7 +239,10 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _selectedNoteId = null;
       _editingNewNote = false;
       _detailDirty = false;
-      _error = null;
+      if (result.reason == NoteDetailExitReason.saved ||
+          result.reason == NoteDetailExitReason.deleted) {
+        _error = null;
+      }
     });
   }
 
@@ -205,12 +255,19 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   @override
   Widget build(BuildContext context) {
     final NotesCopy copy = NotesCopy.of(context);
+    final bool persistenceUnavailable = _error is UnsupportedError;
+    final String? loadError = _error == null
+        ? null
+        : persistenceUnavailable
+        ? copy.persistenceUnavailable
+        : copy.loadError;
     final bool compact =
         MediaQuery.sizeOf(context).width <
         ResponsiveNotesWorkspace.compactBreakpoint;
-    final bool compactDetailActive = compact && _showDetail;
     return Scaffold(
-      appBar: compactDetailActive ? null : _buildWorkspaceAppBar(copy),
+      appBar: _showDetail || (compact && widget.embeddedInWorkspace)
+          ? null
+          : _buildWorkspaceAppBar(copy),
       body: _loading
           ? Center(
               key: const ValueKey<String>('notes-workspace-loading'),
@@ -224,26 +281,33 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
               list: NotesListPanel(
                 notes: _notes,
                 selectedNoteId: _selectedNoteId,
-                error: _error == null ? null : copy.loadError,
+                error: loadError,
                 actionBusy: false,
                 onNewNote: _startNewNote,
                 onSelectNote: _selectNote,
-                onRetry: reload,
+                onRetry: persistenceUnavailable ? null : reload,
               ),
-              detail: _buildDetail(copy, showAppBar: compact),
+              detail: _buildDetail(
+                copy,
+                showAppBar: compact && !widget.embeddedInWorkspace,
+              ),
               hasSelection: _showDetail,
             ),
     );
   }
 
   PreferredSizeWidget _buildWorkspaceAppBar(NotesCopy copy) {
+    final bool expanded =
+        MediaQuery.sizeOf(context).width >= 840 && widget.embeddedInWorkspace;
     return AppBar(
       title: Text(copy.title),
-      actions: widget.onOpenSettings == null && widget.onOpenDiagnostics == null
+      actions:
+          expanded ||
+              widget.onOpenSettings == null && widget.onOpenDiagnostics == null
           ? null
           : <Widget>[
-              if (widget.onOpenSettings != null) _settingsAction(),
-              if (widget.onOpenDiagnostics != null)
+              if (!expanded && widget.onOpenSettings != null) _settingsAction(),
+              if (!expanded && widget.onOpenDiagnostics != null)
                 TextButton(
                   key: const ValueKey<String>('open-diagnostics'),
                   onPressed: widget.onOpenDiagnostics,
@@ -256,6 +320,54 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Widget _buildDetail(NotesCopy copy, {required bool showAppBar}) {
     if (!_showDetail) {
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+      if (_error != null) {
+        final bool persistenceUnavailable = _error is UnsupportedError;
+        final String errorMessage = persistenceUnavailable
+            ? copy.persistenceUnavailable
+            : copy.loadError;
+        return Center(
+          key: const ValueKey<String>('notes-workspace-detail-error'),
+          child: Semantics(
+            liveRegion: true,
+            container: true,
+            label: errorMessage,
+            child: Padding(
+              padding: const EdgeInsets.all(NoteFlowSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.cloud_off_outlined,
+                    size: 32,
+                    color: tokens.textMuted,
+                  ),
+                  const SizedBox(height: NoteFlowSpacing.sm),
+                  Text(
+                    errorMessage,
+                    key: const ValueKey<String>(
+                      'notes-workspace-detail-error-message',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.textSecondary),
+                  ),
+                  if (!persistenceUnavailable) ...<Widget>[
+                    const SizedBox(height: NoteFlowSpacing.xs),
+                    TextButton.icon(
+                      key: const ValueKey<String>(
+                        'notes-workspace-detail-retry',
+                      ),
+                      onPressed: reload,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(copy.retry),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      }
       return Center(
         key: const ValueKey<String>('notes-workspace-detail-empty'),
         child: Column(
@@ -272,12 +384,11 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         ),
       );
     }
+    final NoteDto? note = _selectedNote;
     return NoteDetailPage(
-      key: ValueKey<String>(
-        'notes-workspace-detail-${_selectedNote?.id ?? 'new'}',
-      ),
+      key: _detailKeyFor(note?.id ?? 'new'),
       notesController: _application,
-      note: _selectedNote,
+      note: note,
       provisioningReader: widget.provisioningReader,
       onProvisioningCancel: widget.onProvisioningCancel,
       showAppBar: showAppBar,

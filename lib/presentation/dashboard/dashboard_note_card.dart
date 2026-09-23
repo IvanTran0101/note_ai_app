@@ -42,17 +42,15 @@ final class DashboardNoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final ColorScheme colors = Theme.of(context).colorScheme;
     final String title = note.title.trim().isEmpty ? copy.untitled : note.title;
     final String preview = _preview(note.content);
     final String updatedDate = MaterialLocalizations.of(context)
         .formatCompactDate(note.updatedAt);
-    final Color foreground = selected
-        ? colors.onPrimaryContainer
-        : tokens.textPrimary;
+    final Color foreground = tokens.textPrimary;
     final Color secondaryForeground = selected
-        ? colors.onPrimaryContainer
+        ? tokens.textSecondary
         : tokens.textMuted;
+    final bool listLayout = layout == DashboardNoteCardLayout.list;
 
     return Semantics(
       key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
@@ -63,13 +61,17 @@ final class DashboardNoteCard extends StatelessWidget {
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        color: selected ? colors.primaryContainer : tokens.pageSurface,
+        color: selected
+            ? tokens.selectedSurface
+            : (listLayout ? Colors.transparent : tokens.pageSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-          side: BorderSide(
-            color: selected ? tokens.focusRing : tokens.divider,
-            width: selected ? 1.5 : 1.0,
-          ),
+          side: listLayout
+              ? BorderSide.none
+              : BorderSide(
+                  color: selected ? tokens.focusRing : tokens.divider,
+                  width: selected ? 1.5 : 1.0,
+                ),
         ),
         child: InkWell(
           onTap: () => onTap(note),
@@ -188,12 +190,14 @@ final class DashboardNoteCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: NoteFlowSpacing.md),
-        Text(
-          copy.updatedOn(updatedDate),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: secondaryForeground),
+        Flexible(
+          child: Text(
+            copy.updatedOn(updatedDate),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: secondaryForeground),
+          ),
         ),
       ],
     );

@@ -25,6 +25,8 @@ final class NoteDetailActionBar extends StatelessWidget {
     required this.moreLabel,
     required this.savingLabel,
     required this.summarizingLabel,
+    this.summarizeTooltip,
+    this.iconOnly = false,
   });
 
   final bool isSaving;
@@ -39,6 +41,8 @@ final class NoteDetailActionBar extends StatelessWidget {
   final String moreLabel;
   final String savingLabel;
   final String summarizingLabel;
+  final String? summarizeTooltip;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,88 @@ final class NoteDetailActionBar extends StatelessWidget {
     final bool summarizeEnabled =
         canSummarize && !isSaving && !isSummarizing && onSummarize != null;
     final bool moreEnabled = !isSaving && !isSummarizing && onMore != null;
+    final Widget summarizeButton = Semantics(
+      button: true,
+      enabled: summarizeEnabled,
+      label: isSummarizing ? summarizingLabel : summarizeLabel,
+      child: FilledButton.tonalIcon(
+        key: const ValueKey<String>('note-detail-summarize'),
+        onPressed: summarizeEnabled ? onSummarize : null,
+        icon: isSummarizing
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.auto_awesome_outlined),
+        label: Text(isSummarizing ? summarizingLabel : summarizeLabel),
+      ),
+    );
+    final Widget summarizeAction = summarizeTooltip == null
+        ? summarizeButton
+        : Tooltip(message: summarizeTooltip!, child: summarizeButton);
+
+    if (iconOnly) {
+      Widget iconAction({
+        required String label,
+        required Key key,
+        required bool enabled,
+        required VoidCallback? onPressed,
+        required Widget icon,
+        String? tooltip,
+      }) {
+        return Semantics(
+          button: true,
+          enabled: enabled,
+          label: label,
+          child: IconButton(
+            key: key,
+            tooltip: tooltip ?? label,
+            onPressed: enabled ? onPressed : null,
+            icon: icon,
+          ),
+        );
+      }
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (onSave != null)
+            iconAction(
+              label: isSaving ? savingLabel : saveLabel,
+              key: const ValueKey<String>('note-detail-save'),
+              enabled: saveEnabled,
+              onPressed: onSave,
+              icon: isSaving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+            ),
+          iconAction(
+            label: isSummarizing ? summarizingLabel : summarizeLabel,
+            key: const ValueKey<String>('note-detail-summarize'),
+            enabled: summarizeEnabled,
+            onPressed: onSummarize,
+            icon: isSummarizing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            tooltip: summarizeTooltip,
+          ),
+          if (onMore != null)
+            iconAction(
+              label: moreLabel,
+              key: const ValueKey<String>('note-detail-more'),
+              enabled: moreEnabled,
+              onPressed: onMore,
+              icon: const Icon(Icons.more_horiz),
+            ),
+        ],
+      );
+    }
 
     return Material(
       color: tokens.pageSurface,
@@ -92,26 +178,7 @@ final class NoteDetailActionBar extends StatelessWidget {
                           label: Text(isSaving ? savingLabel : saveLabel),
                         ),
                       ),
-                    Semantics(
-                      button: true,
-                      enabled: summarizeEnabled,
-                      label: isSummarizing ? summarizingLabel : summarizeLabel,
-                      child: FilledButton.tonalIcon(
-                        key: const ValueKey<String>('note-detail-summarize'),
-                        onPressed: summarizeEnabled ? onSummarize : null,
-                        icon: isSummarizing
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.auto_awesome_outlined),
-                        label: Text(
-                          isSummarizing ? summarizingLabel : summarizeLabel,
-                        ),
-                      ),
-                    ),
+                    summarizeAction,
                     if (onMore != null)
                       Semantics(
                         button: true,

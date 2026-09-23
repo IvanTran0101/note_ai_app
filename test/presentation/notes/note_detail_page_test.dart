@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
@@ -82,6 +83,42 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('shows a specific notice when note storage is unsupported', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..createNoteError = UnsupportedError('web storage unavailable');
+    await pumpPage(tester, controller);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Temporary draft',
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Couldn’t save the note. Please try again.'),
+      findsNothing,
+    );
+    final Container unavailableNotice = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('note-detail-error')),
+    );
+    final BoxDecoration noticeDecoration =
+        unavailableNotice.decoration! as BoxDecoration;
+    expect(noticeDecoration.border!.top.color, const Color(0xFFEDEDEC));
+    expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
+    expect(controller.notes, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('updates only changed fields on an existing note', (
@@ -333,6 +370,56 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
+  testWidgets('dirty back explains Web limitation without a Save action', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          NoteDetailCopy.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+        home: Builder(
+          builder: (BuildContext context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showNoteDetailBackConfirmation(
+                context: context,
+                copy: NoteDetailCopy.of(context),
+                canSave: false,
+              ),
+              child: const Text('Open confirmation'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open confirmation'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('You have unsaved changes.'), findsOneWidget);
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-save')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('deletes an existing note after confirmation', (
     WidgetTester tester,
   ) async {
@@ -408,6 +495,7 @@ final class _FakeNotesController implements NotesApplicationController {
   String? summarizedNoteId;
   int summarizeCalls = 0;
   int summarizeFailuresRemaining = 0;
+  Object? createNoteError;
   int _nextId = 1;
 
   @override
@@ -418,6 +506,10 @@ final class _FakeNotesController implements NotesApplicationController {
     required String title,
     required String content,
   }) async {
+    final Object? error = createNoteError;
+    if (error != null) {
+      throw error;
+    }
     final DateTime now = DateTime.utc(2026, 1, 2);
     final NoteDto created = NoteDto(
       id: 'note-${_nextId++}',

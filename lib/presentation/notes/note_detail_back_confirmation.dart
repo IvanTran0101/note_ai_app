@@ -6,21 +6,24 @@ import 'notes_theme_tokens.dart';
 /// Result of the unsaved-changes decision shown before leaving Note Detail.
 enum NoteDetailBackDecision { save, discard, cancel }
 
-/// Shows the mobile dirty-back decision without owning editor state.
+/// Shows the dirty-back decision without owning editor state.
 ///
-/// Save stays the primary action; Discard is styled as a quiet destructive
-/// text action following the Notion menu grammar.
+/// Save is offered only when the current target can persist notes. Discard is
+/// styled as a quiet destructive text action following the Notion menu grammar.
 Future<NoteDetailBackDecision?> showNoteDetailBackConfirmation({
   required BuildContext context,
   required NoteDetailCopy copy,
+  bool canSave = true,
 }) {
   return showDialog<NoteDetailBackDecision>(
     context: context,
     builder: (BuildContext context) {
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
       return AlertDialog(
-        title: Text(copy.dirtyBackTitle),
-        content: Text(copy.dirtyBackMessage),
+        title: Text(canSave ? copy.dirtyBackTitle : copy.unsavedChanges),
+        content: Text(
+          canSave ? copy.dirtyBackMessage : copy.persistenceUnavailable,
+        ),
         actions: <Widget>[
           TextButton(
             key: const ValueKey<String>('note-detail-back-cancel'),
@@ -35,12 +38,13 @@ Future<NoteDetailBackDecision?> showNoteDetailBackConfirmation({
                 Navigator.of(context).pop(NoteDetailBackDecision.discard),
             child: Text(copy.discard),
           ),
-          FilledButton(
-            key: const ValueKey<String>('note-detail-back-save'),
-            onPressed: () =>
-                Navigator.of(context).pop(NoteDetailBackDecision.save),
-            child: Text(copy.save),
-          ),
+          if (canSave)
+            FilledButton(
+              key: const ValueKey<String>('note-detail-back-save'),
+              onPressed: () =>
+                  Navigator.of(context).pop(NoteDetailBackDecision.save),
+              child: Text(copy.save),
+            ),
         ],
       );
     },

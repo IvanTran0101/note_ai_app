@@ -14,6 +14,7 @@ import 'package:note_ai_app/presentation/dashboard/dashboard_page.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_state.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_route_result.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 9, 10, 9);
 
@@ -33,8 +34,9 @@ void main() {
         const Locale('vi'),
       );
 
-      expect(english.allNotes, 'All notes');
-      expect(vietnamese.allNotes, 'Tất cả ghi chú');
+      expect(english.title, 'Home');
+      expect(vietnamese.title, 'Trang chủ');
+      expect(english.workspaceLabel, 'NoteFlow');
       expect(english.noteCount(1), '1 note');
       expect(english.noteCount(3), '3 notes');
       expect(vietnamese.noteCount(3), '3 ghi chú');
@@ -99,7 +101,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('All notes'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('2 notes'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('dashboard-total-count')),
@@ -109,7 +111,13 @@ void main() {
         find.byKey(const ValueKey<String>('dashboard-last-updated')),
         findsOneWidget,
       );
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+
+      await tester.tap(find.byIcon(Icons.grid_view_outlined));
+      await tester.pumpAndSettle();
+
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
+      expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.grid);
 
       await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
@@ -117,6 +125,76 @@ void main() {
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
     });
+
+    testWidgets('wide Home matches the measured page column and breadcrumb', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+        embeddedInWorkspace: true,
+      );
+      await tester.pumpAndSettle();
+
+      final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.toolbarHeight, 48);
+      expect(find.text('NoteFlow / Home'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
+
+      final Finder pageColumn = find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is ConstrainedBox &&
+            widget.constraints.maxWidth ==
+                NoteFlowLayout.dashboardContentMaxWidth,
+      );
+      expect(pageColumn, findsOneWidget);
+      expect(tester.getSize(pageColumn).width, 756);
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(366, 4));
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final Size viewport in <Size>[
+      const Size(360, 800),
+      const Size(375, 667),
+      const Size(393, 852),
+      const Size(412, 915),
+      const Size(600, 900),
+      const Size(768, 1024),
+      const Size(839, 1024),
+      const Size(840, 900),
+      const Size(1024, 1366),
+      const Size(1280, 800),
+      const Size(1440, 900),
+    ]) {
+      testWidgets('keeps Home usable at ${viewport.width}dp', (
+        WidgetTester tester,
+      ) async {
+        final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+        final DashboardController controller = DashboardController(
+          query: _FakeDashboardQuery(_overview(notes: notes)),
+        );
+
+        await _pumpDashboard(
+          tester,
+          dashboardController: controller,
+          notesController: _FakeNotesController(notes: notes),
+          size: viewport,
+          embeddedInWorkspace: true,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(DashboardPage.contentKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.newNoteKey), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     testWidgets('Grid and List use distinct compact layouts', (
       WidgetTester tester,
@@ -137,6 +215,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final double listA = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
+          .dy;
+      final double listB = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
+          .dy;
+      expect(listA, isNot(listB));
+
+      await tester.tap(find.byIcon(Icons.grid_view_outlined));
+      await tester.pumpAndSettle();
+
       final double compactA = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
           .dy;
@@ -148,13 +237,13 @@ void main() {
       await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
 
-      final double listA = tester
+      final double listAfterToggleA = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
           .dy;
-      final double listB = tester
+      final double listAfterToggleB = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
           .dy;
-      expect(listA, isNot(listB));
+      expect(listAfterToggleA, isNot(listAfterToggleB));
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
@@ -189,7 +278,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Tất cả ghi chú'), findsOneWidget);
+        expect(find.text('Trang chủ'), findsOneWidget);
         expect(
           tester
               .getSize(
@@ -368,6 +457,41 @@ void main() {
       );
     });
 
+    testWidgets('explains unsupported note storage without a retry action', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(
+          notes: notes,
+          listNotesError: UnsupportedError('web storage unavailable'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'This Web build cannot load or save notes. Use the installed app to continue.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-notes-retry')),
+        findsNothing,
+      );
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.cloud_off_outlined)).color,
+        NoteFlowUiTokens.light().textMuted,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('opens a note and marks its card selected when tapped', (
       WidgetTester tester,
     ) async {
@@ -413,15 +537,15 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('dashboard-note-a')));
       await tester.pump();
 
-      final ThemeData theme = Theme.of(
-        tester.element(find.byType(DashboardPage)),
-      );
       final Text title = tester.widget<Text>(find.text('Alpha'));
       final Card card = tester.widget<Card>(
         find.byKey(const ValueKey<String>('dashboard-note-card-a')),
       );
-      expect(card.color, theme.colorScheme.primaryContainer);
-      expect(title.style?.color, theme.colorScheme.onPrimaryContainer);
+      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(
+        tester.element(find.byType(DashboardPage)),
+      );
+      expect(card.color, tokens.selectedSurface);
+      expect(title.style?.color, tokens.textPrimary);
 
       expect(
         tester
@@ -540,10 +664,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('NoteFlow'), findsOneWidget);
-      expect(find.text('All notes'), findsOneWidget);
+      expect(find.text('NoteFlow / Home'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('1 note'), findsOneWidget);
-      expect(find.text('NoteFlow'), findsOneWidget);
     });
 
     testWidgets('renders Vietnamese labels when the locale is vi', (
@@ -562,7 +685,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Tất cả ghi chú'), findsOneWidget);
+      expect(find.text('NoteFlow / Trang chủ'), findsOneWidget);
+      expect(find.text('Trang chủ'), findsOneWidget);
       expect(find.text('1 ghi chú'), findsOneWidget);
     });
 
@@ -701,6 +825,7 @@ Future<void> _pumpDashboard(
   VoidCallback? onCreateNote,
   VoidCallback? onOpenSettings,
   VoidCallback? onOpenDiagnostics,
+  bool embeddedInWorkspace = false,
   Locale locale = const Locale('en'),
   Size size = const Size(1200, 900),
   double textScale = 1.0,
@@ -741,6 +866,7 @@ Future<void> _pumpDashboard(
                     onCreateNote();
                     return null;
                   },
+            embeddedInWorkspace: embeddedInWorkspace,
             onOpenSettings: onOpenSettings,
             onOpenDiagnostics: onOpenDiagnostics,
           );

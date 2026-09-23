@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -230,11 +231,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _notifyDirtyChanged();
       persisted = true;
       return true;
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) {
         return false;
       }
-      setState(() => _error = copy.saveError);
+      setState(() {
+        _error = error is UnsupportedError
+            ? copy.persistenceUnavailable
+            : copy.saveError;
+      });
       return false;
     } finally {
       if (mounted) {
@@ -311,6 +316,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     final NoteDetailBackDecision? action = await showNoteDetailBackConfirmation(
       context: context,
       copy: copy,
+      canSave: !kIsWeb,
     );
     _backConfirmationVisible = false;
     _ignoreNextEditorFocusLoss = true;
@@ -327,6 +333,10 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
             ? NoteDetailExitReason.saved
             : NoteDetailExitReason.discarded,
       );
+      return;
+    }
+    if (kIsWeb) {
+      setState(() => _statusMessage = copy.persistenceUnavailable);
       return;
     }
     if (await _save() && mounted) {
@@ -421,10 +431,11 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   @override
   Widget build(BuildContext context) {
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final String pageTitle = _note == null
-        ? copy.newNote
-        : (_note!.title.trim().isEmpty ? copy.editNote : _note!.title);
-    final Widget surface = _buildSurface(copy);
+    final String currentTitle = _titleController.text.trim();
+    final String pageTitle = currentTitle.isNotEmpty
+        ? currentTitle
+        : (_note == null ? copy.newNote : copy.editNote);
+    final Widget surface = _buildSurface(copy, pageTitle);
     final Widget content = widget.onEmbeddedExit != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -485,7 +496,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     );
   }
 
-  Widget _buildSurface(NoteDetailCopy copy) {
+  Widget _buildSurface(NoteDetailCopy copy, String pageTitle) {
     return NoteDetailSurface(
       titleController: _titleController,
       contentController: _contentController,
@@ -493,6 +504,12 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       contentFocusNode: _contentFocusNode,
       contentFieldContextKey: _contentFieldContextKey,
       copy: copy,
+      pageTitle: pageTitle,
+      showPageHeader: !widget.showAppBar,
+      statusUnavailable: kIsWeb,
+      onBack: widget.showAppBar ? null : () => unawaited(_handleBack()),
+      backTooltip: copy.back,
+      backKey: NoteDetailPage.backKey,
       hasSavedNote: _note != null,
       isDirty: _isDirty,
       error: _error,

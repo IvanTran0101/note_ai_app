@@ -70,7 +70,7 @@ void main() {
   });
 
   group('icon-only controls', () {
-    testWidgets('shell icon buttons carry tooltips', (
+    testWidgets('sidebar visibility controls and footer carry tooltips', (
       WidgetTester tester,
     ) async {
       tester.view.physicalSize = const Size(1200, 900);
@@ -93,9 +93,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byTooltip('Collapse sidebar'), findsOneWidget);
+      expect(find.byTooltip('Hide sidebar'), findsOneWidget);
       expect(find.byTooltip('Settings'), findsOneWidget);
       expect(find.byTooltip('Diagnostics'), findsOneWidget);
+
+      await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Open sidebar'), findsOneWidget);
+
+      await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Hide sidebar'), findsOneWidget);
     });
   });
 }

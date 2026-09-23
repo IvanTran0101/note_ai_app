@@ -77,38 +77,65 @@ final class DashboardContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<NoteDto> filteredNotes = visibleNotes;
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         key: const ValueKey<String>('dashboard-content'),
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 32.0),
+        padding: EdgeInsets.zero,
         children: <Widget>[
-          if (searchOpen) ...<Widget>[
-            _buildSearchField(context),
-            const SizedBox(height: NoteFlowSpacing.lg),
-          ],
-          _buildHeader(context),
-          const SizedBox(height: NoteFlowSpacing.xl),
-          _buildControls(context),
-          if (hasError) ...<Widget>[
-            const SizedBox(height: NoteFlowSpacing.lg),
-            DashboardInlineError(copy: copy, onRetry: onRetry),
-          ],
-          const SizedBox(height: NoteFlowSpacing.xl),
-          if (filteredNotes.isEmpty && searchText.trim().isNotEmpty)
-            DashboardFilteredEmptyView(copy: copy, onClear: onClearSearch)
-          else ...<Widget>[
-            if (searchText.trim().isEmpty)
-              NoteFlowSectionLabel(
-                label: copy.recentlyUpdated,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NoteFlowSpacing.xs,
-                  vertical: NoteFlowSpacing.xs,
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: NoteFlowLayout.dashboardContentMaxWidth,
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
+                  compact
+                      ? NoteFlowSpacing.xxl
+                      : NoteFlowLayout.editorTopPadding,
+                  compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
+                  NoteFlowSpacing.xxxl,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (searchOpen) ...<Widget>[
+                      _buildSearchField(context),
+                      const SizedBox(height: NoteFlowSpacing.lg),
+                    ],
+                    _buildHeader(context),
+                    const SizedBox(height: NoteFlowSpacing.xl),
+                    _buildControls(context),
+                    if (hasError) ...<Widget>[
+                      const SizedBox(height: NoteFlowSpacing.lg),
+                      DashboardInlineError(copy: copy, onRetry: onRetry),
+                    ],
+                    const SizedBox(height: NoteFlowSpacing.xl),
+                    if (filteredNotes.isEmpty && searchText.trim().isNotEmpty)
+                      DashboardFilteredEmptyView(
+                        copy: copy,
+                        onClear: onClearSearch,
+                      )
+                    else ...<Widget>[
+                      if (searchText.trim().isEmpty)
+                        NoteFlowSectionLabel(
+                          label: copy.recentlyUpdated,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NoteFlowSpacing.xs,
+                            vertical: NoteFlowSpacing.xs,
+                          ),
+                        ),
+                      _buildNoteCollection(context, filteredNotes),
+                    ],
+                  ],
                 ),
               ),
-            _buildNoteCollection(context, filteredNotes),
-          ],
+            ),
+          ),
         ],
       ),
     );
@@ -143,9 +170,13 @@ final class DashboardContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          copy.allNotes,
-          style: Theme.of(context).textTheme.headlineMedium
-              ?.copyWith(fontWeight: FontWeight.w700, color: colors.onSurface),
+          copy.title,
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+            fontSize: 40,
+            height: 1.2,
+            fontWeight: FontWeight.w700,
+            color: colors.onSurface,
+          ),
         ),
         const SizedBox(height: 4.0),
         Text(
@@ -196,67 +227,89 @@ final class DashboardContent extends StatelessWidget {
   }
 
   Widget _buildControls(BuildContext context) {
-    return Wrap(
-      spacing: 8.0,
-      runSpacing: 8.0,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: <Widget>[
-        PopupMenuButton<DashboardSort>(
-          tooltip: copy.sort,
-          initialValue: sort,
-          onSelected: onSortChanged,
-          itemBuilder: (BuildContext context) =>
-              <PopupMenuEntry<DashboardSort>>[
-                PopupMenuItem<DashboardSort>(
-                  value: DashboardSort.updated,
-                  child: Text(copy.sortUpdated),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool iconsOnly = constraints.maxWidth < 520;
+        return Wrap(
+          spacing: 8.0,
+          runSpacing: 8.0,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            PopupMenuButton<DashboardSort>(
+              tooltip: copy.sort,
+              initialValue: sort,
+              onSelected: onSortChanged,
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<DashboardSort>>[
+                    PopupMenuItem<DashboardSort>(
+                      value: DashboardSort.updated,
+                      child: Text(copy.sortUpdated),
+                    ),
+                    PopupMenuItem<DashboardSort>(
+                      value: DashboardSort.created,
+                      child: Text(copy.sortCreated),
+                    ),
+                  ],
+              child: iconsOnly
+                  ? const SizedBox.square(
+                      dimension: 48,
+                      child: Center(child: Icon(Icons.sort, size: 20)),
+                    )
+                  : Container(
+                      constraints: const BoxConstraints(minHeight: 48.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NoteFlowSpacing.md,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: NoteFlowUiTokens.of(context).divider,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          NoteFlowRadius.input,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const Icon(Icons.sort, size: 20),
+                          const SizedBox(width: NoteFlowSpacing.sm),
+                          Text(
+                            sort == DashboardSort.updated
+                                ? copy.sortUpdated
+                                : copy.sortCreated,
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+            SegmentedButton<DashboardLayout>(
+              key: const ValueKey<String>('dashboard-layout-toggle'),
+              segments: <ButtonSegment<DashboardLayout>>[
+                ButtonSegment<DashboardLayout>(
+                  value: DashboardLayout.list,
+                  label: iconsOnly ? const SizedBox.shrink() : Text(copy.list),
+                  icon: Tooltip(
+                    message: copy.list,
+                    child: const Icon(Icons.view_list_outlined),
+                  ),
                 ),
-                PopupMenuItem<DashboardSort>(
-                  value: DashboardSort.created,
-                  child: Text(copy.sortCreated),
+                ButtonSegment<DashboardLayout>(
+                  value: DashboardLayout.grid,
+                  label: iconsOnly ? const SizedBox.shrink() : Text(copy.grid),
+                  icon: Tooltip(
+                    message: copy.grid,
+                    child: const Icon(Icons.grid_view_outlined),
+                  ),
                 ),
               ],
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 48.0),
-            padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
-            decoration: BoxDecoration(
-              border: Border.all(color: NoteFlowUiTokens.of(context).divider),
-              borderRadius: BorderRadius.circular(NoteFlowRadius.input),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(Icons.sort, size: 20),
-                const SizedBox(width: NoteFlowSpacing.sm),
-                Text(
-                  sort == DashboardSort.updated
-                      ? copy.sortUpdated
-                      : copy.sortCreated,
-                ),
-              ],
-            ),
-          ),
-        ),
-        SegmentedButton<DashboardLayout>(
-          key: const ValueKey<String>('dashboard-layout-toggle'),
-          segments: <ButtonSegment<DashboardLayout>>[
-            ButtonSegment<DashboardLayout>(
-              value: DashboardLayout.list,
-              label: Text(copy.list),
-              icon: const Icon(Icons.view_list_outlined),
-            ),
-            ButtonSegment<DashboardLayout>(
-              value: DashboardLayout.grid,
-              label: Text(copy.grid),
-              icon: const Icon(Icons.grid_view_outlined),
+              selected: <DashboardLayout>{layout},
+              onSelectionChanged: (Set<DashboardLayout> value) {
+                onLayoutChanged(value.first);
+              },
             ),
           ],
-          selected: <DashboardLayout>{layout},
-          onSelectionChanged: (Set<DashboardLayout> value) {
-            onLayoutChanged(value.first);
-          },
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -274,7 +327,16 @@ final class DashboardContent extends StatelessWidget {
               onTap: onOpenNote,
             ),
             if (index < items.length - 1)
-              const SizedBox(height: NoteFlowSpacing.xs),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NoteFlowSpacing.xl,
+                ),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: NoteFlowUiTokens.of(context).divider,
+                ),
+              ),
           ],
         ],
       );

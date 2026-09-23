@@ -84,6 +84,15 @@ entered, so no note was persisted. Other screenshots remain from the
 | `67-noteflow-register-1280x800-final.png` | Current-source Register screen in desktop panel | 1280×800 | light |
 | `68-noteflow-register-390x844-final.png` | Current-source Register screen | 390×844 | light |
 | `69-noteflow-login-390x844-final.png` | Current-source Login screen | 390×844 | light |
+| `70-noteflow-home-1440x900-current.png` | Current-source Home with Web storage limitation | 1440×900 | light |
+| `71-noteflow-notes-1280x800-current.png` | Current-source Notes with Web storage limitation and desktop sidebar | 1280×800 | light |
+| `72-noteflow-notes-1024x768-current.png` | Current-source Notes with desktop sidebar | 1024×768 | light |
+| `73-noteflow-notes-768x1024-current.png` | Current-source Notes with NavigationRail | 768×1024 | light |
+| `74-noteflow-notes-390x844-current.png` | Current-source compact Notes screen | 390×844 | light |
+| `75-noteflow-notes-360x800-current.png` | Current-source compact Notes screen; limitation message wraps without overflow | 360×800 | light |
+| `76-noteflow-notes-1440x900-current.png` | Current-source Notes with desktop sidebar | 1440×900 | light |
+| `77-noteflow-compact-navigation-390x844-current.png` | Compact navigation sheet with Notes selected | 390×844 | light |
+| `78-noteflow-home-390x844-current.png` | Current-source Home with Web storage limitation | 390×844 | light |
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 
@@ -326,7 +335,7 @@ widget regression had not run successfully when this capture was first
 recorded. It does not verify persistence or count toward a numeric fidelity
 score by itself.
 
-### Current regression and build verification — 2026-09-23
+### Earlier regression and build verification — 2026-09-23
 
 - `flutter test --no-pub test/presentation --reporter expanded`: PASS, 189/189.
   Windows required a temporary test-only `local_llm_bridge` package-root shim;
@@ -355,8 +364,8 @@ score by itself.
   Register uses 76px compact and 40px desktop top padding, with the existing
   32px fallback on short viewports.
 - `flutter test --no-pub test/presentation/auth/auth_pages_test.dart`: PASS,
-  9/9. The full `test/presentation` suite also passes 189/189 after this change.
-  Tests use a temporary test-only `local_llm_bridge` package-root shim; the
+  9/9. An earlier `test/presentation` run passed 189/189 before the final auth
+  spacing refinement. Tests use a temporary test-only `local_llm_bridge` shim; the
   package-config file was restored byte-for-byte to SHA-256
   `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 - Widget checks cover phone 393×852 and desktop/tablet 1280×800 and 768×1024.
@@ -367,11 +376,31 @@ score by itself.
   NoteFlow keeps its existing password Login and four-field registration while
   Notion's reference shows an email-first step and provider controls. Those
   unsupported provider actions were not added.
-- Provisional visual-only estimates: Login 77/100, Register 81/100. These are
-  not the full plan rubric scores: the screenshots do not cover all auth states,
-  accessibility, or all target platforms. The app-wide `>=95/100` gate is not
-  met or verified.
+- The visual review is qualitative only. The captures do not cover all auth
+  states, accessibility, or all target platforms, so no numeric auth or app
+  score is assigned and the app-wide `>=95/100` gate is not established.
 - The full presentation suite rerun after the latest spacing refinement did not
   complete: it hit a transient Windows disk-full error and hung in an auth
   navigation test. Do not count that run as a pass. The focused auth page suite
   passed 9/9; the package-config SHA-256 was restored to the recorded baseline.
+
+### Current shell and Notes responsive review — 2026-09-23
+
+- Release Web build used the current working tree with
+  `--dart-define=NOTEFLOW_AUTH_MODE=local`, served from
+  `output/playwright/20260923-shell-current/web`. Captures `70`–`78` use DPR 1.
+- The 280px desktop sidebar appears at 1280×800, 1024×768, and 1440×900; the
+  768×1024 layout uses the labeled NavigationRail; 390×844 uses the compact
+  toolbar and navigation bottom sheet. At 360×800 the storage message wraps
+  inside the viewport. Home and Notes show the existing Web storage-unavailable
+  state; no note data was loaded or persisted in this browser run.
+- This verifies current-source layout at those Web viewports, not a same-state
+  Notion pixel diff, loaded-note UI, native-device behavior, or the `>=95/100`
+  rubric.
+- `flutter build apk --release --no-pub`: PASS, 87.5 MB. `flutter devices`
+  currently lists Windows, Chrome, and Edge only; no Android device/emulator is
+  connected, and iOS/macOS builds require an Apple runner.
+- `flutter analyze --no-pub lib/main.dart lib/presentation`: PASS, no issues.
+  `dart format --output=none --set-exit-if-changed` on the 27 modified Dart
+  files: PASS, 0 changed. The latest full presentation-suite rerun did not
+  complete; see the auth follow-up above. No new full-suite pass is claimed.

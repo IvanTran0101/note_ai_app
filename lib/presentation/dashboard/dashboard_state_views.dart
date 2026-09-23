@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../common/note_flow_primitives.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'dashboard_localizations.dart';
 
@@ -71,35 +72,58 @@ final class DashboardEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Semantics(
-          container: true,
-          label: copy.noNotes,
-          child: Column(
-            key: const ValueKey<String>('dashboard-empty'),
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(
-                Icons.note_alt_outlined,
-                size: 56.0,
-                color: tokens.textMuted,
-              ),
-              const SizedBox(height: 16.0),
-              Text(
-                copy.noNotes,
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8.0),
-              FilledButton.icon(
+    return _DashboardStatePage(
+      copy: copy,
+      child: Semantics(
+        key: const ValueKey<String>('dashboard-empty'),
+        container: true,
+        label: copy.noNotes,
+        child: NoteFlowSurface(
+          tone: NoteFlowSurfaceTone.subtle,
+          bordered: true,
+          radius: NoteFlowRadius.card,
+          padding: const EdgeInsets.all(NoteFlowSpacing.xl),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget message = Row(
+                children: <Widget>[
+                  Icon(Icons.description_outlined, color: tokens.textSecondary),
+                  const SizedBox(width: NoteFlowSpacing.md),
+                  Expanded(
+                    child: Text(
+                      copy.noNotes,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              final Widget create = FilledButton.icon(
                 key: const ValueKey<String>('dashboard-empty-create'),
                 onPressed: onCreateNote,
                 icon: const Icon(Icons.add),
                 label: Text(copy.createFirstNote),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 460) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    message,
+                    const SizedBox(height: NoteFlowSpacing.md),
+                    Align(alignment: Alignment.centerLeft, child: create),
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  Expanded(child: message),
+                  const SizedBox(width: NoteFlowSpacing.md),
+                  create,
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -120,31 +144,13 @@ final class DashboardErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Semantics(
-          liveRegion: true,
-          container: true,
-          label: copy.loadError,
-          child: Column(
-            key: const ValueKey<String>('dashboard-error'),
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.cloud_off_outlined, size: 48.0, color: colors.error),
-              const SizedBox(height: 16.0),
-              Text(copy.loadError, textAlign: TextAlign.center),
-              const SizedBox(height: 16.0),
-              FilledButton.icon(
-                key: const ValueKey<String>('dashboard-retry'),
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: Text(copy.retry),
-              ),
-            ],
-          ),
-        ),
+    return _DashboardStatePage(
+      copy: copy,
+      child: _DashboardLoadError(
+        copy: copy,
+        onRetry: onRetry,
+        stateKey: const ValueKey<String>('dashboard-error'),
+        retryKey: const ValueKey<String>('dashboard-retry'),
       ),
     );
   }
@@ -155,37 +161,162 @@ final class DashboardNotesErrorView extends StatelessWidget {
   const DashboardNotesErrorView({
     super.key,
     required this.copy,
-    required this.onRetry,
+    this.onRetry,
+    this.message,
   });
 
   final DashboardCopy copy;
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Semantics(
-          liveRegion: true,
-          container: true,
-          label: copy.loadError,
-          child: Column(
-            key: const ValueKey<String>('dashboard-notes-error'),
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.folder_off_outlined, size: 48.0, color: colors.error),
-              const SizedBox(height: 16.0),
-              Text(copy.loadError, textAlign: TextAlign.center),
-              const SizedBox(height: 16.0),
-              FilledButton.icon(
-                key: const ValueKey<String>('dashboard-notes-retry'),
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: Text(copy.retry),
+    return _DashboardStatePage(
+      copy: copy,
+      child: _DashboardLoadError(
+        copy: copy,
+        onRetry: onRetry,
+        message: message,
+        informational: message != null,
+        stateKey: const ValueKey<String>('dashboard-notes-error'),
+        retryKey: const ValueKey<String>('dashboard-notes-retry'),
+      ),
+    );
+  }
+}
+
+final class _DashboardStatePage extends StatelessWidget {
+  const _DashboardStatePage({required this.copy, required this.child});
+
+  final DashboardCopy copy;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: <Widget>[
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: NoteFlowLayout.dashboardContentMaxWidth,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
+                compact ? NoteFlowSpacing.xxl : NoteFlowLayout.editorTopPadding,
+                compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
+                NoteFlowSpacing.xxxl,
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    copy.title,
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontSize: 40,
+                      height: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: NoteFlowSpacing.xl),
+                  child,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+final class _DashboardLoadError extends StatelessWidget {
+  const _DashboardLoadError({
+    required this.copy,
+    required this.onRetry,
+    required this.stateKey,
+    required this.retryKey,
+    this.message,
+    this.informational = false,
+  });
+
+  final DashboardCopy copy;
+  final VoidCallback? onRetry;
+  final Key stateKey;
+  final Key retryKey;
+  final String? message;
+  final bool informational;
+
+  @override
+  Widget build(BuildContext context) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final String errorMessage = message ?? copy.loadError;
+    return Semantics(
+      key: stateKey,
+      liveRegion: true,
+      container: true,
+      label: errorMessage,
+      child: NoteFlowSurface(
+        tone: NoteFlowSurfaceTone.subtle,
+        bordered: true,
+        radius: NoteFlowRadius.card,
+        child: Padding(
+          padding: const EdgeInsets.all(NoteFlowSpacing.lg),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget message = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.cloud_off_outlined,
+                    color: informational ? tokens.textMuted : tokens.error,
+                    size: 20,
+                  ),
+                  const SizedBox(width: NoteFlowSpacing.md),
+                  Expanded(
+                    child: Text(
+                      errorMessage,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: tokens.textPrimary),
+                    ),
+                  ),
+                ],
+              );
+              final Widget? retry = onRetry == null
+                  ? null
+                  : TextButton.icon(
+                      key: retryKey,
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(copy.retry),
+                    );
+              if (constraints.maxWidth < 420) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    message,
+                    if (retry != null) ...<Widget>[
+                      const SizedBox(height: NoteFlowSpacing.sm),
+                      Align(alignment: Alignment.centerRight, child: retry),
+                    ],
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  Expanded(child: message),
+                  if (retry != null) ...<Widget>[
+                    const SizedBox(width: NoteFlowSpacing.md),
+                    retry,
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),

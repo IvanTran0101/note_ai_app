@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_action_bar.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_editor_form.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_surface.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
   const Key titleFieldKey = ValueKey<String>('note-detail-title-field');
@@ -19,6 +21,10 @@ void main() {
     required Size size,
     double textScale = 1.0,
     bool isDirty = false,
+    bool showPageHeader = false,
+    bool statusUnavailable = false,
+    bool hasSavedNote = true,
+    String titleText = 'First note',
   }) async {
     tester.view
       ..physicalSize = size
@@ -26,7 +32,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final TextEditingController titleController = TextEditingController(
-      text: 'First note',
+      text: titleText,
     );
     final TextEditingController contentController = TextEditingController(
       text: 'The first note body.',
@@ -50,7 +56,10 @@ void main() {
                   contentFocusNode: contentFocusNode,
                   contentFieldContextKey: GlobalKey(),
                   copy: NoteDetailCopy.of(context),
-                  hasSavedNote: true,
+                  pageTitle: titleText.isEmpty ? 'New note' : titleText,
+                  showPageHeader: showPageHeader,
+                  statusUnavailable: statusUnavailable,
+                  hasSavedNote: hasSavedNote,
                   isDirty: isDirty,
                   error: null,
                   statusMessage: null,
@@ -82,6 +91,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('new note title hint uses page-title typography', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(tester, size: const Size(390, 844), titleText: '');
+
+    final Text titleHint = tester.widget<Text>(find.text('Title'));
+    expect(titleHint.style?.fontSize, 40);
+    expect(titleHint.style?.fontWeight, FontWeight.w700);
+    expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
+  });
+
+  testWidgets('long page titles wrap at compact widths without overflow', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(
+      tester,
+      size: const Size(390, 844),
+      titleText:
+          'A deliberately long page title that must wrap across several lines',
+    );
+
+    expect(tester.getSize(find.byKey(titleFieldKey)).height, greaterThan(72));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('composes editor fields and action bar at 390x844', (
     WidgetTester tester,
   ) async {
@@ -110,13 +144,86 @@ void main() {
     expect(find.byKey(saveKey), findsOneWidget);
     expect(find.byKey(summarizeKey), findsOneWidget);
 
-    // Wide layouts keep the editor centered and capped at 720 logical pixels
-    // (measured Notion content width is 708-720px).
+    // The title block matches Notion's 720px block; body text uses 708px.
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 720);
     expect(tester.getCenter(form).dx, 512);
+    expect(tester.getTopLeft(form).dy, 112);
+    expect(tester.getSize(find.byKey(contentFieldKey)).width, 708);
     expect(find.byType(Scaffold), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('centers the 360px editor column at the Notion compact width', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(tester, size: const Size(567, 694));
+
+    final Finder form = find.byType(NoteDetailEditorForm);
+    expect(tester.getSize(form).width, 360);
+    expect(tester.getCenter(form).dx, 283.5);
+    expect(tester.getTopLeft(form).dy, 56);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide editor uses a Notion-like header with compact actions', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(
+      tester,
+      size: const Size(1024, 700),
+      showPageHeader: true,
+    );
+
+    expect(find.byType(NoteFlowPageHeader), findsOneWidget);
+    expect(find.byType(NoteDetailActionBar), findsOneWidget);
+    expect(find.byKey(summarizeKey), findsOneWidget);
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new-note autosave state lives in the page header', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(
+      tester,
+      size: const Size(1024, 700),
+      titleText: '',
+      showPageHeader: true,
+      hasSavedNote: false,
+    );
+
+    expect(find.text('NoteFlow / New note'), findsOneWidget);
+    expect(find.text('Saves automatically as you type'), findsOneWidget);
+    expect(
+      find.text(
+        'Your note is created automatically as you type. You can summarize it once it is created.',
+      ),
+      findsNothing,
+    );
+    expect(find.byKey(NoteFlowPageHeader.statusKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unavailable note storage uses a warning icon and label', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(
+      tester,
+      size: const Size(1024, 700),
+      titleText: '',
+      showPageHeader: true,
+      statusUnavailable: true,
+      hasSavedNote: false,
+    );
+
+    final Icon unavailableIcon = tester.widget<Icon>(
+      find.byIcon(Icons.cloud_off_outlined),
+    );
+    expect(unavailableIcon.color, NoteFlowUiTokens.light().textMuted);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
+    expect(find.text('Saving unavailable on Web'), findsOneWidget);
   });
 
   for (final Size size in <Size>[

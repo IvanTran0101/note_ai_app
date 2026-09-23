@@ -66,6 +66,9 @@ final class NotesCopy {
   String get loadError => _isVietnamese
       ? 'Không thể tải ghi chú. Vui lòng thử lại.'
       : 'Couldn’t load notes. Please try again.';
+  String get persistenceUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ tải hoặc lưu ghi chú. Hãy dùng ứng dụng đã cài đặt để tiếp tục.'
+      : 'This Web build cannot load or save notes. Use the installed app to continue.';
   String get saveError => _isVietnamese
       ? 'Không thể lưu ghi chú. Vui lòng thử lại.'
       : 'Couldn’t save the note. Please try again.';

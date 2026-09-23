@@ -24,8 +24,8 @@ final class DashboardCopy {
 
   final bool _isVietnamese;
 
-  String get title => 'NoteFlow';
-  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get title => _isVietnamese ? 'Trang chủ' : 'Home';
+  String get workspaceLabel => 'NoteFlow';
   String get recentlyUpdated =>
       _isVietnamese ? 'Cập nhật gần đây' : 'Recently updated';
   String notesCount(int count) => _isVietnamese
@@ -51,6 +51,9 @@ final class DashboardCopy {
   String get loadError => _isVietnamese
       ? 'Không thể tải ghi chú. Vui lòng thử lại.'
       : 'Couldn’t load notes. Please try again.';
+  String get storageUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ tải hoặc lưu ghi chú. Hãy dùng ứng dụng đã cài đặt để tiếp tục.'
+      : 'This Web build cannot load or save notes. Use the installed app to continue.';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get noMatches =>
       _isVietnamese ? 'Không tìm thấy ghi chú phù hợp' : 'No matching notes';

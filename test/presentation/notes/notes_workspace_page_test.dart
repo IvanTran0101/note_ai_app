@@ -41,6 +41,69 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('workspace entry points open notes and drafts inline', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _FakeNotesController controller = _FakeNotesController();
+    final GlobalKey<NotesWorkspacePageState> pageKey =
+        GlobalKey<NotesWorkspacePageState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotesWorkspacePage(
+          key: pageKey,
+          controller: controller,
+          embeddedInWorkspace: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    pageKey.currentState!.openNote(buildNote());
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      'First note',
+    );
+
+    pageKey.currentState!.startNewNote();
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      isEmpty,
+    );
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Unsaved draft',
+    );
+    await tester.pump();
+    pageKey.currentState!.openNote(
+      buildNote(id: 'note-2', title: 'Another note'),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      'Unsaved draft',
+    );
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final int width in <int>[360, 375, 390]) {
     testWidgets('compact list renders without overflow at ${width}dp', (
       WidgetTester tester,
@@ -135,7 +198,7 @@ void main() {
   });
 
   testWidgets(
-    'expanded workspace opens the same detail surface beside the list',
+    'expanded workspace opens the detail as a full page with a back path',
     (WidgetTester tester) async {
       final _FakeNotesController controller = _FakeNotesController(
         notes: <NoteDto>[buildNote()],
@@ -146,10 +209,7 @@ void main() {
         find.byKey(const ValueKey<String>('responsive-notes-expanded-surface')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
       await tester.pumpAndSettle();
 
@@ -159,13 +219,21 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('responsive-notes-list-pane')),
-        findsOneWidget,
+        findsNothing,
+      );
+      expect(find.byKey(NoteDetailPage.backKey), findsOneWidget);
+      await tester.tap(find.byKey(NoteDetailPage.backKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('note-detail-content-field')),
+        findsNothing,
       );
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('does not replace a selected note while its detail is dirty', (
+  testWidgets('wide editor back keeps dirty changes behind confirmation', (
     WidgetTester tester,
   ) async {
     final _FakeNotesController controller = _FakeNotesController(
@@ -183,13 +251,17 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey<String>('note-note-2')));
-    await tester.pump();
-
+    await tester.tap(find.byKey(NoteDetailPage.backKey));
+    await tester.pumpAndSettle();
     expect(
-      find.text('Unsaved changes. Save before summarizing or switching notes.'),
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
       findsOneWidget,
     );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+    );
+    await tester.pumpAndSettle();
+
     expect(
       tester
           .widget<TextField>(
@@ -225,6 +297,91 @@ void main() {
     expect(controller.listNotesCalls, greaterThan(callsBefore));
     expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('load failure is not presented as an empty notes collection', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = StateError('offline');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-error')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
+      findsNothing,
+    );
+
+    controller.listNotesError = null;
+    await tester.tap(find.byKey(const ValueKey<String>('retry-notes')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unsupported note storage has no futile retry action', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = UnsupportedError('web storage unavailable');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    expect(
+      find.text(
+        'This Web build cannot load or save notes. Use the installed app to continue.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('retry-notes')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('new-note')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('discarding a draft preserves the unsupported storage state', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = UnsupportedError('web storage unavailable');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    await tester.tap(find.byKey(const ValueKey<String>('new-note')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('note-detail-title-field')),
+      'QA draft',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(NoteDetailPage.backKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This Web build cannot load or save notes. Use the installed app to continue.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -276,6 +433,8 @@ final class _FakeNotesController implements NotesApplicationController {
   /// test can observe the page while a reload request is in flight.
   Completer<void>? listNotesGate;
 
+  Object? listNotesError;
+
   /// Number of [listNotes] calls, used to prove reloads are coalesced.
   int listNotesCalls = 0;
 
@@ -285,6 +444,9 @@ final class _FakeNotesController implements NotesApplicationController {
     final Completer<void>? gate = listNotesGate;
     if (gate != null) {
       await gate.future;
+    }
+    if (listNotesError != null) {
+      throw listNotesError!;
     }
     return List<NoteDto>.of(notes);
   }

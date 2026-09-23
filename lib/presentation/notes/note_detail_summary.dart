@@ -31,10 +31,13 @@ final class NoteDetailSummary extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final String? value = summary;
     if (value == null) {
+      if (!hasSavedNote) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.only(top: NoteFlowSpacing.xl),
         child: Text(
-          hasSavedNote ? copy.noSummary : copy.saveBeforeSummary,
+          copy.noSummary,
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: tokens.textMuted),
         ),

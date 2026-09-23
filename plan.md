@@ -512,7 +512,7 @@ Web persistence là limitation có sẵn: `FileDatabaseContext` chọn stub khô
 
 ### Re-review 2026-09-23 — corrective audit
 
-Execution checkout: branch `TuanKiet2`, current base commit `c3383eb`.
+Execution checkout: branch `TuanKiet2`, current committed base `cfc28bd`.
 The previous table's `DONE` labels for Steps 0–9 and its `95/100` claim are
 withdrawn. The checklists in Sections 5 and 6 were still unchecked, the stored
 captures were not paired with same-state Notion captures for every viewport,
@@ -553,10 +553,10 @@ form width, and core surfaces close, while the auth flows still differ in
 hierarchy and content: NoteFlow keeps its supported password Login and
 four-field registration; Notion's references show an email-first step and
 provider controls. No auth provider or backend behavior is added to imitate
-those unsupported controls. Provisional visual-only estimate for these four
-screens is Login 77/100 and Register 81/100; this is not the plan's final
-rubric score because state, accessibility, and platform gates are not covered
-by these captures. The full app therefore has no passing 95/100 result.
+those unsupported controls. This is a qualitative visual review only, not a
+rubric score: the four captures do not cover all auth states, accessibility,
+or target platforms, so no auth or app-wide numeric score is assigned. The
+available evidence does not establish the `>=95/100` gate.
 
 Current Login uses 38px compact/72px desktop top padding; Register uses 76px
 compact/40px desktop top padding and a 496px desktop panel, with the existing
@@ -621,15 +621,15 @@ checks state retention only; it does not verify Web persistence or the overall
 | 0. Baseline | Current checkout and browser load/error states inspected; saved browser note and complete runtime baseline not verified | `PARTIAL` | Record actual create/edit/save/delete/auth behavior against reachable backend, without changing it |
 | 1. Reference matrix | Live Notion page opened read-only; official Library, keyboard, search, auth, and web docs fetched; direct sign-up page is JavaScript-only; one shared editor anchor checked; no paired diff for each supported viewport | `PARTIAL` | Complete same-size paired comparisons for supported surfaces and states |
 | 2. Tokens/primitives | Theme/presentation edits applied; targeted analyzer and widget tests pass | `IN_PROGRESS` | Recheck light/dark screenshots, text contrast, and all shared components after final styling |
-| 3. Shell/sidebar | Expanded desktop sidebar now targets 280px measured from the active Notion reference; one open-sidebar title anchor matches x=420 within 2px vertically; collapsed desktop uses a 44×44px overlay; tablet keeps the labeled NavigationRail; captures 54–55 are older collapsed-state images | `IN_PROGRESS` | Save paired release captures for open/collapsed/rail states, verify resize behavior, and run physical-device checks |
-| 4. Dashboard/Recents | Fresh current-source Web build shows the explicit storage-unavailable Home state at 1440×900; no loaded note data is available in this Web backend | `PARTIAL` | Compare Home's available states with Notion and verify controller-backed loaded data on a supported native target |
-| 5. Notes list/detail frame | Fresh current-source Notes captures at 360×800, 390×844, 768×1024, 1024×768, and 1440×900 show compact/rail/sidebar layouts and the explicit storage-unavailable state; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
+| 3. Shell/sidebar | Current-source captures 71–73 and 77 show the 280px desktop sidebar, 80px tablet rail, and compact navigation sheet; collapsed desktop still uses its 44×44px reopen overlay; one live Notion title anchor is within 2px vertically | `IN_PROGRESS` | Complete paired open/collapsed/rail comparisons and run physical-device checks |
+| 4. Dashboard/Recents | Current-source Web Home captures 70 and 78 show the explicit storage-unavailable state at desktop and phone widths; no loaded note data is available in this Web build | `PARTIAL` | Compare Home's supported states with Notion and verify controller-backed loaded data on a supported native target |
+| 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
-| 8. Auth UI | Current-source paired viewport captures 66–69 vs Notion references 20/22/24/26; provisional visual-only Login 77/100 and Register 81/100; auth page tests pass 9/9 and preserve controller/validator/autofill contracts | `IN_PROGRESS` | Improve hierarchy/spacing within existing auth flow, compare validation/busy/error/forgot/reset/verify/change-password states, and verify tablet/auth accessibility without adding unsupported auth choices |
+| 8. Auth UI | Current-source captures 66–69 are paired by viewport with Notion references 20/22/24/26; focused auth page tests pass 9/9 and preserve controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Compare validation/busy/error/forgot/reset/verify/change-password states and verify tablet/auth accessibility without adding unsupported auth choices |
 | 9. Accessibility/localization | Existing semantics and locale tests are evidence only for covered widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0–2.0 text scale, keyboard and touch-target gates on final UI |
-| 10. Device visual QA | Fresh Web Home/Notes run covers 360/390/768/1024/1440 layouts; editor captures cover title wrapping and collapsed sidebar; auth captures cover initial Login/Register; no paired reference diff for every group and no physical-device pass exists | `PARTIAL` | Complete paired reference review for remaining workflows, test Android/iOS/macOS on compatible devices, and rerun final responsive/accessibility gates |
-| 11. Regression/build/handoff | Presentation suite passes 189/189 with a temporary test-only `local_llm_bridge` shim and restored package-config hash; presentation analyzer and format checks pass; fresh Web release build and Android APK build (87.5 MB) pass; no Android device/emulator is connected and Apple-target builds are unverified | `IN_PROGRESS` | Complete same-state visual comparison and remaining accessibility gates; run iOS/macOS builds and device checks only on compatible hardware; audit the final allowlisted diff |
+| 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
+| 11. Regression/build/handoff | Current-source Web release and Android release APK builds pass (87.5 MB); `flutter analyze --no-pub lib/main.dart lib/presentation` passes; Dart format reports 27 modified presentation/test files unchanged; auth page tests pass 9/9. The latest full presentation-suite rerun did not finish after disk-full and a hanging auth-navigation test; an earlier 189/189 run predates final auth spacing | `IN_PROGRESS` | Re-run presentation/auth/routing tests successfully, complete visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |
 
 ---
 
