@@ -282,9 +282,9 @@ claim `>=95`; it does not assert a measured score below 95.
 3. **Sidebar/Share/menu đầy đủ của Notion** không chụp được từ trang reference
    (view-only); đối chiếu theo docs + inventory của plan §2.3 như đã ghi trong
    reference matrix.
-4. This Windows machine has no Android device/emulator. The current editor
-   header build passes for Android APK, but on-device QA still needs a device;
-   iOS/macOS builds and device QA need a compatible Apple runner.
+4. An Android 15/API 35 emulator is now available and has been used for the
+   Login/Register checks recorded below. Native Home/note workflows still need
+   runtime QA; iOS/macOS builds and device QA need a compatible Apple runner.
 
 ## Re-review verification (2026-09-23)
 
@@ -572,10 +572,11 @@ score by itself.
 - After the desktop Register spacing follow-up, the Web release build passes
   and current screenshots `106` (1280×800) and `110` (768×1024) were recaptured.
   The Android release APK also passes from this source at 87.9 MB (142.4s).
-  This verifies Android compilation only: no Android device/emulator is
-  connected. iOS/macOS native builds and runtime checks remain unavailable on
-  this Windows host. An earlier build attempt had a transient Dart out-of-memory
-  error; no Gradle or backend source was changed.
+  At the time of that build-only check, no Android device/emulator was
+  connected; the later auth-only AVD runtime check is recorded below.
+  iOS/macOS native builds and runtime checks remain unavailable on this Windows
+  host. An earlier build attempt had a transient Dart out-of-memory error; no
+  Gradle or backend source was changed.
 
 ### Home/Dashboard Step 4 refresh — 2026-09-24
 
@@ -606,3 +607,20 @@ score by itself.
   fixtures cannot stand in for a persisted note. No numeric score is assigned;
   the plan's `>=95/100` gate remains unproven and Step 4's visual comparison
   checklist stays open.
+
+### Android 15/API 35 auth runtime follow-up — 2026-09-24
+
+- Installed and launched the existing release APK on the `NoteFlow_API35` AVD.
+  Captures `124`–`127` record Login, the email field with the Android keyboard,
+  Register reached through the existing Create account action, and Login at
+  system font scale `2.0`. The font scale was restored to `1.0` after capture.
+- Login rendered at startup; focusing Email showed the focus treatment and
+  native keyboard while keeping Continue reachable. Create account opened the
+  existing Register screen. No login or registration form was submitted.
+- At 200% text scale, the NoteFlow brand and Login heading remain vertically
+  separated; the earlier concern about overlap was a misread of this capture.
+  This is responsive/auth evidence only, not a Notion comparison or score.
+- The Android run did not load persisted notes or exercise Home, the editor,
+  save, menus, or overlays. Same-state Notion pairs for those surfaces remain
+  outstanding, so no numeric score is assigned and the `>=95/100` gate remains
+  unproven. iOS/macOS runtime checks still need an Apple runner.
