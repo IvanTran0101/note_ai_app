@@ -175,6 +175,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
   const NoteFlowPageHeader({
     super.key,
     required this.breadcrumb,
+    this.statusLabel,
+    this.statusBusy = false,
+    this.statusUnavailable = false,
     this.onBack,
     this.backTooltip,
     this.backKey,
@@ -182,10 +185,15 @@ final class NoteFlowPageHeader extends StatelessWidget {
   });
 
   final String breadcrumb;
+  final String? statusLabel;
+  final bool statusBusy;
+  final bool statusUnavailable;
   final VoidCallback? onBack;
   final String? backTooltip;
   final Key? backKey;
   final List<Widget> actions;
+
+  static const Key statusKey = ValueKey<String>('note-flow-page-status');
 
   @override
   Widget build(BuildContext context) {
@@ -193,35 +201,108 @@ final class NoteFlowPageHeader extends StatelessWidget {
     final TextStyle? base = Theme.of(context).textTheme.labelLarge;
     return Material(
       color: tokens.pageSurface,
-      child: SafeArea(
-        bottom: false,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            children: <Widget>[
-              if (onBack != null)
-                IconButton(
-                  key: backKey,
-                  tooltip: backTooltip,
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back, size: 20),
-                  visualDensity: VisualDensity.compact,
-                ),
-              const SizedBox(width: NoteFlowSpacing.xs),
-              Expanded(
-                child: Text(
-                  breadcrumb,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: base?.copyWith(
-                    color: tokens.textMuted,
-                    fontWeight: FontWeight.w500,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: tokens.divider)),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Row(
+              children: <Widget>[
+                if (onBack != null)
+                  IconButton(
+                    key: backKey,
+                    tooltip: backTooltip,
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                const SizedBox(width: NoteFlowSpacing.xs),
+                Expanded(
+                  child: Text(
+                    breadcrumb,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: base?.copyWith(
+                      color: tokens.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-              ...actions,
-            ],
+                if (statusLabel != null)
+                  _NoteFlowPageStatus(
+                    key: statusKey,
+                    label: statusLabel!,
+                    busy: statusBusy,
+                    unavailable: statusUnavailable,
+                  ),
+                ...actions,
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _NoteFlowPageStatus extends StatelessWidget {
+  const _NoteFlowPageStatus({
+    super.key,
+    required this.label,
+    required this.busy,
+    required this.unavailable,
+  });
+
+  final String label;
+  final bool busy;
+  final bool unavailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final bool compact =
+        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+    final Color iconColor = tokens.textMuted;
+    final Widget icon = busy
+        ? SizedBox.square(
+            dimension: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: tokens.textMuted,
+            ),
+          )
+        : Icon(
+            unavailable ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
+            size: 16,
+            color: iconColor,
+          );
+
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.sm),
+          child: compact
+              ? icon
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    icon,
+                    const SizedBox(width: NoteFlowSpacing.xs),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: tokens.textMuted),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

@@ -65,6 +65,18 @@ final class NoteFlowSemanticColors
   }
 }
 
+/// Shared responsive breakpoints and page widths measured from the reference.
+abstract final class NoteFlowLayout {
+  static const double compactBreakpoint = 600;
+  static const double expandedBreakpoint = 840;
+  static const double compactEditorMaxWidth = 360;
+  static const double editorTopPadding = 112;
+  static const double compactEditorTopPadding = 56;
+  static const double editorMaxWidth = 720;
+  static const double editorTextMaxWidth = 708;
+  static const double dashboardContentMaxWidth = 756;
+}
+
 /// Shared spacing scale (dp). Every gap in presentation code must pick one of
 /// these values instead of an arbitrary number.
 abstract final class NoteFlowSpacing {
@@ -122,14 +134,14 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       sidebarSurface: Color(0xFFF7F7F5),
       elevatedSurface: Color(0xFFFFFFFF),
       subtleSurface: Color(0xFFF1F1EF),
-      selectedSurface: Color(0xFFEAEAE8),
+      selectedSurface: Color(0xFFEDEDEC),
       textPrimary: Color(0xFF2C2C2B),
-      textSecondary: Color(0xFF5F5E5B),
-      textMuted: Color(0xFF787774),
-      divider: Color(0xFFE9E9E7),
+      textSecondary: Color(0xFF62615C),
+      textMuted: Color(0xFF70706B),
+      divider: Color(0xFFEDEDEC),
       link: Color(0xFF2383E2),
       focusRing: Color(0xFF2383E2),
-      error: Color(0xFFD44C47),
+      error: Color(0xFFEB5757),
       success: Color(0xFF448361),
       onDestructive: Color(0xFFFFFFFF),
     );
@@ -142,9 +154,9 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       elevatedSurface: Color(0xFF2F2F2F),
       subtleSurface: Color(0xFF252525),
       selectedSurface: Color(0xFF2F2F2F),
-      textPrimary: Color(0xFFE8E8E6),
-      textSecondary: Color(0xFFB4B3B0),
-      textMuted: Color(0xFF8A8986),
+      textPrimary: Color(0xFFF0EFED),
+      textSecondary: Color(0xFFB3B3B3),
+      textMuted: Color(0xFF8B8B8B),
       divider: Color(0xFF303030),
       link: Color(0xFF529CCA),
       focusRing: Color(0xFF529CCA),
