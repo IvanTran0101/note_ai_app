@@ -156,7 +156,7 @@ void main() {
   });
 
   testWidgets(
-    'register aligns with the Notion signup header on phone/desktop',
+    'register starts with email and aligns its desktop panel with Notion',
     (WidgetTester tester) async {
       final AuthController controller = AuthController(
         authenticationAppService: _FakeAuthenticationAppService(),
@@ -200,6 +200,12 @@ void main() {
       expect(
         tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
         inInclusiveRange(356, 360),
+      );
+      expect(
+        tester.getRect(find.byKey(RegisterPage.emailFieldKey)).top,
+        lessThan(
+          tester.getRect(find.byKey(RegisterPage.displayNameFieldKey)).top,
+        ),
       );
       expect(tester.takeException(), isNull);
 

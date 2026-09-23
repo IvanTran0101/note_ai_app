@@ -81,8 +81,8 @@ entered, so no note was persisted. Other screenshots remain from the
 | `56-editor-web-unsaved-back-confirmation-390x844.png` | Web draft-loss confirmation; Cancel and Discard only | 390×844 | light |
 | `57-notes-web-storage-unavailable-after-discard-390x844.png` | Notes page retains the explicit storage-unavailable state after discard | 390×844 | light |
 | `66-noteflow-login-1280x800-final.png` | Current-source Login screen | 1280×800 | light |
-| `67-noteflow-register-1280x800-final.png` | Current-source Register screen in desktop panel | 1280×800 | light |
-| `68-noteflow-register-390x844-final.png` | Current-source Register screen | 390×844 | light |
+| `67-noteflow-register-1280x800-final.png` | Register before the email-first and 32px panel-top refinements; historical capture | 1280×800 | light |
+| `68-noteflow-register-390x844-final.png` | Register before the email-first refinement; historical capture | 390×844 | light |
 | `69-noteflow-login-390x844-final.png` | Current-source Login screen | 390×844 | light |
 | `70-noteflow-home-1440x900-current.png` | Current-source Home with Web storage limitation | 1440×900 | light |
 | `71-noteflow-notes-1280x800-current.png` | Current-source Notes with Web storage limitation and desktop sidebar | 1280×800 | light |
@@ -99,6 +99,7 @@ entered, so no note was persisted. Other screenshots remain from the
 | `82-noteflow-reset-password-390x844-current.png` | Same new-password form | 390×844 | light |
 | `83-noteflow-verify-email-1280x800-current.png` | Current-source verify-email page while signed out; Login CTA shown | 1280×800 | light |
 | `84-noteflow-verify-email-390x844-current.png` | Same signed-out verify-email page | 390×844 | light |
+| `85-noteflow-register-1280x800-debug-current.png` | Current Register after email-first and 32px panel-top refinements; debug ribbon is visible and excluded from fidelity scoring | 1280×800 | light |
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 
@@ -367,7 +368,8 @@ score by itself.
 
 - Register now uses a 496px panel on widths of 600px and above; phone layout
   remains panel-free. Login uses 38px compact and 72px desktop top padding;
-  Register uses 76px compact and 32px desktop top padding, with the existing
+  Register puts Email first, followed by Display name, Password, and Confirm
+  password. It uses 76px compact and 32px desktop top padding, with the existing
   32px fallback on short viewports. Its desktop panel top is constrained to
   28–36px by the auth widget test to match the Notion signup reference at 32px.
 - `flutter test --no-pub test/presentation/auth/auth_pages_test.dart`: PASS,
@@ -376,13 +378,16 @@ score by itself.
   package-config file was restored byte-for-byte to SHA-256
   `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 - Widget checks cover phone 393×852 and desktop/tablet 1280×800 and 768×1024.
-- Current-source paired captures are `66` Login desktop, `67` Register desktop,
-  `68` Register phone, and `69` Login phone. They were compared visually with
+- Paired captures are `66` Login desktop, `67` Register desktop, `68` Register
+  phone, and `69` Login phone. The Register images predate the field-order and
+  panel-top refinements and are retained as historical evidence. They were
+  compared visually with
   Notion references `24`, `26`, `22`, and `20` at matching viewports. The form
   widths and header placement are close, but content hierarchy differs because
   NoteFlow keeps its existing password Login and four-field registration while
-  Notion's reference shows an email-first step and provider controls. Those
-  unsupported provider actions were not added.
+  Notion's reference shows an email-first page and provider controls. The
+  current Register UI now places Email first but keeps the existing remaining
+  fields; unsupported provider actions were not added.
 - The visual review is qualitative only. The captures do not cover all auth
   states, accessibility, or all target platforms, so no numeric auth or app
   score is assigned and the app-wide `>=95/100` gate is not established.
@@ -394,13 +399,15 @@ score by itself.
   document current states only; they are not paired with same-state Notion
   references and do not cover validation, busy, error, success, or
   change-password states.
-- Register geometry refinement: the desktop panel top padding now matches the
-  Notion signup reference at 32px (previously 40px); the focused auth page suite
-  passes 9/9, including a 28–36px panel-top assertion. A fresh release screenshot
-  was not captured in this local-auth preview: after navigating to `/register`,
-  the browser rendered Home. I did not override the auth state; capture `67`
-  predates this 8px refinement and must not be treated as its visual
-  verification.
+- Register refinement: the desktop panel top padding now matches the Notion
+  signup reference at 32px (previously 40px), and Email is the first field.
+  Existing Display name, Password, Confirm password, validators, keys, and
+  `RegisterInput` mapping remain intact. The auth page suite passes 9/9,
+  including field-order and 28–36px panel-top assertions. Capture `85` confirms
+  the current source in a signed-out debug Web run; its Flutter debug ribbon is
+  excluded from the fidelity review. The local-auth release preview rendered
+  Home after navigation to `/register`; I did not override auth state. Captures
+  `67`–`68` predate these refinements.
 - After an earlier rerun hit a transient disk-full error and stalled in auth
   navigation, the current-source command
   `flutter test --no-pub test/presentation --reporter compact --timeout 60s`

@@ -194,16 +194,6 @@ final class _RegisterPageState extends State<RegisterPage> {
               children: <Widget>[
                 _AuthErrorMessage(error: state.error),
                 _authField(
-                  key: RegisterPage.displayNameFieldKey,
-                  controller: _displayNameController,
-                  label: copy.displayName,
-                  hintText: copy.displayNameHint,
-                  textInputAction: TextInputAction.next,
-                  validator: (String? value) =>
-                      _required(value, copy.displayNameRequired),
-                ),
-                const SizedBox(height: 12.0),
-                _authField(
                   key: RegisterPage.emailFieldKey,
                   controller: _emailController,
                   label: copy.email,
@@ -213,6 +203,16 @@ final class _RegisterPageState extends State<RegisterPage> {
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
                       _required(value, copy.emailRequired),
+                ),
+                const SizedBox(height: 12.0),
+                _authField(
+                  key: RegisterPage.displayNameFieldKey,
+                  controller: _displayNameController,
+                  label: copy.displayName,
+                  hintText: copy.displayNameHint,
+                  textInputAction: TextInputAction.next,
+                  validator: (String? value) =>
+                      _required(value, copy.displayNameRequired),
                 ),
                 const SizedBox(height: 12.0),
                 _authField(
