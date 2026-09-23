@@ -26,6 +26,9 @@ final class _LoginPageState extends State<LoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  bool _passwordStep = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,40 +54,56 @@ final class _LoginPageState extends State<LoginPage> {
                 _authField(
                   key: LoginPage.emailFieldKey,
                   controller: _emailController,
+                  focusNode: _emailFocusNode,
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
+                  readOnly: _passwordStep,
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
                       _required(value, copy.emailRequired),
+                  onFieldSubmitted: _passwordStep
+                      ? null
+                      : (_) => _continueToPassword(),
                 ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: LoginPage.passwordFieldKey,
-                  controller: _passwordController,
-                  label: copy.password,
-                  hintText: copy.passwordHint,
-                  obscureText: true,
-                  autofillHints: const <String>[AutofillHints.password],
-                  textInputAction: TextInputAction.done,
-                  validator: (String? value) =>
-                      _required(value, copy.passwordRequired),
-                  onFieldSubmitted: (_) => _submit(),
-                ),
+                if (_passwordStep) ...<Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _changeEmail,
+                      child: Text(copy.changeEmail),
+                    ),
+                  ),
+                  const SizedBox(height: 4.0),
+                  _authField(
+                    key: LoginPage.passwordFieldKey,
+                    controller: _passwordController,
+                    focusNode: _passwordFocusNode,
+                    label: copy.password,
+                    hintText: copy.passwordHint,
+                    obscureText: true,
+                    autofillHints: const <String>[AutofillHints.password],
+                    textInputAction: TextInputAction.done,
+                    validator: (String? value) =>
+                        _required(value, copy.passwordRequired),
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                ],
                 const SizedBox(height: 20.0),
                 _authSubmitButton(
                   key: LoginPage.submitKey,
-                  label: copy.loginAction,
+                  label: _passwordStep ? copy.loginAction : copy.continueAction,
                   busy: state.isBusy,
-                  onPressed: _submit,
+                  onPressed: _passwordStep ? _submit : _continueToPassword,
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: state.isBusy ? null : _openForgotPassword,
-                    child: Text(copy.forgotPassword),
+                if (_passwordStep)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _openForgotPassword,
+                      child: Text(copy.forgotPassword),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 12.0),
                 _AuthLinkRow(
                   prompt: copy.newToNoteFlow,
@@ -97,6 +116,29 @@ final class _LoginPageState extends State<LoginPage> {
         );
       },
     );
+  }
+
+  void _continueToPassword() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _passwordStep = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _passwordFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _changeEmail() {
+    _passwordController.clear();
+    setState(() => _passwordStep = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _emailFocusNode.requestFocus();
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -136,6 +178,8 @@ final class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 }
@@ -169,6 +213,9 @@ final class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _displayNameFocusNode = FocusNode();
+  bool _detailsStep = false;
 
   @override
   Widget build(BuildContext context) {
@@ -196,65 +243,84 @@ final class _RegisterPageState extends State<RegisterPage> {
                 _authField(
                   key: RegisterPage.emailFieldKey,
                   controller: _emailController,
+                  focusNode: _emailFocusNode,
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
+                  readOnly: _detailsStep,
+                  textInputAction: _detailsStep
+                      ? TextInputAction.done
+                      : TextInputAction.next,
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
                       _required(value, copy.emailRequired),
+                  onFieldSubmitted: _detailsStep
+                      ? null
+                      : (_) => _continueToDetails(),
                 ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: RegisterPage.displayNameFieldKey,
-                  controller: _displayNameController,
-                  label: copy.displayName,
-                  hintText: copy.displayNameHint,
-                  textInputAction: TextInputAction.next,
-                  validator: (String? value) =>
-                      _required(value, copy.displayNameRequired),
-                ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: RegisterPage.passwordFieldKey,
-                  controller: _passwordController,
-                  label: copy.password,
-                  hintText: copy.passwordHint,
-                  obscureText: true,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const <String>[AutofillHints.newPassword],
-                  validator: (String? value) =>
-                      _required(value, copy.passwordRequired),
-                ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: RegisterPage.confirmPasswordFieldKey,
-                  controller: _confirmPasswordController,
-                  label: copy.confirmPassword,
-                  hintText: copy.confirmPasswordHint,
-                  obscureText: true,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const <String>[AutofillHints.newPassword],
-                  validator: (String? value) {
-                    final String? requiredError = _required(
-                      value,
-                      copy.passwordRequired,
-                    );
-                    if (requiredError != null) {
-                      return requiredError;
-                    }
-                    return value == _passwordController.text
-                        ? null
-                        : copy.passwordConfirmationMismatch;
-                  },
-                  onFieldSubmitted: (_) => _submit(),
-                ),
+                if (_detailsStep) ...<Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _changeEmail,
+                      child: Text(copy.changeEmail),
+                    ),
+                  ),
+                  const SizedBox(height: 4.0),
+                  _authField(
+                    key: RegisterPage.displayNameFieldKey,
+                    controller: _displayNameController,
+                    focusNode: _displayNameFocusNode,
+                    label: copy.displayName,
+                    hintText: copy.displayNameHint,
+                    textInputAction: TextInputAction.next,
+                    validator: (String? value) =>
+                        _required(value, copy.displayNameRequired),
+                  ),
+                  const SizedBox(height: 12.0),
+                  _authField(
+                    key: RegisterPage.passwordFieldKey,
+                    controller: _passwordController,
+                    label: copy.password,
+                    hintText: copy.passwordHint,
+                    obscureText: true,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const <String>[AutofillHints.newPassword],
+                    validator: (String? value) =>
+                        _required(value, copy.passwordRequired),
+                  ),
+                  const SizedBox(height: 12.0),
+                  _authField(
+                    key: RegisterPage.confirmPasswordFieldKey,
+                    controller: _confirmPasswordController,
+                    label: copy.confirmPassword,
+                    hintText: copy.confirmPasswordHint,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const <String>[AutofillHints.newPassword],
+                    validator: (String? value) {
+                      final String? requiredError = _required(
+                        value,
+                        copy.passwordRequired,
+                      );
+                      if (requiredError != null) {
+                        return requiredError;
+                      }
+                      return value == _passwordController.text
+                          ? null
+                          : copy.passwordConfirmationMismatch;
+                    },
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                ],
                 const SizedBox(height: 20.0),
                 _authSubmitButton(
                   key: RegisterPage.submitKey,
-                  label: copy.registerAction,
+                  label: _detailsStep
+                      ? copy.registerAction
+                      : copy.continueAction,
                   busy: state.isBusy,
-                  onPressed: _submit,
+                  onPressed: _detailsStep ? _submit : _continueToDetails,
                 ),
                 const SizedBox(height: 8.0),
                 _AuthLinkRow(
@@ -268,6 +334,30 @@ final class _RegisterPageState extends State<RegisterPage> {
         );
       },
     );
+  }
+
+  void _continueToDetails() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _detailsStep = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _displayNameFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _changeEmail() {
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    setState(() => _detailsStep = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _emailFocusNode.requestFocus();
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -307,6 +397,8 @@ final class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _emailFocusNode.dispose();
+    _displayNameFocusNode.dispose();
     super.dispose();
   }
 }
@@ -1221,10 +1313,12 @@ Widget _authField({
   String? hintText,
   required String? Function(String?) validator,
   bool obscureText = false,
+  bool readOnly = false,
   TextInputType? keyboardType,
   TextInputAction? textInputAction,
   Iterable<String>? autofillHints,
   ValueChanged<String>? onFieldSubmitted,
+  FocusNode? focusNode,
 }) {
   return Builder(
     builder: (BuildContext context) {
@@ -1250,11 +1344,14 @@ Widget _authField({
             child: TextFormField(
               key: key,
               controller: controller,
+              focusNode: focusNode,
               decoration: InputDecoration(hintText: hintText),
               obscureText: obscureText,
+              readOnly: readOnly,
               keyboardType: keyboardType,
               textInputAction: textInputAction,
               autofillHints: autofillHints,
+              onFieldSubmitted: onFieldSubmitted,
               validator: validator,
             ),
           ),

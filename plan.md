@@ -2,8 +2,8 @@
 
 > **Trạng thái:** Kế hoạch thực thi, chưa phải bằng chứng đã implement.
 >
-> **Baseline rechecked 2026-09-23:** branch `TuanKiet2`, HEAD `7987fe4` before
-> the current typography asset pass. The working tree also contains
+> **Baseline rechecked 2026-09-23:** branch `TuanKiet2`, HEAD `926b590` before
+> the current auth email-first presentation tranche. The working tree also contains
 > pre-existing unrelated generated/untracked artifacts; inspect status and
 > stage only the exact UI/test/doc tranche.
 >
@@ -211,7 +211,7 @@ Tạo một bộ token presentation duy nhất, ưu tiên đặt trong `lib/pres
 
 | Nhóm | Quy tắc bắt buộc |
 | --- | --- |
-| Font | `main.dart` đang đặt family `Inter` nhưng repository chưa có Inter asset; phải xác nhận font thực tế trên Android/iOS/Web/macOS. Nếu cần bundle font thì phải mở rộng allowlist cho asset/pubspec; nếu không, ghi rõ fallback và dùng nó nhất quán trong visual diff. |
+| Font | `Inter` variable font và OFL đã được bundle/đăng ký trong `pubspec.yaml`; Web release manifest và Android APK xác nhận asset. iOS/macOS runtime chưa được kiểm tra; dùng cùng font/fallback trong visual diff và xác minh lại trên Apple runner. |
 | Surface | Page surface, sidebar surface, elevated menu, selected row và callout phải có token riêng cho light/dark; không rải màu literal trong widget. |
 | Text | Có primary, secondary, muted, link, error, success; contrast đạt WCAG AA cho text thường. |
 | Spacing | Dùng scale 4/8/12/16/24/32/48; không tạo khoảng cách ngẫu nhiên cho từng màn hình. |
@@ -513,7 +513,7 @@ Web persistence là limitation có sẵn: `FileDatabaseContext` chọn stub khô
 
 ### Re-review 2026-09-23 — corrective audit
 
-Execution checkout: branch `TuanKiet2`, current committed base `cfc28bd`.
+Execution checkout: branch `TuanKiet2`, committed base `926b590` before the auth email-first tranche.
 The previous table's `DONE` labels for Steps 0–9 and its `95/100` claim are
 withdrawn. The checklists in Sections 5 and 6 were still unchecked, the stored
 captures were not paired with same-state Notion captures for every viewport,
@@ -659,6 +659,20 @@ restored byte-for-byte (SHA-256
 checks state retention only; it does not verify Web persistence or the overall
 95-point visual gate.
 
+Auth email-first presentation follow-up on 2026-09-23: Login now presents Email
+before the existing Password field; Register presents Email before the existing
+Display name, Password, and Confirm password fields. Continue only advances
+local presentation state; the final action still calls the existing controller
+with the existing `LoginInput` or `RegisterInput`. No auth controller, route,
+domain, application, infrastructure, or persistence file changed. The complete
+presentation suite passed 193/193 using the temporary test-only
+`local_llm_bridge` shim; `.dart_tool/package_config.json` was restored to SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. Targeted
+`flutter analyze --no-pub` on the two auth sources and two auth test files found
+no issues, and `git diff --check` passed. No release/browser capture of these
+new auth steps has been made, so no auth or app-wide numeric visual score is
+assigned and the `>=95/100` gate remains unproven.
+
 | Step | Evidence rechecked | Status | Remaining gate |
 | --- | --- | --- | --- |
 | 0. Baseline | Current checkout and browser load/error states inspected; saved browser note and complete runtime baseline not verified | `PARTIAL` | Record actual create/edit/save/delete/auth behavior against reachable backend, without changing it |
@@ -669,10 +683,10 @@ checks state retention only; it does not verify Web persistence or the overall
 | 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
-| 8. Auth UI | Login captures 66/69 and pre-refinement Register captures 67/68 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; debug capture 85 predates the current viewport-background fix; Register places Email first and asserts its 32px desktop panel top; auth suite passes 11/11 and full presentation suite 191/191 while preserving controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Capture current Register in a release build at desktop/phone/tablet sizes; pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
+| 8. Auth UI | Historical captures 66–69 predate the email-first change; captures 79–84 cover existing reset-code, new-password, and signed-out verify-email states. Current source shows Email first, then the existing password/details step; presentation suite passes 193/193 and targeted auth analyzer passes, with controller/input/route contracts preserved. No current paired release captures or numeric score | `IN_PROGRESS` | Capture both current steps in a release build at desktop/phone/tablet sizes; pair each supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
 | 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
-| 11. Regression/build/handoff | Current-source Web release build with Inter passes (Flutter 3.47.5, 399.1s); Android release APK passes (92,217,544 bytes, 1,758.1s); capture 86 shows Web Home and its existing storage limitation; `flutter analyze --no-pub lib` passes and presentation suite passes 191/191 with restored package-config hash; unfiltered root analyze reports 42 unrelated shim/package-test issues; iOS/macOS builds unverified | `IN_PROGRESS` | Capture current Register in a release build without overriding auth state; complete remaining visual/accessibility gates; use an Apple runner for iOS/macOS builds and device QA; audit the final allowlisted diff |
+| 11. Regression/build/handoff | Web release build with Inter and Android release APK passed before the auth email-first source change; capture 86 is Home only. Current presentation suite passes 193/193 and targeted auth analyzer passes with restored package-config hash; unfiltered root analyze reports 42 unrelated shim/package-test issues; iOS/macOS builds unverified. Auth tranche has no post-change release capture | `IN_PROGRESS` | Rebuild and capture current auth in Web release without overriding auth state; complete remaining visual/accessibility gates; use an Apple runner for iOS/macOS builds and device QA; audit the final allowlisted diff |
 
 ---
 

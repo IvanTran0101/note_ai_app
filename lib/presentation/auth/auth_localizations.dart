@@ -63,6 +63,8 @@ final class AuthCopy {
       _isVietnamese ? 'Nhập mật khẩu hiện tại' : 'Enter your current password';
 
   String get loginAction => _isVietnamese ? 'Đăng nhập' : 'Log in';
+  String get continueAction => _isVietnamese ? 'Tiếp tục' : 'Continue';
+  String get changeEmail => _isVietnamese ? 'Đổi email' : 'Change email';
   String get registerAction =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create account';
   String get sendResetCode =>

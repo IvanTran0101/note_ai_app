@@ -72,7 +72,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('login validates required fields before submitting', (
+  testWidgets('login validates email before showing the password step', (
     WidgetTester tester,
   ) async {
     final AuthController controller = AuthController(
@@ -88,8 +88,101 @@ void main() {
     await tester.pump();
 
     expect(find.text('Email is required.'), findsOneWidget);
-    expect(find.text('Password is required.'), findsOneWidget);
+    expect(find.byKey(LoginPage.passwordFieldKey), findsNothing);
+    expect(controller.state.isBusy, isFalse);
+
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(LoginPage.passwordFieldKey), findsOneWidget);
+    expect(find.text('Password is required.'), findsNothing);
+    expect(controller.state.isBusy, isFalse);
   });
+
+  testWidgets('login sends the existing email/password input after step two', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthenticationAppService service =
+        _FakeAuthenticationAppService();
+    final AuthController controller = AuthController(
+      authenticationAppService: service,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(controller: controller)),
+    );
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(service.loginCalls, 0);
+    await tester.enterText(
+      find.byKey(LoginPage.passwordFieldKey),
+      'existing-password',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(service.loginCalls, 1);
+    expect(service.lastLoginInput?.email, 'user@example.com');
+    expect(service.lastLoginInput?.password, 'existing-password');
+  });
+
+  testWidgets(
+    'register calls the existing service only after its details step',
+    (WidgetTester tester) async {
+      final _FakeAuthenticationAppService service =
+          _FakeAuthenticationAppService();
+      final AuthController controller = AuthController(
+        authenticationAppService: service,
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(home: RegisterPage(controller: controller)),
+      );
+      expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
+      await tester.enterText(
+        find.byKey(RegisterPage.emailFieldKey),
+        'user@example.com',
+      );
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 0);
+      expect(find.byKey(RegisterPage.displayNameFieldKey), findsOneWidget);
+      await tester.enterText(
+        find.byKey(RegisterPage.displayNameFieldKey),
+        'User',
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.passwordFieldKey),
+        'existing-password',
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.confirmPasswordFieldKey),
+        'existing-password',
+      );
+      await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 1);
+      expect(service.lastRegisterInput?.email, 'user@example.com');
+      expect(service.lastRegisterInput?.displayName, 'User');
+      expect(service.lastRegisterInput?.password, 'existing-password');
+      expect(service.lastRegisterInput?.confirmPassword, 'existing-password');
+    },
+  );
 
   testWidgets('auth fields use page labels and preserve field semantics', (
     WidgetTester tester,
@@ -217,6 +310,7 @@ void main() {
         find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
         findsNothing,
       );
+      expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
       expect(tester.takeException(), isNull);
 
       tester.view.physicalSize = const Size(1280, 800);
@@ -235,6 +329,14 @@ void main() {
       expect(desktopPanel, findsOneWidget);
       expect(tester.getRect(desktopPanel).width, 496);
       expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
+
+      await tester.enterText(
+        find.byKey(RegisterPage.emailFieldKey),
+        'user@example.com',
+      );
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
       expect(
         tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
         inInclusiveRange(356, 360),
@@ -295,6 +397,19 @@ void main() {
         expect(submitBounds.top, greaterThanOrEqualTo(0));
         expect(submitBounds.bottom, lessThanOrEqualTo(800));
         expect(tester.takeException(), isNull);
+
+        final Key emailKey = page is LoginPage
+            ? LoginPage.emailFieldKey
+            : RegisterPage.emailFieldKey;
+        await tester.enterText(find.byKey(emailKey), 'user@example.com');
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(submit);
+        await tester.pumpAndSettle();
+        final Rect nextStepSubmitBounds = tester.getRect(submit);
+        expect(nextStepSubmitBounds.top, greaterThanOrEqualTo(0));
+        expect(nextStepSubmitBounds.bottom, lessThanOrEqualTo(800));
+        expect(tester.takeException(), isNull);
       }
     },
   );
@@ -312,12 +427,14 @@ void main() {
     );
 
     await tester.enterText(
-      find.byKey(RegisterPage.displayNameFieldKey),
-      'User',
-    );
-    await tester.enterText(
       find.byKey(RegisterPage.emailFieldKey),
       'user@example.com',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(RegisterPage.displayNameFieldKey),
+      'User',
     );
     await tester.enterText(
       find.byKey(RegisterPage.passwordFieldKey),
@@ -414,14 +531,26 @@ const AuthUserDto verifiedUser = AuthUserDto(
 );
 
 final class _FakeAuthenticationAppService implements IAuthenticationAppService {
+  int loginCalls = 0;
+  int registerCalls = 0;
+  LoginInput? lastLoginInput;
+  RegisterInput? lastRegisterInput;
+
   @override
   Future<RegistrationResult> register(RegisterInput input) async {
-    throw UnimplementedError();
+    registerCalls++;
+    lastRegisterInput = input;
+    return const RegistrationResult(
+      user: testUser,
+      verificationDispatchStatus: VerificationDispatchStatus.notRequired,
+    );
   }
 
   @override
   Future<AuthUserDto> login(LoginInput input) async {
-    throw UnimplementedError();
+    loginCalls++;
+    lastLoginInput = input;
+    return testUser;
   }
 
   @override

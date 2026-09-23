@@ -101,11 +101,10 @@ matrix are still outstanding.
 ### Typography note
 
 Notion web uses `ui-sans-serif, -apple-system, "Segoe UI Variable Display",
-"Segoe UI", Helvetica, ...` — a platform UI sans. NoteFlow declares `Inter`
-without bundling it; the effective font is the platform fallback (`Roboto`/
-`Arial`/`Segoe UI` depending on OS). Inter (or the Segoe-adjacent fallback) is
-the closest available match; Step 2 must record the final choice here and keep it
-identical on both sides of every visual diff.
+"Segoe UI", Helvetica, ...` — a platform UI sans. NoteFlow now bundles and
+registers the Inter variable font. Web release output and the Android APK include
+the font; iOS/macOS runtime rendering remains unverified. Keep the measured
+NoteFlow font and viewport identical on both sides of every visual diff.
 
 ### Capture inventory (2026-09-22, session `noteflow-ui`)
 
@@ -223,9 +222,9 @@ Derived from the reference captures; not to be hard-coded per widget (plan §4.1
 | Code block bg | `~#F7F6F3` warm gray | `~#282828` | from code captures (estimate) — verify |
 
 Typography: page font is the current Notion UI sans (segoe-like on web). NoteFlow
-uses `Inter` with fallback `Roboto, Arial, monospace` but **no bundled asset** —
-Step 2 must either bundle Inter (pubspec/asset allowlist exception) or standardise
-on the documented fallback and record it in every visual diff.
+bundles/registers Inter, verified in the Web release manifest and Android APK.
+iOS/macOS runtime rendering remains to be checked on an Apple runner; record the
+actual font and fallback in visual diffs for each verified target.
 
 Spacing scale (plan §4.1): 4/8/12/16/24/32/48. Radius: rows/inputs 6–8px,
 dialogs/cards 8–12px. Motion: hover/focus/selection ≤ 200 ms ease-out, disabled
