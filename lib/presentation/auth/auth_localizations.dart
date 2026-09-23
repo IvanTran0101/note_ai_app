@@ -28,8 +28,8 @@ final class AuthCopy {
   String get registerTitle =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create your account';
   String get registerSubtitle => _isVietnamese
-      ? 'Truy cập ghi chú trên mọi thiết bị.'
-      : 'Access your notes on every device.';
+      ? 'Ghi chú của bạn trên mọi thiết bị.'
+      : 'Your notes on every device.';
   String get forgotTitle =>
       _isVietnamese ? 'Đặt lại mật khẩu' : 'Reset your password';
   String get forgotSubtitle => _isVietnamese
@@ -51,6 +51,12 @@ final class AuthCopy {
 
   String get emailHint =>
       _isVietnamese ? 'Nhập địa chỉ email của bạn' : 'Enter your email address';
+  String get loginEmailHint => _isVietnamese
+      ? 'Dùng email bạn có thể truy cập để đăng nhập hoặc khôi phục tài khoản.'
+      : 'Use an email you can access to sign in or recover your account.';
+  String get registerEmailHint => _isVietnamese
+      ? 'Bạn cần truy cập email này để xác nhận tài khoản.'
+      : 'You will need access to this email to verify your account.';
   String get displayNameHint =>
       _isVietnamese ? 'Nhập tên hiển thị' : 'Enter your name';
   String get passwordHint =>

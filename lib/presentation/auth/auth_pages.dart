@@ -33,6 +33,7 @@ final class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
@@ -89,6 +90,15 @@ final class _LoginPageState extends State<LoginPage> {
                     onFieldSubmitted: (_) => _submit(),
                   ),
                 ],
+                if (!_passwordStep)
+                  Padding(
+                    padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                    child: Text(
+                      copy.loginEmailHint,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: tokens.textMuted),
+                    ),
+                  ),
                 const SizedBox(height: 20.0),
                 _authSubmitButton(
                   key: LoginPage.submitKey,
@@ -220,18 +230,20 @@ final class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
         final AuthState state = widget.controller.state;
+        final bool compactWidth = MediaQuery.sizeOf(context).width < 600;
         return _AuthFormScaffold(
           title: copy.registerTitle,
           subtitle: copy.registerSubtitle,
           compactTopPadding: 76,
           desktopTopPadding: 32,
-          compactBrandTitleSpacing: NoteFlowSpacing.xxl,
+          compactBrandTitleSpacing: 34,
           compactTitleSubtitleSpacing: 0,
-          compactContentSpacing: NoteFlowSpacing.xl,
+          compactContentSpacing: NoteFlowSpacing.lg + NoteFlowSpacing.md,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
           desktopPanel: true,
           child: Form(
@@ -258,6 +270,29 @@ final class _RegisterPageState extends State<RegisterPage> {
                       ? null
                       : (_) => _continueToDetails(),
                 ),
+                if (!_detailsStep)
+                  Padding(
+                    padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: NoteFlowSpacing.md,
+                        vertical: compactWidth
+                            ? NoteFlowSpacing.md
+                            : NoteFlowSpacing.lg,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.subtleSurface,
+                        borderRadius: BorderRadius.circular(
+                          NoteFlowRadius.card,
+                        ),
+                      ),
+                      child: Text(
+                        copy.registerEmailHint,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: tokens.textPrimary),
+                      ),
+                    ),
+                  ),
                 if (_detailsStep) ...<Widget>[
                   Align(
                     alignment: Alignment.centerRight,
@@ -313,7 +348,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                     onFieldSubmitted: (_) => _submit(),
                   ),
                 ],
-                const SizedBox(height: 20.0),
+                SizedBox(height: !_detailsStep && !compactWidth ? 26.0 : 20.0),
                 _authSubmitButton(
                   key: RegisterPage.submitKey,
                   label: _detailsStep
@@ -1081,7 +1116,7 @@ final class _AuthFormScaffold extends StatelessWidget {
           foregroundColor: tokens.pageSurface,
           disabledBackgroundColor: tokens.subtleSurface,
           disabledForegroundColor: tokens.textMuted,
-          minimumSize: const Size(48.0, 44.0),
+          minimumSize: const Size(48.0, 48.0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NoteFlowRadius.input),
           ),
@@ -1201,9 +1236,9 @@ final class _AuthFormScaffold extends StatelessWidget {
                     : tokens.pageSurface,
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
-                    NoteFlowSpacing.xl,
+                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
                     topPadding,
-                    NoteFlowSpacing.xl,
+                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
                     bottomPadding,
                   ),
                   child: ConstrainedBox(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/auth_models.dart';
@@ -9,6 +10,12 @@ import 'package:note_ai_app/presentation/auth/controllers/auth_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
+  setUpAll(() async {
+    final FontLoader fontLoader = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/Inter-Variable.ttf'));
+    await fontLoader.load();
+  });
+
   testWidgets('login keeps a centered narrow form across desktop and phone', (
     WidgetTester tester,
   ) async {
@@ -42,10 +49,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      tester.getRect(find.byKey(LoginPage.emailFieldKey)).width,
-      lessThanOrEqualTo(345),
+    final Rect phoneEmailRect = tester.getRect(
+      find.byKey(LoginPage.emailFieldKey),
     );
+    expect(phoneEmailRect.width, inInclusiveRange(351, 355));
+    expect(phoneEmailRect.left, inInclusiveRange(19, 21));
     expect(tester.getRect(find.text('NoteFlow')).top, inInclusiveRange(36, 48));
     expect(
       tester.getRect(find.text('Welcome back')).top,
@@ -88,6 +96,12 @@ void main() {
     await tester.pump();
 
     expect(find.text('Email is required.'), findsOneWidget);
+    expect(
+      find.text(
+        'Use an email you can access to sign in or recover your account.',
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(LoginPage.passwordFieldKey), findsNothing);
     expect(controller.state.isBusy, isFalse);
 
@@ -99,6 +113,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(LoginPage.passwordFieldKey), findsOneWidget);
+    expect(
+      find.text(
+        'Use an email you can access to sign in or recover your account.',
+      ),
+      findsNothing,
+    );
     expect(find.text('Password is required.'), findsNothing);
     expect(controller.state.isBusy, isFalse);
   });
@@ -150,6 +170,10 @@ void main() {
         MaterialApp(home: RegisterPage(controller: controller)),
       );
       expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
+      expect(
+        find.text('You will need access to this email to verify your account.'),
+        findsOneWidget,
+      );
       await tester.enterText(
         find.byKey(RegisterPage.emailFieldKey),
         'user@example.com',
@@ -159,6 +183,10 @@ void main() {
 
       expect(service.registerCalls, 0);
       expect(find.byKey(RegisterPage.displayNameFieldKey), findsOneWidget);
+      expect(
+        find.text('You will need access to this email to verify your account.'),
+        findsNothing,
+      );
       await tester.enterText(
         find.byKey(RegisterPage.displayNameFieldKey),
         'User',
@@ -286,80 +314,122 @@ void main() {
     }
   });
 
-  testWidgets(
-    'register starts with email and aligns its desktop panel with Notion',
-    (WidgetTester tester) async {
-      final AuthController controller = AuthController(
-        authenticationAppService: _FakeAuthenticationAppService(),
-      );
-      addTearDown(controller.dispose);
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(393, 852);
-      addTearDown(tester.view.resetPhysicalSize);
+  testWidgets('register email step aligns Notion mobile and desktop anchors', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    final ThemeData theme = ThemeData(fontFamily: 'Inter');
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        tester.getRect(find.text('NoteFlow')).top,
-        inInclusiveRange(70, 90),
-      );
-      expect(
-        find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
-        findsNothing,
-      );
-      expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
-      expect(tester.takeException(), isNull);
+    expect(tester.getRect(find.text('NoteFlow')).top, inInclusiveRange(74, 86));
+    expect(
+      tester.getRect(find.text('Create your account')).top,
+      inInclusiveRange(132, 136),
+    );
+    expect(tester.getRect(find.text('Email')).top, inInclusiveRange(216, 222));
+    expect(tester.getRect(find.text('Email')).left, inInclusiveRange(19, 21));
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).top,
+      inInclusiveRange(239, 245),
+    );
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
+      inInclusiveRange(348, 352),
+    );
+    expect(
+      tester
+          .getRect(
+            find.text(
+              'You will need access to this email to verify your account.',
+            ),
+          )
+          .top,
+      inInclusiveRange(309, 313),
+    );
+    expect(
+      tester.getRect(find.byKey(RegisterPage.submitKey)).top,
+      inInclusiveRange(380, 386),
+    );
+    expect(
+      tester.getSize(find.byKey(RegisterPage.submitKey)).height,
+      inInclusiveRange(46, 50),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
+      findsNothing,
+    );
+    expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
+    expect(tester.takeException(), isNull);
 
-      tester.view.physicalSize = const Size(1280, 800);
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1280, 800);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        tester.getRect(find.text('NoteFlow')).top,
-        inInclusiveRange(80, 100),
-      );
-      final Finder desktopPanel = find.byKey(
-        const ValueKey<String>('auth-register-desktop-panel'),
-      );
-      expect(desktopPanel, findsOneWidget);
-      expect(tester.getRect(desktopPanel).width, 496);
-      expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
+    expect(
+      tester.getRect(find.text('NoteFlow')).top,
+      inInclusiveRange(80, 100),
+    );
+    final Finder desktopPanel = find.byKey(
+      const ValueKey<String>('auth-register-desktop-panel'),
+    );
+    expect(desktopPanel, findsOneWidget);
+    expect(tester.getRect(desktopPanel).width, 496);
+    expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
+    expect(
+      tester.getRect(find.byKey(RegisterPage.submitKey)).top,
+      inInclusiveRange(400, 408),
+    );
 
-      await tester.enterText(
-        find.byKey(RegisterPage.emailFieldKey),
-        'user@example.com',
-      );
-      await tester.tap(find.byKey(RegisterPage.submitKey));
-      await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(RegisterPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
 
-      expect(
-        tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
-        inInclusiveRange(356, 360),
-      );
-      expect(
-        tester.getRect(find.byKey(RegisterPage.emailFieldKey)).top,
-        lessThan(
-          tester.getRect(find.byKey(RegisterPage.displayNameFieldKey)).top,
-        ),
-      );
-      expect(tester.takeException(), isNull);
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
+      inInclusiveRange(356, 360),
+    );
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).top,
+      lessThan(
+        tester.getRect(find.byKey(RegisterPage.displayNameFieldKey)).top,
+      ),
+    );
+    expect(tester.takeException(), isNull);
 
-      tester.view.physicalSize = const Size(768, 1024);
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(768, 1024);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(desktopPanel, findsOneWidget);
-      expect(tester.getRect(desktopPanel).width, 496);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(desktopPanel, findsOneWidget);
+    expect(tester.getRect(desktopPanel).width, 496);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'login and register remain reachable at 200% text scale on a small phone',

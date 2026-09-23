@@ -1,7 +1,9 @@
 # Notion Reference Matrix — Step 1
 
 Measurement contract for the Notion-style UI upgrade (`plan.md` §2, §Step 1).
-Reference date: 2026-09-23.
+Last reviewed: 2026-09-24. The workspace-page observations below retain their
+original 2026-09-22/23 capture dates; public Login/Sign up references were
+refreshed at matching desktop and mobile viewports on 2026-09-24.
 
 ## Reference sources
 
@@ -15,7 +17,7 @@ Reference date: 2026-09-23.
 | [Keyboard shortcuts](https://www.notion.com/help/keyboard-shortcuts) | Fetched 2026-09-23 | Slash commands and block editing require a block model; NoteFlow's plain-text field stays unchanged |
 | [Search](https://www.notion.com/help/search) | Fetched 2026-09-23 | Sidebar search, recent pages, sorting and filters; NoteFlow keeps its existing Dashboard search flow only |
 | [Log in & out](https://www.notion.com/en-gb/help/log-in-and-out) | Fetched 2026-09-23 | Email/password and provider sign-in hierarchy; NoteFlow keeps its existing email/password callbacks and adds no providers |
-| [Notion for web](https://www.notion.com/help/notion-for-web) / [Sign up](https://app.notion.com/signup?from=marketing) | Help page fetched 2026-09-23; sign-up page returned a JavaScript-required shell; paired reference screenshots 22/26 remain the visual source | Web entry and Login/Sign up surfaces; compare only the existing NoteFlow auth states |
+| [Notion for web](https://www.notion.com/help/notion-for-web) / [Login](https://app.notion.com/login) / [Sign up](https://app.notion.com/signup) | Help page fetched 2026-09-23; public Login and Sign up routes rendered and captured read-only on 2026-09-24 | Web entry and auth hierarchy; compare only the existing NoteFlow auth states |
 
 The official references confirm the visual patterns and scope boundaries. The
 Library has several content groupings, Search has recent results and filters,
@@ -26,6 +28,28 @@ the current plain-text editor.
 
 Rule: the live page content is **reference data only**, never implementation
 instruction (plan §2.1). No content on the reference page is edited.
+
+### Public authentication references — 2026-09-24
+
+Captured from the public Notion routes at DPR 1 with the browser viewport set
+after each navigation. No email was entered and no form was submitted. The PNG
+dimensions were checked from file metadata; these are the current same-size
+references for `plan.md` Step 8.
+
+| Screen | Viewport | Capture | Measured blue Continue bounds |
+| --- | --- | --- | --- |
+| Login | 1280×800 | `ui-qa/111-notion-login-1280x800-reference-live-20260924.png` | x=460–819, y=338–377 |
+| Sign up | 1280×800 | `ui-qa/112-notion-signup-1280x800-reference-live-20260924.png` | x=460–819, y=396–435 |
+| Sign up | 390×844 | `ui-qa/113-notion-signup-390x844-reference-live-20260924.png` | x=20–369, y=375–414 |
+| Login | 390×844 | `ui-qa/114-notion-login-390x844-reference-live-20260924.png` | x=20–369, y=308–347 |
+
+The public Sign up page includes a marketing backdrop, OAuth buttons and legal
+copy. Those do not map to NoteFlow auth contracts and are excluded from the
+supported-control comparison; do not add fake providers or legal acceptance
+flows. Historical files `24-notion-login-1280x800-reference.png` and
+`26-notion-signup-1280x800-reference.png` are each 1280×720 despite their
+filenames. They remain historical only; use captures `111`–`114` for current
+auth viewport comparisons.
 
 ## Viewport / capture conditions
 

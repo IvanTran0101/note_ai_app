@@ -46,9 +46,9 @@ entered, so no note was persisted. Other screenshots remain from the
 | `21-noteflow-register-390x844-light.png` | Current NoteFlow Register after compact top-spacing fix | 390×844 | light |
 | `22-notion-signup-390x844-reference.png` | Live Notion Sign up reference | 390×844 | light |
 | `23-noteflow-login-1280x800-light.png` | Current NoteFlow Login | 1280×800 | light |
-| `24-notion-login-1280x800-reference.png` | Live Notion Login reference | 1280×800 | light |
+| `24-notion-login-1280x800-reference.png` | Historical Notion Login reference; actual image is 1280×720, so not a same-size desktop pair | 1280×720 | light |
 | `25-noteflow-register-1280x800-light.png` | Current NoteFlow Register | 1280×800 | light |
-| `26-notion-signup-1280x800-reference.png` | Live Notion Sign up reference | 1280×800 | light |
+| `26-notion-signup-1280x800-reference.png` | Historical Notion Sign up reference; actual image is 1280×720, so not a same-size desktop pair | 1280×720 | light |
 | `27-editor-new-web-storage-unavailable-1440x900.png` | Fresh Web build, blank new-note draft; storage unavailable is explicit | 1440×900 | light |
 | `28-editor-new-web-storage-unavailable-390x844.png` | Fresh Web build, compact blank draft; cloud-off status icon | 390×844 | light |
 | `29-noteflow-login-390x844-light-current.png` | Current Login with external field labels and muted hints | 390×844 | light |
@@ -101,6 +101,14 @@ entered, so no note was persisted. Other screenshots remain from the
 | `84-noteflow-verify-email-390x844-current.png` | Same signed-out verify-email page | 390×844 | light |
 | `85-noteflow-register-1280x800-debug-current.png` | Current Register after email-first and 32px panel-top refinements; debug ribbon is visible and excluded from fidelity scoring | 1280×800 | light |
 | `86-noteflow-home-1280x720-current-inter-font.png` | Current release Web Home after bundling Inter; explicit Web storage limitation; no note loaded | 1280×720 | light |
+| `111-notion-login-1280x800-reference-live-20260924.png` | Fresh public Notion Login reference; live route, no form submitted | 1280×800 | light |
+| `112-notion-signup-1280x800-reference-live-20260924.png` | Fresh public Notion Sign up reference; live route, no form submitted | 1280×800 | light |
+| `113-notion-signup-390x844-reference-live-20260924.png` | Fresh public Notion Sign up reference; live route, no form submitted | 390×844 | light |
+| `114-notion-login-390x844-reference-live-20260924.png` | Fresh public Notion Login reference; live route, no form submitted | 390×844 | light |
+
+Image dimensions were read from the PNG files. Historical references `24` and
+`26` are 1280×720 despite their filenames; use `111`–`114` for current
+same-size authentication comparisons.
 
 ## Fresh Home/Notes responsive run — 2026-09-23
 
@@ -494,3 +502,50 @@ score by itself.
   or persisted. iOS/macOS builds and runtime rendering remain unverified on
   this Windows host. This capture does not provide a Notion pixel diff or a
   numeric fidelity score, and does not establish the `>=95/100` gate.
+
+### Auth release comparison — 2026-09-24
+
+- Fresh default Cognito-mode Web release builds from the current checkout were
+  served at DPR 1: captures `104`–`109` use
+  `output/playwright/20260924-auth-mobile-anchor/web`, except refreshed
+  captures `106` and `110`, which use
+  `output/playwright/20260924-auth-desktop-anchor/web`. The browser used the
+  existing `#/login` and `#/register` routes; no auth form was submitted.
+- Current captures: `104` Register email at 390×844; `105` Login email at
+  390×844; `106` Register email at 1280×800; `107` Login email at 1280×800;
+  `108` Register details at 390×844; `109` Login password at 390×844; and `110`
+  Register email at 768×1024. Captures `108` and `109` use the synthetic
+  `ui-review@example.test` value and stop before account creation or login.
+  The email Continue actions only advance the existing local UI step.
+- Same-size comparison uses current Notion captures `111`–`114`; the older
+  desktop files `24` and `26` are actually 1280×720 despite their filenames.
+  The app and public Notion routes were captured at DPR 1, with each browser
+  viewport set after navigation; no form was submitted.
+- Mobile review found the
+  supported form geometry close: the 390px field gutter is 20px, the input is
+  350px wide, the main header/form anchors are within a few pixels, and the
+  Register Continue button occupies the same `y=375–414` center-column rows as
+  the reference. Login's mobile CTA is 3px above Notion's; desktop Login CTA is
+  3px below its same-size reference. Register desktop/tablet callout padding
+  and CTA spacing were adjusted; the refreshed release capture `106` places the
+  CTA at `x=461–818, y=396–435`, matching Notion capture `112` at
+  `x=460–819, y=396–435` within 1px horizontally and exactly vertically.
+  Capture `110` checks that same registration layout at 768×1024. Notion does
+  not provide a directly paired tablet reference here.
+- Provider buttons, legal acceptance copy, and language/help controls visible
+  in Notion are not added because NoteFlow has no corresponding auth contract.
+  Their absence changes the lower-page density. These auth captures do not
+  assign a numeric score and do not establish the app-wide `>=95/100` gate.
+- `flutter test --no-pub test/presentation/auth/auth_pages_test.dart`: PASS,
+  13/13, using the temporary test-only `local_llm_bridge` package-root shim.
+  The full presentation suite passes 193/193 with the same shim. Both runs
+  restore `.dart_tool/package_config.json` to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+  Targeted auth analysis reports no issues; Web release build passes.
+- After the desktop Register spacing follow-up, the Web release build passes
+  and current screenshots `106` (1280×800) and `110` (768×1024) were recaptured.
+  The Android release APK also passes from this source at 87.9 MB (142.4s).
+  This verifies Android compilation only: no Android device/emulator is
+  connected. iOS/macOS native builds and runtime checks remain unavailable on
+  this Windows host. An earlier build attempt had a transient Dart out-of-memory
+  error; no Gradle or backend source was changed.
