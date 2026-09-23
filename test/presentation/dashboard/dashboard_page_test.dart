@@ -97,6 +97,7 @@ void main() {
         tester,
         dashboardController: controller,
         notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
       );
       await tester.pumpAndSettle();
 
@@ -111,7 +112,7 @@ void main() {
         find.byKey(const ValueKey<String>('dashboard-last-updated')),
         findsOneWidget,
       );
-      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
       final Card firstCard = tester.widget<Card>(
         find.byKey(const ValueKey<String>('dashboard-note-card-a')),
       );
@@ -124,6 +125,12 @@ void main() {
             .height,
         greaterThanOrEqualTo(56),
       );
+
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
@@ -212,9 +219,86 @@ void main() {
 
         expect(find.byKey(DashboardPage.contentKey), findsOneWidget);
         expect(find.byKey(DashboardPage.newNoteKey), findsOneWidget);
+        expect(
+          _cardFor(tester, 'a').layout,
+          viewport.width >= 840
+              ? DashboardNoteCardLayout.grid
+              : DashboardNoteCardLayout.list,
+        );
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('wide Home shows six compact notes across the first row', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        for (int index = 0; index < 7; index++)
+          _buildNote(id: 'note-$index', title: 'Note $index'),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+      );
+      await tester.pumpAndSettle();
+
+      final double firstRowY = tester
+          .getTopLeft(
+            find.byKey(const ValueKey<String>('dashboard-note-note-0')),
+          )
+          .dy;
+      for (int index = 1; index < 6; index++) {
+        final Finder card = find.byKey(
+          ValueKey<String>('dashboard-note-note-$index'),
+        );
+        expect(tester.getTopLeft(card).dy, closeTo(firstRowY, 0.5));
+        expect(tester.getSize(card).width, greaterThanOrEqualTo(136));
+      }
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('dashboard-note-note-6')),
+            )
+            .dy,
+        greaterThan(firstRowY),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('wide Home grid survives 200 percent text scaling', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(
+          id: 'long',
+          title: 'A long page title that should wrap and truncate safely',
+          content:
+              'A long note preview that should remain inside the compact grid '
+              'card at large text sizes.',
+        ),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+        textScale: 2.0,
+      );
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'long').layout, DashboardNoteCardLayout.grid);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('Grid and List use distinct compact layouts', (
       WidgetTester tester,

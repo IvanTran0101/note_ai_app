@@ -624,3 +624,28 @@ score by itself.
   save, menus, or overlays. Same-state Notion pairs for those surfaces remain
   outstanding, so no numeric score is assigned and the `>=95/100` gate remains
   unproven. iOS/macOS runtime checks still need an Apple runner.
+
+### Home desktop card-density follow-up — 2026-09-24
+
+- Home now defaults to the existing compact Grid layout when the available
+  content width is at least 840dp; phone and tablet widths keep the existing
+  single-column List by default. The existing List/Grid segmented control
+  remains available as a manual override.
+- Wide Grid calculates two to six columns from a 136dp minimum card width. The
+  compact page cards use existing note title, preview and updated date data,
+  with the existing page icon, theme tokens, semantics and open callback. The
+  List card markup and all data/controller/save contracts are unchanged.
+- Dashboard widget tests pass 39/39, including the 840dp breakpoint, six cards
+  in the first row at 1440dp, and 200% desktop text scale; the full presentation
+  suite passes 202/202.
+  Targeted `flutter analyze` reports no issues. The temporary test-only
+  `local_llm_bridge` package root was used for tests; after each run,
+  `.dart_tool/package_config.json` was restored to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- Web release build passes in 53.5s; Android release APK builds at 88.0MB in
+  68.0s. These verify compilation only; no Android Home runtime capture was
+  made for this change.
+- Existing Home screenshots predate this change and show the Web
+  storage-unavailable state. Widget fixtures verify layout but do not establish
+  a persisted-note runtime or a same-state Notion visual pair. No numeric score
+  is assigned; the app-wide `>=95/100` gate remains unproven.

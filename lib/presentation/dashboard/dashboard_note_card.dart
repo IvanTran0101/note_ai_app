@@ -66,26 +66,23 @@ final class DashboardNoteCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         color: selected
             ? tokens.selectedSurface
-            : (listLayout ? Colors.transparent : tokens.pageSurface),
+            : (listLayout ? Colors.transparent : tokens.subtleSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-          side: listLayout
+          side: listLayout || !selected
               ? BorderSide.none
-              : BorderSide(
-                  color: selected ? tokens.focusRing : tokens.divider,
-                  width: selected ? 1.5 : 1.0,
-                ),
+              : BorderSide(color: tokens.focusRing, width: 1.5),
         ),
         child: InkWell(
           onTap: () => onTap(note),
           hoverColor: tokens.subtleSurface,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: layout == DashboardNoteCardLayout.grid ? 128.0 : 56.0,
+              minHeight: layout == DashboardNoteCardLayout.grid ? 144.0 : 56.0,
             ),
             child: Padding(
               padding: layout == DashboardNoteCardLayout.grid
-                  ? const EdgeInsets.all(NoteFlowSpacing.lg)
+                  ? const EdgeInsets.all(NoteFlowSpacing.md)
                   : const EdgeInsets.symmetric(
                       horizontal: NoteFlowSpacing.md,
                       vertical: NoteFlowSpacing.sm,
@@ -126,43 +123,36 @@ final class DashboardNoteCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Icon(
-                Icons.description_outlined,
-                size: 18,
-                color: selected ? foreground : tokens.textMuted,
-              ),
-            ),
-            const SizedBox(width: NoteFlowSpacing.sm),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
-              ),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Icon(
+            Icons.description_outlined,
+            size: 18,
+            color: selected ? foreground : tokens.textMuted,
+          ),
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
         Text(
-          preview,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: secondaryForeground, height: 1.35),
-        ),
-        const SizedBox(height: NoteFlowSpacing.md),
-        Text(
-          copy.updatedOn(updatedDate),
+          title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelMedium
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          preview,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: secondaryForeground, height: 1.35),
+        ),
+        const SizedBox(height: NoteFlowSpacing.sm),
+        Text(
+          updatedDate,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall
               ?.copyWith(color: secondaryForeground),
         ),
       ],

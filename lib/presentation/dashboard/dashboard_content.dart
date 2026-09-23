@@ -396,19 +396,16 @@ final class DashboardContent extends StatelessWidget {
   }
 
   int _columnCount(double width) {
-    if (width < 600.0) {
-      // Keep Grid meaningfully different from List on phones. A compact
-      // dashboard still has enough room for two flexible cards after its
-      // horizontal padding; List remains the single-column reading mode.
+    if (width < NoteFlowLayout.expandedBreakpoint) {
+      // Keep Grid meaningfully different from List at compact widths. The
+      // List remains the single-column reading mode on phone and tablet.
       return 2;
     }
-    if (width < 840.0) {
-      return 2;
-    }
-    final int columns = (width / 300.0).floor();
-    if (columns < 3) {
-      return 3;
-    }
-    return columns > 4 ? 4 : columns;
+    const double gap = NoteFlowSpacing.md;
+    const double minimumCardWidth = 136.0;
+    return ((width + gap) / (minimumCardWidth + gap))
+        .floor()
+        .clamp(3, 6)
+        .toInt();
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/notes/note_application.dart';
 import '../notes/notes_application_controller.dart';
 import '../notes/note_detail_route_result.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'dashboard_content.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_localizations.dart';
@@ -97,7 +98,7 @@ final class DashboardPageState extends State<DashboardPage> {
   bool _loadingNotes = true;
   bool _searchOpen = false;
   String _searchText = '';
-  DashboardLayout _layout = DashboardLayout.list;
+  DashboardLayout? _layoutOverride;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
   Future<void>? _loadInFlight;
@@ -316,7 +317,11 @@ final class DashboardPageState extends State<DashboardPage> {
       searchController: _searchController,
       searchOpen: _searchOpen,
       searchText: _searchText,
-      layout: _layout,
+      layout:
+          _layoutOverride ??
+          (constraints.maxWidth >= NoteFlowLayout.expandedBreakpoint
+              ? DashboardLayout.grid
+              : DashboardLayout.list),
       sort: _sort,
       selectedNoteId: _selectedNoteId,
       hasError: _hasError,
@@ -324,7 +329,7 @@ final class DashboardPageState extends State<DashboardPage> {
       onClearSearch: _clearSearch,
       onSortChanged: (DashboardSort value) => setState(() => _sort = value),
       onLayoutChanged: (DashboardLayout value) =>
-          setState(() => _layout = value),
+          setState(() => _layoutOverride = value),
       onOpenNote: (NoteDto note) => unawaited(_openNote(note)),
       onCreateNote: _createNote,
       onRetry: reload,
