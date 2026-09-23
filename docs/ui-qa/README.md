@@ -431,6 +431,26 @@ score by itself.
   phone configuration. It does not establish full semantics, focus, keyboard,
   localization, 1.3 scale, other surfaces/platforms, or the `>=95/100` score.
 
+### Auth full-viewport background follow-up — 2026-09-23
+
+- `_AuthFormScaffold` now gives the scroll content a minimum height equal to
+  the viewport minus its top and bottom padding. This keeps the selected auth
+  background visible below short forms while retaining scrolling for tall forms.
+- The widget test checks Login and Register at 360×800, 393×852, 768×1024,
+  1280×550, 1280×800, and 1440×900. The auth widget suite passes 11/11 and the
+  full presentation suite passes 191/191 with the temporary test-only
+  `local_llm_bridge` shim; `.dart_tool/package_config.json` was restored to
+  SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- `flutter analyze --no-pub lib/presentation/auth/auth_pages.dart
+  test/presentation/auth/auth_pages_test.dart` reports no issues. Current-source
+  `flutter build web --release --no-pub --dart-define=NOTEFLOW_AUTH_MODE=local`
+  passes (Flutter 3.47.5, WASM dry run, 304.7s). The browser preview opens the
+  existing Home state and Web storage-unavailable notice; I did not alter auth
+  state to force Register, so a release Register recapture remains pending.
+- Current-source `flutter build apk --release --no-pub` passes (87.5 MB,
+  316.0s). `flutter devices --machine` lists Windows, Chrome and Edge only; no
+  Android device/emulator or Apple runner is available for native visual QA.
+
 ### Current shell and Notes responsive review — 2026-09-23
 
 - Release Web build used the current working tree with

@@ -155,6 +155,44 @@ void main() {
     );
   });
 
+  testWidgets('auth page background fills supported viewports', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    const List<Size> viewports = <Size>[
+      Size(360, 800),
+      Size(393, 852),
+      Size(768, 1024),
+      Size(1280, 550),
+      Size(1280, 800),
+      Size(1440, 900),
+    ];
+    final List<Widget> pages = <Widget>[
+      LoginPage(controller: controller),
+      RegisterPage(controller: controller),
+    ];
+    for (final Size viewport in viewports) {
+      tester.view.physicalSize = viewport;
+      for (final Widget page in pages) {
+        await tester.pumpWidget(MaterialApp(home: page));
+        await tester.pumpAndSettle();
+
+        final Finder background = find.byKey(
+          const ValueKey<String>('auth-form-page-background'),
+        );
+        expect(background, findsOneWidget);
+        expect(tester.getSize(background), viewport);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   testWidgets(
     'register starts with email and aligns its desktop panel with Notion',
     (WidgetTester tester) async {

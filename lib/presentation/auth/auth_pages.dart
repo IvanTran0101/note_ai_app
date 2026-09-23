@@ -1017,6 +1017,11 @@ final class _AuthFormScaffold extends StatelessWidget {
                   ? compactContentSpacing
                   : desktopContentSpacing;
               final bool showDesktopPanel = desktopPanel && !compactWidth;
+              const double bottomPadding = NoteFlowSpacing.xl;
+              final double minScrollContentHeight =
+                  (constraints.maxHeight - topPadding - bottomPadding)
+                      .clamp(0.0, constraints.maxHeight)
+                      .toDouble();
               final Widget formColumn = ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: Column(
@@ -1098,14 +1103,25 @@ final class _AuthFormScaffold extends StatelessWidget {
                     )
                   : formColumn;
               return ColoredBox(
+                key: const ValueKey<String>('auth-form-page-background'),
                 color: showDesktopPanel
                     ? tokens.sidebarSurface
                     : tokens.pageSurface,
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(24, topPadding, 24, 24),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: pageContent,
+                  padding: EdgeInsets.fromLTRB(
+                    NoteFlowSpacing.xl,
+                    topPadding,
+                    NoteFlowSpacing.xl,
+                    bottomPadding,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: minScrollContentHeight,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: pageContent,
+                    ),
                   ),
                 ),
               );
