@@ -13,6 +13,9 @@ final class LoginPage extends StatefulWidget {
 
   static const Key emailFieldKey = ValueKey<String>('auth-login-email');
   static const Key passwordFieldKey = ValueKey<String>('auth-login-password');
+  static const Key passwordVisibilityKey = ValueKey<String>(
+    'auth-login-password-visibility',
+  );
   static const Key submitKey = ValueKey<String>('auth-login-submit');
 
   final AuthController controller;
@@ -26,6 +29,10 @@ final class _LoginPageState extends State<LoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  bool _passwordVisible = false;
+  int _passwordShakeTrigger = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +58,7 @@ final class _LoginPageState extends State<LoginPage> {
                 _authField(
                   key: LoginPage.emailFieldKey,
                   controller: _emailController,
+                  focusNode: _emailFocusNode,
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
@@ -64,7 +72,20 @@ final class _LoginPageState extends State<LoginPage> {
                   controller: _passwordController,
                   label: copy.password,
                   hintText: copy.passwordHint,
-                  obscureText: true,
+                  obscureText: !_passwordVisible,
+                  shakeTrigger: _passwordShakeTrigger,
+                  focusNode: _passwordFocusNode,
+                  keyboardType: TextInputType.visiblePassword,
+                  suffixIcon: _passwordActions(
+                    controller: _passwordController,
+                    copy: copy,
+                    visible: _passwordVisible,
+                    visibilityKey: LoginPage.passwordVisibilityKey,
+                    onClear: _passwordController.clear,
+                    onToggleVisibility: () {
+                      setState(() => _passwordVisible = !_passwordVisible);
+                    },
+                  ),
                   autofillHints: const <String>[AutofillHints.password],
                   textInputAction: TextInputAction.done,
                   validator: (String? value) =>
@@ -101,6 +122,14 @@ final class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
+      final AuthCopy copy = AuthCopy.of(context);
+      if (_required(_emailController.text, copy.emailRequired) != null) {
+        _emailFocusNode.requestFocus();
+      } else if (_required(_passwordController.text, copy.passwordRequired) !=
+          null) {
+        _passwordFocusNode.requestFocus();
+        setState(() => _passwordShakeTrigger++);
+      }
       return;
     }
     try {
@@ -112,6 +141,11 @@ final class _LoginPageState extends State<LoginPage> {
       );
     } on Object {
       // The controller publishes a safe error for the form to render.
+      if (mounted &&
+          widget.controller.state.error?.code ==
+              AuthPresentationErrorCode.invalidCredentials) {
+        setState(() => _passwordShakeTrigger++);
+      }
     }
   }
 
@@ -136,6 +170,8 @@ final class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 }
@@ -153,6 +189,12 @@ final class RegisterPage extends StatefulWidget {
   static const Key confirmPasswordFieldKey = ValueKey<String>(
     'auth-register-confirm-password',
   );
+  static const Key passwordVisibilityKey = ValueKey<String>(
+    'auth-register-password-visibility',
+  );
+  static const Key confirmPasswordVisibilityKey = ValueKey<String>(
+    'auth-register-confirm-password-visibility',
+  );
   static const Key submitKey = ValueKey<String>('auth-register-submit');
 
   final AuthController controller;
@@ -169,6 +211,14 @@ final class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final FocusNode _displayNameFocusNode = FocusNode();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  final FocusNode _confirmPasswordFocusNode = FocusNode();
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
+  int _passwordShakeTrigger = 0;
+  int _confirmPasswordShakeTrigger = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -196,6 +246,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                 _authField(
                   key: RegisterPage.displayNameFieldKey,
                   controller: _displayNameController,
+                  focusNode: _displayNameFocusNode,
                   label: copy.displayName,
                   hintText: copy.displayNameHint,
                   textInputAction: TextInputAction.next,
@@ -206,6 +257,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                 _authField(
                   key: RegisterPage.emailFieldKey,
                   controller: _emailController,
+                  focusNode: _emailFocusNode,
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
@@ -220,11 +272,30 @@ final class _RegisterPageState extends State<RegisterPage> {
                   controller: _passwordController,
                   label: copy.password,
                   hintText: copy.passwordHint,
-                  obscureText: true,
+                  obscureText: !_passwordVisible,
+                  shakeTrigger: _passwordShakeTrigger,
+                  focusNode: _passwordFocusNode,
+                  keyboardType: TextInputType.visiblePassword,
+                  suffixIcon: _passwordActions(
+                    controller: _passwordController,
+                    copy: copy,
+                    visible: _passwordVisible,
+                    visibilityKey: RegisterPage.passwordVisibilityKey,
+                    onClear: _passwordController.clear,
+                    onToggleVisibility: () {
+                      setState(() => _passwordVisible = !_passwordVisible);
+                    },
+                  ),
                   textInputAction: TextInputAction.next,
                   autofillHints: const <String>[AutofillHints.newPassword],
                   validator: (String? value) =>
-                      _required(value, copy.passwordRequired),
+                      _passwordValidationMessage(value, copy),
+                ),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _passwordController,
+                  builder: (BuildContext context, TextEditingValue value, _) {
+                    return _PasswordRequirements(password: value.text);
+                  },
                 ),
                 const SizedBox(height: 12.0),
                 _authField(
@@ -232,7 +303,23 @@ final class _RegisterPageState extends State<RegisterPage> {
                   controller: _confirmPasswordController,
                   label: copy.confirmPassword,
                   hintText: copy.confirmPasswordHint,
-                  obscureText: true,
+                  obscureText: !_confirmPasswordVisible,
+                  shakeTrigger: _confirmPasswordShakeTrigger,
+                  focusNode: _confirmPasswordFocusNode,
+                  keyboardType: TextInputType.visiblePassword,
+                  suffixIcon: _passwordActions(
+                    controller: _confirmPasswordController,
+                    copy: copy,
+                    visible: _confirmPasswordVisible,
+                    visibilityKey: RegisterPage.confirmPasswordVisibilityKey,
+                    onClear: _confirmPasswordController.clear,
+                    onToggleVisibility: () {
+                      setState(
+                        () =>
+                            _confirmPasswordVisible = !_confirmPasswordVisible,
+                      );
+                    },
+                  ),
                   textInputAction: TextInputAction.done,
                   autofillHints: const <String>[AutofillHints.newPassword],
                   validator: (String? value) {
@@ -248,6 +335,26 @@ final class _RegisterPageState extends State<RegisterPage> {
                         : copy.passwordConfirmationMismatch;
                   },
                   onFieldSubmitted: (_) => _submit(),
+                ),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _passwordController,
+                  builder:
+                      (BuildContext context, TextEditingValue password, _) {
+                        return ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _confirmPasswordController,
+                          builder:
+                              (
+                                BuildContext context,
+                                TextEditingValue confirmation,
+                                _,
+                              ) {
+                                return _PasswordMatchIndicator(
+                                  password: password.text,
+                                  confirmation: confirmation.text,
+                                );
+                              },
+                        );
+                      },
                 ),
                 const SizedBox(height: 20.0),
                 _authSubmitButton(
@@ -272,6 +379,37 @@ final class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
+      final AuthCopy copy = AuthCopy.of(context);
+      final bool displayNameInvalid =
+          _required(_displayNameController.text, copy.displayNameRequired) !=
+          null;
+      final bool emailInvalid =
+          _required(_emailController.text, copy.emailRequired) != null;
+      final bool passwordInvalid =
+          _passwordValidationMessage(_passwordController.text, copy) != null;
+      final bool confirmationInvalid =
+          _required(_confirmPasswordController.text, copy.passwordRequired) !=
+              null ||
+          _confirmPasswordController.text != _passwordController.text;
+      if (displayNameInvalid) {
+        _displayNameFocusNode.requestFocus();
+      } else if (emailInvalid) {
+        _emailFocusNode.requestFocus();
+      } else if (passwordInvalid) {
+        _passwordFocusNode.requestFocus();
+      } else if (confirmationInvalid) {
+        _confirmPasswordFocusNode.requestFocus();
+      }
+      if (passwordInvalid || confirmationInvalid) {
+        setState(() {
+          if (passwordInvalid) {
+            _passwordShakeTrigger++;
+          }
+          if (confirmationInvalid) {
+            _confirmPasswordShakeTrigger++;
+          }
+        });
+      }
       return;
     }
     try {
@@ -285,6 +423,11 @@ final class _RegisterPageState extends State<RegisterPage> {
       );
     } on Object {
       // The controller publishes a safe error for the form to render.
+      if (mounted &&
+          widget.controller.state.error?.code ==
+              AuthPresentationErrorCode.passwordRejected) {
+        setState(() => _passwordShakeTrigger++);
+      }
     }
   }
 
@@ -307,6 +450,10 @@ final class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _displayNameFocusNode.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 }
@@ -1198,48 +1345,34 @@ Widget _authSubmitButton({
   );
 }
 
-Widget _authField({
-  required Key key,
+Widget _passwordActions({
   required TextEditingController controller,
-  required String label,
-  String? hintText,
-  required String? Function(String?) validator,
-  bool obscureText = false,
-  TextInputType? keyboardType,
-  TextInputAction? textInputAction,
-  Iterable<String>? autofillHints,
-  ValueChanged<String>? onFieldSubmitted,
+  required AuthCopy copy,
+  required bool visible,
+  required Key visibilityKey,
+  required VoidCallback onClear,
+  required VoidCallback onToggleVisibility,
 }) {
-  return Builder(
-    builder: (BuildContext context) {
-      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  return ValueListenableBuilder<TextEditingValue>(
+    valueListenable: controller,
+    builder: (BuildContext context, TextEditingValue value, _) {
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(bottom: NoteFlowSpacing.sm),
-            child: ExcludeSemantics(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          if (value.text.isNotEmpty)
+            IconButton(
+              tooltip: copy.clearPassword,
+              onPressed: onClear,
+              icon: const Icon(Icons.clear_outlined),
             ),
-          ),
-          Semantics(
-            label: label,
-            child: TextFormField(
-              key: key,
-              controller: controller,
-              decoration: InputDecoration(hintText: hintText),
-              obscureText: obscureText,
-              keyboardType: keyboardType,
-              textInputAction: textInputAction,
-              autofillHints: autofillHints,
-              validator: validator,
+          IconButton(
+            key: visibilityKey,
+            tooltip: visible ? copy.hidePassword : copy.showPassword,
+            onPressed: onToggleVisibility,
+            icon: Icon(
+              visible
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
             ),
           ),
         ],
@@ -1248,6 +1381,319 @@ Widget _authField({
   );
 }
 
+Widget _authField({
+  required Key key,
+  required TextEditingController controller,
+  required String label,
+  String? hintText,
+  required String? Function(String?) validator,
+  bool obscureText = false,
+  Widget? suffixIcon,
+  int shakeTrigger = 0,
+  FocusNode? focusNode,
+  TextInputType? keyboardType,
+  TextInputAction? textInputAction,
+  Iterable<String>? autofillHints,
+  ValueChanged<String>? onFieldSubmitted,
+}) {
+  return _ShakeOnTrigger(
+    trigger: shakeTrigger,
+    child: Builder(
+      builder: (BuildContext context) {
+        final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(bottom: NoteFlowSpacing.sm),
+              child: ExcludeSemantics(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            Semantics(
+              label: label,
+              child: TextFormField(
+                key: key,
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  suffixIcon: suffixIcon,
+                ),
+                obscureText: obscureText,
+                focusNode: focusNode,
+                keyboardType: keyboardType,
+                textInputAction: textInputAction,
+                autofillHints: autofillHints,
+                validator: validator,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 String? _required(String? value, String message) {
   return value == null || value.trim().isEmpty ? message : null;
+}
+
+final class _ShakeOnTrigger extends StatefulWidget {
+  const _ShakeOnTrigger({required this.trigger, required this.child});
+
+  final int trigger;
+  final Widget child;
+
+  @override
+  State<_ShakeOnTrigger> createState() => _ShakeOnTriggerState();
+}
+
+final class _ShakeOnTriggerState extends State<_ShakeOnTrigger>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: NoteFlowMotion.standard,
+  );
+  late final Animation<double> _offset = TweenSequence<double>(
+    <TweenSequenceItem<double>>[
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 0, end: -5),
+        weight: 20,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: -5, end: 5),
+        weight: 30,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 5, end: -3),
+        weight: 25,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: -3, end: 0),
+        weight: 25,
+      ),
+    ],
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+  @override
+  void didUpdateWidget(covariant _ShakeOnTrigger oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.trigger != oldWidget.trigger) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _offset,
+      child: widget.child,
+      builder: (BuildContext context, Widget? child) {
+        return Transform.translate(
+          offset: Offset(_offset.value, 0),
+          child: child,
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
+String? _passwordValidationMessage(String? value, AuthCopy copy) {
+  final String password = value ?? '';
+  if (password.trim().isEmpty) {
+    return copy.passwordRequired;
+  }
+  if (password.length < 8) {
+    return copy.passwordMinLength;
+  }
+  if (!RegExp(r'[A-Z]').hasMatch(password)) {
+    return copy.passwordUppercase;
+  }
+  if (!RegExp(r'[a-z]').hasMatch(password)) {
+    return copy.passwordLowercase;
+  }
+  if (!RegExp(r'[0-9]').hasMatch(password)) {
+    return copy.passwordNumber;
+  }
+  if (!RegExp(r'[^A-Za-z0-9\s]').hasMatch(password)) {
+    return copy.passwordSpecialCharacter;
+  }
+  return null;
+}
+
+final class _PasswordRequirements extends StatelessWidget {
+  const _PasswordRequirements({required this.password});
+
+  final String password;
+
+  @override
+  Widget build(BuildContext context) {
+    final AuthCopy copy = AuthCopy.of(context);
+    final bool allMet =
+        password.length >= 8 &&
+        RegExp(r'[A-Z]').hasMatch(password) &&
+        RegExp(r'[a-z]').hasMatch(password) &&
+        RegExp(r'[0-9]').hasMatch(password) &&
+        RegExp(r'[^A-Za-z0-9\s]').hasMatch(password);
+    return AnimatedSize(
+      duration: NoteFlowMotion.standard,
+      curve: Curves.easeOut,
+      child: AnimatedSwitcher(
+        duration: NoteFlowMotion.fast,
+        child: password.isEmpty
+            ? const SizedBox.shrink(key: ValueKey<String>('password-empty'))
+            : allMet
+            ? _passwordSuccess(context, copy.passwordValid)
+            : Padding(
+                key: const ValueKey<String>('password-missing'),
+                padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _animatedRequirement(
+                      context,
+                      password.length >= 8,
+                      copy.passwordMinLength,
+                    ),
+                    _animatedRequirement(
+                      context,
+                      RegExp(r'[A-Z]').hasMatch(password),
+                      copy.passwordUppercase,
+                    ),
+                    _animatedRequirement(
+                      context,
+                      RegExp(r'[a-z]').hasMatch(password),
+                      copy.passwordLowercase,
+                    ),
+                    _animatedRequirement(
+                      context,
+                      RegExp(r'[0-9]').hasMatch(password),
+                      copy.passwordNumber,
+                    ),
+                    _animatedRequirement(
+                      context,
+                      RegExp(r'[^A-Za-z0-9\s]').hasMatch(password),
+                      copy.passwordSpecialCharacter,
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _passwordSuccess(BuildContext context, String message) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return Padding(
+      key: const ValueKey<String>('password-valid'),
+      padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.check_circle_outline, size: 16, color: tokens.success),
+          const SizedBox(width: NoteFlowSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: tokens.success),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _animatedRequirement(BuildContext context, bool met, String message) {
+    return AnimatedSize(
+      duration: NoteFlowMotion.standard,
+      curve: Curves.easeOut,
+      child: AnimatedSwitcher(
+        duration: NoteFlowMotion.fast,
+        child: met
+            ? const SizedBox.shrink(key: ValueKey<String>('met'))
+            : _requirement(context, message),
+      ),
+    );
+  }
+
+  Widget _requirement(BuildContext context, String message) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final Color color = tokens.error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: NoteFlowSpacing.xs),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.error_outline, size: 16, color: color),
+          const SizedBox(width: NoteFlowSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _PasswordMatchIndicator extends StatelessWidget {
+  const _PasswordMatchIndicator({
+    required this.password,
+    required this.confirmation,
+  });
+
+  final String password;
+  final String confirmation;
+
+  @override
+  Widget build(BuildContext context) {
+    if (confirmation.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final AuthCopy copy = AuthCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final bool matches = password.isNotEmpty && password == confirmation;
+    final Color color = matches ? tokens.success : tokens.error;
+    return AnimatedSwitcher(
+      duration: NoteFlowMotion.fast,
+      child: Padding(
+        key: ValueKey<bool>(matches),
+        padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              matches ? Icons.check_circle_outline : Icons.error_outline,
+              size: 16,
+              color: color,
+            ),
+            const SizedBox(width: NoteFlowSpacing.sm),
+            Expanded(
+              child: Text(
+                matches
+                    ? copy.passwordsMatch
+                    : copy.passwordConfirmationMismatch,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

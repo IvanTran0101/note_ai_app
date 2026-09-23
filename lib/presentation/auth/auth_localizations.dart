@@ -118,6 +118,29 @@ final class AuthCopy {
       : 'Display name is required.';
   String get passwordRequired =>
       _isVietnamese ? 'Vui lòng nhập mật khẩu.' : 'Password is required.';
+  String get showPassword => _isVietnamese ? 'Hiện mật khẩu' : 'Show password';
+  String get hidePassword => _isVietnamese ? 'Ẩn mật khẩu' : 'Hide password';
+  String get clearPassword => _isVietnamese ? 'Xóa mật khẩu' : 'Clear password';
+  String get passwordsMatch =>
+      _isVietnamese ? 'Mật khẩu khớp nhau.' : 'Passwords match.';
+  String get passwordValid => _isVietnamese
+      ? 'Mật khẩu đáp ứng tất cả yêu cầu.'
+      : 'Password meets all requirements.';
+  String get passwordMinLength => _isVietnamese
+      ? 'Mật khẩu phải có ít nhất 8 ký tự.'
+      : 'Password must contain at least 8 characters.';
+  String get passwordUppercase => _isVietnamese
+      ? 'Mật khẩu phải có ít nhất một chữ hoa.'
+      : 'Password must contain an uppercase letter.';
+  String get passwordLowercase => _isVietnamese
+      ? 'Mật khẩu phải có ít nhất một chữ thường.'
+      : 'Password must contain a lowercase letter.';
+  String get passwordNumber => _isVietnamese
+      ? 'Mật khẩu phải có ít nhất một chữ số.'
+      : 'Password must contain a number.';
+  String get passwordSpecialCharacter => _isVietnamese
+      ? 'Mật khẩu phải có ký tự đặc biệt.'
+      : 'Password must contain a special character.';
   String get passwordConfirmationMismatch => _isVietnamese
       ? 'Mật khẩu xác nhận không khớp.'
       : 'Passwords do not match.';
