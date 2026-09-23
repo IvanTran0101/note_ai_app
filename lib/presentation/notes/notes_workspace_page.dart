@@ -6,6 +6,7 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import '../../application/notes/note_application.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
+import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
 import 'notes_localizations.dart';
@@ -249,7 +250,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(buildNoteFlowSnackBar(context: context, message: message));
   }
 
   @override

@@ -14,6 +14,7 @@ import 'note_detail_localizations.dart';
 import 'note_detail_more_actions.dart';
 import 'note_detail_route_result.dart';
 import 'note_detail_surface.dart';
+import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 
 /// Focused mobile-first editor for one note.
@@ -396,7 +397,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     });
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(copiedMessage)));
+      ..showSnackBar(
+        buildNoteFlowSnackBar(context: context, message: copiedMessage),
+      );
     try {
       await Clipboard.setData(ClipboardData(text: summary));
     } on Object {
