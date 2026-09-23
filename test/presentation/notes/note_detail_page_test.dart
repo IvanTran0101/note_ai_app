@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -440,7 +441,7 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
-  testWidgets('more sheet and delete dialog dismiss without side effects', (
+  testWidgets('desktop more menu dismisses and preserves delete confirmation', (
     WidgetTester tester,
   ) async {
     final _FakeNotesController controller = _FakeNotesController(
@@ -451,8 +452,31 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
     await tester.pumpAndSettle();
     expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    final Rect triggerRect = tester.getRect(
+      find.byKey(const ValueKey<String>('note-detail-more')),
+    );
+    final Rect menuItemRect = tester.getRect(
+      find.byKey(NoteDetailPage.moreDeleteKey),
+    );
+    expect(menuItemRect.top, greaterThanOrEqualTo(triggerRect.bottom));
+    expect(menuItemRect.right, lessThanOrEqualTo(triggerRect.right));
+    expect(triggerRect.right - menuItemRect.right, lessThanOrEqualTo(8));
+    expect(
+      menuItemRect.right,
+      lessThanOrEqualTo(tester.view.physicalSize.width),
+    );
 
-    // Tapping the barrier dismisses the sheet without running any action.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    // Tapping the barrier dismisses the menu without running any action.
     await tester.tapAt(const Offset(4, 4));
     await tester.pumpAndSettle();
     expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
@@ -469,6 +493,39 @@ void main() {
 
     expect(find.text('Delete note?'), findsNothing);
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.notes, hasLength(1));
+  });
+
+  testWidgets('compact more actions remain a dismissible bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    await tester.tapAt(const Offset(195, 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
     expect(controller.notes, hasLength(1));
   });
 

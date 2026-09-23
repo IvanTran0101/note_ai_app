@@ -56,6 +56,7 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.onSave,
     required this.onSummarize,
     required this.onMore,
+    this.onMoreWithContext,
     required this.saveLabel,
     required this.summarizeLabel,
     required this.moreLabel,
@@ -99,6 +100,7 @@ final class NoteDetailSurface extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onSummarize;
   final VoidCallback? onMore;
+  final ValueChanged<BuildContext>? onMoreWithContext;
   final String saveLabel;
   final String summarizeLabel;
   final String moreLabel;
@@ -136,6 +138,7 @@ final class NoteDetailSurface extends StatelessWidget {
       onSave: onSave,
       onSummarize: onSummarize,
       onMore: onMore,
+      onMoreWithContext: onMoreWithContext,
       saveLabel: saveLabel,
       summarizeLabel: summarizeLabel,
       moreLabel: moreLabel,

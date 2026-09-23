@@ -20,6 +20,7 @@ final class NoteDetailActionBar extends StatelessWidget {
     required this.onSave,
     required this.onSummarize,
     required this.onMore,
+    this.onMoreWithContext,
     required this.saveLabel,
     required this.summarizeLabel,
     required this.moreLabel,
@@ -36,6 +37,7 @@ final class NoteDetailActionBar extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onSummarize;
   final VoidCallback? onMore;
+  final ValueChanged<BuildContext>? onMoreWithContext;
   final String saveLabel;
   final String summarizeLabel;
   final String moreLabel;
@@ -51,7 +53,18 @@ final class NoteDetailActionBar extends StatelessWidget {
         canSave && !isSaving && !isSummarizing && onSave != null;
     final bool summarizeEnabled =
         canSummarize && !isSaving && !isSummarizing && onSummarize != null;
-    final bool moreEnabled = !isSaving && !isSummarizing && onMore != null;
+    final bool hasMoreAction = onMore != null || onMoreWithContext != null;
+    final bool moreEnabled = !isSaving && !isSummarizing && hasMoreAction;
+
+    void invokeMore(BuildContext buttonContext) {
+      final ValueChanged<BuildContext>? withContext = onMoreWithContext;
+      if (withContext != null) {
+        withContext(buttonContext);
+      } else {
+        onMore?.call();
+      }
+    }
+
     final Widget summarizeButton = Semantics(
       button: true,
       enabled: summarizeEnabled,
@@ -80,16 +93,27 @@ final class NoteDetailActionBar extends StatelessWidget {
         required VoidCallback? onPressed,
         required Widget icon,
         String? tooltip,
+        ValueChanged<BuildContext>? onPressedWithContext,
       }) {
-        return Semantics(
-          button: true,
-          enabled: enabled,
-          label: label,
-          child: IconButton(
-            key: key,
-            tooltip: tooltip ?? label,
-            onPressed: enabled ? onPressed : null,
-            icon: icon,
+        return Builder(
+          builder: (BuildContext buttonContext) => Semantics(
+            button: true,
+            enabled: enabled,
+            label: label,
+            child: IconButton(
+              key: key,
+              tooltip: tooltip ?? label,
+              onPressed: enabled
+                  ? () {
+                      if (onPressedWithContext != null) {
+                        onPressedWithContext(buttonContext);
+                      } else {
+                        onPressed?.call();
+                      }
+                    }
+                  : null,
+              icon: icon,
+            ),
           ),
         );
       }
@@ -130,6 +154,7 @@ final class NoteDetailActionBar extends StatelessWidget {
               enabled: moreEnabled,
               onPressed: onMore,
               icon: const Icon(Icons.more_horiz),
+              onPressedWithContext: onMoreWithContext,
             ),
         ],
       );
@@ -179,16 +204,20 @@ final class NoteDetailActionBar extends StatelessWidget {
                         ),
                       ),
                     summarizeAction,
-                    if (onMore != null)
-                      Semantics(
-                        button: true,
-                        enabled: moreEnabled,
-                        label: moreLabel,
-                        child: OutlinedButton.icon(
-                          key: const ValueKey<String>('note-detail-more'),
-                          onPressed: moreEnabled ? onMore : null,
-                          icon: const Icon(Icons.more_horiz),
-                          label: Text(moreLabel),
+                    if (hasMoreAction)
+                      Builder(
+                        builder: (BuildContext buttonContext) => Semantics(
+                          button: true,
+                          enabled: moreEnabled,
+                          label: moreLabel,
+                          child: OutlinedButton.icon(
+                            key: const ValueKey<String>('note-detail-more'),
+                            onPressed: moreEnabled
+                                ? () => invokeMore(buttonContext)
+                                : null,
+                            icon: const Icon(Icons.more_horiz),
+                            label: Text(moreLabel),
+                          ),
                         ),
                       ),
                   ],
