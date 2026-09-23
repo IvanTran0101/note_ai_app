@@ -416,6 +416,21 @@ score by itself.
   restored byte-for-byte to SHA-256
   `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 
+### Auth text-scale regression check — 2026-09-23
+
+- Added a widget check that pumps Login and Register at 200% text scale in a
+  360×800 viewport, scrolls each existing submit action into view, and verifies
+  there is no layout exception. The Register password-confirmation test now
+  scrolls its existing submit action into view before tapping it in the 800×600
+  test viewport.
+- Current auth widget suite: PASS, 10/10. Current full presentation suite:
+  PASS, 190/190, using the temporary test-only `local_llm_bridge` package-root
+  shim. `.dart_tool/package_config.json` was restored byte-for-byte to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- This covers only Login/Register action reachability under one high text-scale
+  phone configuration. It does not establish full semantics, focus, keyboard,
+  localization, 1.3 scale, other surfaces/platforms, or the `>=95/100` score.
+
 ### Current shell and Notes responsive review — 2026-09-23
 
 - Release Web build used the current working tree with

@@ -221,6 +221,46 @@ void main() {
     },
   );
 
+  testWidgets(
+    'login and register remain reachable at 200% text scale on a small phone',
+    (WidgetTester tester) async {
+      final AuthController controller = AuthController(
+        authenticationAppService: _FakeAuthenticationAppService(),
+      );
+      addTearDown(controller.dispose);
+      tester.view
+        ..physicalSize = const Size(360, 800)
+        ..devicePixelRatio = 1.0;
+      tester.binding.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(
+        tester.binding.platformDispatcher.clearTextScaleFactorTestValue,
+      );
+
+      final List<Widget> pages = <Widget>[
+        LoginPage(controller: controller),
+        RegisterPage(controller: controller),
+      ];
+      for (final Widget page in pages) {
+        await tester.pumpWidget(MaterialApp(home: page));
+        await tester.pumpAndSettle();
+
+        final Finder submit = find.byKey(
+          page is LoginPage ? LoginPage.submitKey : RegisterPage.submitKey,
+        );
+        expect(submit, findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.ensureVisible(submit);
+        await tester.pumpAndSettle();
+        final Rect submitBounds = tester.getRect(submit);
+        expect(submitBounds.top, greaterThanOrEqualTo(0));
+        expect(submitBounds.bottom, lessThanOrEqualTo(800));
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets('register validates password confirmation', (
     WidgetTester tester,
   ) async {
@@ -249,6 +289,8 @@ void main() {
       find.byKey(RegisterPage.confirmPasswordFieldKey),
       'password-2',
     );
+    await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(RegisterPage.submitKey));
     await tester.pump();
 

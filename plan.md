@@ -563,8 +563,10 @@ available evidence does not establish the `>=95/100` gate.
 Current Login uses 38px compact/72px desktop top padding. Register starts with
 Email, followed by Display name, Password, and Confirm password; it uses 76px
 compact/32px desktop top padding and a 496px desktop panel, with the existing
-32px fallback for short viewports. The auth page suite passes 9/9 with the
-temporary test-only `local_llm_bridge` package-root shim;
+32px fallback for short viewports. The auth page suite now passes 10/10 with the
+temporary test-only `local_llm_bridge` package-root shim. The added test checks
+Login and Register at 200% text scale in a 360×800 viewport: each existing
+submit action can be scrolled into view without a layout exception.
 `.dart_tool/package_config.json` was restored to SHA-256
 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
 Widget assertions cover the Email/Display name order and 393×852, 1280×800,
@@ -574,10 +576,11 @@ predate these changes. Capture 85 shows the current source at 1280×800 in a
 signed-out debug Web run; the Flutter debug ribbon is visible and excluded
 from fidelity scoring. The local-auth release preview rendered Home after
 navigation to `/register`; I did not override auth state. A
-later current-source run of `flutter test --no-pub test/presentation
---reporter compact --timeout 60s` passed 189/189 using a temporary test-only
-package-root shim for the unrelated native `local_llm_bridge` hook. The package
-config was restored byte-for-byte to SHA-256
+previous current-source presentation run passed 189/189 using a temporary
+test-only package-root shim for the unrelated native `local_llm_bridge` hook.
+After adding the text-scale check, the full current-source presentation suite
+passed 190/190 and the auth page suite passed 10/10. The package config was
+restored byte-for-byte to SHA-256
 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. An
 earlier run had hit a transient disk-full error and stalled; it is superseded
 by this completed presentation-suite run.
@@ -639,10 +642,10 @@ checks state retention only; it does not verify Web persistence or the overall
 | 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
-| 8. Auth UI | Login captures 66/69 and pre-refinement Register captures 67/68 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; debug capture 85 shows the current Register UI; Register places Email first and asserts its 32px desktop panel top; presentation suite passes 189/189 and preserves controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Capture current Register in a release build at desktop/phone/tablet sizes; pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
-| 9. Accessibility/localization | Existing semantics and locale tests are evidence only for covered widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0–2.0 text scale, keyboard and touch-target gates on final UI |
+| 8. Auth UI | Login captures 66/69 and pre-refinement Register captures 67/68 are paired by viewport with Notion references 20/22/24/26; captures 79–84 show existing reset-code request, new-password form, and signed-out verify-email state at desktop/phone sizes; debug capture 85 shows the current Register UI; Register places Email first and asserts its 32px desktop panel top; auth suite passes 10/10 and full presentation suite 190/190 while preserving controller/validator/autofill contracts; no numeric score is assigned | `IN_PROGRESS` | Capture current Register in a release build at desktop/phone/tablet sizes; pair every supported auth state with same-size Notion references; capture validation/busy/error/success/change-password states; verify tablet layout and accessibility without adding unsupported auth choices |
+| 9. Accessibility/localization | New Login/Register widget test checks submit reachability at 200% text scale in a 360×800 viewport; existing semantics and locale tests are evidence only for covered widgets | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
 | 10. Device visual QA | Current-source Web captures cover Home/Notes at 360/390/768/1024/1280/1440 widths plus editor/auth states; no complete paired diff exists; `flutter devices` currently lists Windows, Chrome, and Edge only | `PARTIAL` | Complete paired reference review; reconnect Android and use an Apple runner for iOS/macOS device checks; rerun final responsive/accessibility gates |
-| 11. Regression/build/handoff | Current-source Android release APK build passes (87.5 MB); Web release build and shell/Notes captures predate the latest Register field-order change, while current-source debug Web Register capture 85 renders successfully; targeted auth analyzer passes; Dart format reports the two touched Dart files unchanged; current-source `test/presentation` passes 189/189 with the temporary test shim and restored package-config hash | `IN_PROGRESS` | Build current-source Web release, complete remaining visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |
+| 11. Regression/build/handoff | Current-source Android release APK build passes (87.5 MB); Web release build and shell/Notes captures predate the latest Register field-order change, while current-source debug Web Register capture 85 renders successfully; current-source `test/presentation` passes 190/190 with the temporary test shim and restored package-config hash | `IN_PROGRESS` | Build current-source Web release, complete remaining visual/accessibility gates, run Apple-target builds on macOS, and audit the final allowlisted diff |
 
 ---
 
