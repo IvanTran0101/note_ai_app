@@ -112,6 +112,8 @@ entered, so no note was persisted. Other screenshots remain from the
 | `119-noteflow-sidebar-compact-bar-390x844-current-20260924.png` | Current release Web compact workspace header | 390×844 | light |
 | `120-noteflow-sidebar-medium-768x1024-current-20260924.png` | Current release Web medium-width NavigationRail | 768×1024 | light |
 | `121-noteflow-sidebar-expanded-1024x768-current-20260924.png` | Current release Web expanded sidebar at a compact desktop viewport | 1024×768 | light |
+| `128-noteflow-home-empty-1080x2400-android15-api35.png` | Android 15/API 35 AVD, current-source Home empty state under temporary local-auth QA build | 1080×2400 | light |
+| `129-noteflow-editor-empty-1080x2400-android15-api35.png` | Android 15/API 35 AVD, current-source blank note editor under temporary local-auth QA build | 1080×2400 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -270,10 +272,10 @@ claim `>=95`; it does not assert a measured score below 95.
 
 ## Known limitations (không che giấu)
 
-1. **Thiết bị vật lý**: Android/iPhone/iPad/macOS chưa được chụp trực tiếp
-   (máy QA chỉ có Windows + Chrome). Safe-area/keyboard overlap được cover
-   bằng widget test và SafeArea usage, nhưng phải kiểm tra lại trên thiết bị
-   thật trước khi release theo plan §4.4.
+1. Android 15/API 35 is an emulator capture, not a physical Android device.
+   iPhone/iPad/macOS still need a compatible Apple runner. Safe-area/keyboard
+   behavior must be checked on those real devices before release under plan
+   §4.4.
 2. The current browser run explicitly reports that the Web build cannot load
    or save notes, so a persisted-note page and actual browser save cannot be
    visually verified. Existing controller behavior is covered by
@@ -282,9 +284,9 @@ claim `>=95`; it does not assert a measured score below 95.
 3. **Sidebar/Share/menu đầy đủ của Notion** không chụp được từ trang reference
    (view-only); đối chiếu theo docs + inventory của plan §2.3 như đã ghi trong
    reference matrix.
-4. An Android 15/API 35 emulator is now available and has been used for the
-   Login/Register checks recorded below. Native Home/note workflows still need
-   runtime QA; iOS/macOS builds and device QA need a compatible Apple runner.
+4. An Android 15/API 35 emulator now covers Login/Register, Home, a blank note
+   editor, autosave across force-stop/relaunch, reopen, and delete of the single
+   QA note. iOS/macOS builds and runtime QA need a compatible Apple runner.
 
 ## Re-review verification (2026-09-23)
 
@@ -649,3 +651,28 @@ score by itself.
   storage-unavailable state. Widget fixtures verify layout but do not establish
   a persisted-note runtime or a same-state Notion visual pair. No numeric score
   is assigned; the app-wide `>=95/100` gate remains unproven.
+
+### Android Home/editor/autosave runtime follow-up — 2026-09-24
+
+- Built `flutter build apk --release --dart-define=NOTEFLOW_AUTH_MODE=local`
+  from source revision `e0b6181`; Gradle reported 1083.2s and the QA APK was
+  87.2MB. Its signing certificate matched the existing Cognito release.
+- Installed by `adb install -r` on the Android 15/API 35 AVD without clearing
+  app data. Captures 128–129 show the actual empty Home and blank editor at
+  1080×2400.
+- Through the app UI, created a temporary note and entered body text. The note
+  appeared in Home, remained after force-stop/relaunch, and reopened with the
+  existing “Note saved.” status. The app's More → Delete → confirmation flow
+  removed that exact QA note; Home returned to “No notes yet.” No other notes
+  existed in the workspace during this check.
+- Restored the previous Cognito APK at
+  `build/app/outputs/flutter-apk/app-release.apk` byte-for-byte (SHA-256
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`),
+  updated its `.sha1` sidecar, reinstalled it, and confirmed the Login screen.
+  The QA note was deleted before restoring the original build; app data was not
+  cleared.
+- This confirms Android local-auth runtime autosave/persistence only. It does
+  not change the Web storage-unavailable limitation or score visual fidelity.
+  There are still no same-state Notion pairs for Home/list/editor, no physical
+  device capture, and no iOS/macOS runner. The fidelity score remains
+  **unassigned; the `>=95/100` gate is not proven**.
