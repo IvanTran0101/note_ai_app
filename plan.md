@@ -2,11 +2,11 @@
 
 > **Trạng thái:** Kế hoạch thực thi, chưa phải bằng chứng đã implement.
 >
-> **Audit starting point 2026-09-24:** branch `TuanKiet2`, HEAD and
-> `origin/TuanKiet2` both `4b09a64` before the current workspace-shell tranche.
-> At review start, the working tree contained the pending auth UI/test tranche, an unrelated
-> modified macOS generated registrant, and existing untracked QA artifacts.
-> Stage only the exact UI/test/doc files for each tranche.
+> **Audit snapshot 2026-09-24:** branch `TuanKiet2`, HEAD and
+> `origin/TuanKiet2` both `2edc3d4` (`Refine Notion-style dashboard home`).
+> The working tree also contains an unrelated modified macOS generated
+> registrant and existing untracked QA artifacts. Stage only the exact
+> UI/test/doc files for each tranche.
 >
 > **Mục tiêu:** đưa những màn hình và trạng thái NoteFlow đang hỗ trợ về cùng
 > ngôn ngữ thị giác, hierarchy, spacing, feedback và responsive behavior với
@@ -720,7 +720,7 @@ app and do not establish the `>=95/100` release gate.
 | 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
 | 3. Shell/sidebar | Release Web build after shell polish captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. `workspace_shell_test.dart` passes 18/18 using a test-only bridge package root; `.dart_tool/package_config.json` restored to SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`; Web release build passes (69.5s). | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels, run Android runtime checks and Apple builds/device checks; no Favorites/profile/workspace-switching controls |
 | 4. Dashboard/Recents | Current-source Web Home captures 70 and 78 show the explicit storage-unavailable state at desktop and phone widths; no loaded note data is available in this Web build | `PARTIAL` | Compare Home's supported states with Notion and verify controller-backed loaded data on a supported native target |
-| 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
+| 5. Notes list/detail frame | Current-source captures 71–76 cover 1280×800, 1024×768, 768×1024, 390×844, 360×800, and 1440×900 with the explicit Web storage limitation; captures 56–57 verify dirty-back and retained load error. Focused analyzer passes for Notes workspace/list/responsive code and tests; targeted formatter reports 0 changed files. | `IN_PROGRESS` | Verify selection and return states with real native data; capture loaded/selected states and pair supported states against Notion |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–53 for long-title wrap/draft retention, captures 54–55 for collapsed-sidebar placement, and capture 56 for Web dirty-back warning with no Save action; captures 49–50 are superseded conflicting observations | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, verify native persistence where a compatible runner is available, and complete editor visual review |
 | 7. Menus/overlays/status | Capture 56 verifies only the Web unsaved-back dialog; no complete visual state matrix | `PARTIAL` | Review More, delete/back confirmation on supported native targets, settings, summaries, and provisioning overlays |
 | 8. Auth UI | Release captures 104–110 cover the current email/password/details steps at desktop/phone/tablet; public same-size Notion refs 111–114; Register mobile CTA matches pixel rows and desktop CTA now matches after a presentation-only spacing adjustment; auth behavior contracts retained; full presentation suite 193/193 | `IN_PROGRESS` | Capture desktop Register details and supported validation/busy/error/success/change-password states; finish accessibility/localization checks; record only supported-control comparison and keep overall score unassigned |
