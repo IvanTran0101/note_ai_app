@@ -36,7 +36,7 @@ final class _LoginPageState extends State<LoginPage> {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final double loginSubmitSpacing = MediaQuery.sizeOf(context).width < 600
         ? NoteFlowSpacing.xl
-        : NoteFlowSpacing.md;
+        : NoteFlowSpacing.md - 5;
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
@@ -45,6 +45,7 @@ final class _LoginPageState extends State<LoginPage> {
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
           compactTopPadding: 38,
+          desktopTopPadding: 82,
           compactBrandTitleSpacing: 34,
           compactTitleSubtitleSpacing: 0,
           compactContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.xs,

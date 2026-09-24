@@ -513,19 +513,21 @@ Chấm ở từng viewport và lấy điểm thấp nhất của từng nhóm; k
 
 | Nhóm | Điểm | Cách chấm đạt |
 | --- | ---: | --- |
-| Cấu trúc và hierarchy | 25 | Sidebar/header/page/Notes list/editor đặt đúng vùng theo responsive contract, anchor lệch không quá ±2–4px theo viewport. |
+| Cấu trúc và hierarchy | 27 | Sidebar/header/page/Notes list/editor nằm đúng vùng theo responsive contract; anchor chính lệch tối đa ±4 logical px. |
 | Màu và surface | 15 | Light/dark surface, text, selected, focus, error/success và divider khớp token/reference; không có màu ngẫu nhiên. |
 | Typography | 15 | Font/fallback, size, weight, line height, truncation và baseline đồng nhất; không wrap sai ở viewport mục tiêu. |
-| Spacing và geometry | 15 | Gutter, row height, block spacing, menu/dialog bounds và touch target khớp reference. |
+| Spacing và geometry | 17 | Gutter, row height, block spacing, menu/dialog bounds và touch target khớp reference; cạnh control và khoảng cách lệch tối đa ±2 logical px. |
 | Component states | 10 | Hover, focus, pressed, selected, disabled, loading, dirty, saving, error, empty và summary có state rõ. |
-| Responsive/platform | 10 | Android/iOS phone, iPad/tablet, web và macOS đạt layout contract; không overflow/keyboard overlap. |
+| Responsive/platform | 11 | Android/iOS phone, iPad/tablet, web và macOS đạt layout contract; không overflow/keyboard overlap. |
 | Accessibility/localization | 5 | Semantics, focus, contrast, EN/VI, text scale và keyboard pass. |
-| Regression behavior | 5 | Save/delete/summarize/search/auth/route callback vẫn hoạt động đúng trên target mà baseline hỗ trợ; target vốn không hỗ trợ một capability phải thể hiện limitation rõ và không giả thành công. |
 | **Tổng** | **100** | **Release chỉ khi `>= 95` và không có critical fail.** |
 
 Quy tắc ghi điểm:
 
-- Chấm từng cặp `target/browser + viewport + screen/state` theo 8 nhóm trên. Mỗi nhóm chỉ nhận điểm dựa trên reference và current-source capture cùng viewport, theme, locale, data state và scroll position.
+- Behavior không cộng điểm thị giác; toàn bộ test regression là release gate riêng ở Step 11 và mục 6.1.
+- Trước khi sửa một cell `target/browser + viewport + screen/state`, ghi danh sách anchor và checklist controls/state áp dụng trong QA log. Reference và current-source capture phải cùng viewport, DPR, theme, locale, data state và scroll position.
+- Tính từng nhóm trong cell bằng `trọng số nhóm × số checklist item PASS / số checklist item áp dụng`. Item chỉ PASS khi mọi điều kiện của item đạt; vị trí anchor chính lệch tối đa ±4 logical px, kích thước/cạnh control và khoảng cách lệch tối đa ±2 logical px. Với typography, font size lệch tối đa ±1 px, line height ±2 px và số dòng/wrap phải khớp. Với màu phẳng, mỗi kênh RGB lệch tối đa 6; bỏ pixel viền chữ/control bị antialiasing khi lấy mẫu.
+- Cộng điểm các nhóm đã chuẩn hóa trong cell. Ghi từng item PASS/FAIL, phép đo, reference/current và lý do; không tự đổi checklist hoặc dung sai sau khi xem kết quả.
 - `N/A` chỉ dùng cho Notion capability không có trong NoteFlow contract (ví dụ OAuth provider hoặc Share/Publish chưa có callback); loại đúng tiêu chí đó khỏi mẫu số rồi chuẩn hóa phần còn lại về thang 100. Không render control giả để lấy điểm.
 - `UNVERIFIED` dùng cho capability NoteFlow có hỗ trợ nhưng chưa có runner, thiết bị, capture hoặc cặp reference tương ứng. Không được loại khỏi mẫu số. Khi còn `UNVERIFIED`, cell/platform score là `N/C` (chưa đủ bằng chứng), không được suy ra đã đạt 95.
 - Platform score là điểm thấp nhất trong các cell bắt buộc của platform; chỉ công bố numeric platform score khi toàn bộ cell áp dụng đều được chấm. Overall score là mức thấp nhất trong các platform score, không lấy trung bình.
@@ -1059,17 +1061,23 @@ Kế hoạch chỉ được đánh dấu hoàn tất khi tất cả điều ki�
 ## 10. Per-platform scorecard — 2026-09-24
 
 `N/C` means required evidence is incomplete; it is not a numeric score and does
-not imply a pass. The editor-anchor result below is a tranche result only.
+not imply a pass. The anchor results below are tranche results only.
 
-| Platform/runtime | Evidence in this tranche | Current status | Remaining evidence before numeric scoring |
+| Platform/runtime | Evidence available to date | Current status | Remaining evidence before numeric scoring |
 | --- | --- | --- | --- |
 | Android | Existing API 35 phone workflow captures 142–153; blank editor at 411×914 logical in 156 | `N/C` | Exact matched reference states; tablet portrait/landscape; other screens, themes, accessibility and full workflow matrix |
 | iOS | No Apple runtime available on this host | `UNVERIFIED` | iPhone and iPad required viewport, workflow and visual captures |
-| Web — Chrome | Blank-editor title glyph anchor passes at 390×844 and 567×694 in 157–158 | `N/C` | Desktop and all other screens/states; matched Notion pairs; keyboard, loading/error/summary, theme, locale and accessibility checks |
-| Web — Edge | Blank-editor title glyph anchor passes at 390×844 and 567×694 in 159–160 | `N/C` | Same remaining Web matrix as Chrome; platform Web score is the lower browser score |
+| Web — Chrome | Blank-editor title glyph anchor in 157–158; Login email CTA pair in 161–162: desktop exact, mobile within 1px | `N/C` | All other screens/states; matched Notion pairs; keyboard, loading/error/summary, theme, locale and accessibility checks |
+| Web — Edge | Blank-editor title glyph anchor in 159–160; Login email CTA pair in 163–164: desktop exact, mobile within 1px | `N/C` | Same remaining Web matrix as Chrome; platform Web score is the lower browser score |
 | macOS | No Apple runtime available on this host | `UNVERIFIED` | Desktop workflow and visual captures on macOS |
 | **Overall** | Required platform and workflow cells are incomplete | **`N/C` — 95% is not established** | Complete all applicable platform cells, then score using §6; keep unsupported capabilities `N/A` only when NoteFlow has no corresponding contract/callback |
 
 Unsupported Notion-only controls are excluded from the denominator only where
 the existing NoteFlow contract does not support that capability. Supported but
 uncaptured states stay `UNVERIFIED` and block a numeric score.
+
+This tranche's Login email-first anchor result is `PASS`: the desktop Continue
+bounds match live Notion at 1280×800 in Chrome and Edge; the 390×844 bounds are
+1px lower in both. This is not a numeric Login, Web, or overall score. Android,
+iOS, macOS, the remaining Web screens/states, and the full workflow matrix are
+still incomplete, so `>=95/100` remains unestablished.

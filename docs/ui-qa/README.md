@@ -137,6 +137,10 @@ entered, so no note was persisted. Other screenshots remain from the
 | `158-noteflow-editor-glyph-anchor-567x694-chrome-dpr1-current-20260924.png` | Same blank editor and build; Chrome, DPR 1 | 567×694 | light |
 | `159-noteflow-editor-glyph-anchor-390x844-edge-dpr1-current-20260924.png` | Same blank editor and build; Microsoft Edge, DPR 1 | 390×844 | light |
 | `160-noteflow-editor-glyph-anchor-567x694-edge-dpr1-current-20260924.png` | Same blank editor and build; Microsoft Edge, DPR 1 | 567×694 | light |
+| `161-noteflow-login-email-anchor-1280x800-chrome-current-20260924.png` | Current-source Cognito Web Login; blank email field focused, Chrome, DPR 1 | 1280×800 | light |
+| `162-noteflow-login-email-anchor-390x844-chrome-current-20260924.png` | Same Login state and build; Chrome, DPR 1 | 390×844 | light |
+| `163-noteflow-login-email-anchor-1280x800-edge-current-20260924.png` | Current-source Cognito Web Login; blank email field focused, Microsoft Edge, DPR 1 | 1280×800 | light |
+| `164-noteflow-login-email-anchor-390x844-edge-current-20260924.png` | Same Login state and build; Microsoft Edge, DPR 1 | 390×844 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -1028,3 +1032,30 @@ screenshots are in “Platform-font Register recapture” below.
   shim and `.dart_tool/package_config.json` restored to its original SHA-256.
   Targeted analysis reported no issues. The current local-auth Web release build
   passes; no backend or application contract was changed.
+
+## Login desktop anchor correction — 2026-09-24
+
+- Captures `161`–`164` use the current-source Cognito-default Web release build
+  on an isolated local origin. They show the existing `#/login` email-first
+  screen at DPR 1, with an empty focused email field, in Chrome and Edge at
+  1280×800 and 390×844. Playwright reported Chrome 153 and Edge 153. No email
+  was entered and no login/register form was submitted.
+- Login's desktop top padding moves the brand/title/form group down 10px; the
+  desktop gap before Continue shrinks by 5px. Compact spacing is unchanged.
+  Chrome and Edge place the desktop Continue control at x=460–819, y=338–377,
+  matching live Notion capture `111`. On mobile both browsers place it at
+  x=20–369, y=309–348, one pixel below live Notion capture `114` at
+  y=308–347. This is an anchor result for the supported email-first state, not
+  a score for all auth screens or Web.
+- `flutter test --no-pub test/presentation/auth`: PASS, 34/34 (auth page and
+  navigation integration suites) using the temporary test-only
+  `local_llm_bridge` package-root shim;
+  `.dart_tool/package_config.json` was restored to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025` and the
+  shim was removed.
+- `flutter analyze --no-pub lib/presentation/auth/auth_pages.dart`: PASS.
+  `dart format --output=none --set-exit-if-changed lib/presentation/auth/auth_pages.dart`:
+  PASS. `flutter build web --release --no-pub --no-wasm-dry-run`: PASS in
+  113.4s. No auth callback, route, application service, or backend behavior
+  changed. The remaining auth states and all other required app/platform cells
+  still block numeric platform and overall scores.
