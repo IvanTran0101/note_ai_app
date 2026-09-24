@@ -35,6 +35,10 @@ void main() {
         find.byKey(LoginPage.emailFieldKey),
         'user@example.com',
       );
+      await tester.tap(find.byKey(LoginPage.submitKey));
+      await tester.pumpAndSettle();
+      expect(service.loginCalls, 0);
+
       await tester.enterText(
         find.byKey(LoginPage.passwordFieldKey),
         'password',
@@ -72,12 +76,16 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(RegisterPage.displayNameFieldKey),
-      'User',
-    );
-    await tester.enterText(
       find.byKey(RegisterPage.emailFieldKey),
       'user@example.com',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
+    expect(service.registerCalls, 0);
+
+    await tester.enterText(
+      find.byKey(RegisterPage.displayNameFieldKey),
+      'User',
     );
     await tester.enterText(
       find.byKey(RegisterPage.passwordFieldKey),

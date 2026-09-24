@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
@@ -106,6 +107,65 @@ void main() {
         find.byType(NoteFlowSidebarRow),
       );
       expect(node.flagsCollection.isSelected.toBoolOrNull(), isTrue);
+    });
+
+    testWidgets('shows the matching focus ring in light and dark themes', (
+      tester,
+    ) async {
+      final Finder row = find.byType(NoteFlowSidebarRow);
+      final Finder focusRing = find.descendant(
+        of: row,
+        matching: find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is DecoratedBox &&
+              widget.position == DecorationPosition.foreground,
+        ),
+      );
+
+      for (final ThemeMode themeMode in <ThemeMode>[
+        ThemeMode.light,
+        ThemeMode.dark,
+      ]) {
+        await tester.pumpWidget(
+          _wrap(
+            Column(
+              children: <Widget>[
+                NoteFlowSidebarRow(
+                  label: 'Notes',
+                  icon: Icons.description_outlined,
+                  onTap: () {},
+                ),
+                TextButton(onPressed: () {}, child: const Text('After row')),
+              ],
+            ),
+            themeMode: themeMode,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(focusRing, findsOneWidget);
+        BoxDecoration decoration =
+            tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
+        expect((decoration.border! as Border).top.color, Colors.transparent);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+
+        decoration =
+            tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
+        expect(
+          (decoration.border! as Border).top.color,
+          themeMode == ThemeMode.light
+              ? NoteFlowUiTokens.light().focusRing
+              : NoteFlowUiTokens.dark().focusRing,
+        );
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        decoration =
+            tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
+        expect((decoration.border! as Border).top.color, Colors.transparent);
+      }
     });
 
     testWidgets('disabled row does not fire callback', (tester) async {

@@ -42,10 +42,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      tester.getRect(find.byKey(LoginPage.emailFieldKey)).width,
-      lessThanOrEqualTo(345),
+    final Rect phoneEmailRect = tester.getRect(
+      find.byKey(LoginPage.emailFieldKey),
     );
+    expect(phoneEmailRect.width, inInclusiveRange(351, 355));
+    expect(phoneEmailRect.left, inInclusiveRange(19, 21));
     expect(tester.getRect(find.text('NoteFlow')).top, inInclusiveRange(36, 48));
     expect(
       tester.getRect(find.text('Welcome back')).top,
@@ -72,7 +73,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('login validates required fields before submitting', (
+  testWidgets('login validates email before showing the password step', (
     WidgetTester tester,
   ) async {
     final AuthController controller = AuthController(
@@ -88,8 +89,121 @@ void main() {
     await tester.pump();
 
     expect(find.text('Email is required.'), findsOneWidget);
-    expect(find.text('Password is required.'), findsOneWidget);
+    expect(
+      find.text(
+        'Use an email you can access to sign in or recover your account.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(LoginPage.passwordFieldKey), findsNothing);
+    expect(controller.state.isBusy, isFalse);
+
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(LoginPage.passwordFieldKey), findsOneWidget);
+    expect(
+      find.text(
+        'Use an email you can access to sign in or recover your account.',
+      ),
+      findsNothing,
+    );
+    expect(find.text('Password is required.'), findsNothing);
+    expect(controller.state.isBusy, isFalse);
   });
+
+  testWidgets('login sends the existing email/password input after step two', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthenticationAppService service =
+        _FakeAuthenticationAppService();
+    final AuthController controller = AuthController(
+      authenticationAppService: service,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(controller: controller)),
+    );
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(service.loginCalls, 0);
+    await tester.enterText(
+      find.byKey(LoginPage.passwordFieldKey),
+      'existing-password',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(service.loginCalls, 1);
+    expect(service.lastLoginInput?.email, 'user@example.com');
+    expect(service.lastLoginInput?.password, 'existing-password');
+  });
+
+  testWidgets(
+    'register calls the existing service only after its details step',
+    (WidgetTester tester) async {
+      final _FakeAuthenticationAppService service =
+          _FakeAuthenticationAppService();
+      final AuthController controller = AuthController(
+        authenticationAppService: service,
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(home: RegisterPage(controller: controller)),
+      );
+      expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
+      expect(
+        find.text('You will need access to this email to verify your account.'),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.emailFieldKey),
+        'user@example.com',
+      );
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 0);
+      expect(find.byKey(RegisterPage.displayNameFieldKey), findsOneWidget);
+      expect(
+        find.text('You will need access to this email to verify your account.'),
+        findsNothing,
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.displayNameFieldKey),
+        'User',
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.passwordFieldKey),
+        'Existing1!',
+      );
+      await tester.enterText(
+        find.byKey(RegisterPage.confirmPasswordFieldKey),
+        'Existing1!',
+      );
+      await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 1);
+      expect(service.lastRegisterInput?.email, 'user@example.com');
+      expect(service.lastRegisterInput?.displayName, 'User');
+      expect(service.lastRegisterInput?.password, 'Existing1!');
+      expect(service.lastRegisterInput?.confirmPassword, 'Existing1!');
+    },
+  );
 
   testWidgets('auth fields use page labels and preserve field semantics', (
     WidgetTester tester,
@@ -155,63 +269,197 @@ void main() {
     );
   });
 
+  testWidgets('auth page background fills supported viewports', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    const List<Size> viewports = <Size>[
+      Size(360, 800),
+      Size(393, 852),
+      Size(768, 1024),
+      Size(1280, 550),
+      Size(1280, 800),
+      Size(1440, 900),
+    ];
+    final List<Widget> pages = <Widget>[
+      LoginPage(controller: controller),
+      RegisterPage(controller: controller),
+    ];
+    for (final Size viewport in viewports) {
+      tester.view.physicalSize = viewport;
+      for (final Widget page in pages) {
+        await tester.pumpWidget(MaterialApp(home: page));
+        await tester.pumpAndSettle();
+
+        final Finder background = find.byKey(
+          const ValueKey<String>('auth-form-page-background'),
+        );
+        expect(background, findsOneWidget);
+        expect(tester.getSize(background), viewport);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
+  testWidgets('register email step preserves order and CTA reachability', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    final ThemeData theme = ThemeData(useMaterial3: true);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.text('NoteFlow')).top, inInclusiveRange(74, 86));
+    final Rect mobileHeading = tester.getRect(find.text('Create your account'));
+    final Rect mobileEmailLabel = tester.getRect(find.text('Email'));
+    final Rect mobileEmailField = tester.getRect(
+      find.byKey(RegisterPage.emailFieldKey),
+    );
+    final Rect mobileHint = tester.getRect(
+      find.text('You will need access to this email to verify your account.'),
+    );
+    final Rect mobileSubmit = tester.getRect(
+      find.byKey(RegisterPage.submitKey),
+    );
+    expect(mobileEmailLabel.top, greaterThan(mobileHeading.bottom));
+    expect(mobileEmailField.top, greaterThan(mobileEmailLabel.bottom));
+    expect(mobileHint.top, greaterThan(mobileEmailField.bottom));
+    expect(mobileSubmit.top, greaterThan(mobileHint.bottom));
+    expect(mobileSubmit.bottom, lessThan(844));
+    expect(tester.getRect(find.text('Email')).left, inInclusiveRange(19, 21));
+    expect(mobileEmailField.width, inInclusiveRange(348, 352));
+    expect(
+      tester.getSize(find.byKey(RegisterPage.submitKey)).height,
+      inInclusiveRange(46, 50),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
+      findsNothing,
+    );
+    expect(find.byKey(RegisterPage.displayNameFieldKey), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(1280, 800);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.text('NoteFlow')).top, greaterThan(0));
+    final Finder desktopPanel = find.byKey(
+      const ValueKey<String>('auth-register-desktop-panel'),
+    );
+    expect(desktopPanel, findsOneWidget);
+    expect(tester.getRect(desktopPanel).width, 496);
+    expect(
+      tester.getRect(find.byKey(RegisterPage.submitKey)).bottom,
+      lessThanOrEqualTo(tester.getRect(desktopPanel).bottom),
+    );
+
+    await tester.enterText(
+      find.byKey(RegisterPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
+      inInclusiveRange(356, 360),
+    );
+    expect(
+      tester.getRect(find.byKey(RegisterPage.emailFieldKey)).top,
+      lessThan(
+        tester.getRect(find.byKey(RegisterPage.displayNameFieldKey)).top,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(768, 1024);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(desktopPanel, findsOneWidget);
+    expect(tester.getRect(desktopPanel).width, 496);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'register aligns with the Notion signup header on phone/desktop',
+    'login and register remain reachable at 200% text scale on a small phone',
     (WidgetTester tester) async {
       final AuthController controller = AuthController(
         authenticationAppService: _FakeAuthenticationAppService(),
       );
       addTearDown(controller.dispose);
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(393, 852);
-      addTearDown(tester.view.resetPhysicalSize);
+      tester.view
+        ..physicalSize = const Size(360, 800)
+        ..devicePixelRatio = 1.0;
+      tester.binding.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(
+        tester.binding.platformDispatcher.clearTextScaleFactorTestValue,
+      );
 
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
+      final List<Widget> pages = <Widget>[
+        LoginPage(controller: controller),
+        RegisterPage(controller: controller),
+      ];
+      for (final Widget page in pages) {
+        await tester.pumpWidget(MaterialApp(home: page));
+        await tester.pumpAndSettle();
 
-      expect(
-        tester.getRect(find.text('NoteFlow')).top,
-        inInclusiveRange(70, 90),
-      );
-      expect(
-        find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
-        findsNothing,
-      );
-      expect(tester.takeException(), isNull);
+        final Finder submit = find.byKey(
+          page is LoginPage ? LoginPage.submitKey : RegisterPage.submitKey,
+        );
+        expect(submit, findsOneWidget);
+        expect(tester.takeException(), isNull);
 
-      tester.view.physicalSize = const Size(1280, 800);
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
+        await tester.ensureVisible(submit);
+        await tester.pumpAndSettle();
+        final Rect submitBounds = tester.getRect(submit);
+        expect(submitBounds.top, greaterThanOrEqualTo(0));
+        expect(submitBounds.bottom, lessThanOrEqualTo(800));
+        expect(tester.takeException(), isNull);
 
-      expect(
-        tester.getRect(find.text('NoteFlow')).top,
-        inInclusiveRange(80, 100),
-      );
-      final Finder desktopPanel = find.byKey(
-        const ValueKey<String>('auth-register-desktop-panel'),
-      );
-      expect(desktopPanel, findsOneWidget);
-      expect(tester.getRect(desktopPanel).width, 496);
-      expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
-      expect(
-        tester.getRect(find.byKey(RegisterPage.emailFieldKey)).width,
-        inInclusiveRange(356, 360),
-      );
-      expect(tester.takeException(), isNull);
-
-      tester.view.physicalSize = const Size(768, 1024);
-      await tester.pumpWidget(
-        MaterialApp(home: RegisterPage(controller: controller)),
-      );
-      await tester.pumpAndSettle();
-
-      expect(desktopPanel, findsOneWidget);
-      expect(tester.getRect(desktopPanel).width, 496);
-      expect(tester.takeException(), isNull);
+        final Key emailKey = page is LoginPage
+            ? LoginPage.emailFieldKey
+            : RegisterPage.emailFieldKey;
+        await tester.enterText(find.byKey(emailKey), 'user@example.com');
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(submit);
+        await tester.pumpAndSettle();
+        final Rect nextStepSubmitBounds = tester.getRect(submit);
+        expect(nextStepSubmitBounds.top, greaterThanOrEqualTo(0));
+        expect(nextStepSubmitBounds.bottom, lessThanOrEqualTo(800));
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 
@@ -228,26 +476,187 @@ void main() {
     );
 
     await tester.enterText(
+      find.byKey(RegisterPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
+    await tester.enterText(
       find.byKey(RegisterPage.displayNameFieldKey),
       'User',
     );
     await tester.enterText(
-      find.byKey(RegisterPage.emailFieldKey),
-      'user@example.com',
-    );
-    await tester.enterText(
       find.byKey(RegisterPage.passwordFieldKey),
-      'password-1',
+      'Password-1!',
     );
     await tester.enterText(
       find.byKey(RegisterPage.confirmPasswordFieldKey),
-      'password-2',
+      'Password-2!',
     );
+    await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(RegisterPage.submitKey));
     await tester.pump();
 
     expect(find.text('Passwords do not match.'), findsOneWidget);
   });
+
+  testWidgets('register shows only unmet password requirements as it changes', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthenticationAppService service =
+        _FakeAuthenticationAppService();
+    final AuthController controller = AuthController(
+      authenticationAppService: service,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: RegisterPage(controller: controller)),
+    );
+    await _advanceRegistrationToDetails(tester);
+
+    expect(find.byKey(RegisterPage.passwordRequirementsKey), findsOneWidget);
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsNothing,
+    );
+
+    await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain an uppercase letter.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain a lowercase letter.'),
+      findsNothing,
+    );
+    expect(find.text('Password must contain a number.'), findsOneWidget);
+    expect(
+      find.text('Password must contain a special character.'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Password must contain an uppercase letter.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(RegisterPage.passwordFieldKey),
+      'Abcdefg1',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsNothing,
+    );
+    expect(
+      find.text('Password must contain an uppercase letter.'),
+      findsNothing,
+    );
+    expect(
+      find.text('Password must contain a lowercase letter.'),
+      findsNothing,
+    );
+    expect(find.text('Password must contain a number.'), findsNothing);
+    expect(
+      find.text('Password must contain a special character.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(RegisterPage.passwordFieldKey),
+      'Abcdefg1!',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Password meets all requirements.'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Password meets all requirements.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain a special character.'),
+      findsNothing,
+    );
+    expect(service.registerCalls, 0);
+  });
+
+  testWidgets('register password guidance follows the selected locale', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('vi'),
+        supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          AuthCopy.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await _advanceRegistrationToDetails(tester);
+    await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mật khẩu phải có ít nhất 8 ký tự.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ hoa.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ số.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ký tự đặc biệt.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ thường.'), findsNothing);
+  });
+
+  testWidgets(
+    'register does not submit while password requirements are missing',
+    (WidgetTester tester) async {
+      final _FakeAuthenticationAppService service =
+          _FakeAuthenticationAppService();
+      final AuthController controller = AuthController(
+        authenticationAppService: service,
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(home: RegisterPage(controller: controller)),
+      );
+      await _advanceRegistrationToDetails(tester);
+      await tester.enterText(
+        find.byKey(RegisterPage.displayNameFieldKey),
+        'User',
+      );
+      await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+      await tester.enterText(
+        find.byKey(RegisterPage.confirmPasswordFieldKey),
+        'abc',
+      );
+      await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 0);
+      expect(
+        find.text('Password must contain at least 8 characters.'),
+        findsWidgets,
+      );
+      expect(
+        find.text('Password must contain an uppercase letter.'),
+        findsWidgets,
+      );
+    },
+  );
 
   testWidgets('forgot-password page exposes email and reset action', (
     WidgetTester tester,
@@ -327,15 +736,36 @@ const AuthUserDto verifiedUser = AuthUserDto(
   isEmailVerified: true,
 );
 
+Future<void> _advanceRegistrationToDetails(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(RegisterPage.emailFieldKey),
+    'user@example.com',
+  );
+  await tester.tap(find.byKey(RegisterPage.submitKey));
+  await tester.pumpAndSettle();
+}
+
 final class _FakeAuthenticationAppService implements IAuthenticationAppService {
+  int loginCalls = 0;
+  int registerCalls = 0;
+  LoginInput? lastLoginInput;
+  RegisterInput? lastRegisterInput;
+
   @override
   Future<RegistrationResult> register(RegisterInput input) async {
-    throw UnimplementedError();
+    registerCalls++;
+    lastRegisterInput = input;
+    return const RegistrationResult(
+      user: testUser,
+      verificationDispatchStatus: VerificationDispatchStatus.notRequired,
+    );
   }
 
   @override
   Future<AuthUserDto> login(LoginInput input) async {
-    throw UnimplementedError();
+    loginCalls++;
+    lastLoginInput = input;
+    return testUser;
   }
 
   @override

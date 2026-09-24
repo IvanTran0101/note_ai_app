@@ -31,12 +31,15 @@ final class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
-  bool _passwordVisible = false;
-  int _passwordShakeTrigger = 0;
+  bool _passwordStep = false;
 
   @override
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final double loginSubmitSpacing = MediaQuery.sizeOf(context).width < 600
+        ? NoteFlowSpacing.xl
+        : NoteFlowSpacing.md - 5;
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
@@ -45,6 +48,7 @@ final class _LoginPageState extends State<LoginPage> {
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
           compactTopPadding: 38,
+          desktopTopPadding: 82,
           compactBrandTitleSpacing: 34,
           compactTitleSubtitleSpacing: 0,
           compactContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.xs,
@@ -62,50 +66,61 @@ final class _LoginPageState extends State<LoginPage> {
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
+                  readOnly: _passwordStep,
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
                       _required(value, copy.emailRequired),
+                  onFieldSubmitted: _passwordStep
+                      ? null
+                      : (_) => _continueToPassword(),
                 ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: LoginPage.passwordFieldKey,
-                  controller: _passwordController,
-                  label: copy.password,
-                  hintText: copy.passwordHint,
-                  obscureText: !_passwordVisible,
-                  shakeTrigger: _passwordShakeTrigger,
-                  focusNode: _passwordFocusNode,
-                  keyboardType: TextInputType.visiblePassword,
-                  suffixIcon: _passwordActions(
-                    controller: _passwordController,
-                    copy: copy,
-                    visible: _passwordVisible,
-                    visibilityKey: LoginPage.passwordVisibilityKey,
-                    onClear: _passwordController.clear,
-                    onToggleVisibility: () {
-                      setState(() => _passwordVisible = !_passwordVisible);
-                    },
+                if (_passwordStep) ...<Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _changeEmail,
+                      child: Text(copy.changeEmail),
+                    ),
                   ),
-                  autofillHints: const <String>[AutofillHints.password],
-                  textInputAction: TextInputAction.done,
-                  validator: (String? value) =>
-                      _required(value, copy.passwordRequired),
-                  onFieldSubmitted: (_) => _submit(),
-                ),
-                const SizedBox(height: 20.0),
+                  const SizedBox(height: 4.0),
+                  _authField(
+                    key: LoginPage.passwordFieldKey,
+                    controller: _passwordController,
+                    focusNode: _passwordFocusNode,
+                    label: copy.password,
+                    hintText: copy.passwordHint,
+                    obscureText: true,
+                    autofillHints: const <String>[AutofillHints.password],
+                    textInputAction: TextInputAction.done,
+                    validator: (String? value) =>
+                        _required(value, copy.passwordRequired),
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                ],
+                if (!_passwordStep)
+                  Padding(
+                    padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                    child: Text(
+                      copy.loginEmailHint,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: tokens.textMuted),
+                    ),
+                  ),
+                SizedBox(height: loginSubmitSpacing),
                 _authSubmitButton(
                   key: LoginPage.submitKey,
-                  label: copy.loginAction,
+                  label: _passwordStep ? copy.loginAction : copy.continueAction,
                   busy: state.isBusy,
-                  onPressed: _submit,
+                  onPressed: _passwordStep ? _submit : _continueToPassword,
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: state.isBusy ? null : _openForgotPassword,
-                    child: Text(copy.forgotPassword),
+                if (_passwordStep)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _openForgotPassword,
+                      child: Text(copy.forgotPassword),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 12.0),
                 _AuthLinkRow(
                   prompt: copy.newToNoteFlow,
@@ -118,6 +133,29 @@ final class _LoginPageState extends State<LoginPage> {
         );
       },
     );
+  }
+
+  void _continueToPassword() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _passwordStep = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _passwordFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _changeEmail() {
+    _passwordController.clear();
+    setState(() => _passwordStep = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _emailFocusNode.requestFocus();
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -186,6 +224,9 @@ final class RegisterPage extends StatefulWidget {
   static const Key passwordFieldKey = ValueKey<String>(
     'auth-register-password',
   );
+  static const Key passwordRequirementsKey = ValueKey<String>(
+    'auth-register-password-requirements',
+  );
   static const Key confirmPasswordFieldKey = ValueKey<String>(
     'auth-register-confirm-password',
   );
@@ -211,30 +252,32 @@ final class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-  final FocusNode _displayNameFocusNode = FocusNode();
   final FocusNode _emailFocusNode = FocusNode();
-  final FocusNode _passwordFocusNode = FocusNode();
-  final FocusNode _confirmPasswordFocusNode = FocusNode();
-  bool _passwordVisible = false;
-  bool _confirmPasswordVisible = false;
-  int _passwordShakeTrigger = 0;
-  int _confirmPasswordShakeTrigger = 0;
+  final FocusNode _displayNameFocusNode = FocusNode();
+  bool _detailsStep = false;
 
   @override
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
         final AuthState state = widget.controller.state;
+        final bool compactWidth = MediaQuery.sizeOf(context).width < 600;
+        final double registerSubmitSpacing = _detailsStep
+            ? 20.0
+            : compactWidth
+            ? NoteFlowSpacing.lg + NoteFlowSpacing.xs
+            : NoteFlowSpacing.lg;
         return _AuthFormScaffold(
           title: copy.registerTitle,
           subtitle: copy.registerSubtitle,
           compactTopPadding: 76,
-          desktopTopPadding: 32,
-          compactBrandTitleSpacing: NoteFlowSpacing.xxl,
+          desktopTopPadding: 42,
+          compactBrandTitleSpacing: 34,
           compactTitleSubtitleSpacing: 0,
-          compactContentSpacing: NoteFlowSpacing.xl,
+          compactContentSpacing: NoteFlowSpacing.lg + NoteFlowSpacing.md,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
           desktopPanel: true,
           child: Form(
@@ -244,124 +287,119 @@ final class _RegisterPageState extends State<RegisterPage> {
               children: <Widget>[
                 _AuthErrorMessage(error: state.error),
                 _authField(
-                  key: RegisterPage.displayNameFieldKey,
-                  controller: _displayNameController,
-                  focusNode: _displayNameFocusNode,
-                  label: copy.displayName,
-                  hintText: copy.displayNameHint,
-                  textInputAction: TextInputAction.next,
-                  validator: (String? value) =>
-                      _required(value, copy.displayNameRequired),
-                ),
-                const SizedBox(height: 12.0),
-                _authField(
                   key: RegisterPage.emailFieldKey,
                   controller: _emailController,
                   focusNode: _emailFocusNode,
                   label: copy.email,
                   hintText: copy.emailHint,
                   keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
+                  readOnly: _detailsStep,
+                  textInputAction: _detailsStep
+                      ? TextInputAction.done
+                      : TextInputAction.next,
                   autofillHints: const <String>[AutofillHints.username],
                   validator: (String? value) =>
                       _required(value, copy.emailRequired),
+                  onFieldSubmitted: _detailsStep
+                      ? null
+                      : (_) => _continueToDetails(),
                 ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: RegisterPage.passwordFieldKey,
-                  controller: _passwordController,
-                  label: copy.password,
-                  hintText: copy.passwordHint,
-                  obscureText: !_passwordVisible,
-                  shakeTrigger: _passwordShakeTrigger,
-                  focusNode: _passwordFocusNode,
-                  keyboardType: TextInputType.visiblePassword,
-                  suffixIcon: _passwordActions(
+                if (!_detailsStep)
+                  Padding(
+                    padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: NoteFlowSpacing.md,
+                        vertical: compactWidth
+                            ? NoteFlowSpacing.md
+                            : NoteFlowSpacing.lg,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.subtleSurface,
+                        borderRadius: BorderRadius.circular(
+                          NoteFlowRadius.card,
+                        ),
+                      ),
+                      child: Text(
+                        copy.registerEmailHint,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: tokens.textPrimary),
+                      ),
+                    ),
+                  ),
+                if (_detailsStep) ...<Widget>[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: state.isBusy ? null : _changeEmail,
+                      child: Text(copy.changeEmail),
+                    ),
+                  ),
+                  const SizedBox(height: 4.0),
+                  _authField(
+                    key: RegisterPage.displayNameFieldKey,
+                    controller: _displayNameController,
+                    focusNode: _displayNameFocusNode,
+                    label: copy.displayName,
+                    hintText: copy.displayNameHint,
+                    textInputAction: TextInputAction.next,
+                    validator: (String? value) =>
+                        _required(value, copy.displayNameRequired),
+                  ),
+                  const SizedBox(height: 12.0),
+                  _authField(
+                    key: RegisterPage.passwordFieldKey,
                     controller: _passwordController,
-                    copy: copy,
-                    visible: _passwordVisible,
-                    visibilityKey: RegisterPage.passwordVisibilityKey,
-                    onClear: _passwordController.clear,
-                    onToggleVisibility: () {
-                      setState(() => _passwordVisible = !_passwordVisible);
-                    },
+                    label: copy.password,
+                    hintText: copy.passwordHint,
+                    obscureText: true,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const <String>[AutofillHints.newPassword],
+                    validator: (String? value) =>
+                        _passwordValidationMessage(value, copy),
                   ),
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const <String>[AutofillHints.newPassword],
-                  validator: (String? value) =>
-                      _passwordValidationMessage(value, copy),
-                ),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _passwordController,
-                  builder: (BuildContext context, TextEditingValue value, _) {
-                    return _PasswordRequirements(password: value.text);
-                  },
-                ),
-                const SizedBox(height: 12.0),
-                _authField(
-                  key: RegisterPage.confirmPasswordFieldKey,
-                  controller: _confirmPasswordController,
-                  label: copy.confirmPassword,
-                  hintText: copy.confirmPasswordHint,
-                  obscureText: !_confirmPasswordVisible,
-                  shakeTrigger: _confirmPasswordShakeTrigger,
-                  focusNode: _confirmPasswordFocusNode,
-                  keyboardType: TextInputType.visiblePassword,
-                  suffixIcon: _passwordActions(
+                  KeyedSubtree(
+                    key: RegisterPage.passwordRequirementsKey,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _passwordController,
+                      builder:
+                          (BuildContext context, TextEditingValue value, _) {
+                            return _PasswordRequirements(password: value.text);
+                          },
+                    ),
+                  ),
+                  const SizedBox(height: 12.0),
+                  _authField(
+                    key: RegisterPage.confirmPasswordFieldKey,
                     controller: _confirmPasswordController,
-                    copy: copy,
-                    visible: _confirmPasswordVisible,
-                    visibilityKey: RegisterPage.confirmPasswordVisibilityKey,
-                    onClear: _confirmPasswordController.clear,
-                    onToggleVisibility: () {
-                      setState(
-                        () =>
-                            _confirmPasswordVisible = !_confirmPasswordVisible,
+                    label: copy.confirmPassword,
+                    hintText: copy.confirmPasswordHint,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const <String>[AutofillHints.newPassword],
+                    validator: (String? value) {
+                      final String? requiredError = _required(
+                        value,
+                        copy.passwordRequired,
                       );
+                      if (requiredError != null) {
+                        return requiredError;
+                      }
+                      return value == _passwordController.text
+                          ? null
+                          : copy.passwordConfirmationMismatch;
                     },
+                    onFieldSubmitted: (_) => _submit(),
                   ),
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const <String>[AutofillHints.newPassword],
-                  validator: (String? value) {
-                    final String? requiredError = _required(
-                      value,
-                      copy.passwordRequired,
-                    );
-                    if (requiredError != null) {
-                      return requiredError;
-                    }
-                    return value == _passwordController.text
-                        ? null
-                        : copy.passwordConfirmationMismatch;
-                  },
-                  onFieldSubmitted: (_) => _submit(),
-                ),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _passwordController,
-                  builder:
-                      (BuildContext context, TextEditingValue password, _) {
-                        return ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _confirmPasswordController,
-                          builder:
-                              (
-                                BuildContext context,
-                                TextEditingValue confirmation,
-                                _,
-                              ) {
-                                return _PasswordMatchIndicator(
-                                  password: password.text,
-                                  confirmation: confirmation.text,
-                                );
-                              },
-                        );
-                      },
-                ),
-                const SizedBox(height: 20.0),
+                ],
+                SizedBox(height: registerSubmitSpacing),
                 _authSubmitButton(
                   key: RegisterPage.submitKey,
-                  label: copy.registerAction,
+                  label: _detailsStep
+                      ? copy.registerAction
+                      : copy.continueAction,
                   busy: state.isBusy,
-                  onPressed: _submit,
+                  onPressed: _detailsStep ? _submit : _continueToDetails,
                 ),
                 const SizedBox(height: 8.0),
                 _AuthLinkRow(
@@ -375,6 +413,30 @@ final class _RegisterPageState extends State<RegisterPage> {
         );
       },
     );
+  }
+
+  void _continueToDetails() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _detailsStep = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _displayNameFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _changeEmail() {
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    setState(() => _detailsStep = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _emailFocusNode.requestFocus();
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -450,10 +512,8 @@ final class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _displayNameFocusNode.dispose();
     _emailFocusNode.dispose();
-    _passwordFocusNode.dispose();
-    _confirmPasswordFocusNode.dispose();
+    _displayNameFocusNode.dispose();
     super.dispose();
   }
 }
@@ -1136,7 +1196,8 @@ final class _AuthFormScaffold extends StatelessWidget {
           foregroundColor: tokens.pageSurface,
           disabledBackgroundColor: tokens.subtleSurface,
           disabledForegroundColor: tokens.textMuted,
-          minimumSize: const Size(48.0, 44.0),
+          minimumSize: const Size(48.0, 48.0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NoteFlowRadius.input),
           ),
@@ -1164,6 +1225,11 @@ final class _AuthFormScaffold extends StatelessWidget {
                   ? compactContentSpacing
                   : desktopContentSpacing;
               final bool showDesktopPanel = desktopPanel && !compactWidth;
+              const double bottomPadding = NoteFlowSpacing.xl;
+              final double minScrollContentHeight =
+                  (constraints.maxHeight - topPadding - bottomPadding)
+                      .clamp(0.0, constraints.maxHeight)
+                      .toDouble();
               final Widget formColumn = ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: Column(
@@ -1245,14 +1311,25 @@ final class _AuthFormScaffold extends StatelessWidget {
                     )
                   : formColumn;
               return ColoredBox(
+                key: const ValueKey<String>('auth-form-page-background'),
                 color: showDesktopPanel
                     ? tokens.sidebarSurface
                     : tokens.pageSurface,
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(24, topPadding, 24, 24),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: pageContent,
+                  padding: EdgeInsets.fromLTRB(
+                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
+                    topPadding,
+                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
+                    bottomPadding,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: minScrollContentHeight,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: pageContent,
+                    ),
                   ),
                 ),
               );
@@ -1347,11 +1424,16 @@ Widget _authSubmitButton({
 
 Widget _passwordActions({
   required TextEditingController controller,
-  required AuthCopy copy,
-  required bool visible,
-  required Key visibilityKey,
-  required VoidCallback onClear,
-  required VoidCallback onToggleVisibility,
+  required String label,
+  String? hintText,
+  required String? Function(String?) validator,
+  bool obscureText = false,
+  bool readOnly = false,
+  TextInputType? keyboardType,
+  TextInputAction? textInputAction,
+  Iterable<String>? autofillHints,
+  ValueChanged<String>? onFieldSubmitted,
+  FocusNode? focusNode,
 }) {
   return ValueListenableBuilder<TextEditingValue>(
     valueListenable: controller,
@@ -1365,14 +1447,21 @@ Widget _passwordActions({
               onPressed: onClear,
               icon: const Icon(Icons.clear_outlined),
             ),
-          IconButton(
-            key: visibilityKey,
-            tooltip: visible ? copy.hidePassword : copy.showPassword,
-            onPressed: onToggleVisibility,
-            icon: Icon(
-              visible
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
+          ),
+          Semantics(
+            label: label,
+            child: TextFormField(
+              key: key,
+              controller: controller,
+              focusNode: focusNode,
+              decoration: InputDecoration(hintText: hintText),
+              obscureText: obscureText,
+              readOnly: readOnly,
+              keyboardType: keyboardType,
+              textInputAction: textInputAction,
+              autofillHints: autofillHints,
+              onFieldSubmitted: onFieldSubmitted,
+              validator: validator,
             ),
           ),
         ],
@@ -1445,93 +1534,55 @@ String? _required(String? value, String message) {
   return value == null || value.trim().isEmpty ? message : null;
 }
 
-final class _ShakeOnTrigger extends StatefulWidget {
-  const _ShakeOnTrigger({required this.trigger, required this.child});
-
-  final int trigger;
-  final Widget child;
-
-  @override
-  State<_ShakeOnTrigger> createState() => _ShakeOnTriggerState();
-}
-
-final class _ShakeOnTriggerState extends State<_ShakeOnTrigger>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: NoteFlowMotion.standard,
-  );
-  late final Animation<double> _offset = TweenSequence<double>(
-    <TweenSequenceItem<double>>[
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0, end: -5),
-        weight: 20,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: -5, end: 5),
-        weight: 30,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 5, end: -3),
-        weight: 25,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: -3, end: 0),
-        weight: 25,
-      ),
-    ],
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
-  @override
-  void didUpdateWidget(covariant _ShakeOnTrigger oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.trigger != oldWidget.trigger) {
-      _controller.forward(from: 0);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _offset,
-      child: widget.child,
-      builder: (BuildContext context, Widget? child) {
-        return Transform.translate(
-          offset: Offset(_offset.value, 0),
-          child: child,
-        );
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-}
-
 String? _passwordValidationMessage(String? value, AuthCopy copy) {
   final String password = value ?? '';
   if (password.trim().isEmpty) {
     return copy.passwordRequired;
   }
-  if (password.length < 8) {
-    return copy.passwordMinLength;
-  }
-  if (!RegExp(r'[A-Z]').hasMatch(password)) {
-    return copy.passwordUppercase;
-  }
-  if (!RegExp(r'[a-z]').hasMatch(password)) {
-    return copy.passwordLowercase;
-  }
-  if (!RegExp(r'[0-9]').hasMatch(password)) {
-    return copy.passwordNumber;
-  }
-  if (!RegExp(r'[^A-Za-z0-9\s]').hasMatch(password)) {
-    return copy.passwordSpecialCharacter;
+  for (final _PasswordRequirement requirement in _passwordRequirements(
+    password,
+    copy,
+  )) {
+    if (!requirement.isMet) {
+      return requirement.message;
+    }
   }
   return null;
+}
+
+List<_PasswordRequirement> _passwordRequirements(
+  String password,
+  AuthCopy copy,
+) {
+  return <_PasswordRequirement>[
+    _PasswordRequirement(
+      message: copy.passwordMinLength,
+      isMet: password.length >= 8,
+    ),
+    _PasswordRequirement(
+      message: copy.passwordUppercase,
+      isMet: RegExp(r'[A-Z]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordLowercase,
+      isMet: RegExp(r'[a-z]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordNumber,
+      isMet: RegExp(r'[0-9]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordSpecialCharacter,
+      isMet: RegExp(r'[^A-Za-z0-9\s]').hasMatch(password),
+    ),
+  ];
+}
+
+final class _PasswordRequirement {
+  const _PasswordRequirement({required this.message, required this.isMet});
+
+  final String message;
+  final bool isMet;
 }
 
 final class _PasswordRequirements extends StatelessWidget {
@@ -1542,12 +1593,13 @@ final class _PasswordRequirements extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
-    final bool allMet =
-        password.length >= 8 &&
-        RegExp(r'[A-Z]').hasMatch(password) &&
-        RegExp(r'[a-z]').hasMatch(password) &&
-        RegExp(r'[0-9]').hasMatch(password) &&
-        RegExp(r'[^A-Za-z0-9\s]').hasMatch(password);
+    final List<_PasswordRequirement> requirements = _passwordRequirements(
+      password,
+      copy,
+    );
+    final bool allMet = requirements.every(
+      (_PasswordRequirement requirement) => requirement.isMet,
+    );
     return AnimatedSize(
       duration: NoteFlowMotion.standard,
       curve: Curves.easeOut,
@@ -1562,33 +1614,12 @@ final class _PasswordRequirements extends StatelessWidget {
                 padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _animatedRequirement(
-                      context,
-                      password.length >= 8,
-                      copy.passwordMinLength,
-                    ),
-                    _animatedRequirement(
-                      context,
-                      RegExp(r'[A-Z]').hasMatch(password),
-                      copy.passwordUppercase,
-                    ),
-                    _animatedRequirement(
-                      context,
-                      RegExp(r'[a-z]').hasMatch(password),
-                      copy.passwordLowercase,
-                    ),
-                    _animatedRequirement(
-                      context,
-                      RegExp(r'[0-9]').hasMatch(password),
-                      copy.passwordNumber,
-                    ),
-                    _animatedRequirement(
-                      context,
-                      RegExp(r'[^A-Za-z0-9\s]').hasMatch(password),
-                      copy.passwordSpecialCharacter,
-                    ),
-                  ],
+                  children: requirements
+                      .map(
+                        (_PasswordRequirement requirement) =>
+                            _animatedRequirement(context, requirement),
+                      )
+                      .toList(growable: false),
                 ),
               ),
       ),
@@ -1597,101 +1628,68 @@ final class _PasswordRequirements extends StatelessWidget {
 
   Widget _passwordSuccess(BuildContext context, String message) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    return Padding(
+    return Semantics(
       key: const ValueKey<String>('password-valid'),
-      padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.check_circle_outline, size: 16, color: tokens.success),
-          const SizedBox(width: NoteFlowSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: tokens.success),
-            ),
+      container: true,
+      label: message,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.check_circle_outline, size: 16, color: tokens.success),
+              const SizedBox(width: NoteFlowSpacing.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: tokens.success),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _animatedRequirement(BuildContext context, bool met, String message) {
+  Widget _animatedRequirement(
+    BuildContext context,
+    _PasswordRequirement requirement,
+  ) {
     return AnimatedSize(
       duration: NoteFlowMotion.standard,
       curve: Curves.easeOut,
       child: AnimatedSwitcher(
         duration: NoteFlowMotion.fast,
-        child: met
+        child: requirement.isMet
             ? const SizedBox.shrink(key: ValueKey<String>('met'))
-            : _requirement(context, message),
+            : _requirement(context, requirement.message),
       ),
     );
   }
 
   Widget _requirement(BuildContext context, String message) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final Color color = tokens.error;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: NoteFlowSpacing.xs),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.error_outline, size: 16, color: color),
-          const SizedBox(width: NoteFlowSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-final class _PasswordMatchIndicator extends StatelessWidget {
-  const _PasswordMatchIndicator({
-    required this.password,
-    required this.confirmation,
-  });
-
-  final String password;
-  final String confirmation;
-
-  @override
-  Widget build(BuildContext context) {
-    if (confirmation.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final AuthCopy copy = AuthCopy.of(context);
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final bool matches = password.isNotEmpty && password == confirmation;
-    final Color color = matches ? tokens.success : tokens.error;
-    return AnimatedSwitcher(
-      duration: NoteFlowMotion.fast,
-      child: Padding(
-        key: ValueKey<bool>(matches),
-        padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              matches ? Icons.check_circle_outline : Icons.error_outline,
-              size: 16,
-              color: color,
-            ),
-            const SizedBox(width: NoteFlowSpacing.sm),
-            Expanded(
-              child: Text(
-                matches
-                    ? copy.passwordsMatch
-                    : copy.passwordConfirmationMismatch,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: color),
+    return Semantics(
+      label: message,
+      container: true,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: NoteFlowSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.error_outline, size: 16, color: tokens.error),
+              const SizedBox(width: NoteFlowSpacing.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: tokens.error),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

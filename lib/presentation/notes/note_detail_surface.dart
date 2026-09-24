@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../common/note_flow_primitives.dart';
@@ -56,6 +57,7 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.onSave,
     required this.onSummarize,
     required this.onMore,
+    this.onMoreWithContext,
     required this.saveLabel,
     required this.summarizeLabel,
     required this.moreLabel,
@@ -99,6 +101,7 @@ final class NoteDetailSurface extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onSummarize;
   final VoidCallback? onMore;
+  final ValueChanged<BuildContext>? onMoreWithContext;
   final String saveLabel;
   final String summarizeLabel;
   final String moreLabel;
@@ -115,7 +118,12 @@ final class NoteDetailSurface extends StatelessWidget {
         ? NoteFlowLayout.compactEditorMaxWidth
         : NoteFlowLayout.editorMaxWidth;
     final double editorTopPadding = compact
-        ? NoteFlowLayout.compactEditorTopPadding
+        ? NoteFlowLayout.compactEditorTopInset(context) +
+              (kIsWeb
+                  ? NoteFlowLayout.compactWebEditorTopAdjustmentFor(
+                      MediaQuery.sizeOf(context).width,
+                    )
+                  : 0)
         : NoteFlowLayout.editorTopPadding;
     final String pageStatus = isSaving
         ? savingLabel
@@ -136,6 +144,7 @@ final class NoteDetailSurface extends StatelessWidget {
       onSave: onSave,
       onSummarize: onSummarize,
       onMore: onMore,
+      onMoreWithContext: onMoreWithContext,
       saveLabel: saveLabel,
       summarizeLabel: summarizeLabel,
       moreLabel: moreLabel,
@@ -163,12 +172,15 @@ final class NoteDetailSurface extends StatelessWidget {
             key: scrollKey,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.fromLTRB(
-              NoteFlowSpacing.lg,
+              compact
+                  ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                  : NoteFlowSpacing.lg,
               editorTopPadding,
               NoteFlowSpacing.lg,
               NoteFlowSpacing.xl,
             ),
-            child: Center(
+            child: Align(
+              alignment: compact ? Alignment.topLeft : Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: editorMaxWidth),
                 child: NoteDetailEditorForm(

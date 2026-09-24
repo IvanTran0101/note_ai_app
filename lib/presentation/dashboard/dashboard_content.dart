@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../application/dashboard/dashboard_overview.dart';
 import '../../application/notes/note_application.dart';
-import '../common/note_flow_primitives.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
@@ -86,17 +85,22 @@ final class DashboardContent extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
         children: <Widget>[
-          Center(
+          Align(
+            alignment: compact ? Alignment.topLeft : Alignment.center,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: NoteFlowLayout.dashboardContentMaxWidth,
+              constraints: BoxConstraints(
+                maxWidth: compact
+                    ? NoteFlowLayout.compactPageFrameMaxWidthFor(context)
+                    : NoteFlowLayout.dashboardContentMaxWidth,
               ),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                   compact
-                      ? NoteFlowSpacing.xxl
-                      : NoteFlowLayout.editorTopPadding,
+                      ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                      : NoteFlowSpacing.xl,
+                  compact
+                      ? NoteFlowLayout.compactPageTopInset(context)
+                      : NoteFlowLayout.dashboardTopPadding,
                   compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                   NoteFlowSpacing.xxxl,
                 ),
@@ -122,14 +126,28 @@ final class DashboardContent extends StatelessWidget {
                       )
                     else ...<Widget>[
                       if (searchText.trim().isEmpty)
-                        NoteFlowSectionLabel(
-                          label: copy.recentlyUpdated,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: NoteFlowSpacing.xs,
-                            vertical: NoteFlowSpacing.xs,
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: NoteFlowSpacing.sm,
+                          ),
+                          child: Semantics(
+                            header: true,
+                            child: Text(
+                              copy.recentlyUpdated,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: NoteFlowUiTokens.of(context)
+                                        .textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
                           ),
                         ),
-                      _buildNoteCollection(context, filteredNotes),
+                      _buildNoteCollection(
+                        context,
+                        filteredNotes,
+                        viewportWidth,
+                      ),
                     ],
                   ],
                 ),
@@ -164,6 +182,7 @@ final class DashboardContent extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final int totalNotes = overview?.totalNotes ?? notes.length;
     final DateTime updatedAt = overview?.lastUpdatedAt ?? notes.first.updatedAt;
     final Widget heading = Column(
@@ -178,28 +197,43 @@ final class DashboardContent extends StatelessWidget {
             color: colors.onSurface,
           ),
         ),
-        const SizedBox(height: 4.0),
-        Text(
-          copy.notesCount(totalNotes),
-          key: const ValueKey<String>('dashboard-total-count'),
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: colors.onSurfaceVariant),
-        ),
-        Text(
-          copy.updatedOn(
-            MaterialLocalizations.of(context).formatCompactDate(updatedAt),
-          ),
-          key: const ValueKey<String>('dashboard-last-updated'),
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: colors.onSurfaceVariant),
+        const SizedBox(height: NoteFlowSpacing.sm),
+        Wrap(
+          spacing: NoteFlowSpacing.md,
+          runSpacing: NoteFlowSpacing.xs,
+          children: <Widget>[
+            Text(
+              copy.notesCount(totalNotes),
+              key: const ValueKey<String>('dashboard-total-count'),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+            Text(
+              copy.updatedOn(
+                MaterialLocalizations.of(context).formatCompactDate(updatedAt),
+              ),
+              key: const ValueKey<String>('dashboard-last-updated'),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
         ),
       ],
     );
-    final Widget createButton = FilledButton.icon(
+    final Widget createButton = OutlinedButton.icon(
       key: const ValueKey<String>('dashboard-create-note'),
       onPressed: onCreateNote,
       icon: const Icon(Icons.add),
       label: Text(copy.newNote),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: tokens.textPrimary,
+        minimumSize: const Size(48, 44),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
+        side: BorderSide(color: tokens.divider),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
+        ),
+      ),
     );
 
     return LayoutBuilder(
@@ -209,7 +243,7 @@ final class DashboardContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               heading,
-              const SizedBox(height: 16.0),
+              const SizedBox(height: NoteFlowSpacing.md),
               Align(alignment: Alignment.centerLeft, child: createButton),
             ],
           );
@@ -218,7 +252,7 @@ final class DashboardContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Expanded(child: heading),
-            const SizedBox(width: 12.0),
+            const SizedBox(width: NoteFlowSpacing.md),
             createButton,
           ],
         );
@@ -231,8 +265,8 @@ final class DashboardContent extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool iconsOnly = constraints.maxWidth < 520;
         return Wrap(
-          spacing: 8.0,
-          runSpacing: 8.0,
+          spacing: NoteFlowSpacing.sm,
+          runSpacing: NoteFlowSpacing.sm,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
             PopupMenuButton<DashboardSort>(
@@ -313,7 +347,11 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildNoteCollection(BuildContext context, List<NoteDto> items) {
+  Widget _buildNoteCollection(
+    BuildContext context,
+    List<NoteDto> items,
+    double viewportWidth,
+  ) {
     if (layout == DashboardLayout.list) {
       return Column(
         children: <Widget>[
@@ -345,8 +383,8 @@ final class DashboardContent extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
-        final int columns = _columnCount(width);
-        const double gap = 12.0;
+        final int columns = _columnCount(width, viewportWidth);
+        const double gap = NoteFlowSpacing.md;
         final double cardWidth = (width - (columns - 1) * gap) / columns;
         return Wrap(
           spacing: gap,
@@ -370,20 +408,17 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  int _columnCount(double width) {
-    if (width < 600.0) {
-      // Keep Grid meaningfully different from List on phones. A compact
-      // dashboard still has enough room for two flexible cards after its
-      // horizontal padding; List remains the single-column reading mode.
+  int _columnCount(double width, double viewportWidth) {
+    if (viewportWidth < NoteFlowLayout.expandedBreakpoint) {
+      // Keep Grid meaningfully different from List at compact widths. The
+      // List remains the single-column reading mode on phone and tablet.
       return 2;
     }
-    if (width < 840.0) {
-      return 2;
-    }
-    final int columns = (width / 300.0).floor();
-    if (columns < 3) {
-      return 3;
-    }
-    return columns > 4 ? 4 : columns;
+    const double gap = NoteFlowSpacing.md;
+    const double minimumCardWidth = 136.0;
+    return ((width + gap) / (minimumCardWidth + gap))
+        .floor()
+        .clamp(3, 4)
+        .toInt();
   }
 }

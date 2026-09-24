@@ -255,7 +255,7 @@ void main() {
     expect(find.byKey(WorkspaceShell.navigationRailKey), findsNothing);
     expect(tester.getSize(sidebar).width, 280.0);
     expect(find.text('NoteFlow'), findsOneWidget);
-    expect(find.text('Pages'), findsOneWidget);
+    expect(find.text('Workspace'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
     expect(find.text('Dashboard page').hitTestable(), findsOneWidget);
@@ -330,7 +330,7 @@ void main() {
     expect(find.text('Trang chủ'), findsOneWidget);
     expect(find.text('Ghi chú'), findsOneWidget);
     expect(find.text('NoteFlow'), findsOneWidget);
-    expect(find.text('Trang'), findsOneWidget);
+    expect(find.text('Không gian làm việc'), findsOneWidget);
   });
 
   testWidgets('sidebar quick actions delegate to existing callbacks', (
@@ -406,6 +406,59 @@ void main() {
     expect(find.text('Notes page').hitTestable(), findsOneWidget);
   });
 
+  testWidgets('compact shell keeps secondary actions in navigation menu', (
+    WidgetTester tester,
+  ) async {
+    int searchCalls = 0;
+    int createCalls = 0;
+    int settingsCalls = 0;
+    int diagnosticsCalls = 0;
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      onOpenSearch: () => searchCalls++,
+      onCreateNote: () => createCalls++,
+      onOpenSettings: () => settingsCalls++,
+      onOpenDiagnostics: () => diagnosticsCalls++,
+    );
+
+    expect(find.byKey(WorkspaceShell.compactMenuKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactSearchKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactNewNoteKey), findsNothing);
+    expect(find.byKey(WorkspaceShell.settingsKey), findsNothing);
+    expect(find.byKey(WorkspaceShell.diagnosticsKey), findsNothing);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.compactMenuSearchKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactNewNoteKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactMenuNewNoteKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.settingsKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.diagnosticsKey), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuSearchKey));
+    await tester.pumpAndSettle();
+    expect(searchCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuNewNoteKey));
+    await tester.pumpAndSettle();
+    expect(createCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.diagnosticsKey));
+    await tester.pumpAndSettle();
+    expect(diagnosticsCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.settingsKey));
+    await tester.pumpAndSettle();
+    expect(settingsCalls, 1);
+  });
+
   testWidgets('footer settings and diagnostics fire their callbacks', (
     WidgetTester tester,
   ) async {
@@ -425,6 +478,28 @@ void main() {
     await tester.tap(find.byKey(WorkspaceShell.diagnosticsKey));
     await tester.pumpAndSettle();
     expect(diagnosticsOpened, isTrue);
+  });
+
+  testWidgets('desktop footer labels existing actions with touch-sized rows', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(
+      tester,
+      size: const Size(1200, 900),
+      onOpenSettings: () {},
+      onOpenDiagnostics: () {},
+    );
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Diagnostics'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
+      greaterThanOrEqualTo(44),
+    );
+    expect(
+      tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
+      greaterThanOrEqualTo(44),
+    );
   });
 
   test('localization alias and delegate cover en and vi', () {

@@ -14,6 +14,7 @@ import 'note_detail_localizations.dart';
 import 'note_detail_more_actions.dart';
 import 'note_detail_route_result.dart';
 import 'note_detail_surface.dart';
+import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 
 /// Focused mobile-first editor for one note.
@@ -396,7 +397,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     });
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(copiedMessage)));
+      ..showSnackBar(
+        buildNoteFlowSnackBar(context: context, message: copiedMessage),
+      );
     try {
       await Clipboard.setData(ClipboardData(text: summary));
     } on Object {
@@ -477,11 +480,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       actions: moreAction == null
           ? null
           : <Widget>[
-              IconButton(
-                key: const ValueKey<String>('note-detail-more'),
-                tooltip: copy.more,
-                onPressed: moreAction,
-                icon: const Icon(Icons.more_horiz),
+              Builder(
+                builder: (BuildContext buttonContext) => IconButton(
+                  key: const ValueKey<String>('note-detail-more'),
+                  tooltip: copy.more,
+                  onPressed: () => unawaited(
+                    _showMoreActions(copy, anchorContext: buttonContext),
+                  ),
+                  icon: const Icon(Icons.more_horiz),
+                ),
               ),
             ],
     );
@@ -491,8 +498,26 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (_note == null || _actionBusy) {
       return null;
     }
-    return () => unawaited(
-      runNoteDetailMoreActions(context: context, copy: copy, onDelete: _delete),
+    return () => unawaited(_showMoreActions(copy));
+  }
+
+  ValueChanged<BuildContext>? _moreActionWithContext(NoteDetailCopy copy) {
+    if (_note == null || _actionBusy) {
+      return null;
+    }
+    return (BuildContext anchorContext) =>
+        unawaited(_showMoreActions(copy, anchorContext: anchorContext));
+  }
+
+  Future<void> _showMoreActions(
+    NoteDetailCopy copy, {
+    BuildContext? anchorContext,
+  }) {
+    return runNoteDetailMoreActions(
+      context: context,
+      copy: copy,
+      anchorContext: anchorContext,
+      onDelete: _delete,
     );
   }
 
@@ -533,6 +558,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       onSave: null,
       onSummarize: _canSummarize ? () => unawaited(_summarize()) : null,
       onMore: widget.showAppBar ? null : _moreAction(copy),
+      onMoreWithContext: widget.showAppBar
+          ? null
+          : _moreActionWithContext(copy),
       saveLabel: copy.save,
       summarizeLabel: copy.summarize,
       moreLabel: copy.more,

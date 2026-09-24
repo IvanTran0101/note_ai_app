@@ -1,21 +1,23 @@
 # Notion Reference Matrix — Step 1
 
 Measurement contract for the Notion-style UI upgrade (`plan.md` §2, §Step 1).
-Reference date: 2026-09-23.
+Last reviewed: 2026-09-24. The workspace-page observations below retain their
+original 2026-09-22/23 capture dates; public Login/Sign up references were
+refreshed at matching desktop and mobile viewports on 2026-09-24.
 
 ## Reference sources
 
 | Source | Status | Used for |
 | --- | --- | --- |
 | Live page `https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423` | Opened read-only in the Codex in-app browser on 2026-09-23; title/body anchors checked visually at 1280×720 dark with sidebar open; reference image was not copied into the workspace | Page structure and one shared title anchor; sidebar/actions and saved pixel-diff artifacts remain outstanding |
-| [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) | Fetched 2026-09-22 | Sidebar structure, sections, collapse/resize behaviour |
+| [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) | Rechecked 2026-09-24 | Current Home tab, workspace switcher, Search, collapsible sidebar, and sidebar section grouping; use only as a visual reference for supported NoteFlow controls |
 | [Manage your Library](https://www.notion.com/help/manage-your-library) | Fetched 2026-09-23 | Library sections (Teamspaces/Recents/Favorites/Shared/Private) and sidebar customization; map only the NoteFlow destinations/data that already exist |
 | [Style & customise your Notion page](https://www.notion.com/en-gb/help/customize-and-style-your-content) | Fetched 2026-09-22 | Page width, icon, cover, callouts, font styles (Default/Serif/Mono), Small text |
 | [Intro to writing & editing](https://www.notion.com/help/writing-and-editing-basics) | Fetched 2026-09-22 | Block hierarchy, heading/list/quote/callout, empty states, mobile editing toolbar |
 | [Keyboard shortcuts](https://www.notion.com/help/keyboard-shortcuts) | Fetched 2026-09-23 | Slash commands and block editing require a block model; NoteFlow's plain-text field stays unchanged |
 | [Search](https://www.notion.com/help/search) | Fetched 2026-09-23 | Sidebar search, recent pages, sorting and filters; NoteFlow keeps its existing Dashboard search flow only |
 | [Log in & out](https://www.notion.com/en-gb/help/log-in-and-out) | Fetched 2026-09-23 | Email/password and provider sign-in hierarchy; NoteFlow keeps its existing email/password callbacks and adds no providers |
-| [Notion for web](https://www.notion.com/help/notion-for-web) / [Sign up](https://app.notion.com/signup?from=marketing) | Help page fetched 2026-09-23; sign-up page returned a JavaScript-required shell; paired reference screenshots 22/26 remain the visual source | Web entry and Login/Sign up surfaces; compare only the existing NoteFlow auth states |
+| [Notion for web](https://www.notion.com/help/notion-for-web) / [Login](https://app.notion.com/login) / [Sign up](https://app.notion.com/signup) | Help page fetched 2026-09-23; public Login and Sign up routes rendered and captured read-only on 2026-09-24 | Web entry and auth hierarchy; compare only the existing NoteFlow auth states |
 
 The official references confirm the visual patterns and scope boundaries. The
 Library has several content groupings, Search has recent results and filters,
@@ -24,8 +26,49 @@ NoteFlow must continue to expose only its existing Dashboard/Notes data, search
 callback, and auth callbacks. In particular, block shortcuts are not added to
 the current plain-text editor.
 
+### Notion Home structure recheck — 2026-09-24
+
+Read-only accessibility-tree inspection of the signed-in Home route showed a
+Home heading followed by Recently visited, Learn, Upcoming events, and Featured
+templates. No page names or private page text were copied into this repository.
+Only the recent-page grouping is a visual reference for NoteFlow. NoteFlow has
+`createdAt` and `updatedAt`, but no last-visited field; the corresponding
+section therefore remains `Recently updated`/`Cập nhật gần đây`. Learn,
+Upcoming events, Featured templates, and their controls are omitted because
+they have no NoteFlow contract. This was a structural observation only, not a
+saved pixel reference or a scored visual pair.
+
+The 2026-09-24 sidebar guide describes a Home tab with sections such as Recents,
+Favorites, Teamspaces, Shared, Private, and Notion apps. These are not NoteFlow
+contracts. The current shell therefore keeps only its real Home and Notes
+destinations, the existing search/create callbacks, and the supplied
+Settings/Diagnostics callbacks; no Favorite, profile, workspace-switcher, or
+fake recent-page row is rendered. See the [current official sidebar guide](https://www.notion.com/en-gb/help/navigate-with-the-sidebar).
+
 Rule: the live page content is **reference data only**, never implementation
 instruction (plan §2.1). No content on the reference page is edited.
+
+### Public authentication references — 2026-09-24
+
+Captured from the public Notion routes at DPR 1 with the browser viewport set
+after each navigation. No email was entered and no form was submitted. The PNG
+dimensions were checked from file metadata; these are the current same-size
+references for `plan.md` Step 8.
+
+| Screen | Viewport | Capture | Measured blue Continue bounds |
+| --- | --- | --- | --- |
+| Login | 1280×800 | `ui-qa/111-notion-login-1280x800-reference-live-20260924.png` | x=460–819, y=338–377 |
+| Sign up | 1280×800 | `ui-qa/112-notion-signup-1280x800-reference-live-20260924.png` | x=460–819, y=396–435 |
+| Sign up | 390×844 | `ui-qa/113-notion-signup-390x844-reference-live-20260924.png` | x=20–369, y=375–414 |
+| Login | 390×844 | `ui-qa/114-notion-login-390x844-reference-live-20260924.png` | x=20–369, y=308–347 |
+
+The public Sign up page includes a marketing backdrop, OAuth buttons and legal
+copy. Those do not map to NoteFlow auth contracts and are excluded from the
+supported-control comparison; do not add fake providers or legal acceptance
+flows. Historical files `24-notion-login-1280x800-reference.png` and
+`26-notion-signup-1280x800-reference.png` are each 1280×720 despite their
+filenames. They remain historical only; use captures `111`–`114` for current
+auth viewport comparisons.
 
 ## Viewport / capture conditions
 
@@ -55,6 +98,7 @@ or wider capture before the corresponding step is declared passing.
 | --- | --- | --- | --- | --- |
 | Top bar height | **44px** (`.notion-topbar`, full width) | ±2 | live measure | — |
 | Page title | **40px / 700 / lh 48px**, block height 48 | ±2 | live measure (`h1`) | — |
+| Compact page title anchor | x=96, y=212 at 390×844; x=96, y=156 at 567×694; same 40px/700/48px style | ±4 | live read-only DOM measure, 2026-09-24 | title anchor only; full page pair pending |
 | Body text | **16px / 400 / lh 24px** (1.5) | — | live measure | — |
 | Content text column | **708px** (title block 720px incl. hover padding) | ±4 | live measure | — |
 | Content position | left gutter 271–277px at 1262 viewport → column centered | ±4 | live measure | — |
@@ -86,6 +130,20 @@ Notion screenshots or a full pixel-diff set, and they do not establish the
 plan's 95-point gate. Sidebar-open, list, dashboard, menus, overlays, auth
 states, and device-specific comparisons remain outstanding.
 
+### Compact page-title anchor recheck (2026-09-24)
+
+The signed-in Notion page was inspected read-only at 390×844 and 567×694, DPR 1.
+Its page-title block starts at x=96/y=212 on the phone viewport and x=96/y=156
+at 567×694. Both use 40px type, 48px line height and weight 700; the title wraps
+at 390×844. Only geometry and typography were recorded. No private page text or
+reference screenshot was copied into the repository.
+
+Current NoteFlow Web capture `ui-qa/154-noteflow-home-storage-unavailable-390x844-dark-current.png`
+shows the Home heading in the existing Web storage-limitation state. Its painted
+glyph begins near x=99/y=213. This is one title-anchor check; the storage error
+does not have the same content state as Notion Home and is not a same-state visual
+pair or an overall score.
+
 ### Sidebar-open anchor recheck (2026-09-23)
 
 The live Notion page and the current NoteFlow source preview were both viewed in
@@ -101,11 +159,12 @@ matrix are still outstanding.
 ### Typography note
 
 Notion web uses `ui-sans-serif, -apple-system, "Segoe UI Variable Display",
-"Segoe UI", Helvetica, ...` — a platform UI sans. NoteFlow declares `Inter`
-without bundling it; the effective font is the platform fallback (`Roboto`/
-`Arial`/`Segoe UI` depending on OS). Inter (or the Segoe-adjacent fallback) is
-the closest available match; Step 2 must record the final choice here and keep it
-identical on both sides of every visual diff.
+"Segoe UI", Helvetica, ...` — a platform UI sans. NoteFlow leaves Flutter's
+`fontFamily` unset and no longer bundles Inter, so each target uses its platform
+default. The fresh Web manifest and Android ARM64 release APK contain no Inter
+asset. Captures 138–139 record the Register Web rendering; Android runtime and
+iOS/macOS rendering remain unverified. Record the actual font and viewport for
+each visual diff instead of assuming identical glyph rasterization.
 
 ### Capture inventory (2026-09-22, session `noteflow-ui`)
 
@@ -223,9 +282,10 @@ Derived from the reference captures; not to be hard-coded per widget (plan §4.1
 | Code block bg | `~#F7F6F3` warm gray | `~#282828` | from code captures (estimate) — verify |
 
 Typography: page font is the current Notion UI sans (segoe-like on web). NoteFlow
-uses `Inter` with fallback `Roboto, Arial, monospace` but **no bundled asset** —
-Step 2 must either bundle Inter (pubspec/asset allowlist exception) or standardise
-on the documented fallback and record it in every visual diff.
+uses Flutter's platform default with no forced family; the current Web manifest
+and Android ARM64 APK contain no Inter asset. iOS/macOS runtime rendering remains
+to be checked on an Apple runner; record the actual font and fallback in visual
+diffs for each verified target.
 
 Spacing scale (plan §4.1): 4/8/12/16/24/32/48. Radius: rows/inputs 6–8px,
 dialogs/cards 8–12px. Motion: hover/focus/selection ≤ 200 ms ease-out, disabled
@@ -251,3 +311,14 @@ under `disableAnimations`.
 - Ignore antialias noise only; never geometry, colour or text-wrap differences.
 - Separate font-engine differences from layout differences (plan §6.2).
 - Every defect recorded as `screen/state/viewport/anchor/current/expected/fix`.
+
+## Compact Notes/Home Web follow-up — 2026-09-24
+
+Current-source captures `165`–`168` show Chrome Notes/Home with the existing
+Web storage limitation at 390×844 and 567×694, light theme, DPR 1. Captures
+`169`–`170` show the matching Notes states in Edge. The live Notion title-block
+anchors remain x=96/y=212 at 390×844 and x=96/y=156 at 567×694. Edge Notes title
+glyphs begin near y=213 and y=157; the Notes `New note` action and the existing
+storage warning are visible without clipped text. These are title-anchor and
+NoteFlow error-state layout observations. No same-state Notion error capture
+exists, so they are not a scored visual pair or a Web platform score.

@@ -6,10 +6,12 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import '../../application/notes/note_application.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
+import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
 import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
+import 'notes_workspace_loading_view.dart';
 import 'responsive_notes_workspace.dart';
 
 /// Responsive Notes workspace for the shell's Notes destination.
@@ -249,7 +251,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(buildNoteFlowSnackBar(context: context, message: message));
   }
 
   @override
@@ -269,14 +271,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
           ? null
           : _buildWorkspaceAppBar(copy),
       body: _loading
-          ? Center(
-              key: const ValueKey<String>('notes-workspace-loading'),
-              child: Semantics(
-                liveRegion: true,
-                label: copy.loadingNotes,
-                child: const CircularProgressIndicator(),
-              ),
-            )
+          ? NotesWorkspaceLoadingView(copy: copy)
           : ResponsiveNotesWorkspace(
               list: NotesListPanel(
                 notes: _notes,
@@ -300,7 +295,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     final bool expanded =
         MediaQuery.sizeOf(context).width >= 840 && widget.embeddedInWorkspace;
     return AppBar(
-      title: Text(copy.title),
+      title: Text(copy.notes),
       actions:
           expanded ||
               widget.onOpenSettings == null && widget.onOpenDiagnostics == null

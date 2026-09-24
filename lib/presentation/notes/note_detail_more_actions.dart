@@ -9,7 +9,53 @@ import 'notes_theme_tokens.dart';
 Future<bool?> showNoteDetailMoreActions({
   required BuildContext context,
   required NoteDetailCopy copy,
+  BuildContext? anchorContext,
 }) {
+  final bool compact =
+      MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+  if (!compact && anchorContext != null) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final RenderBox overlay =
+        Overlay.of(anchorContext).context.findRenderObject()! as RenderBox;
+    final RenderBox anchor = anchorContext.findRenderObject()! as RenderBox;
+    final Offset topLeft = anchor.localToGlobal(Offset.zero, ancestor: overlay);
+    final Rect anchorRect = (topLeft & anchor.size).shift(
+      Offset(0, anchor.size.height - NoteFlowSpacing.sm),
+    );
+    return showMenu<bool>(
+      context: context,
+      position: RelativeRect.fromRect(anchorRect, Offset.zero & overlay.size),
+      color: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+        side: BorderSide(color: tokens.divider),
+      ),
+      items: <PopupMenuEntry<bool>>[
+        PopupMenuItem<bool>(
+          key: const ValueKey<String>('note-detail-more-delete'),
+          value: true,
+          height: 44,
+          child: SizedBox(
+            width: 188,
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.delete_outline, size: 18, color: tokens.error),
+                const SizedBox(width: NoteFlowSpacing.sm),
+                Text(
+                  copy.delete,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: tokens.error),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
@@ -40,11 +86,13 @@ Future<bool?> showNoteDetailMoreActions({
 Future<void> runNoteDetailMoreActions({
   required BuildContext context,
   required NoteDetailCopy copy,
+  BuildContext? anchorContext,
   required Future<void> Function() onDelete,
 }) async {
   final bool? deleteSelected = await showNoteDetailMoreActions(
     context: context,
     copy: copy,
+    anchorContext: anchorContext,
   );
   if (deleteSelected == true) {
     await onDelete();

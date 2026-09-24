@@ -91,7 +91,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('new note title hint uses page-title typography', (
+  testWidgets('new note title hint uses compact page-title typography', (
     WidgetTester tester,
   ) async {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
@@ -143,6 +143,10 @@ void main() {
     expect(find.byType(NoteDetailActionBar), findsOneWidget);
     expect(find.byKey(saveKey), findsOneWidget);
     expect(find.byKey(summarizeKey), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
+      40,
+    );
 
     // The title block matches Notion's 720px block; body text uses 708px.
     final Finder form = find.byType(NoteDetailEditorForm);
@@ -154,15 +158,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('centers the 360px editor column at the Notion compact width', (
+  testWidgets('anchors the compact editor column to the Notion page inset', (
     WidgetTester tester,
   ) async {
     await pumpSurface(tester, size: const Size(567, 694));
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 360);
-    expect(tester.getCenter(form).dx, 283.5);
+    expect(tester.getTopLeft(form).dx, 96);
     expect(tester.getTopLeft(form).dy, 56);
+    expect(
+      tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
+      40,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  test('Web compact editor adjustment follows Notion reference anchors', () {
+    expect(
+      NoteFlowLayout.compactWebEditorTopAdjustmentFor(390),
+      NoteFlowLayout.compactWebEditorPhoneTitleGlyphAdjustment,
+    );
+    expect(
+      NoteFlowLayout.compactWebEditorTopAdjustmentFor(567),
+      NoteFlowLayout.compactWebEditorWideTitleGlyphAdjustment,
+    );
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(478.5), 40);
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(320), 68);
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(840), 0);
+    expect(NoteFlowLayout.compactWebEditorTitleLeadingInset, 8);
+  });
+
+  testWidgets('compact page header keeps the title at the mobile anchor', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(tester, size: const Size(390, 844), showPageHeader: true);
+
+    final Finder form = find.byType(NoteDetailEditorForm);
+    expect(tester.getTopLeft(form).dx, 96);
+    expect(tester.getTopLeft(form).dy, 105);
+    expect(tester.getSize(form).width, 278);
     expect(tester.takeException(), isNull);
   });
 
@@ -194,7 +229,7 @@ void main() {
       hasSavedNote: false,
     );
 
-    expect(find.text('NoteFlow / New note'), findsOneWidget);
+    expect(find.text('New note'), findsOneWidget);
     expect(find.text('Saves automatically as you type'), findsOneWidget);
     expect(
       find.text(

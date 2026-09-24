@@ -88,10 +88,10 @@ final class NoteFlowSectionLabel extends StatelessWidget {
 
 /// One icon+label row in a sidebar or navigation list.
 ///
-/// Keeps a 44dp minimum hit target, a soft selected background, and explicit
-/// hover/press feedback driven by [InkWell] (which already respects
-/// `MediaQuery.disableAnimations`).
-final class NoteFlowSidebarRow extends StatelessWidget {
+/// Keeps a 44dp minimum hit target, a soft selected background, theme-token
+/// keyboard focus feedback, and hover/press feedback driven by [InkWell] (which
+/// already respects `MediaQuery.disableAnimations`).
+final class NoteFlowSidebarRow extends StatefulWidget {
   const NoteFlowSidebarRow({
     super.key,
     required this.label,
@@ -110,56 +110,80 @@ final class NoteFlowSidebarRow extends StatelessWidget {
   final bool dense;
 
   @override
+  State<NoteFlowSidebarRow> createState() => _NoteFlowSidebarRowState();
+}
+
+final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
+  bool _hasFocus = false;
+
+  @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final Color foreground = selected
+    final Color foreground = widget.selected
         ? tokens.textPrimary
         : tokens.textSecondary;
     final TextStyle? base = Theme.of(context).textTheme.labelLarge;
     return Semantics(
       button: true,
-      selected: selected,
+      selected: widget.selected,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: NoteFlowSpacing.sm,
           vertical: 2,
         ),
         child: Material(
-          color: selected ? tokens.selectedSurface : Colors.transparent,
+          color: widget.selected ? tokens.selectedSurface : Colors.transparent,
           borderRadius: BorderRadius.circular(NoteFlowRadius.row),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: onTap,
+            onTap: widget.onTap,
+            onFocusChange: (bool hasFocus) {
+              if (_hasFocus != hasFocus) {
+                setState(() => _hasFocus = hasFocus);
+              }
+            },
             hoverColor: tokens.subtleSurface,
             borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: dense ? 40 : 44),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NoteFlowSpacing.md,
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+                border: Border.all(
+                  color: _hasFocus ? tokens.focusRing : Colors.transparent,
+                  width: 2,
                 ),
-                child: Row(
-                  children: <Widget>[
-                    Icon(
-                      selected ? (selectedIcon ?? icon) : icon,
-                      size: 20,
-                      color: foreground,
-                    ),
-                    const SizedBox(width: NoteFlowSpacing.md),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: base?.copyWith(
-                          color: foreground,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: widget.dense ? 40 : 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NoteFlowSpacing.md,
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        widget.selected
+                            ? (widget.selectedIcon ?? widget.icon)
+                            : widget.icon,
+                        size: 20,
+                        color: foreground,
+                      ),
+                      const SizedBox(width: NoteFlowSpacing.md),
+                      Expanded(
+                        child: Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: base?.copyWith(
+                            color: foreground,
+                            fontWeight: widget.selected
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

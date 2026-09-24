@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// Product-specific semantic colors that are not part of Material's core
@@ -69,12 +70,102 @@ final class NoteFlowSemanticColors
 abstract final class NoteFlowLayout {
   static const double compactBreakpoint = 600;
   static const double expandedBreakpoint = 840;
-  static const double compactEditorMaxWidth = 360;
+
+  /// The compact page column starts after the 72dp navigation gutter and a
+  /// 24dp page inset used by the Notion mobile/web reference.
+  static const double compactPageLeadingInset = 96;
+
+  /// Includes the page inset and trailing gutter around the content column.
+  static const double compactPageMaxWidth = 360;
+  static const double compactPageNarrowLeadingInset = 16;
+  static const double compactEditorMaxWidth = compactPageMaxWidth;
+
+  /// The mobile reference places its H1 at y=212 below a 44dp top bar.
+  static const double compactPageTopPadding = 160;
   static const double editorTopPadding = 112;
+
+  /// Space after the compact page toolbar before the title field.
+  ///
+  /// The toolbar is already part of [NoteDetailSurface]; counting it again
+  /// here pushed the title 60dp below the measured Notion page-title anchor.
   static const double compactEditorTopPadding = 56;
+  static const double compactWebPagePhoneAnchorWidth = 390;
+  static const double compactWebPageWideAnchorWidth = 567;
+  static const double compactWebPagePhoneTopAdjustment = 0;
+  static const double compactWebPageWideTopAdjustment = -56;
+  static const double compactWebEditorPhoneAnchorWidth = 390;
+  static const double compactWebEditorWideAnchorWidth = 567;
+  static const double compactWebEditorPhoneTitleGlyphAdjustment = 68;
+  static const double compactWebEditorWideTitleGlyphAdjustment = 12;
+  static const double compactWebEditorTitleLeadingInset = 8;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
-  static const double dashboardContentMaxWidth = 756;
+  static const double dashboardContentMaxWidth = 768;
+  static const double dashboardTopPadding = 116;
+
+  static double compactPageLeadingInsetFor(BuildContext context) {
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final double progress = ((viewportWidth - 320) / 70).clamp(0.0, 1.0);
+    return compactPageNarrowLeadingInset +
+        (compactPageLeadingInset - compactPageNarrowLeadingInset) * progress;
+  }
+
+  static double compactPageFrameMaxWidthFor(BuildContext context) =>
+      compactPageMaxWidth +
+      compactPageLeadingInsetFor(context) +
+      NoteFlowSpacing.lg;
+
+  static double compactPageTopInset(BuildContext context) =>
+      (compactPageTopPadding +
+              (kIsWeb
+                  ? compactWebPageTopAdjustmentFor(
+                      MediaQuery.sizeOf(context).width,
+                    )
+                  : 0) -
+              MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  static double compactEditorTopInset(BuildContext context) =>
+      (compactEditorTopPadding - MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  /// Interpolates the Web compact page-title inset between the measured
+  /// 390px/y=212 and 567px/y=156 Notion anchors. Native targets retain their
+  /// platform-specific safe-area layout.
+  static double compactWebPageTopAdjustmentFor(double viewportWidth) {
+    if (viewportWidth >= compactBreakpoint) {
+      return 0;
+    }
+    final double progress =
+        ((viewportWidth - compactWebPagePhoneAnchorWidth) /
+                (compactWebPageWideAnchorWidth -
+                    compactWebPagePhoneAnchorWidth))
+            .clamp(0.0, 1.0);
+    return compactWebPagePhoneTopAdjustment +
+        (compactWebPageWideTopAdjustment - compactWebPagePhoneTopAdjustment) *
+            progress;
+  }
+
+  /// Interpolates the Web-only compact editor offset between the 390px
+  /// Notion title-block reference (with its glyph offset inferred from the
+  /// 567px observation) and the measured 567px title glyph. Native targets
+  /// retain their system safe-area layout and do not use this adjustment.
+  static double compactWebEditorTopAdjustmentFor(double viewportWidth) {
+    if (viewportWidth >= compactBreakpoint) {
+      return 0;
+    }
+    final double progress =
+        ((viewportWidth - compactWebEditorPhoneAnchorWidth) /
+                (compactWebEditorWideAnchorWidth -
+                    compactWebEditorPhoneAnchorWidth))
+            .clamp(0.0, 1.0);
+    return compactWebEditorWideTitleGlyphAdjustment +
+        (compactWebEditorPhoneTitleGlyphAdjustment -
+                compactWebEditorWideTitleGlyphAdjustment) *
+            (1 - progress);
+  }
 }
 
 /// Shared spacing scale (dp). Every gap in presentation code must pick one of

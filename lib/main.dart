@@ -53,16 +53,10 @@ import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
-const String _noteFlowFontFamily = 'Inter';
 const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',
 );
-const List<String> _noteFlowFontFallback = <String>[
-  'Segoe UI',
-  'Roboto',
-  'Arial',
-];
 const Color _noteFlowSeedColor = Color(0xFF2383E2);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
@@ -109,8 +103,6 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       NoteFlowSemanticColors.fromColorScheme(colorScheme),
       tokens,
     ],
-    fontFamily: _noteFlowFontFamily,
-    fontFamilyFallback: _noteFlowFontFallback,
     appBarTheme: AppBarThemeData(
       backgroundColor: tokens.pageSurface,
       foregroundColor: tokens.textPrimary,

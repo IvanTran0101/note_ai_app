@@ -28,8 +28,8 @@ final class AuthCopy {
   String get registerTitle =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create your account';
   String get registerSubtitle => _isVietnamese
-      ? 'Truy cập ghi chú trên mọi thiết bị.'
-      : 'Access your notes on every device.';
+      ? 'Ghi chú của bạn trên mọi thiết bị.'
+      : 'Your notes on every device.';
   String get forgotTitle =>
       _isVietnamese ? 'Đặt lại mật khẩu' : 'Reset your password';
   String get forgotSubtitle => _isVietnamese
@@ -51,6 +51,12 @@ final class AuthCopy {
 
   String get emailHint =>
       _isVietnamese ? 'Nhập địa chỉ email của bạn' : 'Enter your email address';
+  String get loginEmailHint => _isVietnamese
+      ? 'Dùng email bạn có thể truy cập để đăng nhập hoặc khôi phục tài khoản.'
+      : 'Use an email you can access to sign in or recover your account.';
+  String get registerEmailHint => _isVietnamese
+      ? 'Bạn cần truy cập email này để xác nhận tài khoản.'
+      : 'You will need access to this email to verify your account.';
   String get displayNameHint =>
       _isVietnamese ? 'Nhập tên hiển thị' : 'Enter your name';
   String get passwordHint =>
@@ -63,6 +69,8 @@ final class AuthCopy {
       _isVietnamese ? 'Nhập mật khẩu hiện tại' : 'Enter your current password';
 
   String get loginAction => _isVietnamese ? 'Đăng nhập' : 'Log in';
+  String get continueAction => _isVietnamese ? 'Tiếp tục' : 'Continue';
+  String get changeEmail => _isVietnamese ? 'Đổi email' : 'Change email';
   String get registerAction =>
       _isVietnamese ? 'Tạo tài khoản' : 'Create account';
   String get sendResetCode =>
@@ -118,11 +126,6 @@ final class AuthCopy {
       : 'Display name is required.';
   String get passwordRequired =>
       _isVietnamese ? 'Vui lòng nhập mật khẩu.' : 'Password is required.';
-  String get showPassword => _isVietnamese ? 'Hiện mật khẩu' : 'Show password';
-  String get hidePassword => _isVietnamese ? 'Ẩn mật khẩu' : 'Hide password';
-  String get clearPassword => _isVietnamese ? 'Xóa mật khẩu' : 'Clear password';
-  String get passwordsMatch =>
-      _isVietnamese ? 'Mật khẩu khớp nhau.' : 'Passwords match.';
   String get passwordValid => _isVietnamese
       ? 'Mật khẩu đáp ứng tất cả yêu cầu.'
       : 'Password meets all requirements.';
