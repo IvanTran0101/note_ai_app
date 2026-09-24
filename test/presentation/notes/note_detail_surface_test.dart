@@ -202,7 +202,7 @@ void main() {
       hasSavedNote: false,
     );
 
-    expect(find.text('NoteFlow / New note'), findsOneWidget);
+    expect(find.text('New note'), findsOneWidget);
     expect(find.text('Saves automatically as you type'), findsOneWidget);
     expect(
       find.text(

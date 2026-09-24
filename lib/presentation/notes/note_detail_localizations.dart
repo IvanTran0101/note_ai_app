@@ -24,7 +24,7 @@ final class NoteDetailCopy {
 
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
   String get editNote => _isVietnamese ? 'Chỉnh sửa ghi chú' : 'Edit note';
-  String pageBreadcrumb(String pageTitle) => 'NoteFlow / $pageTitle';
+  String pageBreadcrumb(String pageTitle) => pageTitle;
   String get back => _isVietnamese ? 'Quay lại' : 'Back';
   String get save => _isVietnamese ? 'Lưu' : 'Save';
   String get saving => _isVietnamese ? 'Đang lưu…' : 'Saving…';
