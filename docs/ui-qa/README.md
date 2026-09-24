@@ -676,3 +676,32 @@ score by itself.
   There are still no same-state Notion pairs for Home/list/editor, no physical
   device capture, and no iOS/macOS runner. The fidelity score remains
   **unassigned; the `>=95/100` gate is not proven**.
+
+### Dashboard empty state — flat page canvas — 2026-09-24
+
+- `DashboardEmptyView` no longer wraps its existing empty message and Create
+  action in a tinted, bordered surface. They align directly with the Home page
+  gutter, following the flat page treatment in the Notion reference. The
+  `dashboard-empty` semantics container, label, `dashboard-empty-create` key,
+  `onCreateNote` callback, and all data/controller contracts remain unchanged.
+- [Capture 130](130-noteflow-home-empty-1080x2400-android15-api35-flat-canvas.png)
+  shows the current empty Home at 1080×2400 on the Android 15/API 35 AVD (font
+  scale 1.0). The existing create action opened the note editor; Android Back
+  from the untouched draft returned to “No notes yet” without creating a note.
+- Targeted `flutter analyze --no-pub` reports no issues. The Dashboard widget
+  suite passes 39/39 over its 360–1440dp coverage using the existing temporary
+  test-only `local_llm_bridge` package root. After the run,
+  `.dart_tool/package_config.json` was restored to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- Android local-auth release build passes in 72.7s at 87.2MB; the QA APK was
+  installed with `adb install -r`. The original Cognito APK and `.sha1` sidecar
+  were restored; its SHA-256 remains
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
+- Web release build passes in 86.5s. A 1280×720 dark Web runtime check shows
+  the existing storage-unavailable message; Web cannot reach the actual empty
+  state with the current storage implementation. No iOS/macOS runner is
+  available on this Windows host.
+- Capture 130 is platform runtime evidence for the empty state, not a paired
+  Notion screenshot. Loaded Home/List/Grid and other states still need
+  same-viewport pairs; no numeric fidelity score is assigned and the
+  app-wide `>=95/100` gate remains unverified.

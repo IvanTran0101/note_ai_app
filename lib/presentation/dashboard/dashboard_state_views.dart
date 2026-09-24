@@ -174,16 +174,18 @@ final class DashboardEmptyView extends StatelessWidget {
         key: const ValueKey<String>('dashboard-empty'),
         container: true,
         label: copy.noNotes,
-        child: NoteFlowSurface(
-          tone: NoteFlowSurfaceTone.subtle,
-          bordered: true,
-          radius: NoteFlowRadius.card,
-          padding: const EdgeInsets.all(NoteFlowSpacing.xl),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final Widget message = Row(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: NoteFlowSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
                 children: <Widget>[
-                  Icon(Icons.description_outlined, color: tokens.textSecondary),
+                  Icon(
+                    Icons.description_outlined,
+                    size: 20,
+                    color: tokens.textSecondary,
+                  ),
                   const SizedBox(width: NoteFlowSpacing.md),
                   Expanded(
                     child: Text(
@@ -195,31 +197,15 @@ final class DashboardEmptyView extends StatelessWidget {
                     ),
                   ),
                 ],
-              );
-              final Widget create = FilledButton.icon(
+              ),
+              const SizedBox(height: NoteFlowSpacing.sm),
+              FilledButton.icon(
                 key: const ValueKey<String>('dashboard-empty-create'),
                 onPressed: onCreateNote,
                 icon: const Icon(Icons.add),
                 label: Text(copy.createFirstNote),
-              );
-              if (constraints.maxWidth < 460) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    message,
-                    const SizedBox(height: NoteFlowSpacing.md),
-                    Align(alignment: Alignment.centerLeft, child: create),
-                  ],
-                );
-              }
-              return Row(
-                children: <Widget>[
-                  Expanded(child: message),
-                  const SizedBox(width: NoteFlowSpacing.md),
-                  create,
-                ],
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),
