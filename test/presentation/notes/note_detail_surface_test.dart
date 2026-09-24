@@ -97,7 +97,7 @@ void main() {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
 
     final Text titleHint = tester.widget<Text>(find.text('Title'));
-    expect(titleHint.style?.fontSize, 36);
+    expect(titleHint.style?.fontSize, 40);
     expect(titleHint.style?.fontWeight, FontWeight.w700);
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
@@ -169,7 +169,7 @@ void main() {
     expect(tester.getTopLeft(form).dy, 56);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-      36,
+      40,
     );
     expect(tester.takeException(), isNull);
   });

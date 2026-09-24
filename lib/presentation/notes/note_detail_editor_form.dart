@@ -70,10 +70,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
-    final double titleFontSize =
-        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint
-        ? 36
-        : 40;
+    const double titleFontSize = 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[

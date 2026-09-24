@@ -129,6 +129,7 @@ entered, so no note was persisted. Other screenshots remain from the
 | `150-noteflow-delete-qa-note-confirmation-android15-api35-current-20260924.png` | Existing “Delete note?” confirmation for the QA note | 1080×2400 | light |
 | `151-noteflow-home-empty-after-qa-cleanup-android15-api35-current-20260924.png` | Home returned to “No notes yet” after QA-note deletion | 1080×2400 | light |
 | `152-noteflow-baseline-apk-after-restore-android15-api35-current-20260924.png` | Original Cognito APK restored; Login screen visible | 1080×2400 | light |
+| `153-noteflow-editor-title-40-android15-api35-current-20260924.png` | Current-source Android editor with 40dp title typography | 1080×2400 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -829,7 +830,7 @@ screenshots are in “Platform-font Register recapture” below.
   progress, and no app-wide score is assigned; the `>=95/100` gate remains
   unproven.
 
-## Compact editor title scale follow-up — 2026-09-24
+## Compact editor title scale follow-up (superseded 2026-09-24)
 
 - `NoteDetailEditorForm` uses a 36dp page-title style below the existing 600dp
   compact breakpoint and keeps 40dp at wider widths. This follows a visual
@@ -932,3 +933,27 @@ screenshots are in “Platform-font Register recapture” below.
   the workflow result does not establish a 95/100 visual score. Android
   workflow behavior is verified for this local-auth build; iOS/macOS remain
   unavailable on this Windows host.
+
+## Compact editor title remeasurement — 2026-09-24
+
+- The live Notion page was measured in the existing in-app browser at 390×844
+  and 567×694. Its page title computes to 40px font size, 48px line height and
+  weight 700 at both widths; it wraps at the 390px viewport. The browser was
+  returned to its original 567×694 viewport afterward.
+- `NoteDetailEditorForm` now uses the same 40dp page-title size at compact and
+  wider widths. Capture 153 shows the updated blank Android editor at 1080×2400
+  (360dp logical width). The existing borderless title/content fields,
+  callbacks, autosave, routes and data flow remain unchanged.
+- `note_detail_surface_test.dart` passes 24/24, including 390px and 567px title
+  checks, long-title wrapping and text-scale cases. The full Notes presentation
+  suite passes 92/92 using a temporary test-only package root; the original
+  `.dart_tool/package_config.json` hash was restored to
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+  Targeted analysis reports no issues and formatting passes.
+- The Android x64 local-auth release build passes at 35.2MB. The original
+  Cognito APK was restored and its installed copy matches SHA-256
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`; the
+  previous ARM64 release artifact was restored with SHA-256
+  `349C005D2025F3CEAB09C0C79C48A4FC137A3FF99C664FB6DB2C3E9B1812C8BE`.
+- This corrects one measurable editor typography mismatch; it does not provide
+  same-state Notion pairs for the rest of the app or establish a 95/100 score.
