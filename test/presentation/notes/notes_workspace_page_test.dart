@@ -104,6 +104,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final int width in <int>[320, 360, 390, 768, 1280]) {
+    testWidgets('loading state keeps Notes list structure at ${width}dp', (
+      WidgetTester tester,
+    ) async {
+      tester.view
+        ..physicalSize = Size(width.toDouble(), width < 600 ? 568 : 800)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final _FakeNotesController controller = _FakeNotesController()
+        ..listNotesGate = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NotesWorkspacePage(
+            controller: controller,
+            embeddedInWorkspace: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final Semantics loading = tester.widget<Semantics>(
+        find.byKey(const ValueKey<String>('notes-workspace-loading')),
+      );
+      expect(loading.properties.liveRegion, isTrue);
+      expect(loading.properties.label, isNotEmpty);
+      expect(
+        find.byKey(const ValueKey<String>('notes-workspace-loading-skeleton')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('notes-workspace-loading-row-0')),
+        findsOneWidget,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byKey(const ValueKey<String>('new-note')), findsNothing);
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.listNotesGate!.complete();
+      await tester.pump();
+    });
+  }
+
+  testWidgets('desktop Notes app bar does not repeat the product name', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(),
+      size: const Size(1280, 800),
+    );
+
+    final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar).first);
+    expect(appBar.title, isA<Text>());
+    expect((appBar.title! as Text).data, 'Notes');
+    expect(find.text('NoteFlow · Notes'), findsNothing);
+  });
+
   for (final int width in <int>[360, 375, 390]) {
     testWidgets('compact list renders without overflow at ${width}dp', (
       WidgetTester tester,

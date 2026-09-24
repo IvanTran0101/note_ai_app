@@ -383,16 +383,16 @@ Pass khi chưa có cặp ảnh và rubric đã chấm.
 
 Files chính: `notes_workspace_page.dart`, `notes_list_panel.dart`, `responsive_notes_workspace.dart`.
 
-- [ ] Giữ `_loadNotesInternal`, `_selectNote`, `_startNewNote`, dirty guard và `_handleDetailExit`.
-- [ ] List header gọn, New note là affordance rõ, search/section label chỉ dùng nếu map được callback hiện có.
-- [ ] Row có icon/page marker, title, preview và selected background theo token.
-- [ ] Loading dùng skeleton/progress phù hợp nhưng giữ `notes-workspace-loading` semantics.
-- [ ] Empty, error, retry và no-selection state cùng visual language.
-- [ ] Medium/desktop không dựng list/detail cạnh nhau; list và editor lần lượt dùng cùng vùng nội dung.
+- [x] Giữ `_loadNotesInternal`, `_selectNote`, `_startNewNote`, dirty guard và `_handleDetailExit` (Notes presentation suite 93/93).
+- [x] List header gọn, New note là affordance rõ; Search/section label không được thêm vì Notes destination không có callback tương ứng.
+- [x] Row có icon/page marker, title, preview và selected background theo token.
+- [x] Loading dùng static skeleton theo cấu trúc list, giữ `notes-workspace-loading` live-region semantics và không tạo note/control giả (viewport tests 320/360/390/768/1280).
+- [x] Empty, error, retry và no-selection state giữ cùng token language; workspace tests xác nhận retry/persistence limitation và empty/error phân biệt.
+- [x] Medium/desktop không dựng list/detail cạnh nhau; list và editor lần lượt dùng cùng vùng nội dung (workspace/responsive tests pass).
 - [ ] Gutter, header và scroll ownership của từng page surface phải ổn định khi chuyển list/editor.
-- [ ] Compact chỉ hiển thị list hoặc detail; back không mất dirty state.
-- [ ] Kiểm tra `ResponsiveNotesWorkspace.onCompactBack`: active `NotesWorkspacePage` phải có đúng một back affordance (app bar hoặc wrapper), gọi cùng dirty/back-confirmation flow và không tạo hai nút back.
-- [ ] Giữ `compactKey`, `mediumKey`, `expandedKey`, `listPaneKey`, `detailPaneKey`.
+- [ ] Compact chỉ hiển thị list hoặc detail; back không mất dirty state trên runtime.
+- [ ] Kiểm tra compact `NotesWorkspacePage` có đúng một back affordance trên runtime và gọi cùng dirty/back-confirmation flow.
+- [x] Giữ `compactKey`, `mediumKey`, `expandedKey`, `listPaneKey`, `detailPaneKey` (responsive widget tests pass).
 
 **Pass:** list/editor state transitions pass test; không có overflow ở width 360/375/390 hoặc medium/desktop.
 
@@ -878,6 +878,26 @@ restored byte-for-byte to SHA-256
 runtime and matched Notion editor comparisons remain open; Step 6 remains in
 progress and no numeric score or `>=95/100` result is claimed.
 
+Notes list loading/title follow-up — 2026-09-24: the active workspace app bar now
+uses the Notes destination label without repeating the product name already
+shown by the shell. The Notes loading screen follows the real list hierarchy
+with a static, token-based title/action/row skeleton, while retaining the
+existing `notes-workspace-loading` live-region label and keeping placeholder
+rows outside the semantics tree. It adds no note data, search/action callback,
+or backend behavior. The Notes workspace test passes 20/20, the full
+`test/presentation/notes` suite passes 93/93 with the temporary test-only
+`local_llm_bridge` package root, scoped presentation analysis reports no issues,
+and the edited Dart files pass formatting. Web release builds in 84.2s and
+Android ARM64 release APK builds in 53.7s at 34.2MB. The package config was
+restored to SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+`flutter devices --machine` currently lists Android 15/API 35 x86_64 emulator,
+Windows host, Chrome and Edge; the repo has no `windows/` or `linux/` runner,
+and this Windows host has no `xcodebuild`, so iOS/macOS runtime/build checks are
+unavailable here. Captures 71–76 and 131 predate this follow-up; there is no
+current runtime screenshot or matched Notion pair for the updated Notes list.
+Step 5 and the overall visual score remain open.
+
 | Step | Evidence rechecked | Status | Remaining gate |
 | --- | --- | --- | --- |
 | 0. Baseline | Current checkout and Web load/error states inspected; Android 15/API 35 local-auth AVD verified a UI-created note through autosave, force-stop/relaunch, reopen and delete. Browser persistence and the complete auth/session/error baseline remain unverified. | `PARTIAL` | Record remaining actual behavior on targets that support it, without changing the backend; capture all specified baseline states |
@@ -885,13 +905,13 @@ progress and no numeric score or `>=95/100` result is claimed.
 | 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; shared sidebar focus outline uses the existing light/dark `focusRing` tokens and is verified by keyboard test; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
 | 3. Shell/sidebar | Release Web captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. Captures 133–134 verify the revised compact header and navigation sheet on Android 15/API 35; `workspace_shell_test.dart` passes 19/19, including each moved action's existing callback. Shared row focus tests pass 9/9. | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels visually, test Android navigation/back and run Apple device checks; no Favorites/profile/workspace-switching controls |
 | 4. Dashboard/Recents | Captures 130 and 132 verify empty/loaded Home on Android 15/API 35; 131 shows loaded Notes list; 135 shows the Web Home title anchor at x≈420/y≈169 in the matched 1280×720 dark viewport (live Notion anchor x≈420/y≈168); 136 refreshes Android empty Home. A UI-created note reports “Note saved.”, survives force-stop/relaunch, and is removed through the existing delete flow. Dashboard tests pass 39/39 across 360–1440dp. Web still shows its existing storage-unavailable state; loaded Grid, loading, search, selected states and most same-state pairs remain open. | `PARTIAL` | Capture remaining actual states on supported targets, pair them with Notion at matching viewports, and score each required anchor |
-| 5. Notes list/detail frame | Current-source captures 71–76 cover desktop, tablet and phone with the explicit Web storage limitation; capture 123 refreshes 1280×800. Captures 56–57 verify dirty-back and retained load error. Notes suite passes 86/86 with a test-only bridge package root; package config hash was restored. Android API 35 local-auth runtime verified create → Home list → force-stop/relaunch → reopen → delete for one QA note; no pre-existing notes were present and the QA note was removed. Capture 137 separately verifies the blank editor and existing Back affordance without creating a note. | `IN_PROGRESS` | Capture loaded/selected states with controlled data and pair supported states against Notion; verify search and destination retention on native runtime |
+| 5. Notes list/detail frame | Notes workspace app bar no longer repeats the shell brand; a static list skeleton preserves the loading live region. `notes_workspace_page_test.dart` passes 20/20, including loading at 320/360/390/768/1280dp, Notes header, compact/detail/back, create flow, error/retry, and dirty-state cases; all Notes presentation tests pass 93/93. Web and Android ARM64 release builds pass. Captures 71–76 and 131 are pre-follow-up; no current runtime screenshot or matched Notion list/editor pair exists. | `IN_PROGRESS` | Capture current loaded/selected/loading/error states with controlled data and pair supported states against Notion; verify compact dirty-back and destination retention on native runtime |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset; breadcrumb now shows the page title without repeating the app brand. Captures 51–56, 129 and 137 predate the breadcrumb edit. Compact title typography uses 36dp below 600dp, with 40dp wider; widget checks cover 390px, 567px and 1024px. Capture 137 records the blank compact editor at 1080×2400; no text was entered. The Web release runtime at 1280×720 dark retained “Saving unavailable on Web”; no current Web screenshot artifact or matched pixel pair exists. The current breadcrumb edit passes its 24-test surface suite, targeted analysis, Web release build and Android ARM64 release build. | `IN_PROGRESS` | Capture current editor source on supported targets, pair supported states with Notion at matched viewports, capture remaining error/summary states, and complete editor visual review |
 | 7. Menus/overlays/status | More is anchored at ≥600dp and uses a bottom sheet below 600dp. Delete/dirty-back surfaces and callbacks have widget coverage; Android API 35 runtime opened More → Delete, confirmed the existing “Delete note?” dialog, and removed only the temporary QA note. Full overlay/theme and paired visual states remain unverified. | `PARTIAL` | Capture same-state menu/dialog pairs and verify focus, keyboard, barrier/system-back behavior on supported targets |
 | 8. Auth UI | Release captures 104–110 cover current email/password/details steps at desktop/phone/tablet; public same-size Notion refs 111–114. The current Register CTA test constrains mobile y=372–378 (reference y=375) and desktop y=392–400 (reference y=396), with a 44dp auth submit target; auth page plus navigation integration suites pass 18/18 using the test-only bridge package root. Android API 35 captures 124–127 cover Login, keyboard focus, Register, and Login at 200% text scale. Behavior contracts remain intact; this tranche has no fresh release screenshot or pixel diff. | `IN_PROGRESS` | Capture desktop Register details and supported validation/busy/error/success/change-password states; finish accessibility/localization checks; compare supported controls and keep overall score unassigned |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; Android API 35 capture 127 visually confirms the Login brand and heading remain separated at system font scale 2.0; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets; shared sidebar row Tab focus/blur is verified in light and dark themes | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
-| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows runner folder. Android API 35 AVD captures 130–137 cover Home, Notes list, compact shell/sheet and blank editor; Web runtime was reviewed at 1280×720 dark with its existing storage limitation. The original Cognito APK was restored and its SHA-256 verified. No Apple runner or physical Android device is attached; full same-state Notion pairs remain open. | `PARTIAL` | Pair Home/list/editor/menus against Notion, verify tablet/rotation/accessibility, and run iOS/macOS checks on an Apple runner |
-| 11. Regression/build/handoff | Full presentation suite passes 203/203; format checks pass for 171 Dart files; targeted editor analysis passes. Full repository analysis does not pass: 42 issues were reported in the temporary `output/test-shim` and `packages/local_llm_bridge/test` due to the shim's undeclared `ffi` dependency and unresolved `package:test` in that package context. Android x64 local-auth release APK (35.7 MB) and Web release build pass. The original Cognito APK was restored and verified by SHA-256. Direct Windows test startup still hits the native `LNK1136` hook issue; shim run passed. iOS/macOS checks remain unavailable on this Windows host. | `IN_PROGRESS` | Resolve or isolate analyzer/package-context issues without changing backend; continue UI tranches; run iOS/macOS checks on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
+| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows/Linux runner folders. Current `flutter devices --machine` lists Android 15/API 35 x86_64 emulator, Windows host, Chrome and Edge. Android captures 130–137 cover earlier Home/Notes/shell/editor states; the latest Web runtime review used 1280×720 dark with its existing storage limitation. No `xcodebuild` or Apple runner is available on this Windows host; no physical Android device is attached. Full same-state Notion pairs remain open. | `PARTIAL` | Capture current Home/list/editor/menus across Android, Web and Apple targets; pair with Notion; verify tablet/rotation/accessibility; run iOS/macOS checks on an Apple runner |
+| 11. Regression/build/handoff | Full presentation suite previously passes 203/203; current Notes presentation suite passes 93/93 and `flutter analyze --no-pub lib/main.dart lib/presentation` reports no issues. Current Web release and Android ARM64 release builds pass; the edited Dart files pass format. Full repository analysis still has the recorded 42 issues in the temporary `output/test-shim` and `packages/local_llm_bridge/test`; direct Windows test startup still hits the native `LNK1136` hook issue, while the test-only shim runs passed and package config was restored. iOS/macOS checks remain unavailable on this Windows host. | `IN_PROGRESS` | Continue UI tranches; resolve/isolate analyzer/package-context issues without backend changes; run Apple builds on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
 
 ---
 
