@@ -91,13 +91,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('new note title hint uses page-title typography', (
+  testWidgets('new note title hint uses compact page-title typography', (
     WidgetTester tester,
   ) async {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
 
     final Text titleHint = tester.widget<Text>(find.text('Title'));
-    expect(titleHint.style?.fontSize, 40);
+    expect(titleHint.style?.fontSize, 36);
     expect(titleHint.style?.fontWeight, FontWeight.w700);
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
@@ -143,6 +143,10 @@ void main() {
     expect(find.byType(NoteDetailActionBar), findsOneWidget);
     expect(find.byKey(saveKey), findsOneWidget);
     expect(find.byKey(summarizeKey), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
+      40,
+    );
 
     // The title block matches Notion's 720px block; body text uses 708px.
     final Finder form = find.byType(NoteDetailEditorForm);
@@ -163,6 +167,10 @@ void main() {
     expect(tester.getSize(form).width, 360);
     expect(tester.getCenter(form).dx, 283.5);
     expect(tester.getTopLeft(form).dy, 56);
+    expect(
+      tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
+      36,
+    );
     expect(tester.takeException(), isNull);
   });
 

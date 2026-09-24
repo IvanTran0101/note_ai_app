@@ -809,3 +809,19 @@ score by itself.
   infrastructure, persistence, or backend code changed. Step 8 stays in
   progress, and no app-wide score is assigned; the `>=95/100` gate remains
   unproven.
+
+## Compact editor title scale follow-up — 2026-09-24
+
+- `NoteDetailEditorForm` uses a 36dp page-title style below the existing 600dp
+  compact breakpoint and keeps 40dp at wider widths. This follows a visual
+  review of the open Notion page at a 567px-wide browser viewport; no page
+  content was changed or saved.
+- Widget tests check the compact title style at 390px and 567px, desktop style
+  at 1024px, and long-title wrapping. `flutter test --no-pub
+  test/presentation/notes` passes 86/86 with the temporary test-only
+  `local_llm_bridge` package root. Targeted analyzer, format, and diff checks
+  pass; the original package-config SHA-256 was restored to
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- This tranche has no fresh runtime capture or matched pixel diff, so it does
+  not complete Step 6 or establish a visual score. Autosave and all backend
+  contracts remain unchanged; the overall `>=95/100` gate is still unproven.

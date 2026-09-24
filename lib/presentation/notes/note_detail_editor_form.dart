@@ -70,6 +70,10 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
+    final double titleFontSize =
+        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint
+        ? 36
+        : 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -81,7 +85,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
           maxLines: null,
           textInputAction: TextInputAction.next,
           style: titleStyle?.copyWith(
-            fontSize: 40,
+            fontSize: titleFontSize,
             fontWeight: FontWeight.w700,
             color: tokens.textPrimary,
             height: 1.2,
@@ -89,7 +93,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
           decoration: InputDecoration(
             hintText: copy.titleLabel,
             hintStyle: titleStyle?.copyWith(
-              fontSize: 40,
+              fontSize: titleFontSize,
               fontWeight: FontWeight.w700,
               color: tokens.textMuted,
               height: 1.2,
