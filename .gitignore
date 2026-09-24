@@ -52,7 +52,7 @@ app.*.map.json
 /.amplify/
 
 # Local agent instructions and generated workspace files
-/pack/
+.pack/
 /_agent_ops/
 AGENTS.md
 /.agents
