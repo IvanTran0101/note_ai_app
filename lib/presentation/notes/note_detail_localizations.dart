@@ -40,6 +40,8 @@ final class NoteDetailCopy {
   String get titleLabel => _isVietnamese ? 'Tiêu đề' : 'Title';
   String get contentLabel => _isVietnamese ? 'Nội dung' : 'Content';
   String get summary => _isVietnamese ? 'Tóm tắt' : 'Summary';
+  String get hideSummary => _isVietnamese ? 'Ẩn tóm tắt' : 'Hide summary';
+  String get showSummary => _isVietnamese ? 'Hiện tóm tắt' : 'Show summary';
   String get summaryStale => _isVietnamese
       ? 'Tóm tắt đã cũ vì ghi chú đã thay đổi.'
       : 'This summary is out of date because the note changed.';

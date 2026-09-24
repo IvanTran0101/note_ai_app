@@ -306,7 +306,7 @@ final class _DashboardStatePage extends StatelessWidget {
                   Text(
                     copy.title,
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: 40,
+                      fontSize: compact ? 32 : 40,
                       height: 1.2,
                       fontWeight: FontWeight.w700,
                       color: tokens.textPrimary,

@@ -68,21 +68,30 @@ final class NotesListPanel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.headlineLarge
                             ?.copyWith(
-                              fontSize: 40,
+                              fontSize: compact ? 32 : 40,
                               height: 1.2,
                               fontWeight: FontWeight.w700,
                               color: tokens.textPrimary,
                             ),
                       );
-                      final Widget create = TextButton.icon(
+                      final Widget create = FilledButton.icon(
                         key: const ValueKey<String>('new-note'),
                         onPressed: actionBusy ? null : onNewNote,
                         icon: const Icon(Icons.add, size: 20),
                         label: Text(copy.newNote),
-                        style: TextButton.styleFrom(
-                          foregroundColor: tokens.textSecondary,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: tokens.link,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .onPrimary,
+                          minimumSize: const Size(48, 44),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: NoteFlowSpacing.sm,
+                            horizontal: NoteFlowSpacing.md,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              NoteFlowRadius.input,
+                            ),
                           ),
                         ),
                       );
@@ -106,6 +115,12 @@ final class NotesListPanel extends StatelessWidget {
                         ],
                       );
                     },
+                  ),
+                  const SizedBox(height: NoteFlowSpacing.sm),
+                  Text(
+                    copy.notesDescription,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.textMuted),
                   ),
                   if (error != null && notes.isNotEmpty) ...<Widget>[
                     const SizedBox(height: NoteFlowSpacing.sm),
@@ -227,65 +242,97 @@ final class NotesListPanel extends StatelessWidget {
                                     ],
                                   ),
                                 )
-                        : ListView.separated(
-                            itemCount: notes.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: NoteFlowSpacing.xs),
-                            itemBuilder: (BuildContext context, int index) {
-                              final NoteDto note = notes[index];
-                              final bool selected = note.id == selectedNoteId;
-                              return Semantics(
-                                selected: selected,
-                                button: true,
-                                label:
-                                    '${note.title.trim().isEmpty ? copy.untitled : note.title}. ${_preview(note.content, copy)}',
-                                child: ListTile(
-                                  key: ValueKey<String>('note-${note.id}'),
-                                  selected: selected,
-                                  selectedTileColor: tokens.selectedSurface,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      NoteFlowRadius.row,
-                                    ),
+                        : ListView(
+                            padding: const EdgeInsets.only(
+                              top: NoteFlowSpacing.xs,
+                              bottom: NoteFlowSpacing.xxxl,
+                            ),
+                            children: <Widget>[
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: tokens.subtleSurface,
+                                  border: Border.all(color: tokens.divider),
+                                  borderRadius: BorderRadius.circular(
+                                    NoteFlowRadius.card,
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: NoteFlowSpacing.md,
-                                    vertical: 2,
-                                  ),
-                                  leading: Icon(
-                                    Icons.description_outlined,
-                                    size: 20,
-                                    color: selected
-                                        ? tokens.textPrimary
-                                        : tokens.textMuted,
-                                  ),
-                                  title: Text(
-                                    note.title.trim().isEmpty
-                                        ? copy.untitled
-                                        : note.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: tokens.textPrimary,
-                                        ),
-                                  ),
-                                  subtitle: Text(
-                                    _preview(note.content, copy),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: tokens.textMuted),
-                                  ),
-                                  onTap: actionBusy
-                                      ? null
-                                      : () => onSelectNote(note),
                                 ),
-                              );
-                            },
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.all(
+                                    NoteFlowSpacing.xs,
+                                  ),
+                                  itemCount: notes.length,
+                                  separatorBuilder: (_, _) => const SizedBox(
+                                    height: NoteFlowSpacing.xs,
+                                  ),
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final NoteDto note = notes[index];
+                                    final bool selected =
+                                        note.id == selectedNoteId;
+                                    return Semantics(
+                                      selected: selected,
+                                      button: true,
+                                      label:
+                                          '${note.title.trim().isEmpty ? copy.untitled : note.title}. ${_preview(note.content, copy)}',
+                                      child: ListTile(
+                                        key: ValueKey<String>(
+                                          'note-${note.id}',
+                                        ),
+                                        selected: selected,
+                                        selectedTileColor:
+                                            tokens.selectedSurface,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            NoteFlowRadius.row,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: NoteFlowSpacing.md,
+                                              vertical: 2,
+                                            ),
+                                        leading: Icon(
+                                          Icons.description_outlined,
+                                          size: 20,
+                                          color: selected
+                                              ? tokens.textPrimary
+                                              : tokens.textMuted,
+                                        ),
+                                        title: Text(
+                                          note.title.trim().isEmpty
+                                              ? copy.untitled
+                                              : note.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                color: tokens.textPrimary,
+                                              ),
+                                        ),
+                                        subtitle: Text(
+                                          _preview(note.content, copy),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: tokens.textMuted,
+                                              ),
+                                        ),
+                                        onTap: actionBusy
+                                            ? null
+                                            : () => onSelectNote(note),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                   ),
                 ],

@@ -29,6 +29,7 @@ final class _LoginPageState extends State<LoginPage> {
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
   bool _passwordStep = false;
+  bool _passwordVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +45,7 @@ final class _LoginPageState extends State<LoginPage> {
         return _AuthFormScaffold(
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
+          desktopPanel: true,
           compactTopPadding: 38,
           desktopTopPadding: 82,
           compactBrandTitleSpacing: 34,
@@ -91,7 +93,13 @@ final class _LoginPageState extends State<LoginPage> {
                     focusNode: _passwordFocusNode,
                     label: copy.password,
                     hintText: copy.passwordHint,
-                    obscureText: true,
+                    obscureText: !_passwordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _passwordVisible,
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
                     autofillHints: const <String>[AutofillHints.password],
                     textInputAction: TextInputAction.done,
                     validator: (String? value) =>
@@ -232,6 +240,8 @@ final class _RegisterPageState extends State<RegisterPage> {
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _displayNameFocusNode = FocusNode();
   bool _detailsStep = false;
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +346,13 @@ final class _RegisterPageState extends State<RegisterPage> {
                     controller: _passwordController,
                     label: copy.password,
                     hintText: copy.passwordHint,
-                    obscureText: true,
+                    obscureText: !_passwordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _passwordVisible,
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
                     textInputAction: TextInputAction.next,
                     autofillHints: const <String>[AutofillHints.newPassword],
                     validator: (String? value) =>
@@ -358,7 +374,15 @@ final class _RegisterPageState extends State<RegisterPage> {
                     controller: _confirmPasswordController,
                     label: copy.confirmPassword,
                     hintText: copy.confirmPasswordHint,
-                    obscureText: true,
+                    obscureText: !_confirmPasswordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _confirmPasswordVisible,
+                      onPressed: () => setState(
+                        () =>
+                            _confirmPasswordVisible = !_confirmPasswordVisible,
+                      ),
+                    ),
                     textInputAction: TextInputAction.done,
                     autofillHints: const <String>[AutofillHints.newPassword],
                     validator: (String? value) {
@@ -491,6 +515,7 @@ final class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         return _AuthFormScaffold(
           title: copy.forgotTitle,
           subtitle: copy.forgotSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -605,6 +630,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
         return _AuthFormScaffold(
           title: copy.resetTitle,
           subtitle: copy.resetSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -890,6 +916,7 @@ final class _ChangePasswordPageState extends State<ChangePasswordPage> {
         return _AuthFormScaffold(
           title: copy.changePassword,
           subtitle: copy.changePasswordSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -1440,6 +1467,7 @@ Widget _authField({
   String? hintText,
   required String? Function(String?) validator,
   bool obscureText = false,
+  Widget? suffixIcon,
   bool readOnly = false,
   TextInputType? keyboardType,
   TextInputAction? textInputAction,
@@ -1472,7 +1500,10 @@ Widget _authField({
               key: key,
               controller: controller,
               focusNode: focusNode,
-              decoration: InputDecoration(hintText: hintText),
+              decoration: InputDecoration(
+                hintText: hintText,
+                suffixIcon: suffixIcon,
+              ),
               obscureText: obscureText,
               readOnly: readOnly,
               keyboardType: keyboardType,
@@ -1485,6 +1516,21 @@ Widget _authField({
         ],
       );
     },
+  );
+}
+
+Widget _passwordVisibilityButton(
+  BuildContext context, {
+  required bool visible,
+  required VoidCallback onPressed,
+}) {
+  final AuthCopy copy = AuthCopy.of(context);
+  return IconButton(
+    tooltip: visible ? copy.hidePassword : copy.showPassword,
+    onPressed: onPressed,
+    icon: Icon(
+      visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+    ),
   );
 }
 

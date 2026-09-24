@@ -26,8 +26,13 @@ final class DashboardCopy {
 
   String get title => _isVietnamese ? 'Trang chủ' : 'Home';
   String get workspaceLabel => 'NoteFlow';
+  String get workspaceHint => _isVietnamese
+      ? 'Lưu ý tưởng, sắp xếp công việc và để AI tổng hợp phần quan trọng.'
+      : 'Capture ideas, organize work, and let AI surface what matters.';
   String get recentlyUpdated =>
       _isVietnamese ? 'Cập nhật gần đây' : 'Recently updated';
+  String get recents => _isVietnamese ? 'Gần đây' : 'Recents';
+  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
   String notesCount(int count) => _isVietnamese
       ? '$count ghi chú'
       : '$count ${count == 1 ? 'note' : 'notes'}';

@@ -63,6 +63,8 @@ final class AuthCopy {
       _isVietnamese ? 'Nhập mật khẩu' : 'Enter your password';
   String get confirmPasswordHint =>
       _isVietnamese ? 'Nhập lại mật khẩu' : 'Re-enter your password';
+  String get showPassword => _isVietnamese ? 'Hiện mật khẩu' : 'Show password';
+  String get hidePassword => _isVietnamese ? 'Ẩn mật khẩu' : 'Hide password';
   String get verificationCodeHint =>
       _isVietnamese ? 'Nhập mã xác nhận' : 'Enter the verification code';
   String get currentPasswordHint =>

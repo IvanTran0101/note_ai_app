@@ -28,6 +28,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     required this.statusMessage,
     this.showSaveState = true,
     required this.actionBusy,
+    this.isSummarizing = false,
     required this.provisioningReader,
     required this.onProvisioningRetry,
     required this.onProvisioningCancel,
@@ -54,6 +55,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final String? statusMessage;
   final bool showSaveState;
   final bool actionBusy;
+  final bool isSummarizing;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
   final VoidCallback? onProvisioningCancel;
@@ -71,6 +73,9 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
+    final TextStyle contentStyle =
+        bodyStyle?.copyWith(color: tokens.textPrimary, height: 1.5) ??
+        TextStyle(color: tokens.textPrimary, height: 1.5);
     final bool compactWeb =
         kIsWeb &&
         MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
@@ -117,6 +122,17 @@ final class NoteDetailEditorForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
+        NoteDetailSummary(
+          copy: copy,
+          hasSavedNote: hasSavedNote,
+          summary: summary,
+          isStale: summaryStale,
+          isSummarizing: isSummarizing,
+          onCopy: onCopySummary,
+          onRegenerate: onRegenerateSummary,
+          copyLabel: copySummaryLabel,
+          regenerateLabel: regenerateSummaryLabel,
+        ),
         Container(
           key: contentFieldContextKey,
           child: Align(
@@ -125,29 +141,36 @@ final class NoteDetailEditorForm extends StatelessWidget {
               constraints: const BoxConstraints(
                 maxWidth: NoteFlowLayout.editorTextMaxWidth,
               ),
-              child: TextField(
-                key: const ValueKey<String>('note-detail-content-field'),
+              child: _SummaryContentMotion(
+                active: isSummarizing,
                 controller: contentController,
-                focusNode: contentFocusNode,
-                minLines: 6,
-                maxLines: null,
-                keyboardType: TextInputType.multiline,
-                textCapitalization: TextCapitalization.sentences,
-                style: bodyStyle?.copyWith(
-                  color: tokens.textPrimary,
-                  height: 1.5,
-                ),
-                decoration: InputDecoration(
-                  hintText: copy.contentLabel,
-                  hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  focusedErrorBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: NoteFlowSpacing.sm,
+                textStyle: contentStyle,
+                child: TextField(
+                  key: const ValueKey<String>('note-detail-content-field'),
+                  controller: contentController,
+                  focusNode: contentFocusNode,
+                  minLines: 6,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: isSummarizing
+                      ? contentStyle.copyWith(color: Colors.transparent)
+                      : contentStyle,
+                  cursorColor: isSummarizing
+                      ? Colors.transparent
+                      : tokens.textPrimary,
+                  decoration: InputDecoration(
+                    hintText: copy.contentLabel,
+                    hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: NoteFlowSpacing.sm,
+                    ),
                   ),
                 ),
               ),
@@ -246,7 +269,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         ],
-        if (actionBusy) ...<Widget>[
+        if (actionBusy && !isSummarizing) ...<Widget>[
           const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
@@ -262,17 +285,119 @@ final class NoteDetailEditorForm extends StatelessWidget {
             onRetry: hasSavedNote ? onProvisioningRetry : null,
             onCancel: onProvisioningCancel,
           ),
-        NoteDetailSummary(
-          copy: copy,
-          hasSavedNote: hasSavedNote,
-          summary: summary,
-          isStale: summaryStale,
-          onCopy: onCopySummary,
-          onRegenerate: onRegenerateSummary,
-          copyLabel: copySummaryLabel,
-          regenerateLabel: regenerateSummaryLabel,
-        ),
       ],
+    );
+  }
+}
+
+/// Gives the note text a gentle breathing effect while the AI reads it.
+final class _SummaryContentMotion extends StatefulWidget {
+  const _SummaryContentMotion({
+    required this.active,
+    required this.controller,
+    required this.textStyle,
+    required this.child,
+  });
+
+  final bool active;
+  final TextEditingController controller;
+  final TextStyle textStyle;
+  final Widget child;
+
+  @override
+  State<_SummaryContentMotion> createState() => _SummaryContentMotionState();
+}
+
+final class _SummaryContentMotionState extends State<_SummaryContentMotion>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _SummaryContentMotion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.active && oldWidget.active) {
+      _controller.stop();
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) {
+      return widget.child;
+    }
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (BuildContext context, Widget? child) {
+        return Stack(
+          fit: StackFit.passthrough,
+          children: <Widget>[
+            child!,
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: widget.controller,
+              builder:
+                  (BuildContext context, TextEditingValue value, Widget? _) {
+                    if (value.text.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    final Color baseColor =
+                        widget.textStyle.color ?? tokens.textPrimary;
+                    final List<TextSpan> words = RegExp(r'\S+\s*')
+                        .allMatches(value.text)
+                        .toList(growable: false)
+                        .asMap()
+                        .entries
+                        .map((MapEntry<int, RegExpMatch> entry) {
+                          final double phase =
+                              (_controller.value + (entry.key * 0.13)) % 1;
+                          final double wave = phase < 0.5
+                              ? phase * 2
+                              : 2 - (phase * 2);
+                          final double pulse = Curves.easeInOut.transform(wave);
+                          return TextSpan(
+                            text: entry.value.group(0),
+                            style: widget.textStyle.copyWith(
+                              color: baseColor.withAlpha(
+                                140 + (pulse * 115).round(),
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(growable: false);
+                    return IgnorePointer(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: NoteFlowSpacing.sm,
+                        ),
+                        child: RichText(text: TextSpan(children: words)),
+                      ),
+                    );
+                  },
+            ),
+          ],
+        );
+      },
     );
   }
 }
