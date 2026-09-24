@@ -30,13 +30,19 @@ void main() {
     WidgetTester tester,
     _FakeNotesController controller, {
     required Size size,
+    bool embeddedInWorkspace = false,
   }) async {
     tester.view
       ..physicalSize = size
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: NotesWorkspacePage(controller: controller)),
+      MaterialApp(
+        home: NotesWorkspacePage(
+          controller: controller,
+          embeddedInWorkspace: embeddedInWorkspace,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -190,6 +196,22 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('compact Notes title uses the shared page anchor', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(notes: <NoteDto>[buildNote()]),
+      size: const Size(390, 844),
+      embeddedInWorkspace: true,
+    );
+
+    final Finder pageTitle = find.text('Notes').last;
+    expect(tester.getTopLeft(pageTitle).dx, 96);
+    expect(tester.getTopLeft(pageTitle).dy, 160);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('compact create flow returns to the note list after save', (
     WidgetTester tester,
