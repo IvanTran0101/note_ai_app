@@ -50,6 +50,11 @@ final class _LoginPageState extends State<LoginPage> {
           compactTitleSubtitleSpacing: 0,
           compactContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.xs,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
+          footer: _AuthLinkRow(
+            prompt: copy.newToNoteFlow,
+            action: copy.registerAction,
+            onPressed: state.isBusy ? null : _openRegister,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -118,12 +123,6 @@ final class _LoginPageState extends State<LoginPage> {
                       child: Text(copy.forgotPassword),
                     ),
                   ),
-                const SizedBox(height: 12.0),
-                _AuthLinkRow(
-                  prompt: copy.newToNoteFlow,
-                  action: copy.registerAction,
-                  onPressed: state.isBusy ? null : _openRegister,
-                ),
               ],
             ),
           ),
@@ -257,6 +256,13 @@ final class _RegisterPageState extends State<RegisterPage> {
           compactTitleSubtitleSpacing: 0,
           compactContentSpacing: NoteFlowSpacing.lg + NoteFlowSpacing.md,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
+          footer: _AuthLinkRow(
+            prompt: copy.alreadyHaveAccount,
+            action: copy.loginAction,
+            onPressed: state.isBusy ? null : _openLogin,
+          ),
+          compactFooterBottomPadding: 220,
+          allowAnchoredFooter: !_detailsStep,
           desktopPanel: true,
           child: Form(
             key: _formKey,
@@ -378,12 +384,6 @@ final class _RegisterPageState extends State<RegisterPage> {
                       : copy.continueAction,
                   busy: state.isBusy,
                   onPressed: _detailsStep ? _submit : _continueToDetails,
-                ),
-                const SizedBox(height: 8.0),
-                _AuthLinkRow(
-                  prompt: copy.alreadyHaveAccount,
-                  action: copy.loginAction,
-                  onPressed: state.isBusy ? null : _openLogin,
                 ),
               ],
             ),
@@ -1100,6 +1100,9 @@ final class _AuthFormScaffold extends StatelessWidget {
     this.compactTitleSubtitleSpacing = NoteFlowSpacing.sm,
     this.compactContentSpacing = 32,
     this.desktopContentSpacing = 32,
+    this.footer,
+    this.compactFooterBottomPadding = 120,
+    this.allowAnchoredFooter = true,
     this.desktopPanel = false,
   });
 
@@ -1112,6 +1115,9 @@ final class _AuthFormScaffold extends StatelessWidget {
   final double compactTitleSubtitleSpacing;
   final double compactContentSpacing;
   final double desktopContentSpacing;
+  final Widget? footer;
+  final double compactFooterBottomPadding;
+  final bool allowAnchoredFooter;
   final bool desktopPanel;
 
   @override
@@ -1167,7 +1173,16 @@ final class _AuthFormScaffold extends StatelessWidget {
                   ? compactContentSpacing
                   : desktopContentSpacing;
               final bool showDesktopPanel = desktopPanel && !compactWidth;
-              const double bottomPadding = NoteFlowSpacing.xl;
+              final bool anchorFooter =
+                  allowAnchoredFooter &&
+                  footer != null &&
+                  constraints.maxHeight >= 700 &&
+                  MediaQuery.viewInsetsOf(context).bottom == 0;
+              final double bottomPadding = anchorFooter
+                  ? compactWidth
+                        ? compactFooterBottomPadding
+                        : 130
+                  : NoteFlowSpacing.xl;
               final double minScrollContentHeight =
                   (constraints.maxHeight - topPadding - bottomPadding)
                       .clamp(0.0, constraints.maxHeight)
@@ -1252,28 +1267,82 @@ final class _AuthFormScaffold extends StatelessWidget {
                       ),
                     )
                   : formColumn;
+              final Widget scrollContent = footer == null
+                  ? ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: minScrollContentHeight,
+                      ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: pageContent,
+                      ),
+                    )
+                  : ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: minScrollContentHeight,
+                      ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: <Widget>[
+                            pageContent,
+                            const SizedBox(height: 12),
+                            footer!,
+                          ],
+                        ),
+                      ),
+                    );
+              final double horizontalPadding = compactWidth
+                  ? 20.0
+                  : NoteFlowSpacing.xl;
               return ColoredBox(
                 key: const ValueKey<String>('auth-form-page-background'),
                 color: showDesktopPanel
                     ? tokens.sidebarSurface
                     : tokens.pageSurface,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
-                    topPadding,
-                    compactWidth ? 20.0 : NoteFlowSpacing.xl,
-                    bottomPadding,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: minScrollContentHeight,
-                    ),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: pageContent,
-                    ),
-                  ),
-                ),
+                child: anchorFooter
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                topPadding,
+                                horizontalPadding,
+                                0,
+                              ),
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: pageContent,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontalPadding,
+                              0,
+                              horizontalPadding,
+                              bottomPadding,
+                            ),
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: footer!,
+                            ),
+                          ),
+                        ],
+                      )
+                    : SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          topPadding,
+                          horizontalPadding,
+                          bottomPadding,
+                        ),
+                        child: scrollContent,
+                      ),
               );
             },
           ),

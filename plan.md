@@ -1233,3 +1233,44 @@ errors and zero warnings during this render.
 | Web — Chrome | `N/C` | Current Web build and Chromium-runner Login smoke capture verified; installed Chrome capture, matched reference, and required workflow/state cells remain outstanding. |
 | Web — Edge | `N/C` | No current-source Edge capture or complete matched cell matrix in this iteration. |
 | **Overall** | **`N/C`** | This presentation correction fixes a false-saved visual state; it does not establish a full-screen or platform visual score. |
+
+## Login/Register secondary-link layout tranche — 2026-09-25
+
+The compact Login `Create account` link stays near the Notion Login sign-up
+anchor. Register's `Log in` link now uses the higher Sign up anchor on its email
+step. The longer Register details form returns the link to natural scroll flow,
+so it cannot cover or clip `Create account`. With a keyboard or a short viewport,
+both pages continue using the existing scroll fallback. Existing navigation
+callbacks, validators, controller calls, routes, and backend behavior are
+unchanged.
+
+Current-source Web release build passed in 115.1s. Installed Chrome and Edge
+rendered the 390×844 Login and Register email states; capture files are
+`docs/ui-qa/187-noteflow-login-email-390x844-{chrome,edge}-current-20260925.png`
+and `docs/ui-qa/188-noteflow-register-email-390x844-{chrome,edge}-current-20260925.png`.
+The Edge Register details capture `docs/ui-qa/190-noteflow-register-details-390x844-edge-current-20260925.png`
+shows the complete Create account CTA with the login link below it. Both browser
+console checks reported zero errors and zero warnings. The dummy email used to
+advance to Register details was not submitted.
+
+The current-source Android release APK built successfully (87.7 MB), installed
+on `NoteFlow_API35` / Android 15, and restored the existing signed-in Home
+session. No final-source Android auth screen was captured in this tranche.
+`auth_pages_test.dart` passed 19/19 using the existing temporary test-only
+package shim; `dart analyze` reported no issues. The exact original
+`.dart_tool/package_config.json` was restored (SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`).
+
+The Login footer is visually near the live Notion Login reference at
+`docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png`; the Register
+email footer is visually near the live Notion Sign up reference at
+`docs/ui-qa/113-notion-signup-390x844-reference-live-20260924.png`. These are
+secondary-link anchor checks only; the Register details state has no matched
+Notion password-form capture and is not assigned a numeric screen score.
+
+| Target | Score after this iteration | Self-score evidence |
+| --- | --- | --- |
+| Android | `N/C` | Current APK build/install passed, but no final-source Android auth capture or complete auth/platform matrix was scored. |
+| Web — Chrome | `N/C` | Current Login/Register email captures and browser console are verified; the full auth states, remaining viewports, and all inner-page cells remain incomplete. |
+| Web — Edge | `N/C` | Current Login/Register email and Register details captures show the CTA remains usable; the full auth and inner-page matrix remains incomplete. |
+| **Overall** | **`N/C` — 95/100 is not established** | This tranche adjusts secondary-link placement and prevents CTA overlap; it is not a whole-platform score. |

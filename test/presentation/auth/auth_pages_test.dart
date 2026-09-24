@@ -73,6 +73,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('login registration link sits low without hiding Continue', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final Rect continueRect = tester.getRect(find.byKey(LoginPage.submitKey));
+    final Rect registerLinkRect = tester.getRect(find.text('Create account'));
+    expect(continueRect.top, inInclusiveRange(300, 400));
+    expect(registerLinkRect.top, inInclusiveRange(690, 714));
+    expect(registerLinkRect.top - continueRect.bottom, greaterThan(240));
+    expect(tester.takeException(), isNull);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.byKey(LoginPage.submitKey)).bottom,
+      lessThan(844 - 320),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('login validates email before showing the password step', (
     WidgetTester tester,
   ) async {
@@ -407,6 +444,77 @@ void main() {
 
     expect(desktopPanel, findsOneWidget);
     expect(tester.getRect(desktopPanel).width, 496);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('register login link matches the mobile signup anchor', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(home: RegisterPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final Rect continueRect = tester.getRect(
+      find.byKey(RegisterPage.submitKey),
+    );
+    final Rect loginLinkRect = tester.getRect(find.text('Log in'));
+    expect(continueRect.bottom, lessThan(844));
+    expect(loginLinkRect.center.dy, inInclusiveRange(598, 618));
+    expect(loginLinkRect.top - continueRect.bottom, greaterThan(64));
+    expect(tester.takeException(), isNull);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpWidget(
+      MaterialApp(home: RegisterPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.byKey(RegisterPage.submitKey)).bottom,
+      lessThan(844 - 320),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('register details keep Create account clear of the footer', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(home: RegisterPage(controller: controller)),
+    );
+    await tester.enterText(
+      find.byKey(RegisterPage.emailFieldKey),
+      'qa.noteflow@example.test',
+    );
+    await tester.tap(find.byKey(RegisterPage.submitKey));
+    await tester.pumpAndSettle();
+
+    final Rect createAccountRect = tester.getRect(
+      find.byKey(RegisterPage.submitKey),
+    );
+    final Rect loginLinkRect = tester.getRect(find.text('Log in'));
+    expect(createAccountRect.height, greaterThanOrEqualTo(48));
+    expect(createAccountRect.bottom, lessThan(844));
+    expect(loginLinkRect.top - createAccountRect.bottom, greaterThan(8));
     expect(tester.takeException(), isNull);
   });
 
