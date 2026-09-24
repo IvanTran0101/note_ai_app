@@ -34,6 +34,9 @@ final class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final AuthCopy copy = AuthCopy.of(context);
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final double loginSubmitSpacing = MediaQuery.sizeOf(context).width < 600
+        ? NoteFlowSpacing.xl
+        : NoteFlowSpacing.md;
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (BuildContext context, Widget? child) {
@@ -99,7 +102,7 @@ final class _LoginPageState extends State<LoginPage> {
                           ?.copyWith(color: tokens.textMuted),
                     ),
                   ),
-                const SizedBox(height: 20.0),
+                SizedBox(height: loginSubmitSpacing),
                 _authSubmitButton(
                   key: LoginPage.submitKey,
                   label: _passwordStep ? copy.loginAction : copy.continueAction,

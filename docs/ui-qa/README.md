@@ -116,6 +116,8 @@ entered, so no note was persisted. Other screenshots remain from the
 | `129-noteflow-editor-empty-1080x2400-android15-api35.png` | Android 15/API 35 AVD, current-source blank note editor under temporary local-auth QA build | 1080×2400 | light |
 | `138-noteflow-register-platform-font-390x844-current-20260924.png` | Current system-font Web Register email step, focused blank email field | 390×844 | light |
 | `139-noteflow-register-platform-font-1280x800-current-20260924.png` | Current system-font Web Register email step, focused blank email field | 1280×800 | light |
+| `140-noteflow-login-platform-font-390x844-current-20260924.png` | Current system-font Web Login email step, focused blank email field | 390×844 | light |
+| `141-noteflow-login-platform-font-1280x800-current-20260924.png` | Current system-font Web Login email step, focused blank email field | 1280×800 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -875,3 +877,22 @@ screenshots are in “Platform-font Register recapture” below.
   Android font runtime and iOS/macOS remain unverified. These captures cover
   only Register email, assign no numeric score, and do not establish the
   app-wide `>=95/100` gate.
+
+### Login system-font recapture — 2026-09-24
+
+- [Capture 140](140-noteflow-login-platform-font-390x844-current-20260924.png)
+  and [capture 141](141-noteflow-login-platform-font-1280x800-current-20260924.png)
+  are fresh release Web screenshots at DPR 1 on the existing `#/login` route.
+  The email field is blank and focused; no form was submitted. They pair with
+  Notion refs [114](114-notion-login-390x844-reference-live-20260924.png) and
+  [111](111-notion-login-1280x800-reference-live-20260924.png).
+- Pixel checks place Login's blue CTA within 1px of the mobile reference
+  (current y=309–348; reference y=308–347) and 5px above desktop (current
+  y=333–372; reference y=338–377). The desktop heading/field group starts
+  around 8–10px early; the existing recovery hint wraps to two lines. The
+  provider buttons and legal copy in Notion have no corresponding NoteFlow
+  contract and were not fabricated.
+- The responsive spacing edit passes the 34-test auth suite and the full
+  presentation suite (209/209); scoped analysis, Web release, and Android
+  ARM64 release builds pass. Android visual runtime, iOS/macOS, and other Login
+  states remain open. No numeric auth/app score is assigned.
