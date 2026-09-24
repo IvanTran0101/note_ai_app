@@ -454,6 +454,9 @@ Reference visual: [Notion login](https://notion.com/login), [Notion sign up](htt
 - [ ] Bao phủ splash/session restore + retry và `EmailVerificationBanner` trong workspace; giữ các key resend/refresh/open verification và không đổi auth controller.
 - [ ] Login compact có scroll, keyboard inset và CTA luôn tới được.
 - [ ] Không đổi Cognito, session, token, logout hay refresh.
+- [x] Register có checklist mật khẩu cập nhật khi nhập, chỉ hiện điều kiện còn thiếu và báo trạng thái đạt khi đủ cả năm điều kiện đang cấu hình trong `lib/amplify_outputs.dart`: tối thiểu 8 ký tự, chữ hoa, chữ thường, chữ số và ký tự đặc biệt. Có EN/VI và semantics label; validator chỉ kiểm tra ở presentation trước khi gọi luồng đăng ký hiện có.
+- [x] `test/presentation/auth/auth_pages_test.dart` pass 16/16, gồm checklist thay đổi theo input, bản dịch tiếng Việt, semantics, chặn submit phía client khi thiếu điều kiện và giữ nguyên RegisterInput/service call khi hợp lệ. `dart analyze` ba file auth/test không có issue.
+- [ ] Chụp và đối chiếu trực quan Login/Register cùng các state trên browser và native targets; checklist không làm thay đổi scorecard visual.
 
 **Pass:** Login và Sign up/Register đạt visual score tối thiểu 95 ở desktop/mobile; auth tests và auth navigation integration tests pass; không gửi request thêm.
 
@@ -1116,3 +1119,28 @@ reached 95/100.
 All other supported browser/platform × viewport × screen/state cells remain
 `UNVERIFIED` until their reference/current evidence is recorded. Only controls
 mapped `OUT_OF_SCOPE` in the NoteFlow contract tables above may be `N/A`.
+
+### Registration password-guidance tranche — 2026-09-24
+
+This tranche ports the live missing-requirement feedback from `TanMinh2` into
+the existing two-step Register form. The displayed rules match the password
+policy already present in `lib/amplify_outputs.dart`. Changes are limited to
+`lib/presentation/auth/auth_pages.dart`,
+`lib/presentation/auth/auth_localizations.dart`, and the directly related auth
+page tests. Domain, application, infrastructure, Cognito configuration,
+auth-controller, API, and persistence files were not changed.
+
+| Target | Verified evidence from this tranche | Visual score |
+| --- | --- | --- |
+| Android | Shared Flutter auth-page tests pass; no new Android runtime capture | `N/C` |
+| iOS | Shared Flutter auth-page tests pass; no Apple runtime capture | `N/C (UNVERIFIED)` |
+| Web — Chrome | Shared Flutter auth-page tests pass; no browser capture of the password checklist | `N/C` |
+| Web — Edge | Shared Flutter auth-page tests pass; no browser capture of the password checklist | `N/C` |
+| macOS | Shared Flutter auth-page tests pass; no Apple runtime capture | `N/C (UNVERIFIED)` |
+| **Overall** | Behavior/localization verified by widget tests; this is not a visual reference comparison | **`N/C` — 95/100 remains unestablished** |
+
+The focused `flutter test` run needed a temporary `.dart_tool` package-root
+shim because the existing `local_llm_bridge` native hook failed with
+`LNK1136: invalid or corrupt file` for `llama-vocab.obj`. The shim and temporary
+package-config edit were restored after the passing 16/16 run. Scoped Dart
+analysis reported no issues.

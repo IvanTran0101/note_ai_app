@@ -208,6 +208,9 @@ final class RegisterPage extends StatefulWidget {
   static const Key passwordFieldKey = ValueKey<String>(
     'auth-register-password',
   );
+  static const Key passwordRequirementsKey = ValueKey<String>(
+    'auth-register-password-requirements',
+  );
   static const Key confirmPasswordFieldKey = ValueKey<String>(
     'auth-register-confirm-password',
   );
@@ -331,7 +334,17 @@ final class _RegisterPageState extends State<RegisterPage> {
                     textInputAction: TextInputAction.next,
                     autofillHints: const <String>[AutofillHints.newPassword],
                     validator: (String? value) =>
-                        _required(value, copy.passwordRequired),
+                        _passwordValidationMessage(value, copy),
+                  ),
+                  KeyedSubtree(
+                    key: RegisterPage.passwordRequirementsKey,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _passwordController,
+                      builder:
+                          (BuildContext context, TextEditingValue value, _) {
+                            return _PasswordRequirements(password: value.text);
+                          },
+                    ),
                   ),
                   const SizedBox(height: 12.0),
                   _authField(
@@ -1408,4 +1421,166 @@ Widget _authField({
 
 String? _required(String? value, String message) {
   return value == null || value.trim().isEmpty ? message : null;
+}
+
+String? _passwordValidationMessage(String? value, AuthCopy copy) {
+  final String password = value ?? '';
+  if (password.trim().isEmpty) {
+    return copy.passwordRequired;
+  }
+  for (final _PasswordRequirement requirement in _passwordRequirements(
+    password,
+    copy,
+  )) {
+    if (!requirement.isMet) {
+      return requirement.message;
+    }
+  }
+  return null;
+}
+
+List<_PasswordRequirement> _passwordRequirements(
+  String password,
+  AuthCopy copy,
+) {
+  return <_PasswordRequirement>[
+    _PasswordRequirement(
+      message: copy.passwordMinLength,
+      isMet: password.length >= 8,
+    ),
+    _PasswordRequirement(
+      message: copy.passwordUppercase,
+      isMet: RegExp(r'[A-Z]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordLowercase,
+      isMet: RegExp(r'[a-z]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordNumber,
+      isMet: RegExp(r'[0-9]').hasMatch(password),
+    ),
+    _PasswordRequirement(
+      message: copy.passwordSpecialCharacter,
+      isMet: RegExp(r'[^A-Za-z0-9\s]').hasMatch(password),
+    ),
+  ];
+}
+
+final class _PasswordRequirement {
+  const _PasswordRequirement({required this.message, required this.isMet});
+
+  final String message;
+  final bool isMet;
+}
+
+final class _PasswordRequirements extends StatelessWidget {
+  const _PasswordRequirements({required this.password});
+
+  final String password;
+
+  @override
+  Widget build(BuildContext context) {
+    final AuthCopy copy = AuthCopy.of(context);
+    final List<_PasswordRequirement> requirements = _passwordRequirements(
+      password,
+      copy,
+    );
+    final bool allMet = requirements.every(
+      (_PasswordRequirement requirement) => requirement.isMet,
+    );
+    return AnimatedSize(
+      duration: NoteFlowMotion.standard,
+      curve: Curves.easeOut,
+      child: AnimatedSwitcher(
+        duration: NoteFlowMotion.fast,
+        child: password.isEmpty
+            ? const SizedBox.shrink(key: ValueKey<String>('password-empty'))
+            : allMet
+            ? _passwordSuccess(context, copy.passwordValid)
+            : Padding(
+                key: const ValueKey<String>('password-missing'),
+                padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: requirements
+                      .map(
+                        (_PasswordRequirement requirement) =>
+                            _animatedRequirement(context, requirement),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _passwordSuccess(BuildContext context, String message) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return Semantics(
+      key: const ValueKey<String>('password-valid'),
+      container: true,
+      label: message,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.only(top: NoteFlowSpacing.sm),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.check_circle_outline, size: 16, color: tokens.success),
+              const SizedBox(width: NoteFlowSpacing.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: tokens.success),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _animatedRequirement(
+    BuildContext context,
+    _PasswordRequirement requirement,
+  ) {
+    return AnimatedSize(
+      duration: NoteFlowMotion.standard,
+      curve: Curves.easeOut,
+      child: AnimatedSwitcher(
+        duration: NoteFlowMotion.fast,
+        child: requirement.isMet
+            ? const SizedBox.shrink(key: ValueKey<String>('met'))
+            : _requirement(context, requirement.message),
+      ),
+    );
+  }
+
+  Widget _requirement(BuildContext context, String message) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return Semantics(
+      label: message,
+      container: true,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: NoteFlowSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.error_outline, size: 16, color: tokens.error),
+              const SizedBox(width: NoteFlowSpacing.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: tokens.error),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

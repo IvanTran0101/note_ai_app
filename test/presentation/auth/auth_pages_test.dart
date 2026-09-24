@@ -186,11 +186,11 @@ void main() {
       );
       await tester.enterText(
         find.byKey(RegisterPage.passwordFieldKey),
-        'existing-password',
+        'Existing1!',
       );
       await tester.enterText(
         find.byKey(RegisterPage.confirmPasswordFieldKey),
-        'existing-password',
+        'Existing1!',
       );
       await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
       await tester.pumpAndSettle();
@@ -200,8 +200,8 @@ void main() {
       expect(service.registerCalls, 1);
       expect(service.lastRegisterInput?.email, 'user@example.com');
       expect(service.lastRegisterInput?.displayName, 'User');
-      expect(service.lastRegisterInput?.password, 'existing-password');
-      expect(service.lastRegisterInput?.confirmPassword, 'existing-password');
+      expect(service.lastRegisterInput?.password, 'Existing1!');
+      expect(service.lastRegisterInput?.confirmPassword, 'Existing1!');
     },
   );
 
@@ -487,11 +487,11 @@ void main() {
     );
     await tester.enterText(
       find.byKey(RegisterPage.passwordFieldKey),
-      'password-1',
+      'Password-1!',
     );
     await tester.enterText(
       find.byKey(RegisterPage.confirmPasswordFieldKey),
-      'password-2',
+      'Password-2!',
     );
     await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
     await tester.pumpAndSettle();
@@ -500,6 +500,163 @@ void main() {
 
     expect(find.text('Passwords do not match.'), findsOneWidget);
   });
+
+  testWidgets('register shows only unmet password requirements as it changes', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthenticationAppService service =
+        _FakeAuthenticationAppService();
+    final AuthController controller = AuthController(
+      authenticationAppService: service,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: RegisterPage(controller: controller)),
+    );
+    await _advanceRegistrationToDetails(tester);
+
+    expect(find.byKey(RegisterPage.passwordRequirementsKey), findsOneWidget);
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsNothing,
+    );
+
+    await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain an uppercase letter.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain a lowercase letter.'),
+      findsNothing,
+    );
+    expect(find.text('Password must contain a number.'), findsOneWidget);
+    expect(
+      find.text('Password must contain a special character.'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Password must contain an uppercase letter.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(RegisterPage.passwordFieldKey),
+      'Abcdefg1',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Password must contain at least 8 characters.'),
+      findsNothing,
+    );
+    expect(
+      find.text('Password must contain an uppercase letter.'),
+      findsNothing,
+    );
+    expect(
+      find.text('Password must contain a lowercase letter.'),
+      findsNothing,
+    );
+    expect(find.text('Password must contain a number.'), findsNothing);
+    expect(
+      find.text('Password must contain a special character.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(RegisterPage.passwordFieldKey),
+      'Abcdefg1!',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Password meets all requirements.'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Password meets all requirements.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Password must contain a special character.'),
+      findsNothing,
+    );
+    expect(service.registerCalls, 0);
+  });
+
+  testWidgets('register password guidance follows the selected locale', (
+    WidgetTester tester,
+  ) async {
+    final AuthController controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('vi'),
+        supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          AuthCopy.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await _advanceRegistrationToDetails(tester);
+    await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mật khẩu phải có ít nhất 8 ký tự.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ hoa.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ số.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ký tự đặc biệt.'), findsOneWidget);
+    expect(find.text('Mật khẩu phải có ít nhất một chữ thường.'), findsNothing);
+  });
+
+  testWidgets(
+    'register does not submit while password requirements are missing',
+    (WidgetTester tester) async {
+      final _FakeAuthenticationAppService service =
+          _FakeAuthenticationAppService();
+      final AuthController controller = AuthController(
+        authenticationAppService: service,
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(home: RegisterPage(controller: controller)),
+      );
+      await _advanceRegistrationToDetails(tester);
+      await tester.enterText(
+        find.byKey(RegisterPage.displayNameFieldKey),
+        'User',
+      );
+      await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+      await tester.enterText(
+        find.byKey(RegisterPage.confirmPasswordFieldKey),
+        'abc',
+      );
+      await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(RegisterPage.submitKey));
+      await tester.pumpAndSettle();
+
+      expect(service.registerCalls, 0);
+      expect(
+        find.text('Password must contain at least 8 characters.'),
+        findsWidgets,
+      );
+      expect(
+        find.text('Password must contain an uppercase letter.'),
+        findsWidgets,
+      );
+    },
+  );
 
   testWidgets('forgot-password page exposes email and reset action', (
     WidgetTester tester,
@@ -578,6 +735,15 @@ const AuthUserDto verifiedUser = AuthUserDto(
   email: 'user@example.com',
   isEmailVerified: true,
 );
+
+Future<void> _advanceRegistrationToDetails(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(RegisterPage.emailFieldKey),
+    'user@example.com',
+  );
+  await tester.tap(find.byKey(RegisterPage.submitKey));
+  await tester.pumpAndSettle();
+}
 
 final class _FakeAuthenticationAppService implements IAuthenticationAppService {
   int loginCalls = 0;
