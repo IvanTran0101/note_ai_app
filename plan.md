@@ -257,13 +257,17 @@ Repo hiện có `android/`, `ios/`, `web/`, `macos/`; không có `windows/` ho�
 | --- | --- | --- |
 | Android phone nhỏ | `360×800` | compact, drawer/sheet, bàn phím không che title/content, back gesture không mất dirty state. |
 | Android phone phổ biến | `412×915` | compact page/editor, action bar chạm được bằng một tay. |
+| Android tablet portrait | `768×1024` | medium rail và Notes surface toàn vùng nội dung; kiểm tra system bars, resize và landscape handoff. |
+| Android tablet landscape | `1024×768` | expanded navigation + một Notes surface; menu/dialog không bị cắt. |
 | iPhone SE | `375×667` | compact, safe area, text không overflow, scroll tới Summarize/action row; trạng thái autosave rõ và không thêm manual Save. |
 | iPhone hiện đại | `393×852` | compact, dynamic text cỡ lớn không vỡ layout. |
 | iPad portrait | `768×1024` | medium rail; Notes list hoặc editor dùng toàn vùng nội dung, detail có gutter. |
 | iPad landscape | `1024×1366` | expanded sidebar + một Notes surface tại một thời điểm, menu không bị cắt. |
-| Web Chrome | `1280×800`, `1440×900` | sidebar mở/thu gọn, hover/focus, keyboard shortcuts và resize liên tục. |
-| Web narrow | `390×844` | cùng compact contract với phone. |
+| Web Chrome và Edge | `1280×800`, `1440×900` | sidebar mở/thu gọn, hover/focus, keyboard và resize; chấm từng browser engine rồi lấy điểm thấp hơn làm điểm Web. |
+| Web Chrome và Edge narrow | `390×844`; kiểm tra thêm `567×694` | cùng compact contract; đo title anchor tại cả hai mốc và kiểm tra interpolation giữa chúng. |
 | macOS | `1440×900` | pointer/hover, menu keyboard, sidebar và dialog theo desktop. |
+
+`android/`, `ios/`, `web/`, `macos/` là các target được chấm. Windows có thể xuất hiện trong `flutter devices` như host, nhưng không phải target của repo khi `windows/` runner không tồn tại. Android tablet và iPad được chấm riêng dù dùng breakpoint chung. Chrome/Edge là hai runtime của cùng platform Web; platform score lấy mức thấp hơn.
 
 ---
 
@@ -475,7 +479,7 @@ Chạy lại cùng một workflow trên tất cả target có trong repo:
 5. Sidebar open/closed, destination switch, More menu, delete/back confirmation, appearance settings.
 6. Splash/session restore, email-verification banner và diagnostics/model provisioning: loading/ready/error/retry/cancel.
 7. Dark/light và EN/VI.
-8. Rotate/resize hoặc viewport tương đương mobile/tablet/desktop.
+8. Rotate/resize hoặc viewport tương đương mobile/tablet/desktop; Android tablet và iPad được kiểm tra riêng, Web chạy trên cả Chrome và Edge.
 
 Mỗi state phải có screenshot baseline/reference, screenshot implementation và ghi chú sai lệch. Không chấp nhận screenshot chỉ khác vì đã scroll sai vị trí.
 
@@ -518,6 +522,14 @@ Chấm ở từng viewport và lấy điểm thấp nhất của từng nhóm; k
 | Accessibility/localization | 5 | Semantics, focus, contrast, EN/VI, text scale và keyboard pass. |
 | Regression behavior | 5 | Save/delete/summarize/search/auth/route callback vẫn hoạt động đúng trên target mà baseline hỗ trợ; target vốn không hỗ trợ một capability phải thể hiện limitation rõ và không giả thành công. |
 | **Tổng** | **100** | **Release chỉ khi `>= 95` và không có critical fail.** |
+
+Quy tắc ghi điểm:
+
+- Chấm từng cặp `target/browser + viewport + screen/state` theo 8 nhóm trên. Mỗi nhóm chỉ nhận điểm dựa trên reference và current-source capture cùng viewport, theme, locale, data state và scroll position.
+- `N/A` chỉ dùng cho Notion capability không có trong NoteFlow contract (ví dụ OAuth provider hoặc Share/Publish chưa có callback); loại đúng tiêu chí đó khỏi mẫu số rồi chuẩn hóa phần còn lại về thang 100. Không render control giả để lấy điểm.
+- `UNVERIFIED` dùng cho capability NoteFlow có hỗ trợ nhưng chưa có runner, thiết bị, capture hoặc cặp reference tương ứng. Không được loại khỏi mẫu số. Khi còn `UNVERIFIED`, cell/platform score là `N/C` (chưa đủ bằng chứng), không được suy ra đã đạt 95.
+- Platform score là điểm thấp nhất trong các cell bắt buộc của platform; chỉ công bố numeric platform score khi toàn bộ cell áp dụng đều được chấm. Overall score là mức thấp nhất trong các platform score, không lấy trung bình.
+- Có thể ghi riêng kết quả một anchor hoặc tranche (ví dụ `PASS ±4px`) nhưng không gọi đó là điểm toàn màn hình hay điểm platform.
 
 ### 6.1 Critical fail — điểm tổng không được dùng để bỏ qua
 
@@ -1010,12 +1022,12 @@ pairs and the app-wide score remain open; no `>=95/100` score is assigned.
 | 3. Shell/sidebar | Release Web captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. Captures 133–134 verify the revised compact header and navigation sheet on Android 15/API 35; `workspace_shell_test.dart` passes 19/19, including each moved action's existing callback. Shared row focus tests pass 9/9. | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels visually, test Android navigation/back and run Apple device checks; no Favorites/profile/workspace-switching controls |
 | 4. Dashboard/Recents | Capture 154 records current Web Home at 390×844 dark with the existing storage limitation; its title glyph begins x≈99/y≈213 versus the live Notion title block at x=96/y=212. Compact anchor widget test added; Dashboard tests pass 40/40, including narrow/text-scale cases. Existing Android captures 142 and 146–147 are from the prior source and cover workflow, not this layout. Grid, loading, search, selected states, equivalent Home data state and broader same-state pairs remain open. | `PARTIAL` | Capture remaining actual states on supported targets, pair equivalent Home states with Notion at matching viewports, and score every required anchor |
 | 5. Notes list/detail frame | Notes workspace app bar no longer repeats the shell brand; a static list skeleton preserves the loading live region. The shared compact page inset is x=96 at 390dp and tapers on narrow screens. `notes_workspace_page_test.dart` still covers loading at 320/360/390/768/1280dp, Notes header, compact/detail/back, create flow, error/retry and dirty-state cases. Current-source loaded/list/loading/error runtime captures and a matched Notion list pair are still missing. | `IN_PROGRESS` | Capture current loaded/selected/loading/error states with controlled data and pair them against Notion; verify compact dirty-back and destination retention on native runtime |
-| 6. Page editor | 720px title block, 708px body-text width, 112px desktop content inset; compact editor title typography is 40dp. Current Web capture 155 at 390×844 places title ink at x=96/y=157 versus Notion x=96/y=212 (55px high); Android capture 156 is x≈96.8/y≈214.9dp at 411×914, not a matched viewport pair. Surface tests pass 25/25; current Web and Android editor runtime captures exist. | `IN_PROGRESS` | Correct and recheck the compact Web vertical anchor; capture desktop, keyboard, save/error/summary states and same-size Notion pairs; complete visual review |
+| 6. Page editor | Compact title typography is 40dp. Historical Web capture 155 is superseded at the two compact anchors by current Chrome/Edge captures 157–160: title glyph bounds x=104/y=225–256 at 390×844 and x=104/y=169–200 at 567×694, DPR 1. The 567px glyph matches the live Notion observation; the 390px glyph y≈225 is inferred from its measured x=96/y=212 title box and the observed 13px glyph offset. Android capture 156 remains a blank editor at 411×914 logical, not a matched pair. Full presentation suite passes 213/213. | `IN_PROGRESS` | Capture desktop, keyboard, save/error/summary states and exact same-state Notion pairs; complete visual review |
 | 7. Menus/overlays/status | More is anchored at ≥600dp and uses a bottom sheet below 600dp. Delete/dirty-back surfaces and callbacks have widget coverage; current-source Android captures 149–150 show the existing More → Delete sheet and “Delete note?” confirmation while removing only the temporary QA note. Full overlay/theme and paired visual states remain unverified. | `PARTIAL` | Capture same-state menu/dialog pairs and verify focus, keyboard, barrier/system-back behavior on supported targets |
 | 8. Auth UI | Captures 138–141 are fresh system-font Web Register/Login email states at 390×844 and 1280×800, paired with public Notion refs 111–114. Register CTA bounds align at y=375–414 mobile and y=396–435 desktop after increasing the auth-only minimum to 48dp. Login is within 1px on mobile and 5px above Notion on desktop; its desktop heading/fields begin about 8–10px early. Unsupported provider/legal controls remain absent. The earlier widget-derived y=108–112 heading claim is superseded. Auth suites pass 34/34 and the full presentation suite passes 209/209 after the responsive spacing edit. | `IN_PROGRESS` | Capture Login and Register details plus supported validation/busy/error/success/change-password states; finish accessibility/localization checks and supported-state pairs |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; Android API 35 capture 127 visually confirms the Login brand and heading remain separated at system font scale 2.0; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets; shared sidebar row Tab focus/blur is verified in light and dark themes | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
-| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows/Linux runner folders. Available checks include Web 390×844 and Android 15/API 35 x64 at 411×914 logical; captures 155–156 are current blank-editor states. Web retains its storage limitation and its editor title is 55px above the measured Notion phone anchor. No `xcodebuild`/Apple runner or physical Android device is available here; list/menu/Home pairs and other target states remain open. | `PARTIAL` | Correct and pair the Web editor; capture current Home/list/menus on available targets; verify tablet/rotation/accessibility; run iOS/macOS checks on an Apple runner |
-| 11. Regression/build/handoff | This tranche's note-detail tests pass 25/25 and the full `test/presentation` suite passes 212/212 with the temporary test-only package-root shim; `.dart_tool/package_config.json` is restored. Targeted analysis, formatting and diff check pass; Web and Android x64 local-auth release builds pass. The Android APK was installed temporarily for a blank-editor screenshot; the original Cognito APK and both generated APK outputs were restored byte-for-byte, and app data was not cleared. Broad `flutter analyze` final output was not captured; full repository tests/runtime were not rerun. Apple checks remain unavailable here. | `IN_PROGRESS` | Continue UI tranches; fix the Web editor anchor, complete matched visual review and audit the allowlisted diff before each push |
+| 10. Device visual QA | Repo targets are Android/iOS/Web/macOS; there are no Windows/Linux runners. Current Web Chrome and Edge captures 157–160 verify the blank-editor title anchor at 390×844 and 567×694, DPR 1. Android capture 156 is a blank editor at 411×914 logical. The Web storage limitation remains visible. No Apple runner or physical Android device is available here; tablet/rotation, other screens and same-state workflow pairs remain open. | `PARTIAL` | Capture current Home/list/menus on available targets; verify tablet/rotation/accessibility; run iOS/macOS checks on an Apple runner |
+| 11. Regression/build/handoff | The full `test/presentation` suite passes 213/213 using the temporary test-only package-root shim; `.dart_tool/package_config.json` is restored to its original SHA-256. Targeted analysis passed and the current Web local-auth release build succeeded in 203.1s. Chrome/Edge compact editor captures verify both required title anchors. Broad repository analysis/tests, the remaining runtime matrix and Apple checks are still open. | `IN_PROGRESS` | Continue UI tranches; capture matched visual states and audit the allowlisted diff before each push |
 
 ---
 
@@ -1041,3 +1053,23 @@ Kế hoạch chỉ được đánh dấu hoàn tất khi tất cả điều ki�
 - [ ] Không có critical fail, overflow, mất focus, mất dirty state hoặc CTA bị che.
 - [ ] `dart format`, `flutter analyze`, presentation/auth tests và build target phù hợp đã chạy; output được ghi lại.
 - [ ] Diff cuối cùng đã được review theo allowlist và từng step có thể rollback độc lập.
+
+---
+
+## 10. Per-platform scorecard — 2026-09-24
+
+`N/C` means required evidence is incomplete; it is not a numeric score and does
+not imply a pass. The editor-anchor result below is a tranche result only.
+
+| Platform/runtime | Evidence in this tranche | Current status | Remaining evidence before numeric scoring |
+| --- | --- | --- | --- |
+| Android | Existing API 35 phone workflow captures 142–153; blank editor at 411×914 logical in 156 | `N/C` | Exact matched reference states; tablet portrait/landscape; other screens, themes, accessibility and full workflow matrix |
+| iOS | No Apple runtime available on this host | `UNVERIFIED` | iPhone and iPad required viewport, workflow and visual captures |
+| Web — Chrome | Blank-editor title glyph anchor passes at 390×844 and 567×694 in 157–158 | `N/C` | Desktop and all other screens/states; matched Notion pairs; keyboard, loading/error/summary, theme, locale and accessibility checks |
+| Web — Edge | Blank-editor title glyph anchor passes at 390×844 and 567×694 in 159–160 | `N/C` | Same remaining Web matrix as Chrome; platform Web score is the lower browser score |
+| macOS | No Apple runtime available on this host | `UNVERIFIED` | Desktop workflow and visual captures on macOS |
+| **Overall** | Required platform and workflow cells are incomplete | **`N/C` — 95% is not established** | Complete all applicable platform cells, then score using §6; keep unsupported capabilities `N/A` only when NoteFlow has no corresponding contract/callback |
+
+Unsupported Notion-only controls are excluded from the denominator only where
+the existing NoteFlow contract does not support that capability. Supported but
+uncaptured states stay `UNVERIFIED` and block a numeric score.

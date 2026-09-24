@@ -131,8 +131,12 @@ entered, so no note was persisted. Other screenshots remain from the
 | `152-noteflow-baseline-apk-after-restore-android15-api35-current-20260924.png` | Original Cognito APK restored; Login screen visible | 1080×2400 | light |
 | `153-noteflow-editor-title-40-android15-api35-current-20260924.png` | Current-source Android editor with 40dp title typography | 1080×2400 | light |
 | `154-noteflow-home-storage-unavailable-390x844-dark-current.png` | Current-source Web Home with the existing storage limitation | 390×844 | dark |
-| `155-noteflow-editor-390x844-current.png` | Current-source Web blank editor; title anchor is 55px above the measured Notion phone anchor | 390×844 | light |
+| `155-noteflow-editor-390x844-current.png` | Historical pre-adjustment Web blank editor; title anchor miss is superseded by captures 157–160 | 390×844 | light |
 | `156-noteflow-editor-title-anchor-android15-api35-current-20260924.png` | Current-source Android blank editor; title anchor measured at x≈96.8/y≈214.9dp in a 411×914 logical viewport | 1080×2400 | light |
+| `157-noteflow-editor-glyph-anchor-390x844-chrome-dpr1-current-20260924.png` | Current-source blank Web editor; Chrome, local-auth QA build, DPR 1 | 390×844 | light |
+| `158-noteflow-editor-glyph-anchor-567x694-chrome-dpr1-current-20260924.png` | Same blank editor and build; Chrome, DPR 1 | 567×694 | light |
+| `159-noteflow-editor-glyph-anchor-390x844-edge-dpr1-current-20260924.png` | Same blank editor and build; Microsoft Edge, DPR 1 | 390×844 | light |
+| `160-noteflow-editor-glyph-anchor-567x694-edge-dpr1-current-20260924.png` | Same blank editor and build; Microsoft Edge, DPR 1 | 567×694 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -1001,3 +1005,26 @@ screenshots are in “Platform-font Register recapture” below.
 - The overall visual score remains unassigned. The app-wide `>=95/100` gate is
   not met or claimed; the Web anchor miss, matched data states, other workflows,
   and Apple runtime checks remain open.
+
+## Compact editor glyph-anchor correction — 2026-09-24
+
+- Captures `157`–`160` use the current Web release build with the existing
+  `NOTEFLOW_AUTH_MODE=local` preview mode. They show a blank New note and the
+  existing “Saving unavailable on Web” state. No title/body text was entered,
+  and no save or backend write was triggered.
+- Playwright verified DPR 1 and exact CSS/Flutter-view sizes at 390×844 and
+  567×694 in both Chrome and Microsoft Edge. Pixel bounds of the title glyphs
+  are x=104, y=225–256 at 390×844 and x=104, y=169–200 at 567×694 in all four
+  captures. At 567px the live Notion glyph was observed near x=104/y=169
+  against a title box at x=96/y=156. At 390px the live title box is
+  x=96/y=212; expected glyph y≈225 applies the observed 13px glyph-to-linebox
+  offset, so that part is an inference. The live Notion page itself was not
+  captured or saved.
+- The previous Web miss in capture `155` is superseded for these two compact
+  editor anchors only. Desktop/editor states, keyboard behavior, save/error/
+  summary states, equivalent content-state comparisons, other screens and Apple
+  runtime checks remain unscored; overall is still `N/C`, not 95/100.
+- `test/presentation` passes 213/213 with the temporary test-only package-root
+  shim and `.dart_tool/package_config.json` restored to its original SHA-256.
+  Targeted analysis reported no issues. The current local-auth Web release build
+  passes; no backend or application contract was changed.

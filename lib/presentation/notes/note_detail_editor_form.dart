@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
@@ -70,6 +71,12 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
+    final bool compactWeb =
+        kIsWeb &&
+        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+    final double titleLeadingInset = compactWeb
+        ? NoteFlowLayout.compactWebEditorTitleLeadingInset
+        : 0;
     const double titleFontSize = 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -101,8 +108,11 @@ final class NoteDetailEditorForm extends StatelessWidget {
             focusedBorder: InputBorder.none,
             errorBorder: InputBorder.none,
             focusedErrorBorder: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: NoteFlowSpacing.sm,
+            contentPadding: EdgeInsets.fromLTRB(
+              titleLeadingInset,
+              NoteFlowSpacing.sm,
+              0,
+              NoteFlowSpacing.sm,
             ),
           ),
         ),

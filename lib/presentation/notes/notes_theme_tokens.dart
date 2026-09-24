@@ -88,6 +88,11 @@ abstract final class NoteFlowLayout {
   /// The toolbar is already part of [NoteDetailSurface]; counting it again
   /// here pushed the title 60dp below the measured Notion page-title anchor.
   static const double compactEditorTopPadding = 56;
+  static const double compactWebEditorPhoneAnchorWidth = 390;
+  static const double compactWebEditorWideAnchorWidth = 567;
+  static const double compactWebEditorPhoneTitleGlyphAdjustment = 68;
+  static const double compactWebEditorWideTitleGlyphAdjustment = 12;
+  static const double compactWebEditorTitleLeadingInset = 8;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
   static const double dashboardContentMaxWidth = 768;
@@ -114,6 +119,25 @@ abstract final class NoteFlowLayout {
       (compactEditorTopPadding - MediaQuery.viewPaddingOf(context).top)
           .clamp(0.0, double.infinity)
           .toDouble();
+
+  /// Interpolates the Web-only compact editor offset between the 390px
+  /// Notion title-block reference (with its glyph offset inferred from the
+  /// 567px observation) and the measured 567px title glyph. Native targets
+  /// retain their system safe-area layout and do not use this adjustment.
+  static double compactWebEditorTopAdjustmentFor(double viewportWidth) {
+    if (viewportWidth >= compactBreakpoint) {
+      return 0;
+    }
+    final double progress =
+        ((viewportWidth - compactWebEditorPhoneAnchorWidth) /
+                (compactWebEditorWideAnchorWidth -
+                    compactWebEditorPhoneAnchorWidth))
+            .clamp(0.0, 1.0);
+    return compactWebEditorWideTitleGlyphAdjustment +
+        (compactWebEditorPhoneTitleGlyphAdjustment -
+                compactWebEditorWideTitleGlyphAdjustment) *
+            (1 - progress);
+  }
 }
 
 /// Shared spacing scale (dp). Every gap in presentation code must pick one of

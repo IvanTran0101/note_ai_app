@@ -174,6 +174,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('Web compact editor adjustment follows Notion reference anchors', () {
+    expect(
+      NoteFlowLayout.compactWebEditorTopAdjustmentFor(390),
+      NoteFlowLayout.compactWebEditorPhoneTitleGlyphAdjustment,
+    );
+    expect(
+      NoteFlowLayout.compactWebEditorTopAdjustmentFor(567),
+      NoteFlowLayout.compactWebEditorWideTitleGlyphAdjustment,
+    );
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(478.5), 40);
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(320), 68);
+    expect(NoteFlowLayout.compactWebEditorTopAdjustmentFor(840), 0);
+    expect(NoteFlowLayout.compactWebEditorTitleLeadingInset, 8);
+  });
+
   testWidgets('compact page header keeps the title at the mobile anchor', (
     WidgetTester tester,
   ) async {

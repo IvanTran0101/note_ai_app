@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../common/note_flow_primitives.dart';
@@ -117,7 +118,12 @@ final class NoteDetailSurface extends StatelessWidget {
         ? NoteFlowLayout.compactEditorMaxWidth
         : NoteFlowLayout.editorMaxWidth;
     final double editorTopPadding = compact
-        ? NoteFlowLayout.compactEditorTopInset(context)
+        ? NoteFlowLayout.compactEditorTopInset(context) +
+              (kIsWeb
+                  ? NoteFlowLayout.compactWebEditorTopAdjustmentFor(
+                      MediaQuery.sizeOf(context).width,
+                    )
+                  : 0)
         : NoteFlowLayout.editorTopPadding;
     final String pageStatus = isSaving
         ? savingLabel
