@@ -118,6 +118,17 @@ entered, so no note was persisted. Other screenshots remain from the
 | `139-noteflow-register-platform-font-1280x800-current-20260924.png` | Current system-font Web Register email step, focused blank email field | 1280×800 | light |
 | `140-noteflow-login-platform-font-390x844-current-20260924.png` | Current system-font Web Login email step, focused blank email field | 390×844 | light |
 | `141-noteflow-login-platform-font-1280x800-current-20260924.png` | Current system-font Web Login email step, focused blank email field | 1280×800 | light |
+| `142-noteflow-home-initial-android15-api35-current-20260924.png` | Current-source Android Home empty state | 1080×2400 | light |
+| `143-noteflow-editor-blank-android15-api35-current-20260924.png` | Current-source Android blank note editor | 1080×2400 | light |
+| `144-noteflow-editor-title-focus-android15-api35-current-20260924.png` | Android editor title field focused with system keyboard open | 1080×2400 | light |
+| `145-noteflow-editor-autosave-content-android15-api35-current-20260924.png` | Android title and body entered; editor reports “Note saved.” with keyboard open | 1080×2400 | light |
+| `146-noteflow-home-with-saved-qa-note-android15-api35-current-20260924.png` | Saved QA note shown in the Notes list | 1080×2400 | light |
+| `147-noteflow-relaunch-persisted-note-android15-api35-current-20260924.png` | Saved QA note remains after force-stop and relaunch | 1080×2400 | light |
+| `148-noteflow-reopened-saved-qa-note-android15-api35-current-20260924.png` | Persisted QA note reopened in the editor | 1080×2400 | light |
+| `149-noteflow-note-actions-menu-android15-api35-current-20260924.png` | Existing More → Delete bottom sheet | 1080×2400 | light |
+| `150-noteflow-delete-qa-note-confirmation-android15-api35-current-20260924.png` | Existing “Delete note?” confirmation for the QA note | 1080×2400 | light |
+| `151-noteflow-home-empty-after-qa-cleanup-android15-api35-current-20260924.png` | Home returned to “No notes yet” after QA-note deletion | 1080×2400 | light |
+| `152-noteflow-baseline-apk-after-restore-android15-api35-current-20260924.png` | Original Cognito APK restored; Login screen visible | 1080×2400 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -896,3 +907,28 @@ screenshots are in “Platform-font Register recapture” below.
   presentation suite (209/209); scoped analysis, Web release, and Android
   ARM64 release builds pass. Android visual runtime, iOS/macOS, and other Login
   states remain open. No numeric auth/app score is assigned.
+
+## Android current-source autosave and cleanup follow-up — 2026-09-24
+
+- Captures 142–151 were made on the Android 15/API 35 x86_64 AVD using a
+  temporary release APK built from checkout `b900fec` with the existing
+  `NOTEFLOW_AUTH_MODE=local` define. The existing package was updated with
+  `adb install -r`; app data was not cleared.
+- The UI flow created a synthetic QA note, showed “Note saved.”, displayed it
+  in the Notes list, retained it after force-stop/relaunch, and reopened the
+  same title and body in the editor. The note was then deleted through the
+  existing More → Delete flow; capture 151 confirms Home returned to “No notes
+  yet.” No manual Save control or backend change was introduced.
+- Captures 144–145 show the system keyboard while editing; 149–150 record the
+  existing bottom sheet and delete confirmation. These captures verify Android
+  behavior and runtime layout, not fidelity against Notion.
+- The original Cognito APK was restored and launched; capture 152 shows its
+  Login screen. The installed APK was pulled back from the AVD and its SHA-256
+  matched the backup (`5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`).
+  The prior ARM64 release artifact was also restored byte-for-byte with SHA-256
+  `349C005D2025F3CEAB09C0C79C48A4FC137A3FF99C664FB6DB2C3E9B1812C8BE`.
+- The current Home and editor still lack same-state Notion pairs. The empty
+  screens have substantial unused vertical space at this phone viewport, so
+  the workflow result does not establish a 95/100 visual score. Android
+  workflow behavior is verified for this local-auth build; iOS/macOS remain
+  unavailable on this Windows host.
