@@ -725,3 +725,38 @@ score by itself.
   same-viewport comparisons against Notion, and they do not cover Grid, loading,
   search, selected states, iOS, or macOS. The visual fidelity score remains
   **unassigned; the `>=95/100` gate is not proven**.
+
+### Compact workspace shell tranche — 2026-09-24
+
+- Starting source base: `ed2eacb` on `TuanKiet2`. Presentation-only changes in
+  `workspace_shell.dart` reduce the compact top bar to the existing menu,
+  NoteFlow identity and Search. Existing New note, Diagnostics and Settings
+  actions now live in the existing compact navigation sheet. No callback,
+  destination, route, data flow or backend code changed.
+- Captures [133](133-noteflow-android-compact-shell-1080x2400-android15-api35.png)
+  and [134](134-noteflow-android-compact-navigation-sheet-1080x2400-android15-api35.png)
+  show the compact shell and open sheet on Android 15/API 35 at 1080×2400,
+  system font scale 1.0. The sheet exposes the existing Search, New note,
+  Workspace, Home, Notes, Diagnostics and Settings actions. Visual check found
+  the compact header less crowded and the sheet readable within the safe area.
+- `dart format --output=none --set-exit-if-changed` and `git diff --check` pass.
+  Targeted `flutter analyze --no-pub` on the shell and its widget test reports
+  no issues. `workspace_shell_test.dart` passes 19/19 with the existing
+  temporary test-only `local_llm_bridge` shim, including each moved action's
+  existing callback. Without the shim, test startup fails before running tests
+  at the native hook linker (`llama-vocab.obj`, `LNK1136`). The original
+  `.dart_tool/package_config.json` was restored and its SHA-256 is
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- `flutter build apk --release --target-platform android-x64 --no-pub
+  --dart-define=NOTEFLOW_AUTH_MODE=local` passes; APK size is 35.7 MB. The APK
+  was installed on the Android 15/API 35 AVD and both captures were taken from
+  its runtime. Afterwards the pre-existing Cognito APK was restored, reinstalled
+  without clearing app data and the Login screen was verified. Its workspace
+  artifact SHA-256 matches the backup:
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
+- `flutter build web --release --no-pub
+  --dart-define=NOTEFLOW_AUTH_MODE=local` passes in 85.5s. The Web runtime still
+  displays NoteFlow's existing storage-unavailable state; this tranche does
+  not change that limitation. iOS/macOS runtime and same-state Notion visual
+  pairs remain outstanding. These captures verify this shell tranche only and
+  do not assign a numeric or app-wide fidelity score.

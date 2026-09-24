@@ -15,8 +15,8 @@ enum WorkspaceDestination { dashboard, notes }
 /// active destination to the composition root through [onDestinationChanged].
 /// Responsive behaviour is driven entirely by the incoming width:
 ///
-/// * `< 600` — a compact top bar with the workspace title and a bottom-sheet
-///   navigation menu; the active page fills the rest of the screen;
+/// * `< 600` — a compact brand/search bar and a bottom-sheet navigation menu
+///   with the remaining workspace actions; the active page fills the screen;
 /// * `600–839` — an accessible [NavigationRail] with visible labels;
 /// * `>= 840` — a Notion-inspired sidebar (hideable to a narrow reopen control)
 ///   with a workspace header, section label, active rows and a footer for the
@@ -310,33 +310,12 @@ class WorkspaceShellState extends State<WorkspaceShell> {
               ),
             ),
           ),
-          if (widget.onOpenDiagnostics != null)
-            IconButton(
-              key: WorkspaceShell.diagnosticsKey,
-              tooltip: copy.diagnostics,
-              onPressed: widget.onOpenDiagnostics,
-              icon: const Icon(Icons.bug_report_outlined, size: 20),
-            ),
           if (widget.onOpenSearch != null)
             IconButton(
               key: WorkspaceShell.compactSearchKey,
               tooltip: copy.search,
               onPressed: widget.onOpenSearch,
               icon: const Icon(Icons.search, size: 20),
-            ),
-          if (widget.onCreateNote != null)
-            IconButton(
-              key: WorkspaceShell.compactNewNoteKey,
-              tooltip: copy.newNote,
-              onPressed: widget.onCreateNote,
-              icon: const Icon(Icons.add, size: 20),
-            ),
-          if (widget.onOpenSettings != null)
-            IconButton(
-              key: WorkspaceShell.settingsKey,
-              tooltip: copy.settings,
-              onPressed: widget.onOpenSettings,
-              icon: const Icon(Icons.settings_outlined, size: 20),
             ),
         ],
       ),
@@ -371,14 +350,17 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                   },
                 ),
               if (widget.onCreateNote != null)
-                NoteFlowSidebarRow(
-                  key: WorkspaceShell.compactMenuNewNoteKey,
-                  label: copy.newNote,
-                  icon: Icons.add,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    widget.onCreateNote?.call();
-                  },
+                KeyedSubtree(
+                  key: WorkspaceShell.compactNewNoteKey,
+                  child: NoteFlowSidebarRow(
+                    key: WorkspaceShell.compactMenuNewNoteKey,
+                    label: copy.newNote,
+                    icon: Icons.add,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      widget.onCreateNote?.call();
+                    },
+                  ),
                 ),
               NoteFlowSectionLabel(label: copy.pagesSection),
               for (final WorkspaceDestination destination
@@ -394,6 +376,32 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                     showDestination(destination);
                   },
                 ),
+              if (widget.onOpenSettings != null ||
+                  widget.onOpenDiagnostics != null) ...<Widget>[
+                const Divider(height: NoteFlowSpacing.lg),
+                if (widget.onOpenDiagnostics != null)
+                  NoteFlowSidebarRow(
+                    key: WorkspaceShell.diagnosticsKey,
+                    label: copy.diagnostics,
+                    icon: Icons.bug_report_outlined,
+                    dense: true,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      widget.onOpenDiagnostics?.call();
+                    },
+                  ),
+                if (widget.onOpenSettings != null)
+                  NoteFlowSidebarRow(
+                    key: WorkspaceShell.settingsKey,
+                    label: copy.settings,
+                    icon: Icons.settings_outlined,
+                    dense: true,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      widget.onOpenSettings?.call();
+                    },
+                  ),
+              ],
             ],
           ),
         );

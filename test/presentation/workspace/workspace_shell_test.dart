@@ -406,6 +406,59 @@ void main() {
     expect(find.text('Notes page').hitTestable(), findsOneWidget);
   });
 
+  testWidgets('compact shell keeps secondary actions in navigation menu', (
+    WidgetTester tester,
+  ) async {
+    int searchCalls = 0;
+    int createCalls = 0;
+    int settingsCalls = 0;
+    int diagnosticsCalls = 0;
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      onOpenSearch: () => searchCalls++,
+      onCreateNote: () => createCalls++,
+      onOpenSettings: () => settingsCalls++,
+      onOpenDiagnostics: () => diagnosticsCalls++,
+    );
+
+    expect(find.byKey(WorkspaceShell.compactMenuKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactSearchKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactNewNoteKey), findsNothing);
+    expect(find.byKey(WorkspaceShell.settingsKey), findsNothing);
+    expect(find.byKey(WorkspaceShell.diagnosticsKey), findsNothing);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.compactMenuSearchKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactNewNoteKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.compactMenuNewNoteKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.settingsKey), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.diagnosticsKey), findsOneWidget);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuSearchKey));
+    await tester.pumpAndSettle();
+    expect(searchCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuNewNoteKey));
+    await tester.pumpAndSettle();
+    expect(createCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.diagnosticsKey));
+    await tester.pumpAndSettle();
+    expect(diagnosticsCalls, 1);
+
+    await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkspaceShell.settingsKey));
+    await tester.pumpAndSettle();
+    expect(settingsCalls, 1);
+  });
+
   testWidgets('footer settings and diagnostics fire their callbacks', (
     WidgetTester tester,
   ) async {
