@@ -13,9 +13,6 @@ final class LoginPage extends StatefulWidget {
 
   static const Key emailFieldKey = ValueKey<String>('auth-login-email');
   static const Key passwordFieldKey = ValueKey<String>('auth-login-password');
-  static const Key passwordVisibilityKey = ValueKey<String>(
-    'auth-login-password-visibility',
-  );
   static const Key submitKey = ValueKey<String>('auth-login-submit');
 
   final AuthController controller;
@@ -32,6 +29,7 @@ final class _LoginPageState extends State<LoginPage> {
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
   bool _passwordStep = false;
+  bool _passwordVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +45,7 @@ final class _LoginPageState extends State<LoginPage> {
         return _AuthFormScaffold(
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
+          desktopPanel: true,
           compactTopPadding: 38,
           desktopTopPadding: 82,
           compactBrandTitleSpacing: 34,
@@ -89,7 +88,13 @@ final class _LoginPageState extends State<LoginPage> {
                     focusNode: _passwordFocusNode,
                     label: copy.password,
                     hintText: copy.passwordHint,
-                    obscureText: true,
+                    obscureText: !_passwordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _passwordVisible,
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
                     autofillHints: const <String>[AutofillHints.password],
                     textInputAction: TextInputAction.done,
                     validator: (String? value) =>
@@ -160,14 +165,6 @@ final class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
-      final AuthCopy copy = AuthCopy.of(context);
-      if (_required(_emailController.text, copy.emailRequired) != null) {
-        _emailFocusNode.requestFocus();
-      } else if (_required(_passwordController.text, copy.passwordRequired) !=
-          null) {
-        _passwordFocusNode.requestFocus();
-        setState(() => _passwordShakeTrigger++);
-      }
       return;
     }
     try {
@@ -179,11 +176,6 @@ final class _LoginPageState extends State<LoginPage> {
       );
     } on Object {
       // The controller publishes a safe error for the form to render.
-      if (mounted &&
-          widget.controller.state.error?.code ==
-              AuthPresentationErrorCode.invalidCredentials) {
-        setState(() => _passwordShakeTrigger++);
-      }
     }
   }
 
@@ -230,12 +222,6 @@ final class RegisterPage extends StatefulWidget {
   static const Key confirmPasswordFieldKey = ValueKey<String>(
     'auth-register-confirm-password',
   );
-  static const Key passwordVisibilityKey = ValueKey<String>(
-    'auth-register-password-visibility',
-  );
-  static const Key confirmPasswordVisibilityKey = ValueKey<String>(
-    'auth-register-confirm-password-visibility',
-  );
   static const Key submitKey = ValueKey<String>('auth-register-submit');
 
   final AuthController controller;
@@ -255,6 +241,8 @@ final class _RegisterPageState extends State<RegisterPage> {
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _displayNameFocusNode = FocusNode();
   bool _detailsStep = false;
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -352,7 +340,13 @@ final class _RegisterPageState extends State<RegisterPage> {
                     controller: _passwordController,
                     label: copy.password,
                     hintText: copy.passwordHint,
-                    obscureText: true,
+                    obscureText: !_passwordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _passwordVisible,
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
                     textInputAction: TextInputAction.next,
                     autofillHints: const <String>[AutofillHints.newPassword],
                     validator: (String? value) =>
@@ -374,7 +368,15 @@ final class _RegisterPageState extends State<RegisterPage> {
                     controller: _confirmPasswordController,
                     label: copy.confirmPassword,
                     hintText: copy.confirmPasswordHint,
-                    obscureText: true,
+                    obscureText: !_confirmPasswordVisible,
+                    suffixIcon: _passwordVisibilityButton(
+                      context,
+                      visible: _confirmPasswordVisible,
+                      onPressed: () => setState(
+                        () =>
+                            _confirmPasswordVisible = !_confirmPasswordVisible,
+                      ),
+                    ),
                     textInputAction: TextInputAction.done,
                     autofillHints: const <String>[AutofillHints.newPassword],
                     validator: (String? value) {
@@ -441,37 +443,6 @@ final class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
-      final AuthCopy copy = AuthCopy.of(context);
-      final bool displayNameInvalid =
-          _required(_displayNameController.text, copy.displayNameRequired) !=
-          null;
-      final bool emailInvalid =
-          _required(_emailController.text, copy.emailRequired) != null;
-      final bool passwordInvalid =
-          _passwordValidationMessage(_passwordController.text, copy) != null;
-      final bool confirmationInvalid =
-          _required(_confirmPasswordController.text, copy.passwordRequired) !=
-              null ||
-          _confirmPasswordController.text != _passwordController.text;
-      if (displayNameInvalid) {
-        _displayNameFocusNode.requestFocus();
-      } else if (emailInvalid) {
-        _emailFocusNode.requestFocus();
-      } else if (passwordInvalid) {
-        _passwordFocusNode.requestFocus();
-      } else if (confirmationInvalid) {
-        _confirmPasswordFocusNode.requestFocus();
-      }
-      if (passwordInvalid || confirmationInvalid) {
-        setState(() {
-          if (passwordInvalid) {
-            _passwordShakeTrigger++;
-          }
-          if (confirmationInvalid) {
-            _confirmPasswordShakeTrigger++;
-          }
-        });
-      }
       return;
     }
     try {
@@ -485,11 +456,6 @@ final class _RegisterPageState extends State<RegisterPage> {
       );
     } on Object {
       // The controller publishes a safe error for the form to render.
-      if (mounted &&
-          widget.controller.state.error?.code ==
-              AuthPresentationErrorCode.passwordRejected) {
-        setState(() => _passwordShakeTrigger++);
-      }
     }
   }
 
@@ -549,6 +515,7 @@ final class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         return _AuthFormScaffold(
           title: copy.forgotTitle,
           subtitle: copy.forgotSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -663,6 +630,7 @@ final class _ResetPasswordPageState extends State<ResetPasswordPage> {
         return _AuthFormScaffold(
           title: copy.resetTitle,
           subtitle: copy.resetSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -948,6 +916,7 @@ final class _ChangePasswordPageState extends State<ChangePasswordPage> {
         return _AuthFormScaffold(
           title: copy.changePassword,
           subtitle: copy.changePasswordSubtitle,
+          desktopPanel: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -1422,12 +1391,14 @@ Widget _authSubmitButton({
   );
 }
 
-Widget _passwordActions({
+Widget _authField({
+  required Key key,
   required TextEditingController controller,
   required String label,
   String? hintText,
   required String? Function(String?) validator,
   bool obscureText = false,
+  Widget? suffixIcon,
   bool readOnly = false,
   TextInputType? keyboardType,
   TextInputAction? textInputAction,
@@ -1435,17 +1406,23 @@ Widget _passwordActions({
   ValueChanged<String>? onFieldSubmitted,
   FocusNode? focusNode,
 }) {
-  return ValueListenableBuilder<TextEditingValue>(
-    valueListenable: controller,
-    builder: (BuildContext context, TextEditingValue value, _) {
-      return Row(
+  return Builder(
+    builder: (BuildContext context) {
+      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (value.text.isNotEmpty)
-            IconButton(
-              tooltip: copy.clearPassword,
-              onPressed: onClear,
-              icon: const Icon(Icons.clear_outlined),
+          Padding(
+            padding: const EdgeInsets.only(bottom: NoteFlowSpacing.sm),
+            child: ExcludeSemantics(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ),
           Semantics(
@@ -1454,7 +1431,10 @@ Widget _passwordActions({
               key: key,
               controller: controller,
               focusNode: focusNode,
-              decoration: InputDecoration(hintText: hintText),
+              decoration: InputDecoration(
+                hintText: hintText,
+                suffixIcon: suffixIcon,
+              ),
               obscureText: obscureText,
               readOnly: readOnly,
               keyboardType: keyboardType,
@@ -1470,62 +1450,17 @@ Widget _passwordActions({
   );
 }
 
-Widget _authField({
-  required Key key,
-  required TextEditingController controller,
-  required String label,
-  String? hintText,
-  required String? Function(String?) validator,
-  bool obscureText = false,
-  Widget? suffixIcon,
-  int shakeTrigger = 0,
-  FocusNode? focusNode,
-  TextInputType? keyboardType,
-  TextInputAction? textInputAction,
-  Iterable<String>? autofillHints,
-  ValueChanged<String>? onFieldSubmitted,
+Widget _passwordVisibilityButton(
+  BuildContext context, {
+  required bool visible,
+  required VoidCallback onPressed,
 }) {
-  return _ShakeOnTrigger(
-    trigger: shakeTrigger,
-    child: Builder(
-      builder: (BuildContext context) {
-        final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(bottom: NoteFlowSpacing.sm),
-              child: ExcludeSemantics(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-            Semantics(
-              label: label,
-              child: TextFormField(
-                key: key,
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  suffixIcon: suffixIcon,
-                ),
-                obscureText: obscureText,
-                focusNode: focusNode,
-                keyboardType: keyboardType,
-                textInputAction: textInputAction,
-                autofillHints: autofillHints,
-                validator: validator,
-              ),
-            ),
-          ],
-        );
-      },
+  final AuthCopy copy = AuthCopy.of(context);
+  return IconButton(
+    tooltip: visible ? copy.hidePassword : copy.showPassword,
+    onPressed: onPressed,
+    icon: Icon(
+      visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
     ),
   );
 }

@@ -32,6 +32,7 @@ class WorkspaceShell extends StatefulWidget {
     this.onCreateNote,
     this.onOpenSettings,
     this.onOpenDiagnostics,
+    this.accountName,
   });
 
   /// Width below which navigation chrome is hidden (compact). Inclusive lower
@@ -91,6 +92,15 @@ class WorkspaceShell extends StatefulWidget {
   static const Key compactNewNoteKey = ValueKey<String>(
     'workspace-compact-new-note',
   );
+  static const Key compactFabNewNoteKey = ValueKey<String>(
+    'workspace-compact-fab-new-note',
+  );
+  static const Key compactBottomNavigationKey = ValueKey<String>(
+    'workspace-compact-bottom-navigation',
+  );
+  static const Key compactBrandKey = ValueKey<String>(
+    'workspace-compact-brand-home',
+  );
   static const Key compactMenuSearchKey = ValueKey<String>(
     'workspace-compact-menu-search',
   );
@@ -100,6 +110,11 @@ class WorkspaceShell extends StatefulWidget {
 
   /// Compact top-bar button opening the bottom-sheet navigation menu.
   static const Key compactMenuKey = ValueKey<String>('workspace-compact-menu');
+
+  /// Stable key for the compact account/avatar control.
+  static const Key compactAvatarKey = ValueKey<String>(
+    'workspace-compact-avatar',
+  );
 
   /// Footer/compact settings action.
   static const Key settingsKey = ValueKey<String>('workspace-open-settings');
@@ -141,6 +156,10 @@ class WorkspaceShell extends StatefulWidget {
   /// Optional local-AI diagnostics action for the navigation footer.
   final VoidCallback? onOpenDiagnostics;
 
+  /// Display name used for the compact avatar initial. Email/local identity
+  /// may be supplied by the composition root when no profile image exists.
+  final String? accountName;
+
   @override
   WorkspaceShellState createState() => WorkspaceShellState();
 }
@@ -150,9 +169,17 @@ class WorkspaceShell extends StatefulWidget {
 /// Exposed so a composition root can hold a `GlobalKey<WorkspaceShellState>`
 /// and call [showDestination] after an action elsewhere in the app (for
 /// example, switching to Notes from a Dashboard call to action).
-class WorkspaceShellState extends State<WorkspaceShell> {
+class WorkspaceShellState extends State<WorkspaceShell>
+    with SingleTickerProviderStateMixin {
   late WorkspaceDestination _destination = widget.initialDestination;
   bool _sidebarCollapsed = false;
+  late final AnimationController _pageMotionController = AnimationController(
+    vsync: this,
+    duration: NoteFlowMotion.standard,
+  )..value = 1;
+  double _pageTravel = 0;
+  double _horizontalSwipeDistance = 0;
+  bool _pointerSwipeHandled = false;
 
   /// Destination currently shown by the shell.
   WorkspaceDestination get destination => _destination;
@@ -166,9 +193,19 @@ class WorkspaceShellState extends State<WorkspaceShell> {
     if (_destination == destination) {
       return;
     }
+    _pageTravel = _destinationIndex(destination) > _selectedIndex
+        ? 0.035
+        : -0.035;
     setState(() => _destination = destination);
+    _pageMotionController.forward(from: 0);
     widget.onDestinationChanged?.call(destination);
   }
+
+  int _destinationIndex(WorkspaceDestination destination) =>
+      switch (destination) {
+        WorkspaceDestination.dashboard => 0,
+        WorkspaceDestination.notes => 1,
+      };
 
   int get _selectedIndex => switch (_destination) {
     WorkspaceDestination.dashboard => 0,
@@ -220,6 +257,22 @@ class WorkspaceShellState extends State<WorkspaceShell> {
         // dispose an active editor, losing its unsaved draft on resize.
         return Scaffold(
           backgroundColor: tokens.pageSurface,
+          floatingActionButton:
+              compact &&
+                  _destination == WorkspaceDestination.dashboard &&
+                  widget.onCreateNote != null
+              ? FloatingActionButton(
+                  key: WorkspaceShell.compactFabNewNoteKey,
+                  onPressed: widget.onCreateNote,
+                  backgroundColor: tokens.link,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  tooltip: copy.newNote,
+                  child: const Icon(Icons.add),
+                )
+              : null,
+          // Compact navigation lives beside the avatar in the top bar, like
+          // Notion's mobile shell. The existing FAB remains the create action.
+          bottomNavigationBar: null,
           body: SafeArea(
             top: compact,
             left: compact,
@@ -229,7 +282,7 @@ class WorkspaceShellState extends State<WorkspaceShell> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 SizedBox(
-                  height: compact ? 44 : 0,
+                  height: compact ? 56 : 0,
                   child: compact
                       ? _buildCompactTopBar(copy)
                       : const SizedBox.shrink(),
@@ -257,7 +310,9 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                                 ? const SizedBox.shrink()
                                 : const VerticalDivider(width: 1, thickness: 1),
                           ),
-                          Expanded(child: _buildPages()),
+                          Expanded(
+                            child: compact ? _buildSwipePages() : _buildPages(),
+                          ),
                         ],
                       ),
                       if (collapsedDesktop)
@@ -286,126 +341,341 @@ class WorkspaceShellState extends State<WorkspaceShell> {
     );
   }
 
+  Widget _buildSwipePages() {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) {
+        _horizontalSwipeDistance = 0;
+        _pointerSwipeHandled = false;
+      },
+      onHorizontalDragUpdate: (DragUpdateDetails details) {
+        if (_pointerSwipeHandled) {
+          return;
+        }
+        _horizontalSwipeDistance += details.delta.dx;
+        if (_horizontalSwipeDistance.abs() < 80) {
+          return;
+        }
+        final int nextIndex =
+            (_selectedIndex + (_horizontalSwipeDistance < 0 ? 1 : -1)).clamp(
+              0,
+              1,
+            );
+        _pointerSwipeHandled = true;
+        if (nextIndex != _selectedIndex) {
+          showDestination(WorkspaceDestination.values[nextIndex]);
+        }
+      },
+      onHorizontalDragEnd: (_) {
+        _horizontalSwipeDistance = 0;
+        _pointerSwipeHandled = false;
+      },
+      onHorizontalDragCancel: () {
+        _horizontalSwipeDistance = 0;
+        _pointerSwipeHandled = false;
+      },
+      child: AnimatedBuilder(
+        animation: _pageMotionController,
+        child: _buildPages(),
+        builder: (BuildContext context, Widget? child) {
+          final double progress = Curves.easeOutCubic.transform(
+            _pageMotionController.value,
+          );
+          return FractionalTranslation(
+            translation: Offset(_pageTravel * (1 - progress), 0),
+            child: Opacity(opacity: 0.94 + (0.06 * progress), child: child),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageMotionController.dispose();
+    super.dispose();
+  }
+
   Widget _buildCompactTopBar(WorkspaceCopy copy) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-    final TextStyle? titleStyle = Theme.of(context).textTheme.titleSmall;
+    final ThemeData theme = Theme.of(context);
     return SizedBox(
-      height: 44,
+      height: 56,
       child: Row(
         children: <Widget>[
-          IconButton(
-            key: WorkspaceShell.compactMenuKey,
-            tooltip: copy.openMenu,
-            onPressed: () => _showCompactMenu(copy),
-            icon: const Icon(Icons.menu, size: 22),
-          ),
-          Expanded(
-            child: Text(
-              copy.workspaceTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: titleStyle?.copyWith(
-                color: tokens.textSecondary,
-                fontWeight: FontWeight.w600,
+          KeyedSubtree(
+            key: WorkspaceShell.compactBrandKey,
+            child: KeyedSubtree(
+              key: WorkspaceShell.compactMenuKey,
+              child: IconButton(
+                key: WorkspaceShell.compactAvatarKey,
+                tooltip: copy.openMenu,
+                onPressed: () => _showCompactMenu(copy),
+                padding: EdgeInsets.zero,
+                icon: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: tokens.selectedSurface,
+                  foregroundColor: tokens.textPrimary,
+                  child: Text(
+                    _avatarInitial,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          if (widget.onOpenSearch != null)
-            IconButton(
-              key: WorkspaceShell.compactSearchKey,
-              tooltip: copy.search,
-              onPressed: widget.onOpenSearch,
-              icon: const Icon(Icons.search, size: 20),
-            ),
+          const SizedBox(width: NoteFlowSpacing.xs),
+          Expanded(child: _buildCompactTopNavigation(copy)),
         ],
       ),
     );
   }
 
-  Future<void> _showCompactMenu(WorkspaceCopy copy) {
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext sheetContext) {
-        return NoteFlowSurface(
-          tone: NoteFlowSurfaceTone.elevated,
-          padding: const EdgeInsets.fromLTRB(
-            NoteFlowSpacing.sm,
-            0,
-            NoteFlowSpacing.sm,
-            NoteFlowSpacing.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              if (widget.onOpenSearch != null)
-                NoteFlowSidebarRow(
-                  key: WorkspaceShell.compactMenuSearchKey,
-                  label: copy.search,
-                  icon: Icons.search,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    widget.onOpenSearch?.call();
-                  },
-                ),
-              if (widget.onCreateNote != null)
-                KeyedSubtree(
-                  key: WorkspaceShell.compactNewNoteKey,
-                  child: NoteFlowSidebarRow(
-                    key: WorkspaceShell.compactMenuNewNoteKey,
-                    label: copy.newNote,
-                    icon: Icons.add,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      widget.onCreateNote?.call();
-                    },
-                  ),
-                ),
-              NoteFlowSectionLabel(label: copy.pagesSection),
-              for (final WorkspaceDestination destination
-                  in WorkspaceDestination.values)
-                NoteFlowSidebarRow(
-                  key: WorkspaceShell.destinationKey(destination),
-                  label: _labelFor(copy, destination),
-                  icon: _iconFor(destination, active: false),
-                  selectedIcon: _iconFor(destination, active: true),
-                  selected: destination == _destination,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    showDestination(destination);
-                  },
-                ),
-              if (widget.onOpenSettings != null ||
-                  widget.onOpenDiagnostics != null) ...<Widget>[
-                const Divider(height: NoteFlowSpacing.lg),
-                if (widget.onOpenDiagnostics != null)
-                  NoteFlowSidebarRow(
-                    key: WorkspaceShell.diagnosticsKey,
-                    label: copy.diagnostics,
-                    icon: Icons.bug_report_outlined,
-                    dense: true,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      widget.onOpenDiagnostics?.call();
-                    },
-                  ),
-                if (widget.onOpenSettings != null)
-                  NoteFlowSidebarRow(
-                    key: WorkspaceShell.settingsKey,
-                    label: copy.settings,
-                    icon: Icons.settings_outlined,
-                    dense: true,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      widget.onOpenSettings?.call();
-                    },
-                  ),
-              ],
+  String get _avatarInitial {
+    final String value = widget.accountName?.trim() ?? '';
+    return value.isEmpty ? 'U' : value.substring(0, 1).toUpperCase();
+  }
+
+  Widget _buildCompactTopNavigation(WorkspaceCopy copy) {
+    final List<Widget> items = <Widget>[
+      _buildCompactTopAction(
+        key: const ValueKey<String>('workspace-compact-home'),
+        tooltip: _labelFor(copy, WorkspaceDestination.dashboard),
+        icon: _iconFor(WorkspaceDestination.dashboard, active: false),
+        activeIcon: _iconFor(WorkspaceDestination.dashboard, active: true),
+        selected: _destination == WorkspaceDestination.dashboard,
+        onPressed: () => showDestination(WorkspaceDestination.dashboard),
+      ),
+      _buildCompactTopAction(
+        key: const ValueKey<String>('workspace-compact-notes'),
+        tooltip: _labelFor(copy, WorkspaceDestination.notes),
+        icon: _iconFor(WorkspaceDestination.notes, active: false),
+        activeIcon: _iconFor(WorkspaceDestination.notes, active: true),
+        selected: _destination == WorkspaceDestination.notes,
+        onPressed: () => showDestination(WorkspaceDestination.notes),
+      ),
+      if (widget.onOpenSearch != null)
+        _buildCompactTopAction(
+          key: WorkspaceShell.compactSearchKey,
+          tooltip: copy.search,
+          icon: Icons.search_outlined,
+          activeIcon: Icons.search,
+          onPressed: widget.onOpenSearch!,
+        ),
+      _buildCompactTopAction(
+        key: const ValueKey<String>('workspace-compact-more'),
+        tooltip: copy.openMenu,
+        icon: Icons.more_horiz,
+        activeIcon: Icons.more_horiz,
+        onPressed: () => _showCompactMenu(copy),
+      ),
+    ];
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (int index = 0; index < items.length; index++) ...<Widget>[
+              items[index],
+              if (index < items.length - 1)
+                const SizedBox(width: NoteFlowSpacing.xs),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTopAction({
+    required Key key,
+    required String tooltip,
+    required IconData icon,
+    required IconData activeIcon,
+    required VoidCallback onPressed,
+    bool selected = false,
+  }) {
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: selected ? tokens.selectedSurface : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          key: key,
+          borderRadius: BorderRadius.circular(20),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NoteFlowSpacing.md,
+              vertical: NoteFlowSpacing.sm,
+            ),
+            child: AnimatedSwitcher(
+              duration: NoteFlowMotion.fast,
+              child: Icon(
+                selected ? activeIcon : icon,
+                key: ValueKey<bool>(selected),
+                size: selected ? 22 : 20,
+                color: tokens.textPrimary,
+              ),
+            ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCompactMenu(WorkspaceCopy copy) {
+    return showGeneralDialog<void>(
+      context: context,
+      // Keep the opening tap from immediately dismissing the newly-created
+      // route on Android; the drawer has an explicit close affordance.
+      barrierDismissible: false,
+      barrierLabel: copy.openMenu,
+      barrierColor: Colors.black54,
+      transitionDuration: NoteFlowMotion.standard,
+      pageBuilder:
+          (
+            BuildContext sheetContext,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.paddingOf(context).top + 56,
+                ),
+                child: SafeArea(
+                  top: false,
+                  right: false,
+                  child: SizedBox(
+                    width: (MediaQuery.sizeOf(context).width * 0.84).clamp(
+                      280.0,
+                      340.0,
+                    ),
+                    height: double.infinity,
+                    child: NoteFlowSurface(
+                      tone: NoteFlowSurfaceTone.elevated,
+                      padding: const EdgeInsets.fromLTRB(
+                        NoteFlowSpacing.sm,
+                        NoteFlowSpacing.sm,
+                        NoteFlowSpacing.sm,
+                        NoteFlowSpacing.xl,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  copy.workspaceTitle,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: MaterialLocalizations.of(context)
+                                    .closeButtonTooltip,
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                icon: const Icon(Icons.close),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: NoteFlowSpacing.lg),
+                          if (widget.onOpenSearch != null)
+                            NoteFlowSidebarRow(
+                              key: WorkspaceShell.compactMenuSearchKey,
+                              label: copy.search,
+                              icon: Icons.search,
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                widget.onOpenSearch?.call();
+                              },
+                            ),
+                          if (widget.onCreateNote != null)
+                            KeyedSubtree(
+                              key: WorkspaceShell.compactNewNoteKey,
+                              child: NoteFlowSidebarRow(
+                                key: WorkspaceShell.compactMenuNewNoteKey,
+                                label: copy.newNote,
+                                icon: Icons.add,
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  widget.onCreateNote?.call();
+                                },
+                              ),
+                            ),
+                          NoteFlowSectionLabel(label: copy.pagesSection),
+                          for (final WorkspaceDestination destination
+                              in WorkspaceDestination.values)
+                            NoteFlowSidebarRow(
+                              key: WorkspaceShell.destinationKey(destination),
+                              label: _labelFor(copy, destination),
+                              icon: _iconFor(destination, active: false),
+                              selectedIcon: _iconFor(destination, active: true),
+                              selected: destination == _destination,
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                showDestination(destination);
+                              },
+                            ),
+                          if (widget.onOpenSettings != null ||
+                              widget.onOpenDiagnostics != null) ...<Widget>[
+                            const Divider(height: NoteFlowSpacing.lg),
+                            if (widget.onOpenDiagnostics != null)
+                              NoteFlowSidebarRow(
+                                key: WorkspaceShell.diagnosticsKey,
+                                label: copy.diagnostics,
+                                icon: Icons.bug_report_outlined,
+                                dense: true,
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  widget.onOpenDiagnostics?.call();
+                                },
+                              ),
+                            if (widget.onOpenSettings != null)
+                              NoteFlowSidebarRow(
+                                key: WorkspaceShell.settingsKey,
+                                label: copy.settings,
+                                icon: Icons.settings_outlined,
+                                dense: true,
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  widget.onOpenSettings?.call();
+                                },
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+      transitionBuilder:
+          (
+            BuildContext context,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+            Widget child,
+          ) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero)
+                      .chain(CurveTween(curve: Curves.easeOutCubic))
+                      .animate(animation),
+              child: child,
+            );
+          },
     );
   }
 
@@ -478,14 +748,32 @@ class WorkspaceShellState extends State<WorkspaceShell> {
                             dense: true,
                             onTap: widget.onOpenSearch,
                           ),
-                        if (widget.onCreateNote != null)
-                          NoteFlowSidebarRow(
-                            key: WorkspaceShell.sidebarNewNoteKey,
-                            label: copy.newNote,
-                            icon: Icons.add,
-                            dense: true,
-                            onTap: widget.onCreateNote,
+                        if (widget.onCreateNote != null) ...<Widget>[
+                          const SizedBox(height: NoteFlowSpacing.xs),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              key: WorkspaceShell.sidebarNewNoteKey,
+                              onPressed: widget.onCreateNote,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(copy.newNote),
+                              ),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(44),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: NoteFlowSpacing.md,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    NoteFlowRadius.row,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -530,33 +818,43 @@ class WorkspaceShellState extends State<WorkspaceShell> {
       ),
       child: Row(
         children: <Widget>[
-          Semantics(
-            excludeSemantics: true,
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: tokens.selectedSurface,
-                borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.description_outlined,
-                size: 16,
-                color: tokens.textSecondary,
-              ),
-            ),
-          ),
-          const SizedBox(width: NoteFlowSpacing.sm),
           Expanded(
-            child: Text(
-              copy.workspaceTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: titleStyle?.copyWith(
-                color: tokens.textSecondary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.1,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+              onTap: () => showDestination(WorkspaceDestination.dashboard),
+              child: Row(
+                children: <Widget>[
+                  Semantics(
+                    excludeSemantics: true,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: tokens.selectedSurface,
+                        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      copy.workspaceTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -588,20 +886,20 @@ class WorkspaceShellState extends State<WorkspaceShell> {
           ),
           child: Column(
             children: <Widget>[
-              if (widget.onOpenDiagnostics != null)
-                NoteFlowSidebarRow(
-                  key: WorkspaceShell.diagnosticsKey,
-                  label: copy.diagnostics,
-                  icon: Icons.bug_report_outlined,
-                  onTap: widget.onOpenDiagnostics,
-                  dense: true,
-                ),
               if (widget.onOpenSettings != null)
                 NoteFlowSidebarRow(
                   key: WorkspaceShell.settingsKey,
                   label: copy.settings,
                   icon: Icons.settings_outlined,
                   onTap: widget.onOpenSettings,
+                  dense: true,
+                ),
+              if (widget.onOpenDiagnostics != null)
+                NoteFlowSidebarRow(
+                  key: WorkspaceShell.diagnosticsKey,
+                  label: copy.diagnostics,
+                  icon: Icons.bug_report_outlined,
+                  onTap: widget.onOpenDiagnostics,
                   dense: true,
                 ),
             ],

@@ -197,6 +197,7 @@ final class NoteDetailSurface extends StatelessWidget {
                   statusMessage: statusMessage,
                   showSaveState: !showPageHeader,
                   actionBusy: actionBusy,
+                  isSummarizing: isSummarizing,
                   provisioningReader: provisioningReader,
                   onProvisioningRetry: onProvisioningRetry,
                   onProvisioningCancel: onProvisioningCancel,

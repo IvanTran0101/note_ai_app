@@ -20,6 +20,7 @@ final class DashboardNoteCard extends StatelessWidget {
     required this.copy,
     required this.layout,
     this.selected = false,
+    this.showPreview = true,
   });
 
   /// Note projection shown by the card.
@@ -36,6 +37,10 @@ final class DashboardNoteCard extends StatelessWidget {
 
   /// Whether the card is the current selection in an expanded layout.
   final bool selected;
+
+  /// Home can use a compact Notion-style title row/card while other callers
+  /// may keep the original preview treatment.
+  final bool showPreview;
 
   static const Key cardKeyPrefix = ValueKey<String>('dashboard-note-card');
 
@@ -56,7 +61,9 @@ final class DashboardNoteCard extends StatelessWidget {
       key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
       button: true,
       selected: selected,
-      label: copy.noteSemantics(title: title, preview: preview),
+      label: showPreview
+          ? copy.noteSemantics(title: title, preview: preview)
+          : title,
       child: Card(
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
@@ -66,19 +73,23 @@ final class DashboardNoteCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         color: selected
             ? tokens.selectedSurface
-            : (listLayout ? Colors.transparent : tokens.subtleSurface),
+            : (listLayout ? tokens.elevatedSurface : tokens.subtleSurface),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-          side: listLayout || !selected
-              ? BorderSide.none
-              : BorderSide(color: tokens.focusRing, width: 1.5),
+          borderRadius: BorderRadius.circular(
+            listLayout ? NoteFlowRadius.row : NoteFlowRadius.card,
+          ),
+          side: selected
+              ? BorderSide(color: tokens.focusRing, width: 1.5)
+              : BorderSide(color: tokens.divider),
         ),
         child: InkWell(
           onTap: () => onTap(note),
           hoverColor: tokens.subtleSurface,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: layout == DashboardNoteCardLayout.grid ? 144.0 : 56.0,
+              minHeight: layout == DashboardNoteCardLayout.grid
+                  ? (showPreview ? 144.0 : 88.0)
+                  : 56.0,
             ),
             child: Padding(
               padding: layout == DashboardNoteCardLayout.grid
@@ -139,22 +150,24 @@ final class DashboardNoteCard extends StatelessWidget {
           style: Theme.of(context).textTheme.titleSmall
               ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
         ),
-        const SizedBox(height: 4),
-        Text(
-          preview,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: secondaryForeground, height: 1.35),
-        ),
-        const SizedBox(height: NoteFlowSpacing.sm),
-        Text(
-          updatedDate,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: secondaryForeground),
-        ),
+        if (showPreview) ...<Widget>[
+          const SizedBox(height: 4),
+          Text(
+            preview,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: secondaryForeground, height: 1.35),
+          ),
+          const SizedBox(height: NoteFlowSpacing.sm),
+          Text(
+            updatedDate,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: secondaryForeground),
+          ),
+        ],
       ],
     );
   }
@@ -188,27 +201,31 @@ final class DashboardNoteCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
               ),
-              const SizedBox(height: 2),
-              Text(
-                preview,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: secondaryForeground),
-              ),
+              if (showPreview) ...<Widget>[
+                const SizedBox(height: 2),
+                Text(
+                  preview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: secondaryForeground),
+                ),
+              ],
             ],
           ),
         ),
-        const SizedBox(width: NoteFlowSpacing.md),
-        Flexible(
-          child: Text(
-            copy.updatedOn(updatedDate),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: secondaryForeground),
+        if (showPreview) ...<Widget>[
+          const SizedBox(width: NoteFlowSpacing.md),
+          Flexible(
+            child: Text(
+              copy.updatedOn(updatedDate),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: secondaryForeground),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }

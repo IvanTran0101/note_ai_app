@@ -29,6 +29,11 @@ final class NotesCopy {
 
   final bool _isVietnamese;
 
+  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get notesDescription => _isVietnamese
+      ? 'Mọi ý tưởng của bạn ở một nơi.'
+      : 'Every idea, in one calm place.';
+
   String get title => _isVietnamese ? 'NoteFlow · Ghi chú' : 'NoteFlow · Notes';
   String get notes => _isVietnamese ? 'Ghi chú' : 'Notes';
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';

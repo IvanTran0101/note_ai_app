@@ -57,7 +57,7 @@ const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',
 );
-const Color _noteFlowSeedColor = Color(0xFF2383E2);
+const Color _noteFlowSeedColor = Color(0xFF0F766E);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
 
@@ -72,7 +72,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
         brightness: brightness,
       ).copyWith(
         primary: tokens.link,
-        onPrimary: isDark ? const Color(0xFF191919) : const Color(0xFFFFFFFF),
+        onPrimary: isDark ? const Color(0xFF16312E) : const Color(0xFFFFFFFF),
         primaryContainer: tokens.selectedSurface,
         onPrimaryContainer: tokens.textPrimary,
         secondaryContainer: tokens.selectedSurface,
@@ -107,10 +107,15 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       backgroundColor: tokens.pageSurface,
       foregroundColor: tokens.textPrimary,
       elevation: 0.0,
-      scrolledUnderElevation: 1.0,
+      scrolledUnderElevation: 0.0,
       surfaceTintColor: Colors.transparent,
-      toolbarHeight: 44.0,
+      toolbarHeight: 52.0,
       centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: tokens.textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     cardTheme: CardThemeData(
       color: tokens.elevatedSurface,
@@ -124,8 +129,8 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: tokens.textPrimary,
-        foregroundColor: tokens.pageSurface,
+        backgroundColor: tokens.link,
+        foregroundColor: colorScheme.onPrimary,
         disabledBackgroundColor: tokens.subtleSurface,
         disabledForegroundColor: tokens.textMuted,
         minimumSize: const Size(48.0, 44.0),
@@ -187,6 +192,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
+        foregroundColor: tokens.link,
         minimumSize: const Size(48.0, 44.0),
         padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
         shape: RoundedRectangleBorder(
@@ -198,6 +204,9 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       iconColor: tokens.textSecondary,
       textColor: tokens.textPrimary,
       minTileHeight: 44.0,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: NoteFlowSpacing.md,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NoteFlowRadius.row),
       ),
@@ -811,6 +820,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         Expanded(
           child: WorkspaceShell(
             key: _workspaceShellKey,
+            accountName: widget.currentUserSession.identity?.email
+                .split('@')
+                .first,
             onDestinationChanged: _reloadWorkspaceDestination,
             onOpenSearch: () {
               _workspaceShellKey.currentState?.showDestination(

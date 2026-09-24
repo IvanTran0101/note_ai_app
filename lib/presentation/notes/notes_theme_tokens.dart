@@ -71,24 +71,25 @@ abstract final class NoteFlowLayout {
   static const double compactBreakpoint = 600;
   static const double expandedBreakpoint = 840;
 
-  /// The compact page column starts after the 72dp navigation gutter and a
-  /// 24dp page inset used by the Notion mobile/web reference.
-  static const double compactPageLeadingInset = 96;
+  /// Compact pages use a normal mobile reading gutter. The previous 96dp
+  /// value left the phone layout looking like a desktop canvas with the
+  /// content stranded in the middle.
+  static const double compactPageLeadingInset = 20;
 
   /// Includes the page inset and trailing gutter around the content column.
   static const double compactPageMaxWidth = 360;
   static const double compactPageNarrowLeadingInset = 16;
   static const double compactEditorMaxWidth = compactPageMaxWidth;
 
-  /// The mobile reference places its H1 at y=212 below a 44dp top bar.
-  static const double compactPageTopPadding = 160;
-  static const double editorTopPadding = 112;
+  /// Keep the first useful action within the first viewport on phones.
+  static const double compactPageTopPadding = 24;
+  static const double editorTopPadding = 48;
 
   /// Space after the compact page toolbar before the title field.
   ///
   /// The toolbar is already part of [NoteDetailSurface]; counting it again
   /// here pushed the title 60dp below the measured Notion page-title anchor.
-  static const double compactEditorTopPadding = 56;
+  static const double compactEditorTopPadding = 24;
   static const double compactWebPagePhoneAnchorWidth = 390;
   static const double compactWebPageWideAnchorWidth = 567;
   static const double compactWebPagePhoneTopAdjustment = 0;
@@ -101,7 +102,7 @@ abstract final class NoteFlowLayout {
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
   static const double dashboardContentMaxWidth = 768;
-  static const double dashboardTopPadding = 116;
+  static const double dashboardTopPadding = 72;
 
   static double compactPageLeadingInsetFor(BuildContext context) {
     final double viewportWidth = MediaQuery.sizeOf(context).width;
@@ -224,16 +225,16 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       pageSurface: Color(0xFFFFFFFF),
       sidebarSurface: Color(0xFFF7F7F5),
       elevatedSurface: Color(0xFFFFFFFF),
-      subtleSurface: Color(0xFFF1F1EF),
-      selectedSurface: Color(0xFFEDEDEC),
-      textPrimary: Color(0xFF2C2C2B),
-      textSecondary: Color(0xFF62615C),
-      textMuted: Color(0xFF70706B),
-      divider: Color(0xFFEDEDEC),
-      link: Color(0xFF2383E2),
-      focusRing: Color(0xFF2383E2),
+      subtleSurface: Color(0xFFF4F6F4),
+      selectedSurface: Color(0xFFE4F2EF),
+      textPrimary: Color(0xFF252525),
+      textSecondary: Color(0xFF5D625F),
+      textMuted: Color(0xFF777C78),
+      divider: Color(0xFFE5E8E5),
+      link: Color(0xFF0F766E),
+      focusRing: Color(0xFF0F766E),
       error: Color(0xFFEB5757),
-      success: Color(0xFF448361),
+      success: Color(0xFF2F7D5B),
       onDestructive: Color(0xFFFFFFFF),
     );
   }
@@ -244,13 +245,13 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       sidebarSurface: Color(0xFF202020),
       elevatedSurface: Color(0xFF2F2F2F),
       subtleSurface: Color(0xFF252525),
-      selectedSurface: Color(0xFF2F2F2F),
-      textPrimary: Color(0xFFF0EFED),
-      textSecondary: Color(0xFFB3B3B3),
-      textMuted: Color(0xFF8B8B8B),
-      divider: Color(0xFF303030),
-      link: Color(0xFF529CCA),
-      focusRing: Color(0xFF529CCA),
+      selectedSurface: Color(0xFF24413D),
+      textPrimary: Color(0xFFF4F4F1),
+      textSecondary: Color(0xFFC0C5C1),
+      textMuted: Color(0xFF969C98),
+      divider: Color(0xFF353A37),
+      link: Color(0xFF5EEAD4),
+      focusRing: Color(0xFF5EEAD4),
       error: Color(0xFFE06A6A),
       success: Color(0xFF5FA784),
       onDestructive: Color(0xFF191919),
