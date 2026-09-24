@@ -1059,3 +1059,31 @@ screenshots are in “Platform-font Register recapture” below.
   113.4s. No auth callback, route, application service, or backend behavior
   changed. The remaining auth states and all other required app/platform cells
   still block numeric platform and overall scores.
+
+## Compact Notes/Home Web follow-up — 2026-09-24
+
+- Captures `165`–`168` are current-source Chrome Web release screens at DPR 1,
+  light theme: Notes and Home at 390×844 and 567×694. Captures `169`–`170` are
+  the matching Notes screens in Edge at the same viewports. All show the
+  existing Web storage-unavailable behavior; no note was entered or saved.
+- In Edge, the Notes title block is x=96/y=204.87 at 390×844 and x=96/y=149 at
+  567×694. Its painted title begins near y=213 and y=157, respectively, within
+  1px of the observed Notion title-block anchors x=96/y=212 and x=96/y=156.
+  “New note” remains visible. The storage warning wraps to three lines in a
+  278.4×74px card on the phone and two lines in a 360×58px card at 567px; text
+  is not clipped. This is an anchor/layout check for the Web limitation state,
+  not a matched Notion error-state pair.
+- Home title anchors in Chrome captures `167`–`168` are near x=99/y=213 at
+  390×844 and x=96/y=157 at 567×694. The Home storage warning is visible, but
+  its placement is not a same-state Notion comparison.
+- `flutter test --no-pub test/presentation/notes/notes_workspace_page_test.dart`
+  passes 44/44 with the temporary test-only package-root shim;
+  `.dart_tool/package_config.json` is restored to its prior SHA-256.
+  Scoped analysis and the current-source Web release build pass. Android,
+  Apple, other Web screens/states, light/dark pairs and full workflow scoring
+  remain open; this tranche does not establish a numeric platform score.
+- The Android 15/API 35 emulator is connected at about 411×914 logical. A
+  current-source x64 debug build was stopped after more than four minutes in
+  the `local_llm_bridge` NDK/llama.cpp compile hook; it produced no APK or
+  definitive result. The app was not installed/launched and emulator data was
+  untouched, so this attempt adds no Android runtime evidence.

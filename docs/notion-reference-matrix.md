@@ -311,3 +311,14 @@ under `disableAnimations`.
 - Ignore antialias noise only; never geometry, colour or text-wrap differences.
 - Separate font-engine differences from layout differences (plan §6.2).
 - Every defect recorded as `screen/state/viewport/anchor/current/expected/fix`.
+
+## Compact Notes/Home Web follow-up — 2026-09-24
+
+Current-source captures `165`–`168` show Chrome Notes/Home with the existing
+Web storage limitation at 390×844 and 567×694, light theme, DPR 1. Captures
+`169`–`170` show the matching Notes states in Edge. The live Notion title-block
+anchors remain x=96/y=212 at 390×844 and x=96/y=156 at 567×694. Edge Notes title
+glyphs begin near y=213 and y=157; the Notes `New note` action and the existing
+storage warning are visible without clipped text. These are title-anchor and
+NoteFlow error-state layout observations. No same-state Notion error capture
+exists, so they are not a scored visual pair or a Web platform score.

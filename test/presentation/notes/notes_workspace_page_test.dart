@@ -7,6 +7,7 @@ import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 1, 1);
 
@@ -46,6 +47,17 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  test('compact Web page title inset follows measured Notion anchors', () {
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(320), 0);
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(390), 0);
+    expect(
+      NoteFlowLayout.compactWebPageTopAdjustmentFor(478.5),
+      closeTo(-28, 1),
+    );
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(567), -56);
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(600), 0);
+  });
 
   testWidgets('workspace entry points open notes and drafts inline', (
     WidgetTester tester,
@@ -414,6 +426,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('compact load failure keeps its retry callback', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = StateError('offline');
+    await pumpWorkspace(
+      tester,
+      controller,
+      size: const Size(390, 844),
+      embeddedInWorkspace: true,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('retry-notes')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    controller.listNotesError = null;
+    await tester.tap(find.byKey(const ValueKey<String>('retry-notes')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unsupported note storage has no futile retry action', (
     WidgetTester tester,
   ) async {
@@ -431,6 +470,53 @@ void main() {
     expect(find.byKey(const ValueKey<String>('new-note')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final Size size in <Size>[
+    const Size(320, 568),
+    const Size(390, 844),
+    const Size(567, 694),
+  ]) {
+    testWidgets('compact storage status stays readable at ${size.width}dp', (
+      WidgetTester tester,
+    ) async {
+      final _FakeNotesController controller = _FakeNotesController()
+        ..listNotesError = UnsupportedError('web storage unavailable');
+      await pumpWorkspace(
+        tester,
+        controller,
+        size: size,
+        embeddedInWorkspace: true,
+      );
+
+      final Finder notice = find.byKey(
+        const ValueKey<String>('notes-list-error'),
+      );
+      final Rect noticeBounds = tester.getRect(notice);
+      final Rect cardBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('notes-load-error-card')),
+      );
+      final Rect createBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('new-note')),
+      );
+      expect(noticeBounds.left, greaterThanOrEqualTo(0));
+      expect(noticeBounds.right, lessThanOrEqualTo(size.width));
+      expect(noticeBounds.top, lessThan(createBounds.bottom + 80));
+      expect(cardBounds.right, lessThanOrEqualTo(size.width));
+      expect(cardBounds.height, lessThan(180));
+      expect(
+        find.byKey(const ValueKey<String>('notes-load-error-state')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey<String>('retry-notes')), findsNothing);
+      expect(find.byKey(const ValueKey<String>('new-note')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey<String>('new-note')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('discarding a draft preserves the unsupported storage state', (
     WidgetTester tester,

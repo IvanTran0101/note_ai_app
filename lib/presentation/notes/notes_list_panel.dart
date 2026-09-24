@@ -129,59 +129,66 @@ final class NotesListPanel extends StatelessWidget {
                   Expanded(
                     child: notes.isEmpty
                         ? error != null
-                              ? Center(
-                                  key: const ValueKey<String>(
-                                    'notes-load-error-state',
-                                  ),
-                                  child: Semantics(
-                                    liveRegion: true,
-                                    container: true,
-                                    label: error,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        Icon(
-                                          Icons.cloud_off_outlined,
-                                          size: 32,
-                                          color: tokens.textMuted,
+                              ? compact
+                                    ? _buildCompactErrorState(
+                                        context,
+                                        copy,
+                                        tokens,
+                                      )
+                                    : Center(
+                                        key: const ValueKey<String>(
+                                          'notes-load-error-state',
                                         ),
-                                        const SizedBox(
-                                          height: NoteFlowSpacing.sm,
-                                        ),
-                                        Text(
-                                          error!,
-                                          key: const ValueKey<String>(
-                                            'notes-list-error',
-                                          ),
-                                          textAlign: TextAlign.center,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: tokens.textSecondary,
+                                        child: Semantics(
+                                          liveRegion: true,
+                                          container: true,
+                                          label: error,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: <Widget>[
+                                              Icon(
+                                                Icons.cloud_off_outlined,
+                                                size: 32,
+                                                color: tokens.textMuted,
                                               ),
-                                        ),
-                                        const SizedBox(
-                                          height: NoteFlowSpacing.xs,
-                                        ),
-                                        if (onRetry != null)
-                                          TextButton.icon(
-                                            key: const ValueKey<String>(
-                                              'retry-notes',
-                                            ),
-                                            onPressed: actionBusy
-                                                ? null
-                                                : onRetry,
-                                            icon: const Icon(
-                                              Icons.refresh,
-                                              size: 18,
-                                            ),
-                                            label: Text(copy.retry),
+                                              const SizedBox(
+                                                height: NoteFlowSpacing.sm,
+                                              ),
+                                              Text(
+                                                error!,
+                                                key: const ValueKey<String>(
+                                                  'notes-list-error',
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color:
+                                                          tokens.textSecondary,
+                                                    ),
+                                              ),
+                                              const SizedBox(
+                                                height: NoteFlowSpacing.xs,
+                                              ),
+                                              if (onRetry != null)
+                                                TextButton.icon(
+                                                  key: const ValueKey<String>(
+                                                    'retry-notes',
+                                                  ),
+                                                  onPressed: actionBusy
+                                                      ? null
+                                                      : onRetry,
+                                                  icon: const Icon(
+                                                    Icons.refresh,
+                                                    size: 18,
+                                                  ),
+                                                  label: Text(copy.retry),
+                                                ),
+                                            ],
                                           ),
-                                      ],
-                                    ),
-                                  ),
-                                )
+                                        ),
+                                      )
                               : Center(
                                   key: ValueKey<String>('notes-empty'),
                                   child: Column(
@@ -289,5 +296,71 @@ final class NotesListPanel extends StatelessWidget {
   String _preview(String content, NotesCopy copy) {
     final String normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
     return normalized.isEmpty ? copy.noContent : normalized;
+  }
+
+  Widget _buildCompactErrorState(
+    BuildContext context,
+    NotesCopy copy,
+    NoteFlowUiTokens tokens,
+  ) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Semantics(
+        key: const ValueKey<String>('notes-load-error-state'),
+        liveRegion: true,
+        container: true,
+        label: error,
+        child: Container(
+          key: const ValueKey<String>('notes-load-error-card'),
+          width: double.infinity,
+          padding: const EdgeInsets.all(NoteFlowSpacing.md),
+          decoration: BoxDecoration(
+            color: tokens.subtleSurface,
+            border: Border.all(color: tokens.divider),
+            borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.cloud_off_outlined,
+                      size: 20,
+                      color: tokens.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      key: const ValueKey<String>('notes-list-error'),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: tokens.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+              if (onRetry != null) ...<Widget>[
+                const SizedBox(height: NoteFlowSpacing.xs),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey<String>('retry-notes'),
+                    onPressed: actionBusy ? null : onRetry,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(copy.retry),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
