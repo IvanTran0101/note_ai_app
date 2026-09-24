@@ -217,7 +217,7 @@ Tạo một bộ token presentation duy nhất, ưu tiên đặt trong `lib/pres
 
 | Nhóm | Quy tắc bắt buộc |
 | --- | --- |
-| Font | `Inter` variable font và OFL đã được bundle/đăng ký trong `pubspec.yaml`; Web release manifest và Android APK xác nhận asset. iOS/macOS runtime chưa được kiểm tra; dùng cùng font/fallback trong visual diff và xác minh lại trên Apple runner. |
+| Font | Để `fontFamily` theo mặc định của Flutter/nền tảng; không bundle hoặc ép Inter. Ghi nhận font thực tế trên từng target trước khi so ảnh; xác minh Android/iOS/macOS runtime trên thiết bị/runner tương ứng. |
 | Surface | Page surface, sidebar surface, elevated menu, selected row và callout phải có token riêng cho light/dark; không rải màu literal trong widget. |
 | Text | Có primary, secondary, muted, link, error, success; contrast đạt WCAG AA cho text thường. |
 | Spacing | Dùng scale 4/8/12/16/24/32/48; không tạo khoảng cách ngẫu nhiên cho từng màn hình. |
@@ -593,7 +593,7 @@ rubric score: the four captures do not cover all auth states, accessibility,
 or target platforms, so no auth or app-wide numeric score is assigned. The
 available evidence does not establish the `>=95/100` gate.
 
-Typography follow-up on 2026-09-23: the app theme requested the `Inter` family,
+Typography follow-up on 2026-09-23 (Inter experiment; later superseded): the app theme requested the `Inter` family,
 but the checkout contained no Inter font asset or pubspec font registration.
 The UI-only asset pass bundles the Inter variable font and OFL license and
 registers the family in `pubspec.yaml`; it adds no package and changes no auth,
@@ -618,7 +618,7 @@ packaging gap only; they do not establish full cross-platform typography or the
 
 Current Login uses 38px compact/72px desktop top padding. Register starts with
 Email, followed by Display name, Password, and Confirm password; it uses 76px
-compact/32px desktop top padding and a 496px desktop panel, with the existing
+compact/42px desktop top padding and a 496px desktop panel, with the existing
 32px fallback for short viewports. `_AuthFormScaffold` now keeps its selected
 page background painted through the available viewport while preserving scroll
 when content is taller. The auth widget suite passes 11/11 with the temporary
@@ -705,23 +705,17 @@ no issues, and `git diff --check` passed. No release/browser capture of these
 new auth steps has been made, so no auth or app-wide numeric visual score is
 assigned and the `>=95/100` gate remains unproven.
 
-Auth visual recheck on 2026-09-24: captured the live public Notion Login and
-Sign up pages at 1280×800 and 390×844 (references 111–114), with no form
-submission. PNG dimensions were checked; historical references 24 and 26 are
-1280×720 despite their filenames and are not valid 1280×800 pairs. Current
-NoteFlow release captures 104–110 cover Login/Register email, password/details,
-and 768×1024 registration. Blue CTA pixel bounds show Register mobile matches
-the live reference at x=20–369, y=375–414; Login differs by 3px vertically on
-mobile and desktop. The desktop Register CTA was moved down to the same
-reference row via presentation-only callout padding/spacing; release capture
-106 now matches the live Sign up CTA at x=460–819, y=396–435 within 1px
-horizontally and exactly vertically. No auth controller, route, DTO, service,
-or persistence file was changed. A direct test invocation stopped before its
-assertions in the unrelated native `local_llm_bridge` hook (`LNK1136`); the
-test-only package-root shim then passed the full presentation suite 193/193 and
-restored `.dart_tool/package_config.json` to its expected SHA-256. Targeted
-analyzer and format checks pass. These auth comparisons do not score the full
-app and do not establish the `>=95/100` release gate.
+Auth visual recheck on 2026-09-24 (historical Inter-era capture; superseded by
+the platform-font recapture below): the live public Notion Login and Sign up
+pages were captured at 1280×800 and 390×844 (references 111–114), with no form
+submission. Historical references 24 and 26 are 1280×720 despite their
+filenames. NoteFlow captures 104–110 cover the earlier Inter-rendered
+Login/Register states; their CTA measurements apply only to that source and
+must not be used as current geometry. The current source measurements and
+screenshots are in the later Platform-font and Register recapture entry. No
+auth controller, route, DTO, service, or persistence file changed. Neither the
+historical captures nor the current auth pair establish the app-wide
+`>=95/100` release gate.
 
 Shared navigation focus follow-up on 2026-09-24: `NoteFlowSidebarRow` now
 renders the existing theme `focusRing` token as a 2dp outline while focused.
@@ -824,7 +818,7 @@ other Home states, page workflows, theme/platform pairs, and accessibility
 remain open. No overall fidelity score is assigned and the `>=95/100` gate
 remains unproven.
 
-Register CTA alignment follow-up — 2026-09-24: the existing email-first
+Register CTA alignment follow-up — 2026-09-24 (widget-only historical estimate; superseded by browser measurements below): the existing email-first
 Register step now uses the 12dp compact gap and 16dp desktop gap before its
 existing Continue action; the details-step gap remains unchanged. The shared
 auth submit button is 44dp high to retain the plan's minimum touch target. The
@@ -841,18 +835,37 @@ Desktop Register details and validation/busy/error/success/change-password
 states remain to verify. Step 8 remains in progress; no numeric auth or overall
 fidelity score is assigned, and the `>=95/100` gate is still unproven.
 
-Register mobile heading alignment follow-up — 2026-09-24: on the existing
-390×844 email-first Register screen, the brand-to-heading gap is reduced from
-34dp to 10dp and the following content gap is increased from 28dp to 52dp.
-This moves the heading up 24dp to the tested y=108–112 range, close to the
-public Notion reference heading at about y=108, while preserving the form start
-and Continue button geometry. The auth page suite passes 13/13 and the auth
-navigation integration suite passes 5/5 with the temporary test-only bridge
-package root; the original package-config SHA-256 is restored. Targeted
-analysis and formatting pass. This is widget geometry evidence, not a fresh
-runtime screenshot or pixel diff. No auth controller, route, DTO, service,
-domain, application, infrastructure, persistence, or backend code changed.
-Step 8 remains in progress and the `>=95/100` gate remains unproven.
+Register mobile heading alignment follow-up — 2026-09-24 (superseded and
+incorrect): the 10dp brand/title gap, 52dp content gap, and y=108–112 heading
+claim came from widget-test font metrics after changing the font setup; they did
+not represent the Web runtime. Do not use those values as current evidence. The
+replacement platform-font and browser measurements are recorded below.
+
+Platform-font and Register recapture — 2026-09-24: NoteFlow no longer forces
+Inter; `fontFamily` is unset and the Inter/OFL registration was removed from
+`pubspec.yaml`. The Web `FontManifest.json` contains only MaterialIcons and
+CupertinoIcons, and the fresh Android ARM64 release APK contains no Inter asset.
+The Register email step uses the browser-measured layout values: 34dp compact
+brand/title gap, 28dp content gap, 20dp compact Continue gap, 42dp desktop
+panel top padding, and a 48dp auth submit minimum. Fresh release Web captures [138](docs/ui-qa/138-noteflow-register-platform-font-390x844-current-20260924.png)
+and [139](docs/ui-qa/139-noteflow-register-platform-font-1280x800-current-20260924.png)
+show the blank, focused email field at 390×844 and 1280×800. Against Notion
+references 113 and 112, the blue CTA bounds are y=375–414 on mobile and
+y=396–435 on desktop, matching the reference's 40px visible height and top
+anchors. The desktop card top aligns at y≈43. Its lower content remains shorter
+because Notion's provider/legal actions have no NoteFlow contract and are not
+fabricated. The auth suite passes 34/34 and the complete presentation suite
+passes 209/209; scoped analysis and Web release plus Android ARM64 release
+builds pass.
+`.dart_tool/package_config.json` was restored to SHA-256
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. Only
+theme/font selection and unused font assets, auth presentation spacing/touch
+target, its widget test, and QA documentation changed; auth callbacks/routes
+and domain, application, infrastructure, persistence, and backend code remain
+untouched. Android font
+runtime plus iOS/macOS rendering remain unverified. This evidence covers only
+the existing Register email state in Web; no numeric auth/app score is assigned
+and the `>=95/100` gate remains unproven.
 
 Compact editor title scale follow-up — 2026-09-24: `NoteDetailEditorForm` now
 uses a 36dp page-title style below the existing 600dp compact breakpoint and
@@ -915,16 +928,16 @@ Step 5 and the overall visual score remain open.
 | --- | --- | --- | --- |
 | 0. Baseline | Current checkout and Web load/error states inspected; Android 15/API 35 local-auth AVD verified a UI-created note through autosave, force-stop/relaunch, reopen and delete. Browser persistence and the complete auth/session/error baseline remain unverified. | `PARTIAL` | Record remaining actual behavior on targets that support it, without changing the backend; capture all specified baseline states |
 | 1. Reference matrix | Live workspace-page observations retained with their original dates; public Login/Sign up captures 111–114 are same-size 1280×800 and 390×844; old files 24/26 are actually 1280×720; one editor anchor is paired, but workspace surface states still lack complete same-state diffs | `PARTIAL` | Pair shell, Home, list/editor, menus and overlays at supported viewports; keep auth comparison limited to supported controls |
-| 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; shared sidebar focus outline uses the existing light/dark `focusRing` tokens and is verified by keyboard test; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
+| 2. Tokens/primitives | Theme leaves `fontFamily` unset; Inter/OFL packaging removed. Web manifest contains MaterialIcons/CupertinoIcons only; Android ARM64 release APK contains no Inter asset. Shared sidebar focus outline uses existing light/dark `focusRing` tokens and is verified by keyboard test. Web Register captures 138–139 show platform-default rendering; Android runtime, iOS/macOS remain unverified | `IN_PROGRESS` | Verify actual font rendering on Android/iOS/macOS; recheck light/dark screenshots, text contrast, and all shared components after final styling |
 | 3. Shell/sidebar | Release Web captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. Captures 133–134 verify the revised compact header and navigation sheet on Android 15/API 35; `workspace_shell_test.dart` passes 19/19, including each moved action's existing callback. Shared row focus tests pass 9/9. | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels visually, test Android navigation/back and run Apple device checks; no Favorites/profile/workspace-switching controls |
 | 4. Dashboard/Recents | Captures 130 and 132 verify empty/loaded Home on Android 15/API 35; 131 shows loaded Notes list; 135 shows the Web Home title anchor at x≈420/y≈169 in the matched 1280×720 dark viewport (live Notion anchor x≈420/y≈168); 136 refreshes Android empty Home. A UI-created note reports “Note saved.”, survives force-stop/relaunch, and is removed through the existing delete flow. Dashboard tests pass 39/39 across 360–1440dp. Web still shows its existing storage-unavailable state; loaded Grid, loading, search, selected states and most same-state pairs remain open. | `PARTIAL` | Capture remaining actual states on supported targets, pair them with Notion at matching viewports, and score each required anchor |
 | 5. Notes list/detail frame | Notes workspace app bar no longer repeats the shell brand; a static list skeleton preserves the loading live region. `notes_workspace_page_test.dart` passes 20/20, including loading at 320/360/390/768/1280dp, Notes header, compact/detail/back, create flow, error/retry, and dirty-state cases; all Notes presentation tests pass 93/93. Web and Android ARM64 release builds pass. Captures 71–76 and 131 are pre-follow-up; no current runtime screenshot or matched Notion list/editor pair exists. | `IN_PROGRESS` | Capture current loaded/selected/loading/error states with controlled data and pair supported states against Notion; verify compact dirty-back and destination retention on native runtime |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset; breadcrumb now shows the page title without repeating the app brand. Captures 51–56, 129 and 137 predate the breadcrumb edit. Compact title typography uses 36dp below 600dp, with 40dp wider; widget checks cover 390px, 567px and 1024px. Capture 137 records the blank compact editor at 1080×2400; no text was entered. The Web release runtime at 1280×720 dark retained “Saving unavailable on Web”; no current Web screenshot artifact or matched pixel pair exists. The current breadcrumb edit passes its 24-test surface suite, targeted analysis, Web release build and Android ARM64 release build. | `IN_PROGRESS` | Capture current editor source on supported targets, pair supported states with Notion at matched viewports, capture remaining error/summary states, and complete editor visual review |
 | 7. Menus/overlays/status | More is anchored at ≥600dp and uses a bottom sheet below 600dp. Delete/dirty-back surfaces and callbacks have widget coverage; Android API 35 runtime opened More → Delete, confirmed the existing “Delete note?” dialog, and removed only the temporary QA note. Full overlay/theme and paired visual states remain unverified. | `PARTIAL` | Capture same-state menu/dialog pairs and verify focus, keyboard, barrier/system-back behavior on supported targets |
-| 8. Auth UI | Release captures 104–110 cover current email/password/details steps at desktop/phone/tablet; public same-size Notion refs 111–114. Register mobile heading geometry now tests y=108–112 against the public reference at about y=108, while email/form/CTA geometry remains aligned; the CTA test constrains mobile y=372–378 (reference y=375) and desktop y=392–400 (reference y=396), with a 44dp auth submit target. Auth page and navigation integration suites pass 18/18 using the test-only bridge package root. Android API 35 captures 124–127 cover Login, keyboard focus, Register, and Login at 200% text scale. Behavior contracts remain intact; this tranche has no fresh release screenshot or pixel diff. | `IN_PROGRESS` | Capture desktop Register details and supported validation/busy/error/success/change-password states; finish accessibility/localization checks; compare supported controls and keep overall score unassigned |
+| 8. Auth UI | Captures 138–139 are fresh system-font Web Register email screenshots at 390×844 and 1280×800, paired with public Notion refs 113/112. CTA bounds align at y=375–414 mobile and y=396–435 desktop after increasing the auth-only minimum to 48dp. Desktop card top aligns near y=43 but is shorter because unsupported provider/legal controls are not added. The earlier widget-derived y=108–112 heading claim is superseded. Auth page/navigation suites pass 34/34, the full presentation suite passes 209/209; current page is blank/focused and no form submitted. | `IN_PROGRESS` | Capture Login and Register details plus supported validation/busy/error/success/change-password states; finish accessibility/localization checks; pair every supported state and keep overall score unassigned |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; Android API 35 capture 127 visually confirms the Login brand and heading remain separated at system font scale 2.0; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets; shared sidebar row Tab focus/blur is verified in light and dark themes | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
 | 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows/Linux runner folders. Current `flutter devices --machine` lists Android 15/API 35 x86_64 emulator, Windows host, Chrome and Edge. Android captures 130–137 cover earlier Home/Notes/shell/editor states; the latest Web runtime review used 1280×720 dark with its existing storage limitation. No `xcodebuild` or Apple runner is available on this Windows host; no physical Android device is attached. Full same-state Notion pairs remain open. | `PARTIAL` | Capture current Home/list/editor/menus across Android, Web and Apple targets; pair with Notion; verify tablet/rotation/accessibility; run iOS/macOS checks on an Apple runner |
-| 11. Regression/build/handoff | Full presentation suite previously passes 203/203; current Notes presentation suite passes 93/93 and `flutter analyze --no-pub lib/main.dart lib/presentation` reports no issues. Current Web release and Android ARM64 release builds pass; the edited Dart files pass format. Full repository analysis still has the recorded 42 issues in the temporary `output/test-shim` and `packages/local_llm_bridge/test`; direct Windows test startup still hits the native `LNK1136` hook issue, while the test-only shim runs passed and package config was restored. iOS/macOS checks remain unavailable on this Windows host. | `IN_PROGRESS` | Continue UI tranches; resolve/isolate analyzer/package-context issues without backend changes; run Apple builds on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
+| 11. Regression/build/handoff | Current auth suite passes 34/34 and the full presentation suite passes 209/209 with the test-only `local_llm_bridge` shim; package config is restored. Scoped analysis reports no issues. Web release and Android ARM64 release APK builds pass; edited Dart files formatted. Full repository analysis still has the recorded 42 dependency/test-context issues; Apple checks remain unavailable on this Windows host. | `IN_PROGRESS` | Continue UI tranches; resolve/isolate analyzer/package-context issues without backend changes; run Apple builds on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
 
 ---
 

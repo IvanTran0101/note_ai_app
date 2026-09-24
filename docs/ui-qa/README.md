@@ -114,6 +114,8 @@ entered, so no note was persisted. Other screenshots remain from the
 | `121-noteflow-sidebar-expanded-1024x768-current-20260924.png` | Current release Web expanded sidebar at a compact desktop viewport | 1024×768 | light |
 | `128-noteflow-home-empty-1080x2400-android15-api35.png` | Android 15/API 35 AVD, current-source Home empty state under temporary local-auth QA build | 1080×2400 | light |
 | `129-noteflow-editor-empty-1080x2400-android15-api35.png` | Android 15/API 35 AVD, current-source blank note editor under temporary local-auth QA build | 1080×2400 | light |
+| `138-noteflow-register-platform-font-390x844-current-20260924.png` | Current system-font Web Register email step, focused blank email field | 390×844 | light |
+| `139-noteflow-register-platform-font-1280x800-current-20260924.png` | Current system-font Web Register email step, focused blank email field | 1280×800 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -540,7 +542,7 @@ score by itself.
   captures `106` and `110`, which use
   `output/playwright/20260924-auth-desktop-anchor/web`. The browser used the
   existing `#/login` and `#/register` routes; no auth form was submitted.
-- Current captures: `104` Register email at 390×844; `105` Login email at
+- Historical Inter-era captures: `104` Register email at 390×844; `105` Login email at
   390×844; `106` Register email at 1280×800; `107` Login email at 1280×800;
   `108` Register details at 390×844; `109` Login password at 390×844; and `110`
   Register email at 768×1024. Captures `108` and `109` use the synthetic
@@ -550,7 +552,7 @@ score by itself.
   desktop files `24` and `26` are actually 1280×720 despite their filenames.
   The app and public Notion routes were captured at DPR 1, with each browser
   viewport set after navigation; no form was submitted.
-- Mobile review found the
+- The Inter-era mobile review found the
   supported form geometry close: the 390px field gutter is 20px, the input is
   350px wide, the main header/form anchors are within a few pixels, and the
   Register Continue button occupies the same `y=375–414` center-column rows as
@@ -791,7 +793,11 @@ score by itself.
   states, same-state pairs for other workflows, accessibility, and Apple
   platform checks remain open; no numeric score is assigned.
 
-## Register CTA alignment follow-up — 2026-09-24
+## Register CTA alignment follow-up — 2026-09-24 (historical widget-only measurements)
+
+The values below were recorded before the platform-font correction. Treat them
+as history, not current browser geometry; the current values and release
+screenshots are in “Platform-font Register recapture” below.
 
 - The existing Register email step now uses a 12dp compact gap and 16dp desktop
   gap before Continue. The details step keeps its existing 20dp gap. The shared
@@ -841,3 +847,31 @@ score by itself.
   context). This tranche does not complete Step 6 or establish a visual score.
   Autosave and all backend contracts remain unchanged; the overall `>=95/100`
   gate is still unproven.
+
+### Platform-font Register recapture — 2026-09-24
+
+- NoteFlow no longer forces Inter: the app theme leaves `fontFamily` unset and
+  `pubspec.yaml` no longer registers Inter/OFL assets. The fresh Web
+  `FontManifest.json` lists MaterialIcons and CupertinoIcons only; the Android
+  ARM64 release APK contains no Inter asset.
+- [Capture 138](138-noteflow-register-platform-font-390x844-current-20260924.png)
+  and [capture 139](139-noteflow-register-platform-font-1280x800-current-20260924.png)
+  are fresh release Web screenshots at DPR 1 on the existing `#/register` route.
+  The email field is blank and focused; no form was submitted. They pair with
+  live Notion captures [113](113-notion-signup-390x844-reference-live-20260924.png)
+  and [112](112-notion-signup-1280x800-reference-live-20260924.png).
+- The auth-only submit minimum is 48dp. The blue Continue bounds are y=375–414
+  on mobile and y=396–435 on desktop, matching the reference's 40px visible
+  height and top anchors. The desktop panel begins near y=43 like the reference
+  but is shorter;
+  provider buttons and legal controls remain absent because NoteFlow has no
+  matching auth contract. No unsupported control or backend behavior was added.
+- The auth page/navigation suite passes 34/34 and the full presentation suite
+  passes 209/209 with the existing test-only `local_llm_bridge` package-root
+  shim; scoped analysis, Web release build, and Android ARM64 release APK build
+  pass. `.dart_tool/package_config.json` was
+  restored to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+  Android font runtime and iOS/macOS remain unverified. These captures cover
+  only Register email, assign no numeric score, and do not establish the
+  app-wide `>=95/100` gate.

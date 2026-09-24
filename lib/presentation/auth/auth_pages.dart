@@ -239,16 +239,16 @@ final class _RegisterPageState extends State<RegisterPage> {
         final double registerSubmitSpacing = _detailsStep
             ? 20.0
             : compactWidth
-            ? NoteFlowSpacing.md
+            ? NoteFlowSpacing.lg + NoteFlowSpacing.xs
             : NoteFlowSpacing.lg;
         return _AuthFormScaffold(
           title: copy.registerTitle,
           subtitle: copy.registerSubtitle,
           compactTopPadding: 76,
-          desktopTopPadding: 32,
-          compactBrandTitleSpacing: 10,
+          desktopTopPadding: 42,
+          compactBrandTitleSpacing: 34,
           compactTitleSubtitleSpacing: 0,
-          compactContentSpacing: NoteFlowSpacing.xxxl + NoteFlowSpacing.xs,
+          compactContentSpacing: NoteFlowSpacing.lg + NoteFlowSpacing.md,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
           desktopPanel: true,
           child: Form(
@@ -1121,7 +1121,7 @@ final class _AuthFormScaffold extends StatelessWidget {
           foregroundColor: tokens.pageSurface,
           disabledBackgroundColor: tokens.subtleSurface,
           disabledForegroundColor: tokens.textMuted,
-          minimumSize: const Size(48.0, 44.0),
+          minimumSize: const Size(48.0, 48.0),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NoteFlowRadius.input),
