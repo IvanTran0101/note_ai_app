@@ -154,19 +154,22 @@ final class NotesListPanel extends StatelessWidget {
                                               const SizedBox(
                                                 height: NoteFlowSpacing.sm,
                                               ),
-                                              Text(
-                                                error!,
-                                                key: const ValueKey<String>(
-                                                  'notes-list-error',
+                                              Semantics(
+                                                excludeSemantics: true,
+                                                child: Text(
+                                                  error!,
+                                                  key: const ValueKey<String>(
+                                                    'notes-list-error',
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: tokens
+                                                            .textSecondary,
+                                                      ),
                                                 ),
-                                                textAlign: TextAlign.center,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                      color:
-                                                          tokens.textSecondary,
-                                                    ),
                                               ),
                                               const SizedBox(
                                                 height: NoteFlowSpacing.xs,
@@ -336,11 +339,14 @@ final class NotesListPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: NoteFlowSpacing.sm),
                   Expanded(
-                    child: Text(
-                      error!,
-                      key: const ValueKey<String>('notes-list-error'),
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: tokens.textSecondary),
+                    child: Semantics(
+                      excludeSemantics: true,
+                      child: Text(
+                        error!,
+                        key: const ValueKey<String>('notes-list-error'),
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: tokens.textSecondary),
+                      ),
                     ),
                   ),
                 ],

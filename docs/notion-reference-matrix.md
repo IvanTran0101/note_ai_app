@@ -193,7 +193,7 @@ from the official help-doc screenshots and the plan §2.3 inventory captured
 | Share | OUT_OF_SCOPE | No sharing contract in NoteFlow — do not render |
 | Copy link | OUT_OF_SCOPE | No link/URL contract — do not render |
 | Favorite | OUT_OF_SCOPE | No favorite contract in NoteDto — do not render |
-| Actions (•••) | SUPPORTED | `NoteDetailMoreActions` — only real callbacks (delete; copy/regenerate summary live with summary) |
+| Actions (•••) | SUPPORTED | `NoteDetailMoreActions` exposes only the existing Delete callback. Summary actions are separate controls in the summary callout. |
 
 ### Page header
 
@@ -208,32 +208,36 @@ from the official help-doc screenshots and the plan §2.3 inventory captured
 
 | Item | Label | NoteFlow mapping |
 | --- | --- | --- |
-| Heading/paragraph/list spacing | PRESENTATION_ONLY | Simulated with existing plain-text content; no block model changes (plan Step 6) |
-| Code block, horizontal scroll | PRESENTATION_ONLY | Only if content rendering is introduced; `NoteDto.content` stays plain text |
+| Plain-text content typography and spacing | PRESENTATION_ONLY | Style the existing `NoteDto.content` field while keeping it plain text; do not add block types or list behavior |
+| Code block, horizontal scroll | OUT_OF_SCOPE | The note content contract has no block/code type or code-block behavior |
+| AI summary Copy / Regenerate | SUPPORTED | Separate controls inside the existing summary callout; Copy copies only the generated summary and Regenerate calls the existing summary flow |
 | Empty states | SUPPORTED | Existing empty/loading/error states restyled |
 
 ### Sidebar
 
 | Item | Label | NoteFlow mapping |
 | --- | --- | --- |
-| Workspace switcher | PRESENTATION_ONLY | Workspace title header (existing `workspaceTitle`); no workspace switching |
+| Workspace identity/title | PRESENTATION_ONLY | Static `NoteFlow` title in the existing shell; no switching behavior |
+| Workspace switcher | OUT_OF_SCOPE | No workspace-switching state or callback exists |
 | Search | SUPPORTED | Dashboard search flow only (`dashboard-search-field`/`toggle`); no new endpoint |
 | Home/Recents | SUPPORTED | Dashboard destination (Step 4) |
 | Inbox/Chat/Meetings/Events | OUT_OF_SCOPE | No corresponding features |
 | New page (+) | SUPPORTED | `onCreateNote`/`_startNewNote` |
-| Profile/settings footer | SUPPORTED | Existing settings sheet + diagnostics entry |
+| Settings | SUPPORTED | Existing settings callback/sheet |
+| Diagnostics | SUPPORTED | Existing diagnostics callback |
+| Profile/avatar | OUT_OF_SCOPE | No profile surface or callback exists |
 
 ### Actions menu
 
 | Item | Label | NoteFlow mapping |
 | --- | --- | --- |
-| Font style / Small text / Full width | PRESENTATION_ONLY | Local presentation setting in the existing settings sheet only if added as pure UI preference; otherwise OUT_OF_SCOPE |
+| Font style / Small text / Full width | OUT_OF_SCOPE | No per-note style or width preference exists; do not add settings for them |
 | Copy link | OUT_OF_SCOPE | — |
-| Copy page contents | PRESENTATION_ONLY | Clipboard copy of content/summary — `Clipboard` use already exists for summary |
+| Copy page contents | OUT_OF_SCOPE | Existing clipboard action copies only the generated summary; it does not copy the note title/body |
 | Duplicate / Move | OUT_OF_SCOPE | No contract |
 | Trash (delete) | SUPPORTED | `deleteNote` + confirmation |
 | Customize page / Lock / AI / Suggest edits / Translate / Import-Export / Version history | OUT_OF_SCOPE | No contracts |
-| Undo | OUT_OF_SCOPE | No undo contract |
+| Undo | OUT_OF_SCOPE | A snackbar undo exists only in the legacy `NotesPage`; it is not part of the active `NotesWorkspacePage` flow |
 
 ### Share dialog
 

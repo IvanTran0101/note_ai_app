@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
@@ -10,6 +11,23 @@ import 'package:note_ai_app/presentation/notes/notes_application_controller.dart
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 1, 1);
+
+List<String> _semanticsLabelsWithin(SemanticsNode node) {
+  final List<String> labels = <String>[];
+
+  void visit(SemanticsNode current) {
+    if (current.label.isNotEmpty) {
+      labels.add(current.label);
+    }
+    current.visitChildren((SemanticsNode child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  visit(node);
+  return labels;
+}
 
 void main() {
   NoteDto buildNote({
@@ -424,6 +442,54 @@ void main() {
       findsNothing,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('notes load error is announced once in both layouts', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    try {
+      for (final (Size size, bool embeddedInWorkspace) in <(Size, bool)>[
+        (const Size(1024, 700), false),
+        (const Size(390, 844), true),
+      ]) {
+        final _FakeNotesController controller = _FakeNotesController()
+          ..listNotesError = StateError('offline');
+        await pumpWorkspace(
+          tester,
+          controller,
+          size: size,
+          embeddedInWorkspace: embeddedInWorkspace,
+        );
+
+        final String error = tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('notes-list-error')),
+            )
+            .data!;
+        final SemanticsNode errorNode = tester.getSemantics(
+          find.byKey(const ValueKey<String>('notes-load-error-state')),
+        );
+        final String accessibleLabels = _semanticsLabelsWithin(errorNode)
+            .join('\n');
+        expect(
+          accessibleLabels.split(error).length - 1,
+          1,
+          reason: 'Semantics labels: $accessibleLabels',
+        );
+        expect(
+          tester
+              .getSemantics(find.byKey(const ValueKey<String>('retry-notes')))
+              .flagsCollection
+              .isButton,
+          isTrue,
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('compact load failure keeps its retry callback', (
