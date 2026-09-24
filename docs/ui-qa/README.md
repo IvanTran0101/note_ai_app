@@ -822,6 +822,22 @@ score by itself.
   `local_llm_bridge` package root. Targeted analyzer, format, and diff checks
   pass; the original package-config SHA-256 was restored to
   `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-- This tranche has no fresh runtime capture or matched pixel diff, so it does
-  not complete Step 6 or establish a visual score. Autosave and all backend
-  contracts remain unchanged; the overall `>=95/100` gate is still unproven.
+- Android 15/API 35 local-auth release runtime was captured at
+  [137](137-noteflow-android-editor-empty-1080x2400-android15-api35.png)
+  (1080×2400). It shows the blank compact editor, existing Back action, title,
+  and content fields. No text was entered and no note was created.
+- The local-auth Web release build passed (86.9 seconds). Browser review at
+  1280×720 dark retained the existing “Saving unavailable on Web” state; no Web
+  screenshot artifact or matched Notion pixel diff was captured. The Android
+  local-auth x64 release APK built successfully (35.7 MB); afterward the
+  original Cognito APK was reinstalled, its Login screen was verified, and its
+  SHA-256 remained
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
+- `flutter test --no-pub test/presentation` passes 203/203; format checks pass
+  for 171 Dart files, and targeted editor analysis reports no issues. A full
+  repository `flutter analyze --no-pub` run does not pass: it reports 42 issues
+  in `output/test-shim` and `packages/local_llm_bridge/test` (undeclared `ffi`
+  in the temporary shim and unresolved `package:test` in that package test
+  context). This tranche does not complete Step 6 or establish a visual score.
+  Autosave and all backend contracts remain unchanged; the overall `>=95/100`
+  gate is still unproven.
