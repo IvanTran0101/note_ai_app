@@ -8,6 +8,7 @@ import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dar
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
   final DateTime createdAt = DateTime.utc(2026, 1, 1);
@@ -116,7 +117,10 @@ void main() {
     );
     final BoxDecoration noticeDecoration =
         unavailableNotice.decoration! as BoxDecoration;
-    expect(noticeDecoration.border!.top.color, const Color(0xFFEDEDEC));
+    expect(
+      noticeDecoration.border!.top.color,
+      NoteFlowUiTokens.light().divider,
+    );
     expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
     expect(controller.notes, isEmpty);
     expect(tester.takeException(), isNull);

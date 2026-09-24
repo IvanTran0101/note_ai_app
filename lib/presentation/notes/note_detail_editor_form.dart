@@ -149,7 +149,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
                   key: const ValueKey<String>('note-detail-content-field'),
                   controller: contentController,
                   focusNode: contentFocusNode,
-                  minLines: 6,
+                  minLines: 1,
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
                   textCapitalization: TextCapitalization.sentences,

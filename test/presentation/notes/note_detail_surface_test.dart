@@ -27,6 +27,7 @@ void main() {
     String? error,
     bool hasSavedNote = true,
     String titleText = 'First note',
+    String contentText = 'The first note body.',
   }) async {
     tester.view
       ..physicalSize = size
@@ -37,7 +38,7 @@ void main() {
       text: titleText,
     );
     final TextEditingController contentController = TextEditingController(
-      text: 'The first note body.',
+      text: contentText,
     );
     final FocusNode contentFocusNode = FocusNode();
     addTearDown(titleController.dispose);
@@ -108,6 +109,20 @@ void main() {
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
 
+  testWidgets('empty content starts as a compact multiline page block', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(tester, size: const Size(390, 844), contentText: '');
+
+    final Finder content = find.byKey(contentFieldKey);
+    final TextField field = tester.widget<TextField>(content);
+    expect(field.maxLines, isNull);
+    expect(field.keyboardType, TextInputType.multiline);
+    expect(tester.getSize(content).height, lessThan(80));
+    expect(find.text('Content'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('long page titles wrap at compact widths without overflow', (
     WidgetTester tester,
   ) async {
@@ -158,7 +173,7 @@ void main() {
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 720);
     expect(tester.getCenter(form).dx, 512);
-    expect(tester.getTopLeft(form).dy, 112);
+    expect(tester.getTopLeft(form).dy, 48);
     expect(tester.getSize(find.byKey(contentFieldKey)).width, 708);
     expect(find.byType(Scaffold), findsNothing);
     expect(tester.takeException(), isNull);
@@ -171,8 +186,8 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 360);
-    expect(tester.getTopLeft(form).dx, 96);
-    expect(tester.getTopLeft(form).dy, 56);
+    expect(tester.getTopLeft(form).dx, 20);
+    expect(tester.getTopLeft(form).dy, 24);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
       40,
@@ -201,9 +216,9 @@ void main() {
     await pumpSurface(tester, size: const Size(390, 844), showPageHeader: true);
 
     final Finder form = find.byType(NoteDetailEditorForm);
-    expect(tester.getTopLeft(form).dx, 96);
-    expect(tester.getTopLeft(form).dy, 105);
-    expect(tester.getSize(form).width, 278);
+    expect(tester.getTopLeft(form).dx, 20);
+    expect(tester.getTopLeft(form).dy, 73);
+    expect(tester.getSize(form).width, 354);
     expect(tester.takeException(), isNull);
   });
 

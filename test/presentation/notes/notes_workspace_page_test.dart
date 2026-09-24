@@ -238,8 +238,8 @@ void main() {
     );
 
     final Finder pageTitle = find.text('Notes').last;
-    expect(tester.getTopLeft(pageTitle).dx, 96);
-    expect(tester.getTopLeft(pageTitle).dy, 160);
+    expect(tester.getTopLeft(pageTitle).dx, 20);
+    expect(tester.getTopLeft(pageTitle).dy, 29);
     expect(tester.takeException(), isNull);
   });
 
@@ -260,12 +260,17 @@ void main() {
     final Rect firstNoteRect = tester.getRect(
       find.byKey(const ValueKey<String>('note-note-1')),
     );
+    final Rect descriptionRect = tester.getRect(
+      find.text('Every idea, in one calm place.'),
+    );
 
-    expect(createRect.top, closeTo(titleRect.top, 1));
+    expect(createRect.left, greaterThanOrEqualTo(titleRect.right));
+    expect(createRect.top, lessThan(titleRect.bottom));
+    expect(createRect.bottom, greaterThan(titleRect.top));
     expect(createRect.width, 48);
     expect(find.byTooltip('New note'), findsOneWidget);
     expect(
-      firstNoteRect.top - titleRect.bottom,
+      firstNoteRect.top - descriptionRect.bottom,
       lessThanOrEqualTo(NoteFlowSpacing.xxl),
     );
     expect(tester.takeException(), isNull);

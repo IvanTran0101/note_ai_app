@@ -273,27 +273,38 @@ class WorkspaceShellState extends State<WorkspaceShell>
           // Compact navigation lives beside the avatar in the top bar, like
           // Notion's mobile shell. The existing FAB remains the create action.
           bottomNavigationBar: null,
-          body: SafeArea(
-            top: compact,
-            left: compact,
-            right: compact,
-            bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                SizedBox(
-                  height: compact ? 56 : 0,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SafeArea(
+                top: compact,
+                left: compact,
+                right: compact,
+                bottom: false,
+                child: SizedBox(
+                  height: compact ? 57 : 0,
                   child: compact
-                      ? _buildCompactTopBar(copy)
+                      ? Column(
+                          children: <Widget>[
+                            SizedBox(
+                              height: 56,
+                              child: _buildCompactTopBar(copy),
+                            ),
+                            const SizedBox(
+                              height: 1,
+                              child: Divider(height: 1),
+                            ),
+                          ],
+                        )
                       : const SizedBox.shrink(),
                 ),
-                SizedBox(
-                  height: compact ? 1 : 0,
-                  child: compact
-                      ? const Divider(height: 1)
-                      : const SizedBox.shrink(),
-                ),
-                Expanded(
+              ),
+              Expanded(
+                child: SafeArea(
+                  top: false,
+                  left: compact,
+                  right: compact,
+                  bottom: false,
                   child: Stack(
                     fit: StackFit.expand,
                     children: <Widget>[
@@ -310,9 +321,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
                                 ? const SizedBox.shrink()
                                 : const VerticalDivider(width: 1, thickness: 1),
                           ),
-                          Expanded(
-                            child: compact ? _buildSwipePages() : _buildPages(),
-                          ),
+                          Expanded(child: _buildSwipePages(compact: compact)),
                         ],
                       ),
                       if (collapsedDesktop)
@@ -324,8 +333,8 @@ class WorkspaceShellState extends State<WorkspaceShell>
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -341,39 +350,45 @@ class WorkspaceShellState extends State<WorkspaceShell>
     );
   }
 
-  Widget _buildSwipePages() {
+  Widget _buildSwipePages({required bool compact}) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: (_) {
-        _horizontalSwipeDistance = 0;
-        _pointerSwipeHandled = false;
-      },
-      onHorizontalDragUpdate: (DragUpdateDetails details) {
-        if (_pointerSwipeHandled) {
-          return;
-        }
-        _horizontalSwipeDistance += details.delta.dx;
-        if (_horizontalSwipeDistance.abs() < 80) {
-          return;
-        }
-        final int nextIndex =
-            (_selectedIndex + (_horizontalSwipeDistance < 0 ? 1 : -1)).clamp(
-              0,
-              1,
-            );
-        _pointerSwipeHandled = true;
-        if (nextIndex != _selectedIndex) {
-          showDestination(WorkspaceDestination.values[nextIndex]);
-        }
-      },
-      onHorizontalDragEnd: (_) {
-        _horizontalSwipeDistance = 0;
-        _pointerSwipeHandled = false;
-      },
-      onHorizontalDragCancel: () {
-        _horizontalSwipeDistance = 0;
-        _pointerSwipeHandled = false;
-      },
+      onHorizontalDragStart: compact
+          ? (_) {
+              _horizontalSwipeDistance = 0;
+              _pointerSwipeHandled = false;
+            }
+          : null,
+      onHorizontalDragUpdate: compact
+          ? (DragUpdateDetails details) {
+              if (_pointerSwipeHandled) {
+                return;
+              }
+              _horizontalSwipeDistance += details.delta.dx;
+              if (_horizontalSwipeDistance.abs() < 80) {
+                return;
+              }
+              final int nextIndex =
+                  (_selectedIndex + (_horizontalSwipeDistance < 0 ? 1 : -1))
+                      .clamp(0, 1);
+              _pointerSwipeHandled = true;
+              if (nextIndex != _selectedIndex) {
+                showDestination(WorkspaceDestination.values[nextIndex]);
+              }
+            }
+          : null,
+      onHorizontalDragEnd: compact
+          ? (_) {
+              _horizontalSwipeDistance = 0;
+              _pointerSwipeHandled = false;
+            }
+          : null,
+      onHorizontalDragCancel: compact
+          ? () {
+              _horizontalSwipeDistance = 0;
+              _pointerSwipeHandled = false;
+            }
+          : null,
       child: AnimatedBuilder(
         animation: _pageMotionController,
         child: _buildPages(),
@@ -382,8 +397,13 @@ class WorkspaceShellState extends State<WorkspaceShell>
             _pageMotionController.value,
           );
           return FractionalTranslation(
-            translation: Offset(_pageTravel * (1 - progress), 0),
-            child: Opacity(opacity: 0.94 + (0.06 * progress), child: child),
+            translation: compact
+                ? Offset(_pageTravel * (1 - progress), 0)
+                : Offset.zero,
+            child: Opacity(
+              opacity: compact ? 0.94 + (0.06 * progress) : 1,
+              child: child,
+            ),
           );
         },
       ),

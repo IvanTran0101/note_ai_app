@@ -248,14 +248,15 @@ final class NotesListPanel extends StatelessWidget {
                               bottom: NoteFlowSpacing.xxxl,
                             ),
                             children: <Widget>[
-                              DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: tokens.subtleSurface,
-                                  border: Border.all(color: tokens.divider),
+                              Material(
+                                color: tokens.subtleSurface,
+                                shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(
                                     NoteFlowRadius.card,
                                   ),
+                                  side: BorderSide(color: tokens.divider),
                                 ),
+                                clipBehavior: Clip.antiAlias,
                                 child: ListView.separated(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),

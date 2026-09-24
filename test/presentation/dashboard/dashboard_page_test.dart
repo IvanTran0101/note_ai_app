@@ -15,6 +15,8 @@ import 'package:note_ai_app/presentation/dashboard/dashboard_state.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_route_result.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_localizations.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 9, 10, 9);
 
@@ -183,7 +185,7 @@ void main() {
       expect(pageColumn, findsOneWidget);
       expect(tester.getSize(pageColumn).width, 768);
       expect(tester.getTopLeft(find.text('Home')).dx, closeTo(360, 4));
-      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(160, 4));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(120, 4));
       expect(tester.takeException(), isNull);
     });
 
@@ -214,10 +216,60 @@ void main() {
       );
       expect(pageColumn, findsOneWidget);
       expect(tester.getSize(pageColumn).width, 390);
-      // The outer WorkspaceShell contributes its 44dp compact toolbar, so the
-      // full app's title anchor is y=204 before the font's glyph inset.
-      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(96, 1));
-      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(160, 1));
+      // The compact page keeps the title aligned to the phone's 20dp edge.
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(20, 1));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(28, 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('compact Home offsets its page title below the safe-area bar', (
+      WidgetTester tester,
+    ) async {
+      const Size viewport = Size(390, 844);
+      tester.view
+        ..physicalSize = viewport
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('vi'),
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            DashboardCopy.delegate,
+            WorkspaceCopy.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: viewport,
+              devicePixelRatio: 1,
+              padding: EdgeInsets.only(top: 24),
+              viewPadding: EdgeInsets.only(top: 24),
+            ),
+            child: WorkspaceShell(
+              dashboard: DashboardPage(
+                dashboardController: controller,
+                notesController: _FakeNotesController(notes: notes),
+                onOpenNote: (NoteDto _) => null,
+                onCreateNote: () => null,
+                embeddedInWorkspace: true,
+              ),
+              notes: const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Trang chủ'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Trang chủ')).dy, closeTo(85, 1));
       expect(tester.takeException(), isNull);
     });
 
@@ -675,10 +727,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('dashboard-note-a')));
       await tester.pump();
 
-      final Text title = tester.widget<Text>(find.text('Alpha'));
-      final Card card = tester.widget<Card>(
-        find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+      final Finder cardFinder = find.byKey(
+        const ValueKey<String>('dashboard-note-card-a'),
       );
+      final Text title = tester.widget<Text>(
+        find.descendant(of: cardFinder, matching: find.text('Alpha')),
+      );
+      final Card card = tester.widget<Card>(cardFinder);
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(
         tester.element(find.byType(DashboardPage)),
       );
@@ -730,7 +785,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(query.calls, greaterThan(callsBeforeTap));
-      expect(find.text('Renamed'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-a')),
+          matching: find.text('Renamed'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('invokes create from the loaded state action', (
@@ -894,7 +955,13 @@ void main() {
       expect(notesController.listNotesCalls, greaterThan(notesCallsBefore));
       expect(query.calls, greaterThan(queryCallsBefore));
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('Beta'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-b')),
+          matching: find.text('Beta'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('2 notes'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -948,7 +1015,13 @@ void main() {
       expect(notesController.listNotesCalls, notesCallsBefore + 1);
       expect(query.calls, queryCallsBefore + 1);
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('Beta'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-b')),
+          matching: find.text('Beta'),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   });
