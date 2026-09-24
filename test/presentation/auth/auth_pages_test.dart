@@ -361,11 +361,11 @@ void main() {
     );
     expect(
       tester.getRect(find.byKey(RegisterPage.submitKey)).top,
-      inInclusiveRange(380, 386),
+      inInclusiveRange(372, 378),
     );
     expect(
       tester.getSize(find.byKey(RegisterPage.submitKey)).height,
-      inInclusiveRange(46, 50),
+      inInclusiveRange(42, 46),
     );
     expect(
       find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
@@ -395,7 +395,7 @@ void main() {
     expect(tester.getRect(desktopPanel).top, inInclusiveRange(28, 36));
     expect(
       tester.getRect(find.byKey(RegisterPage.submitKey)).top,
-      inInclusiveRange(400, 408),
+      inInclusiveRange(392, 400),
     );
 
     await tester.enterText(

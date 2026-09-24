@@ -236,6 +236,11 @@ final class _RegisterPageState extends State<RegisterPage> {
       builder: (BuildContext context, Widget? child) {
         final AuthState state = widget.controller.state;
         final bool compactWidth = MediaQuery.sizeOf(context).width < 600;
+        final double registerSubmitSpacing = _detailsStep
+            ? 20.0
+            : compactWidth
+            ? NoteFlowSpacing.md
+            : NoteFlowSpacing.lg;
         return _AuthFormScaffold(
           title: copy.registerTitle,
           subtitle: copy.registerSubtitle,
@@ -348,7 +353,7 @@ final class _RegisterPageState extends State<RegisterPage> {
                     onFieldSubmitted: (_) => _submit(),
                   ),
                 ],
-                SizedBox(height: !_detailsStep && !compactWidth ? 26.0 : 20.0),
+                SizedBox(height: registerSubmitSpacing),
                 _authSubmitButton(
                   key: RegisterPage.submitKey,
                   label: _detailsStep
@@ -1116,7 +1121,8 @@ final class _AuthFormScaffold extends StatelessWidget {
           foregroundColor: tokens.pageSurface,
           disabledBackgroundColor: tokens.subtleSurface,
           disabledForegroundColor: tokens.textMuted,
-          minimumSize: const Size(48.0, 48.0),
+          minimumSize: const Size(48.0, 44.0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NoteFlowRadius.input),
           ),

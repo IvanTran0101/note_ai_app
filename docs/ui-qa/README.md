@@ -790,3 +790,22 @@ score by itself.
   anchor, not 95% app-wide fidelity. Loaded Grid, loading, search, selected
   states, same-state pairs for other workflows, accessibility, and Apple
   platform checks remain open; no numeric score is assigned.
+
+## Register CTA alignment follow-up — 2026-09-24
+
+- The existing Register email step now uses a 12dp compact gap and 16dp desktop
+  gap before Continue. The details step keeps its existing 20dp gap. The shared
+  auth submit button is 44dp high to retain the minimum touch target.
+- The current widget test constrains the mobile CTA top to y=372–378 versus the
+  live Notion reference y=375, and desktop to y=392–400 versus y=396. These
+  checks measure widget geometry; this tranche has no fresh release screenshot
+  or pixel diff.
+- `auth_pages_test.dart` and `auth_navigation_integration_test.dart` pass
+  18/18 with the temporary test-only `local_llm_bridge` package root. The
+  original `.dart_tool/package_config.json` was restored to SHA-256
+  `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+  Targeted `flutter analyze`, Dart format, and `git diff --check` pass.
+- No auth controller, route, input DTO, service, domain, application,
+  infrastructure, persistence, or backend code changed. Step 8 stays in
+  progress, and no app-wide score is assigned; the `>=95/100` gate remains
+  unproven.
