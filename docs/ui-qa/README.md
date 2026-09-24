@@ -130,6 +130,9 @@ entered, so no note was persisted. Other screenshots remain from the
 | `151-noteflow-home-empty-after-qa-cleanup-android15-api35-current-20260924.png` | Home returned to “No notes yet” after QA-note deletion | 1080×2400 | light |
 | `152-noteflow-baseline-apk-after-restore-android15-api35-current-20260924.png` | Original Cognito APK restored; Login screen visible | 1080×2400 | light |
 | `153-noteflow-editor-title-40-android15-api35-current-20260924.png` | Current-source Android editor with 40dp title typography | 1080×2400 | light |
+| `154-noteflow-home-storage-unavailable-390x844-dark-current.png` | Current-source Web Home with the existing storage limitation | 390×844 | dark |
+| `155-noteflow-editor-390x844-current.png` | Current-source Web blank editor; title anchor is 55px above the measured Notion phone anchor | 390×844 | light |
+| `156-noteflow-editor-title-anchor-android15-api35-current-20260924.png` | Current-source Android blank editor; title anchor measured at x≈96.8/y≈214.9dp in a 411×914 logical viewport | 1080×2400 | light |
 
 Image dimensions were read from the PNG files. Historical references `24` and
 `26` are 1280×720 despite their filenames; use `111`–`114` for current
@@ -969,9 +972,32 @@ screenshots are in “Platform-font Register recapture” below.
   title uses 40px/48px/700 typography; no private page text or screenshot was
   saved to the repository.
 - Focused Dashboard/editor tests pass 65/65 and the full `test/presentation`
-  suite passes 211/211 with the temporary test-only package-root shim; the
+  suite passes 212/212 with the temporary test-only package-root shim; the
   `.dart_tool/package_config.json` hash was restored. Scoped analysis and the
   Web release build pass. The current-source Android x64 local-auth release build also passes
-  (36.9MB); it was saved under the system temp directory and not installed. The
-  pre-existing project APK was restored byte-for-byte. Android runtime,
-  iOS/macOS and overall visual scoring remain open.
+  (36.9MB); it was installed temporarily on the existing API 35 emulator and
+  opened only to a blank draft, then the original Cognito APK was restored. The
+  pre-existing generated APK outputs were restored byte-for-byte. Android editor
+  runtime is now captured, while iOS/macOS and overall visual scoring remain open.
+
+## Compact editor vertical-anchor check — 2026-09-24
+
+- Web capture `155` is a current-source release build at 390×844, DPR 1. Its
+  blank-editor title ink starts at x=96/y=157; the live Notion phone reference
+  starts at x=96/y=212. The Web title is 55px too high, so this is a measured
+  miss and must be fixed before claiming the compact editor matches.
+- Android capture `156` shows a blank draft on the API 35 x64 emulator. The
+  emulator viewport is 411×914 logical pixels (1080×2400 at 420dpi); title ink
+  starts around x=96.8/y=214.9dp. This is close to the Notion anchor, but the
+  viewport is not an exact 390×844 pair and does not establish a score.
+- The release APK was installed with `adb install -r`; no title or body text was
+  entered. The installed original Cognito APK was restored and the emulator was
+  returned to its home screen; existing app data was not cleared. Both generated
+  release APK outputs were restored byte-for-byte after the build.
+- The note-detail tests pass 25/25 and the complete presentation suite passes
+  212/212 using the temporary test-only package-root shim. Targeted analysis,
+  formatting, Web release build, Android x64 release build, and `git diff
+  --check` pass. No backend or application contract changed.
+- The overall visual score remains unassigned. The app-wide `>=95/100` gate is
+  not met or claimed; the Web anchor miss, matched data states, other workflows,
+  and Apple runtime checks remain open.

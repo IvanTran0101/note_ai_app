@@ -83,8 +83,11 @@ abstract final class NoteFlowLayout {
   static const double compactPageTopPadding = 160;
   static const double editorTopPadding = 112;
 
-  /// Detail has a second 44dp page toolbar before the editor content.
-  static const double compactEditorTopPadding = 116;
+  /// Space after the compact page toolbar before the title field.
+  ///
+  /// The toolbar is already part of [NoteDetailSurface]; counting it again
+  /// here pushed the title 60dp below the measured Notion page-title anchor.
+  static const double compactEditorTopPadding = 56;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
   static const double dashboardContentMaxWidth = 768;

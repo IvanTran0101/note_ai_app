@@ -166,7 +166,7 @@ void main() {
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 360);
     expect(tester.getTopLeft(form).dx, 96);
-    expect(tester.getTopLeft(form).dy, 116);
+    expect(tester.getTopLeft(form).dy, 56);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
       40,
@@ -181,7 +181,7 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getTopLeft(form).dx, 96);
-    expect(tester.getTopLeft(form).dy, 165);
+    expect(tester.getTopLeft(form).dy, 105);
     expect(tester.getSize(form).width, 278);
     expect(tester.takeException(), isNull);
   });
