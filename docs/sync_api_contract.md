@@ -62,7 +62,7 @@ Conflict response (`409`):
   "code": "REVISION_CONFLICT",
   "retryable": false,
   "mutationId": "mutation-123",
-  "remoteNote": {}
+  "remoteNote": null
 }
 ```
 
@@ -80,6 +80,9 @@ The cursor is opaque. Flutter stores it and sends it back unchanged.
   "hasMore": false
 }
 ```
+
+The client stores `nextCursor` even when `hasMore` is false. It is the last
+successfully applied position, not only a request for another page.
 
 Deleted notes remain represented as tombstones until the sync policy allows
 cleanup.
@@ -112,6 +115,27 @@ credentials, tokens, or request bodies through this contract.
 `lib/application/sync/sync_contract.dart` is the only Application-facing
 remote port. The future Infrastructure adapter owns HTTP, token attachment,
 JSON mapping, and provider error mapping.
+
+## M1.2 backend semantics
+
+The sandbox implementation stores one per-account sequence item and writes the
+note snapshot, change-feed row, and idempotency record in one DynamoDB
+transaction. Change-feed rows use the sparse `ChangesByOwnerSequence` index.
+
+```text
+OWNER#sub / META#SYNC
+OWNER#sub / NOTE#note-id
+OWNER#sub / MUTATION#mutation-id
+OWNER#sub / CHANGE#sequence
+```
+
+An accepted mutation advances the account sequence. A stale `baseRevision`
+returns `409 REVISION_CONFLICT`; it does not create a change-feed row. A retry
+with the same `mutationId` replays the original applied response.
+
+The cursor is account-bound and opaque. The client stores it even when
+`hasMore` is false, because it represents the last successfully applied
+sequence.
 
 ## M1.0 stop gate
 

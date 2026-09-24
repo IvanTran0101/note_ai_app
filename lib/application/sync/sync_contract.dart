@@ -159,7 +159,7 @@ final class SyncMutationResult {
 
   factory SyncMutationResult.conflict({
     required String mutationId,
-    required SyncNoteSnapshot remote,
+    SyncNoteSnapshot? remote,
   }) {
     return SyncMutationResult._(
       mutationId: _requireNonBlank(mutationId, 'mutationId'),
@@ -181,12 +181,12 @@ final class SyncMutationResult {
 final class SyncChangesPage {
   SyncChangesPage({
     required Iterable<SyncNoteSnapshot> snapshots,
-    required this.nextCursor,
-    required this.hasMore,
-  }) : snapshots = List<SyncNoteSnapshot>.unmodifiable(snapshots) {
-    final bool cursorPresent = nextCursor != null && nextCursor!.isNotEmpty;
-    if (hasMore != cursorPresent) {
-      throw ArgumentError('hasMore must match whether nextCursor is present');
+    String? nextCursor,
+    this.hasMore = false,
+  }) : snapshots = List<SyncNoteSnapshot>.unmodifiable(snapshots),
+       nextCursor = _normalizeCursor(nextCursor) {
+    if (hasMore && this.nextCursor == null) {
+      throw ArgumentError('hasMore requires a nextCursor');
     }
   }
 
@@ -247,4 +247,8 @@ int _requirePositive(int value, String fieldName) {
     throw ArgumentError.value(value, fieldName, 'must be positive');
   }
   return value;
+}
+
+String? _normalizeCursor(String? value) {
+  return value == null || value.isEmpty ? null : value;
 }

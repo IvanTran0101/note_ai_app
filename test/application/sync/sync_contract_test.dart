@@ -103,6 +103,10 @@ void main() {
     expect(applied.note, _snapshot());
     expect(conflict.isConflict, isTrue);
     expect(conflict.conflictRemote, _snapshot(revision: 2));
+    expect(
+      SyncMutationResult.conflict(mutationId: 'm-2').conflictRemote,
+      isNull,
+    );
   });
 
   test('change page keeps cursor opaque and snapshots immutable', () {
@@ -119,6 +123,13 @@ void main() {
     expect(
       () => page.snapshots.add(_snapshot(revision: 2)),
       throwsUnsupportedError,
+    );
+    expect(
+      SyncChangesPage(
+        snapshots: <SyncNoteSnapshot>[_snapshot()],
+        nextCursor: 'last-seen-cursor',
+      ).hasMore,
+      isFalse,
     );
     expect(
       () => SyncChangesPage(

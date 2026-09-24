@@ -66,7 +66,7 @@ export const createSyncFunction = (stack: Stack, table: ITable): SyncFunction =>
         'dynamodb:TransactWriteItems',
         'dynamodb:DescribeTable',
       ],
-      resources: [table.tableArn],
+      resources: [table.tableArn, `${table.tableArn}/index/*`],
     }),
   );
 
