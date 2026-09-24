@@ -35,15 +35,22 @@ final class NotesWorkspaceLoadingView extends StatelessWidget {
             top: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
-                compact ? NoteFlowSpacing.xl : NoteFlowLayout.editorTopPadding,
+                compact
+                    ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                    : NoteFlowSpacing.xl,
+                compact
+                    ? NoteFlowLayout.compactPageTopInset(context)
+                    : NoteFlowLayout.editorTopPadding,
                 compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                 NoteFlowSpacing.xl,
               ),
-              child: Center(
+              child: Align(
+                alignment: compact ? Alignment.topLeft : Alignment.center,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: NoteFlowLayout.editorMaxWidth,
+                  constraints: BoxConstraints(
+                    maxWidth: compact
+                        ? NoteFlowLayout.compactPageMaxWidth
+                        : NoteFlowLayout.editorMaxWidth,
                   ),
                   child: KeyedSubtree(
                     key: skeletonKey,

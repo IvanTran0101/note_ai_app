@@ -98,6 +98,7 @@ or wider capture before the corresponding step is declared passing.
 | --- | --- | --- | --- | --- |
 | Top bar height | **44px** (`.notion-topbar`, full width) | ±2 | live measure | — |
 | Page title | **40px / 700 / lh 48px**, block height 48 | ±2 | live measure (`h1`) | — |
+| Compact page title anchor | x=96, y=212 at 390×844; x=96, y=156 at 567×694; same 40px/700/48px style | ±4 | live read-only DOM measure, 2026-09-24 | title anchor only; full page pair pending |
 | Body text | **16px / 400 / lh 24px** (1.5) | — | live measure | — |
 | Content text column | **708px** (title block 720px incl. hover padding) | ±4 | live measure | — |
 | Content position | left gutter 271–277px at 1262 viewport → column centered | ±4 | live measure | — |
@@ -128,6 +129,20 @@ This records one shared editor anchor only. The NoteFlow images are not paired
 Notion screenshots or a full pixel-diff set, and they do not establish the
 plan's 95-point gate. Sidebar-open, list, dashboard, menus, overlays, auth
 states, and device-specific comparisons remain outstanding.
+
+### Compact page-title anchor recheck (2026-09-24)
+
+The signed-in Notion page was inspected read-only at 390×844 and 567×694, DPR 1.
+Its page-title block starts at x=96/y=212 on the phone viewport and x=96/y=156
+at 567×694. Both use 40px type, 48px line height and weight 700; the title wraps
+at 390×844. Only geometry and typography were recorded. No private page text or
+reference screenshot was copied into the repository.
+
+Current NoteFlow Web capture `ui-qa/154-noteflow-home-storage-unavailable-390x844-dark-current.png`
+shows the Home heading in the existing Web storage-limitation state. Its painted
+glyph begins near x=99/y=213. This is one title-anchor check; the storage error
+does not have the same content state as Notion Home and is not a same-state visual
+pair or an overall score.
 
 ### Sidebar-open anchor recheck (2026-09-23)
 

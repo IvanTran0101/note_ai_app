@@ -69,13 +69,48 @@ final class NoteFlowSemanticColors
 abstract final class NoteFlowLayout {
   static const double compactBreakpoint = 600;
   static const double expandedBreakpoint = 840;
-  static const double compactEditorMaxWidth = 360;
+
+  /// The compact page column starts after the 72dp navigation gutter and a
+  /// 24dp page inset used by the Notion mobile/web reference.
+  static const double compactPageLeadingInset = 96;
+
+  /// Includes the page inset and trailing gutter around the content column.
+  static const double compactPageMaxWidth = 360;
+  static const double compactPageNarrowLeadingInset = 16;
+  static const double compactEditorMaxWidth = compactPageMaxWidth;
+
+  /// The mobile reference places its H1 at y=212 below a 44dp top bar.
+  static const double compactPageTopPadding = 160;
   static const double editorTopPadding = 112;
-  static const double compactEditorTopPadding = 56;
+
+  /// Detail has a second 44dp page toolbar before the editor content.
+  static const double compactEditorTopPadding = 116;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
   static const double dashboardContentMaxWidth = 768;
   static const double dashboardTopPadding = 116;
+
+  static double compactPageLeadingInsetFor(BuildContext context) {
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final double progress = ((viewportWidth - 320) / 70).clamp(0.0, 1.0);
+    return compactPageNarrowLeadingInset +
+        (compactPageLeadingInset - compactPageNarrowLeadingInset) * progress;
+  }
+
+  static double compactPageFrameMaxWidthFor(BuildContext context) =>
+      compactPageMaxWidth +
+      compactPageLeadingInsetFor(context) +
+      NoteFlowSpacing.lg;
+
+  static double compactPageTopInset(BuildContext context) =>
+      (compactPageTopPadding - MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  static double compactEditorTopInset(BuildContext context) =>
+      (compactEditorTopPadding - MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
 }
 
 /// Shared spacing scale (dp). Every gap in presentation code must pick one of

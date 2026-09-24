@@ -957,3 +957,21 @@ screenshots are in “Platform-font Register recapture” below.
   `349C005D2025F3CEAB09C0C79C48A4FC137A3FF99C664FB6DB2C3E9B1812C8BE`.
 - This corrects one measurable editor typography mismatch; it does not provide
   same-state Notion pairs for the rest of the app or establish a 95/100 score.
+
+## Compact mobile page-anchor follow-up — 2026-09-24
+
+- `154-noteflow-home-storage-unavailable-390x844-dark-current.png` is a
+  current-source Web release capture at DPR 1, 390×844, dark theme. It records
+  the Home title and the existing Web storage-unavailable message. The title
+  glyph begins near x=99/y=213, corresponding to the live Notion title anchor
+  x=96/y=212; this is only an anchor comparison, not a matched Home data state.
+- The live Notion page was inspected read-only at 390×844 and 567×694. Its page
+  title uses 40px/48px/700 typography; no private page text or screenshot was
+  saved to the repository.
+- Focused Dashboard/editor tests pass 65/65 and the full `test/presentation`
+  suite passes 211/211 with the temporary test-only package-root shim; the
+  `.dart_tool/package_config.json` hash was restored. Scoped analysis and the
+  Web release build pass. The current-source Android x64 local-auth release build also passes
+  (36.9MB); it was saved under the system temp directory and not installed. The
+  pre-existing project APK was restored byte-for-byte. Android runtime,
+  iOS/macOS and overall visual scoring remain open.

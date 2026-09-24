@@ -117,7 +117,7 @@ final class NoteDetailSurface extends StatelessWidget {
         ? NoteFlowLayout.compactEditorMaxWidth
         : NoteFlowLayout.editorMaxWidth;
     final double editorTopPadding = compact
-        ? NoteFlowLayout.compactEditorTopPadding
+        ? NoteFlowLayout.compactEditorTopInset(context)
         : NoteFlowLayout.editorTopPadding;
     final String pageStatus = isSaving
         ? savingLabel
@@ -166,12 +166,15 @@ final class NoteDetailSurface extends StatelessWidget {
             key: scrollKey,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.fromLTRB(
-              NoteFlowSpacing.lg,
+              compact
+                  ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                  : NoteFlowSpacing.lg,
               editorTopPadding,
               NoteFlowSpacing.lg,
               NoteFlowSpacing.xl,
             ),
-            child: Center(
+            child: Align(
+              alignment: compact ? Alignment.topLeft : Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: editorMaxWidth),
                 child: NoteDetailEditorForm(

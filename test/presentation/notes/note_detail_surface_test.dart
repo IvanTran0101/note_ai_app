@@ -158,19 +158,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('centers the 360px editor column at the Notion compact width', (
+  testWidgets('anchors the compact editor column to the Notion page inset', (
     WidgetTester tester,
   ) async {
     await pumpSurface(tester, size: const Size(567, 694));
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 360);
-    expect(tester.getCenter(form).dx, 283.5);
-    expect(tester.getTopLeft(form).dy, 56);
+    expect(tester.getTopLeft(form).dx, 96);
+    expect(tester.getTopLeft(form).dy, 116);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
       40,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact page header keeps the title at the mobile anchor', (
+    WidgetTester tester,
+  ) async {
+    await pumpSurface(tester, size: const Size(390, 844), showPageHeader: true);
+
+    final Finder form = find.byType(NoteDetailEditorForm);
+    expect(tester.getTopLeft(form).dx, 96);
+    expect(tester.getTopLeft(form).dy, 165);
+    expect(tester.getSize(form).width, 278);
     expect(tester.takeException(), isNull);
   });
 

@@ -281,16 +281,21 @@ final class _DashboardStatePage extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: <Widget>[
-        Center(
+        Align(
+          alignment: compact ? Alignment.topLeft : Alignment.center,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: NoteFlowLayout.dashboardContentMaxWidth,
+            constraints: BoxConstraints(
+              maxWidth: compact
+                  ? NoteFlowLayout.compactPageFrameMaxWidthFor(context)
+                  : NoteFlowLayout.dashboardContentMaxWidth,
             ),
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                 compact
-                    ? NoteFlowSpacing.xxl
+                    ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                    : NoteFlowSpacing.xl,
+                compact
+                    ? NoteFlowLayout.compactPageTopInset(context)
                     : NoteFlowLayout.dashboardTopPadding,
                 compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                 NoteFlowSpacing.xxxl,

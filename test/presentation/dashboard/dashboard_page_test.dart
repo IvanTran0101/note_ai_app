@@ -187,6 +187,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('compact Home keeps the Notion mobile page anchor', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(390, 844),
+        embeddedInWorkspace: true,
+      );
+      await tester.pumpAndSettle();
+
+      final Finder pageColumn = find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is ConstrainedBox &&
+            widget.constraints.maxWidth ==
+                NoteFlowLayout.compactPageFrameMaxWidthFor(
+                  tester.element(find.byType(DashboardPage)),
+                ),
+      );
+      expect(pageColumn, findsOneWidget);
+      expect(tester.getSize(pageColumn).width, 390);
+      // The outer WorkspaceShell contributes its 44dp compact toolbar, so the
+      // full app's title anchor is y=204 before the font's glyph inset.
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(96, 1));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(160, 1));
+      expect(tester.takeException(), isNull);
+    });
+
     for (final Size viewport in <Size>[
       const Size(360, 800),
       const Size(375, 667),
