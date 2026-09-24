@@ -138,7 +138,11 @@ final class DashboardContent extends StatelessWidget {
                             ),
                           ),
                         ),
-                      _buildNoteCollection(context, filteredNotes),
+                      _buildNoteCollection(
+                        context,
+                        filteredNotes,
+                        viewportWidth,
+                      ),
                     ],
                   ],
                 ),
@@ -338,7 +342,11 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildNoteCollection(BuildContext context, List<NoteDto> items) {
+  Widget _buildNoteCollection(
+    BuildContext context,
+    List<NoteDto> items,
+    double viewportWidth,
+  ) {
     if (layout == DashboardLayout.list) {
       return Column(
         children: <Widget>[
@@ -370,7 +378,7 @@ final class DashboardContent extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
-        final int columns = _columnCount(width);
+        final int columns = _columnCount(width, viewportWidth);
         const double gap = NoteFlowSpacing.md;
         final double cardWidth = (width - (columns - 1) * gap) / columns;
         return Wrap(
@@ -395,8 +403,8 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  int _columnCount(double width) {
-    if (width < NoteFlowLayout.expandedBreakpoint) {
+  int _columnCount(double width, double viewportWidth) {
+    if (viewportWidth < NoteFlowLayout.expandedBreakpoint) {
       // Keep Grid meaningfully different from List at compact widths. The
       // List remains the single-column reading mode on phone and tablet.
       return 2;
@@ -405,7 +413,7 @@ final class DashboardContent extends StatelessWidget {
     const double minimumCardWidth = 136.0;
     return ((width + gap) / (minimumCardWidth + gap))
         .floor()
-        .clamp(3, 6)
+        .clamp(3, 4)
         .toInt();
   }
 }

@@ -152,7 +152,7 @@ void main() {
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
     });
 
-    testWidgets('wide Home matches the measured page column and breadcrumb', (
+    testWidgets('wide Home matches the Notion page column and title anchor', (
       WidgetTester tester,
     ) async {
       final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
@@ -181,9 +181,9 @@ void main() {
                 NoteFlowLayout.dashboardContentMaxWidth,
       );
       expect(pageColumn, findsOneWidget);
-      expect(tester.getSize(pageColumn).width, 960);
-      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(264, 4));
-      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(108, 4));
+      expect(tester.getSize(pageColumn).width, 768);
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(360, 4));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(160, 4));
       expect(tester.takeException(), isNull);
     });
 
@@ -229,7 +229,7 @@ void main() {
       });
     }
 
-    testWidgets('wide Home shows six compact notes across the first row', (
+    testWidgets('wide Home uses four cards across its centered page column', (
       WidgetTester tester,
     ) async {
       final List<NoteDto> notes = <NoteDto>[
@@ -253,7 +253,7 @@ void main() {
             find.byKey(const ValueKey<String>('dashboard-note-note-0')),
           )
           .dy;
-      for (int index = 1; index < 6; index++) {
+      for (int index = 1; index < 4; index++) {
         final Finder card = find.byKey(
           ValueKey<String>('dashboard-note-note-$index'),
         );
@@ -263,7 +263,7 @@ void main() {
       expect(
         tester
             .getTopLeft(
-              find.byKey(const ValueKey<String>('dashboard-note-note-6')),
+              find.byKey(const ValueKey<String>('dashboard-note-note-4')),
             )
             .dy,
         greaterThan(firstRowY),

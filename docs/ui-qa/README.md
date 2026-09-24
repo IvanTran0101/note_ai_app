@@ -760,3 +760,33 @@ score by itself.
   not change that limitation. iOS/macOS runtime and same-state Notion visual
   pairs remain outstanding. These captures verify this shell tranche only and
   do not assign a numeric or app-wide fidelity score.
+
+### Home reference-anchor correction — 2026-09-24
+
+- A same-viewport 1280×720 dark comparison with both sidebars open showed the
+  previous NoteFlow Home title at x≈325/y≈117 and the live Notion page title at
+  x≈420/y≈168. The Home title now renders at x≈420/y≈169. The desktop Home
+  outer column is 768px with 24px inner gutters (720px usable), and the top
+  inset is 116px. The existing wide Grid is capped at four cards at this width;
+  List/Grid selection, note data, and callbacks remain unchanged.
+- [Capture 135](135-noteflow-web-home-storage-unavailable-1280x720-dark.png)
+  records the NoteFlow Web runtime at that viewport and theme. It still shows
+  the existing storage-unavailable message. The live Notion page was viewed
+  only for the title anchor; no screenshot or private page content was saved.
+  [Capture 136](136-noteflow-android-home-empty-1080x2400-android15-api35.png)
+  shows the empty Home on the Android 15/API 35 AVD at 1080×2400.
+- `dashboard_page_test.dart` passes 39/39 with a temporary test-only
+  `local_llm_bridge` package root. Targeted `flutter analyze --no-pub` reports
+  no issues; Dart format and `git diff --check` pass. Direct Windows test
+  startup still fails before executing tests at `llama-vocab.obj`, `LNK1136`.
+  The shim run passed and `.dart_tool/package_config.json` was restored to
+  SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+- Web release build passes in 87.5s. Android x64 local-auth release APK build
+  passes in 62.1s at 35.7MB; runtime capture 136 came from the Android 15/API
+  35 AVD. The prior Cognito APK and `.sha1` sidecar were restored, reinstalled
+  without clearing app data, and Login was verified. Its SHA-256 remains
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
+- This tranche adjusts presentation layout only. It proves one Home title
+  anchor, not 95% app-wide fidelity. Loaded Grid, loading, search, selected
+  states, same-state pairs for other workflows, accessibility, and Apple
+  platform checks remain open; no numeric score is assigned.

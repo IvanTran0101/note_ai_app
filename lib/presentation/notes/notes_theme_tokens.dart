@@ -74,8 +74,8 @@ abstract final class NoteFlowLayout {
   static const double compactEditorTopPadding = 56;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
-  static const double dashboardContentMaxWidth = 960;
-  static const double dashboardTopPadding = 64;
+  static const double dashboardContentMaxWidth = 768;
+  static const double dashboardTopPadding = 116;
 }
 
 /// Shared spacing scale (dp). Every gap in presentation code must pick one of

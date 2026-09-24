@@ -357,9 +357,11 @@ Files chính: `dashboard_page.dart`, `dashboard_content.dart`, `dashboard_note_c
 - [x] Chỉ hiển thị phần Home có dữ liệu NoteFlow: note count, supported update date,
   sort theo `updatedAt`/`createdAt`, preview và hai layout List/Grid. `NoteDto` không có
   visit history nên section phải ghi `Recently updated`, không giả là `Recently visited`.
-- [x] Desktop dùng top bar 44px và Dashboard content column tối đa 960px với inset trên
-  64px; compact giữ inset trên 32px. 960px là target cho trang Recent rộng hơn editor,
-  chưa phải anchor đo được từ ảnh Notion.
+- [x] Desktop dùng top bar 44px, Dashboard outer column tối đa 768px (720px sau gutter
+  hai bên 24px) và inset trên 116px; compact giữ inset trên 32px. Ở Web 1280×720 dark,
+  sidebar mở, Home title hiện tại đặt tại x≈420/y≈169, khớp anchor title Notion quan sát
+  trực tiếp tại x≈420/y≈168; xem capture 135 và cùng viewport. Đây là một anchor Home,
+  chưa đại diện cho điểm fidelity tổng thể.
 - [x] List row bỏ card elevation, giữ icon/title/preview/update date và selected/hover;
   row chạm được tối thiểu 56px. Grid giữ layout toggle hiện có và thêm page marker chung,
   không thêm icon field vào model.
@@ -797,20 +799,45 @@ macOS builds/runtime remain unavailable on this Windows host. This tranche
 does not provide a same-state Notion pair or a 95-point score; the score stays
 unassigned and Step 4's visual comparison gate remains open.
 
+Home reference-anchor correction — 2026-09-24: a same-viewport Web 1280×720
+dark comparison with both sidebars open showed the Home title at x≈325/y≈117,
+while the live Notion page title anchor was x≈420/y≈168. The desktop Home
+content now uses a 768px outer column, 24px internal gutters (720px usable
+width), and 116px top inset; the measured title is x≈420/y≈169. The existing
+wide Grid sizes cards from 136px minimum width and caps at four columns to fit
+that measured content width; existing List/Grid selection and note callbacks
+remain intact. Capture 135 records the NoteFlow Web runtime at the matched
+viewport/theme, including its existing storage-unavailable message; no private
+Notion page screenshot or content was saved. Capture 136 records the Android
+15/API 35 empty Home at 1080×2400. `dashboard_page_test.dart` passes 39/39 with
+the temporary test-only bridge package root, targeted analyze and format pass,
+Web release build passes in 87.5s, and Android x64 local-auth release build
+passes in 62.1s at 35.7MB. The original Cognito APK was restored byte-for-byte
+and its SHA-256 remains
+`5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`; Android
+Login was verified after reinstall. The direct Windows test invocation still
+fails before tests at the native hook linker (`llama-vocab.obj`, `LNK1136`);
+the test-only shim run passed and `.dart_tool/package_config.json` was restored
+to SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+This improves one desktop Home anchor and adds Android empty-state evidence;
+other Home states, page workflows, theme/platform pairs, and accessibility
+remain open. No overall fidelity score is assigned and the `>=95/100` gate
+remains unproven.
+
 | Step | Evidence rechecked | Status | Remaining gate |
 | --- | --- | --- | --- |
 | 0. Baseline | Current checkout and Web load/error states inspected; Android 15/API 35 local-auth AVD verified a UI-created note through autosave, force-stop/relaunch, reopen and delete. Browser persistence and the complete auth/session/error baseline remain unverified. | `PARTIAL` | Record remaining actual behavior on targets that support it, without changing the backend; capture all specified baseline states |
 | 1. Reference matrix | Live workspace-page observations retained with their original dates; public Login/Sign up captures 111–114 are same-size 1280×800 and 390×844; old files 24/26 are actually 1280×720; one editor anchor is paired, but workspace surface states still lack complete same-state diffs | `PARTIAL` | Pair shell, Home, list/editor, menus and overlays at supported viewports; keep auth comparison limited to supported controls |
 | 2. Tokens/primitives | Inter variable font/OFL are bundled; Web manifest and Android APK contain both; capture 86 shows Web rendering at 1280×720 light; shared sidebar focus outline uses the existing light/dark `focusRing` tokens and is verified by keyboard test; iOS/macOS remain unverified | `IN_PROGRESS` | Verify iOS/macOS font rendering; recheck light/dark screenshots, text contrast, and all shared components after final styling |
 | 3. Shell/sidebar | Release Web captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. Captures 133–134 verify the revised compact header and navigation sheet on Android 15/API 35; `workspace_shell_test.dart` passes 19/19, including each moved action's existing callback. Shared row focus tests pass 9/9. | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels visually, test Android navigation/back and run Apple device checks; no Favorites/profile/workspace-switching controls |
-| 4. Dashboard/Recents | Captures 130 and 132 verify empty and loaded Home on Android 15/API 35; capture 131 shows the Notes list with a loaded item. A UI-created note reports “Note saved.”, appears in Home/Notes, remains after force-stop/relaunch, and is removed through the existing delete flow. Dashboard tests pass 39/39 across 360–1440dp. Web build/runtime still shows the existing storage-unavailable state; Grid, loading, search, selected states, and same-state Notion pairs remain unverified. | `PARTIAL` | Capture remaining actual states on supported targets, pair them with Notion at matching viewports, and score each required anchor |
+| 4. Dashboard/Recents | Captures 130 and 132 verify empty/loaded Home on Android 15/API 35; 131 shows loaded Notes list; 135 shows the Web Home title anchor at x≈420/y≈169 in the matched 1280×720 dark viewport (live Notion anchor x≈420/y≈168); 136 refreshes Android empty Home. A UI-created note reports “Note saved.”, survives force-stop/relaunch, and is removed through the existing delete flow. Dashboard tests pass 39/39 across 360–1440dp. Web still shows its existing storage-unavailable state; loaded Grid, loading, search, selected states and most same-state pairs remain open. | `PARTIAL` | Capture remaining actual states on supported targets, pair them with Notion at matching viewports, and score each required anchor |
 | 5. Notes list/detail frame | Current-source captures 71–76 cover desktop, tablet and phone with the explicit Web storage limitation; capture 123 refreshes 1280×800. Captures 56–57 verify dirty-back and retained load error. Notes suite passes 86/86 with a test-only bridge package root; package config hash was restored. Android API 35 local-auth runtime verified create → Home list → force-stop/relaunch → reopen → delete for one QA note; no pre-existing notes were present and the QA note was removed. | `IN_PROGRESS` | Capture loaded/selected states with controlled data and pair supported states against Notion; verify search and destination retention on native runtime |
 | 6. Page editor | 720px title block, 708px body-text width, 112px content inset, `NoteFlow / New note` breadcrumb, captures 51–56, and capture 129 for the blank Android editor. Android API 35 local-auth runtime reopened the QA note after restart and showed “Note saved.”; the temporary note was removed afterward. | `IN_PROGRESS` | Pair supported editor states with Notion, capture remaining error/summary states, and complete editor visual review |
 | 7. Menus/overlays/status | More is anchored at ≥600dp and uses a bottom sheet below 600dp. Delete/dirty-back surfaces and callbacks have widget coverage; Android API 35 runtime opened More → Delete, confirmed the existing “Delete note?” dialog, and removed only the temporary QA note. Full overlay/theme and paired visual states remain unverified. | `PARTIAL` | Capture same-state menu/dialog pairs and verify focus, keyboard, barrier/system-back behavior on supported targets |
 | 8. Auth UI | Release captures 104–110 cover the current email/password/details steps at desktop/phone/tablet; public same-size Notion refs 111–114; Register mobile CTA matches pixel rows and desktop CTA now matches after a presentation-only spacing adjustment; Android API 35 captures 124–127 cover Login, keyboard focus, Register, and Login at 200% text scale; auth behavior contracts retained; full presentation suite passes 200/200 using the test-only bridge package root | `IN_PROGRESS` | Capture desktop Register details and supported validation/busy/error/success/change-password states; finish accessibility/localization checks; record only supported-control comparison and keep overall score unassigned |
 | 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; Android API 35 capture 127 visually confirms the Login brand and heading remain separated at system font scale 2.0; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets; shared sidebar row Tab focus/blur is verified in light and dark themes | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
-| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows runner folder. Android API 35 AVD captures 130–134 cover empty/loaded Home, Notes list and compact shell/sheet. The original Cognito APK was restored after the local-auth runtime check and its SHA-256 verified; Web release build/runtime still exposes the existing storage-unavailable message. No Apple runner or physical Android device is attached; full same-state Notion pairs remain open. | `PARTIAL` | Pair Home/list/editor/menus against Notion, verify tablet/rotation/accessibility, and run iOS/macOS checks on an Apple runner |
-| 11. Regression/build/handoff | Compact shell suite passes 19/19 with the test-only local bridge shim; targeted analyzer and format checks pass. Android x64 local-auth release APK (35.7 MB) and Web release build pass; Android runtime captures 133–134 confirm the compact shell/sheet. The original Cognito APK was restored and verified by SHA-256. Direct test startup still hits the unrelated Windows native `LNK1136` hook issue. Full presentation suite has not been rerun for this tranche. | `IN_PROGRESS` | Continue UI tranches; rerun the relevant regressions/builds; run iOS/macOS checks on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
+| 10. Device visual QA | Platform folders are Android/iOS/Web/macOS; no Windows runner folder. Android API 35 AVD captures 130–136 cover empty/loaded Home, Notes list, compact shell/sheet and refreshed empty Home; Web capture 135 records the title anchor and existing storage limitation. The original Cognito APK was restored after the local-auth runtime check and its SHA-256 verified. No Apple runner or physical Android device is attached; full same-state Notion pairs remain open. | `PARTIAL` | Pair Home/list/editor/menus against Notion, verify tablet/rotation/accessibility, and run iOS/macOS checks on an Apple runner |
+| 11. Regression/build/handoff | Dashboard suite passes 39/39 with the test-only local bridge shim; targeted analyzer and format checks pass. Android x64 local-auth release APK (35.7 MB) and Web release build pass; Android capture 136 verifies runtime Home. The original Cognito APK was restored and verified by SHA-256. Direct Windows test startup still hits the native `LNK1136` hook issue; shim run passed. iOS/macOS checks remain unavailable on this Windows host. | `IN_PROGRESS` | Continue UI tranches; rerun the relevant regressions/builds; run iOS/macOS checks on an Apple runner; complete paired visual review and audit the allowlisted diff before each push |
 
 ---
 
