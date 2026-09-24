@@ -23,6 +23,8 @@ void main() {
     bool isDirty = false,
     bool showPageHeader = false,
     bool statusUnavailable = false,
+    bool isSaving = false,
+    String? error,
     bool hasSavedNote = true,
     String titleText = 'First note',
   }) async {
@@ -61,7 +63,7 @@ void main() {
                   statusUnavailable: statusUnavailable,
                   hasSavedNote: hasSavedNote,
                   isDirty: isDirty,
-                  error: null,
+                  error: error,
                   statusMessage: null,
                   actionBusy: false,
                   provisioningReader: null,
@@ -69,7 +71,7 @@ void main() {
                   onProvisioningCancel: null,
                   summary: null,
                   summaryStale: false,
-                  isSaving: false,
+                  isSaving: isSaving,
                   isSummarizing: false,
                   canSave: true,
                   canSummarize: true,
@@ -88,7 +90,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (isSaving) {
+      await tester.pump();
+    } else {
+      await tester.pumpAndSettle();
+    }
   }
 
   testWidgets('new note title hint uses compact page-title typography', (
@@ -259,6 +265,53 @@ void main() {
     expect(unavailableIcon.color, NoteFlowUiTokens.light().textMuted);
     expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
     expect(find.text('Saving unavailable on Web'), findsOneWidget);
+  });
+
+  testWidgets('compact page status follows the autosave lifecycle', (
+    WidgetTester tester,
+  ) async {
+    const Size size = Size(390, 844);
+
+    await pumpSurface(
+      tester,
+      size: size,
+      titleText: '',
+      showPageHeader: true,
+      hasSavedNote: false,
+    );
+    expect(find.byIcon(Icons.edit_note_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
+
+    await pumpSurface(tester, size: size, showPageHeader: true, isDirty: true);
+    expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
+
+    await pumpSurface(
+      tester,
+      size: size,
+      showPageHeader: true,
+      isDirty: true,
+      error: 'Couldn’t save the note. Please try again.',
+    );
+    final Finder status = find.byKey(NoteFlowPageHeader.statusKey);
+    final Icon errorIcon = tester.widget<Icon>(
+      find.descendant(of: status, matching: find.byIcon(Icons.error_outline)),
+    );
+    expect(errorIcon.color, Theme.of(tester.element(status)).colorScheme.error);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
+
+    await pumpSurface(tester, size: size, showPageHeader: true, isSaving: true);
+    expect(
+      find.descendant(
+        of: find.byKey(NoteFlowPageHeader.statusKey),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.cloud_done_outlined), findsNothing);
+
+    await pumpSurface(tester, size: size, showPageHeader: true);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsOneWidget);
   });
 
   for (final Size size in <Size>[

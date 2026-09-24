@@ -202,6 +202,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
     this.statusLabel,
     this.statusBusy = false,
     this.statusUnavailable = false,
+    this.statusDirty = false,
+    this.statusError = false,
+    this.statusDraft = false,
     this.onBack,
     this.backTooltip,
     this.backKey,
@@ -212,6 +215,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
   final String? statusLabel;
   final bool statusBusy;
   final bool statusUnavailable;
+  final bool statusDirty;
+  final bool statusError;
+  final bool statusDraft;
   final VoidCallback? onBack;
   final String? backTooltip;
   final Key? backKey;
@@ -261,6 +267,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
                     label: statusLabel!,
                     busy: statusBusy,
                     unavailable: statusUnavailable,
+                    dirty: statusDirty,
+                    error: statusError,
+                    draft: statusDraft,
                   ),
                 ...actions,
               ],
@@ -278,18 +287,35 @@ final class _NoteFlowPageStatus extends StatelessWidget {
     required this.label,
     required this.busy,
     required this.unavailable,
+    required this.dirty,
+    required this.error,
+    required this.draft,
   });
 
   final String label;
   final bool busy;
   final bool unavailable;
+  final bool dirty;
+  final bool error;
+  final bool draft;
 
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final bool compact =
         MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
-    final Color iconColor = tokens.textMuted;
+    final IconData statusIcon = unavailable
+        ? Icons.cloud_off_outlined
+        : error
+        ? Icons.error_outline
+        : dirty
+        ? Icons.cloud_upload_outlined
+        : draft
+        ? Icons.edit_note_outlined
+        : Icons.cloud_done_outlined;
+    final Color iconColor = error
+        ? Theme.of(context).colorScheme.error
+        : tokens.textMuted;
     final Widget icon = busy
         ? SizedBox.square(
             dimension: 14,
@@ -298,11 +324,7 @@ final class _NoteFlowPageStatus extends StatelessWidget {
               color: tokens.textMuted,
             ),
           )
-        : Icon(
-            unavailable ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
-            size: 16,
-            color: iconColor,
-          );
+        : Icon(statusIcon, size: 16, color: iconColor);
 
     return Semantics(
       liveRegion: true,

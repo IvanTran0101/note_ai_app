@@ -400,6 +400,7 @@ Files chính: `notes_workspace_page.dart`, `notes_list_panel.dart`, `responsive_
 - [ ] Gutter, header và scroll ownership của từng page surface phải ổn định khi chuyển list/editor.
 - [ ] Compact chỉ hiển thị list hoặc detail; back không mất dirty state trên runtime.
 - [ ] Kiểm tra compact `NotesWorkspacePage` có đúng một back affordance trên runtime và gọi cùng dirty/back-confirmation flow.
+- [ ] Android API 35 pilot ở 412×915: mở Notes, tạo note qua affordance hiện có, nhập title/content, đợi autosave, quay lại danh sách rồi mở lại; xác minh title/content còn nguyên, keyboard không che editor và system back/dirty guard giữ đúng behavior. Dùng note QA dùng một lần, ghi rõ cách dọn trước khi tạo; không đổi sang manual Save.
 - [x] Giữ `compactKey`, `mediumKey`, `expandedKey`, `listPaneKey`, `detailPaneKey` (responsive widget tests pass).
 
 **Pass:** list/editor state transitions pass test; không có overflow ở width 360/375/390 hoặc medium/desktop.
@@ -417,6 +418,7 @@ Files chính: `note_detail_page.dart`, `note_detail_surface.dart`, `note_detail_
 - [ ] Summary hiển thị dưới dạng callout/card nhẹ, giữ copy/regenerate và stale state nếu callback có.
 - [ ] Provisioning/error/status là callout đồng nhất, giữ retry/cancel.
 - [ ] Action bar theo toolbar grammar nhưng chỉ hiện Summarize/More khi callback hiện có cho phép; hiển thị dirty/saving/saved/error từ state autosave thật.
+- [x] Compact page-header status dùng icon phân biệt draft, dirty/pending, saving, save error, Web unavailable và saved; test tại 390×844 xác nhận busy/error/dirty/draft không bị trình bày nhầm là saved. Đây chỉ sửa presentation, không đổi autosave hay callback.
 - [ ] Giữ `canSave: false`/`onSave: null` vì baseline và test xác nhận autosave-only; không đổi thành manual Save. Kiểm chứng create/update/error qua controller test seam và đánh dấu riêng việc Chrome chưa kết nối được backend.
 - [ ] Dirty indicator hiển thị ở header/action bar nhưng không tự ý thay đổi autosave.
 - [ ] Delete/back confirmation giữ dialog và route result hiện tại.
@@ -1176,9 +1178,9 @@ score can currently be stated as `>=95/100`.
 
 | Platform/runtime | Current score | Confirmed evidence from the audit | Missing evidence before numeric scoring |
 | --- | --- | --- | --- |
-| Android | `N/C` | Captures 142–153 show selected workflow behavior from `b900fec`, not final-HEAD visual pairs; capture 156 is one 411×914 editor anchor. `flutter devices` listed no Android target and `adb devices -l` was empty during audit. | Current-source captures at every required phone/tablet viewport, matched Notion references, supported states/themes/locales, keyboard/back, text scale and accessibility |
+| Android | `N/C` | AVD `NoteFlow_API35` is booted as `emulator-5554` (Android 15/API 35). The current working-tree release APK (87.7 MB) built successfully, installed with `adb install -r`, and launched. Capture 171 records Login/email-first at 411×914 logical (1080×2400 px, 420 dpi); it does not verify the authenticated editor lifecycle. Captures 142–153 are older workflow evidence, and capture 156 is a single 411×914 editor anchor. | Matched Notion reference pairs and current runtime captures for every required phone/tablet workflow/state/theme/locale; editor autosave and notes round-trip; keyboard/back, text scale and accessibility; complete the 412×915 pilot in Step 5 |
 | iOS | `N/C (UNVERIFIED)` | No Apple runtime or `xcodebuild` on this Windows host. iPhone landscape is supported by the runner and is now an explicit required cell in §4.4. | iPhone portrait/landscape and iPad portrait/landscape captures for supported workflows, safe areas, keyboard, accessibility and matched references |
-| Web — Chrome | `N/C` | Captures 157–158 record blank-editor anchors, 161–162 Login CTA anchors, and 165–168 compact Notes/Home warning states. The live Home comparison was only 1280×720. The served bundle at `.dart_tool/noteflow-web-anchor-20260924` predates `cb5dc31` and `cf03c67`. | Current-HEAD runtime at 1280×800, 1440×900, 390×844 and 567×694; loaded supported note states, all auth/workflow states, same-state pairs, theme, locale, keyboard and accessibility |
+| Web — Chrome | `N/C` | The current working-tree Web release build succeeded and rendered the email-first Login screen in an IAB/Playwright-managed Chromium runner at 567×694; capture `output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png`. This is Chromium smoke evidence, not proof of the required installed Chrome cell or a matched Notion pair. Older captures 157–158, 161–162 and 165–168 remain limited anchors/states. | Installed Chrome current-source runtime at 1280×800, 1440×900, 390×844 and 567×694; loaded supported note states, all auth/workflow states, same-state pairs, theme, locale, keyboard and accessibility |
 | Web — Edge | `N/C` | Captures 159–164 and 169–170 cover only editor/Login anchors and compact storage-unavailable Notes states. Served bundle predates current HEAD; no fresh Edge browser runtime was available through CUA. | Same current-source, viewport and workflow matrix as Chrome; Web score is the lower of the two browser scores |
 | macOS | `N/C (UNVERIFIED)` | No Mac runtime, `xcodebuild`, or macOS capture on this host. | Current build and matched captures at 1440×900 for supported desktop workflows, title bar/menu, hover/focus, keyboard, themes and locale |
 | **Overall** | **`N/C` — 95/100 is not established** | Every platform has at least one supported state without a current matched visual measurement; Apple runtimes are absent. | Complete and score every applicable cell using §6; keep supported-but-unverified items in the denominator and use `N/A` only for capabilities absent from NoteFlow contracts |
@@ -1196,3 +1198,38 @@ captured.
 | Chrome | 390×844 | Login, email-first | Continue button bounds | `docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png` — x=20–369, y=308–347 | `docs/ui-qa/162-noteflow-login-email-anchor-390x844-chrome-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
 | Edge | 1280×800 | Login, email-first | Continue button bounds | `docs/ui-qa/111-notion-login-1280x800-reference-live-20260924.png` — x=460–819, y=338–377 | `docs/ui-qa/163-noteflow-login-email-anchor-1280x800-edge-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
 | Edge | 390×844 | Login, email-first | Continue button bounds | `docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png` — x=20–369, y=308–347 | `docs/ui-qa/164-noteflow-login-email-anchor-390x844-edge-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
+
+### Compact editor autosave-status tranche — 2026-09-24
+
+The compact page header now reflects the existing editor lifecycle: an unsaved
+draft uses an edit icon, pending changes use an upload icon, an active save uses
+the existing progress indicator, save failure uses the error color/icon, and a
+saved note uses the cloud-done icon. The Web storage-unavailable state keeps its
+existing unavailable icon. Labels, autosave scheduling, callbacks, persistence,
+and all non-presentation layers remain unchanged.
+
+The regression test exercises these states at 390×844. The complete focused
+`note_detail_surface_test.dart` suite passed 27/27 via the existing temporary
+test-only package shim; scoped `dart analyze` and `git diff --check` passed.
+Android API 35 is available and booted. The current working-tree release APK
+built, installed with `adb install -r`, and launched. Capture
+`docs/ui-qa/171-noteflow-login-email-411x914-android-current-20260924.png`
+records the initial Login screen at 411×914 logical; the authenticated editor
+was not reached, so this capture is not evidence that autosave status works at
+runtime. The Web release build also succeeded and rendered the Login screen in
+an IAB/Playwright-managed Chromium runner at 567×694; the capture is
+`output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png`.
+The accessibility tree exposed the email field, Continue, and Create account.
+This is a Web smoke check, not an installed Chrome/Edge score or a matched
+Notion comparison. The Playwright-managed Chromium console reported zero
+errors and zero warnings during this render.
+
+| Android | 411×914 logical (1080×2400 px, 420 dpi) | Login/email-first initial state | Full screen and input anchors | No matched reference | `docs/ui-qa/171-noteflow-login-email-411x914-android-current-20260924.png` | Not measured | `UNVERIFIED` | Current runtime capture only; no paired reference or editor state |
+| Web/Chromium runner | 567×694 CSS px | Login/email-first initial state, light theme | Full screen and input/control anchors | No matched reference | `output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png` | Not measured | `UNVERIFIED` | Successful Web build and render; runner does not establish installed Chrome/Edge cells or visual parity |
+
+| Target | Score after this iteration | Self-score evidence |
+| --- | --- | --- |
+| Android | `N/C` | Lifecycle states are regression-tested and the current APK Login screen was captured; authenticated editor runtime and matched Notion pairs remain outstanding. |
+| Web — Chrome | `N/C` | Current Web build and Chromium-runner Login smoke capture verified; installed Chrome capture, matched reference, and required workflow/state cells remain outstanding. |
+| Web — Edge | `N/C` | No current-source Edge capture or complete matched cell matrix in this iteration. |
+| **Overall** | **`N/C`** | This presentation correction fixes a false-saved visual state; it does not establish a full-screen or platform visual score. |
