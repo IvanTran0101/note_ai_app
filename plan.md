@@ -1274,3 +1274,38 @@ Notion password-form capture and is not assigned a numeric screen score.
 | Web — Chrome | `N/C` | Current Login/Register email captures and browser console are verified; the full auth states, remaining viewports, and all inner-page cells remain incomplete. |
 | Web — Edge | `N/C` | Current Login/Register email and Register details captures show the CTA remains usable; the full auth and inner-page matrix remains incomplete. |
 | **Overall** | **`N/C` — 95/100 is not established** | This tranche adjusts secondary-link placement and prevents CTA overlap; it is not a whole-platform score. |
+
+## Compact Android Notes-header CTA tranche — 2026-09-25
+
+On compact layouts, the Notes header now keeps its title and create action on
+one row by using a plus icon with the existing localized `New note` tooltip.
+The `new-note` key, busy-state handling, and `onNewNote` callback are unchanged;
+wide layouts keep the labeled button. This is a presentation-only adjustment.
+No application, domain, infrastructure, route, persistence, API, or backend
+code changed.
+
+The focused `notes_workspace_page_test.dart` suite passed 27/27 with the
+existing test-only package shim. Scoped `dart analyze` reported no issues and
+`git diff --check` passed. The original `.dart_tool/package_config.json` was
+restored and its SHA-256 verified as
+`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
+
+The Android release APK built successfully (87.7 MB), installed, and launched
+on `NoteFlow_API35` / Android 15 at 411×914 logical (1080×2400 px, 420 dpi).
+The current Notes capture is
+`docs/ui-qa/192-noteflow-notes-list-411x914-android-current-20260925.png`.
+On-device accessibility bounds confirm the Notes title and `New note` action
+share the same row, and the saved note row remains visible. This verifies one
+current Android state and the CTA affordance; it is not a matched Notion
+comparison or a full workflow score.
+
+The Web release build also succeeded (137.9s). The current local preview loaded
+the Login screen after rebuild. The authenticated Notes screen was not reached
+in this browser pass, so this is only a Web build/smoke result.
+
+| Target | Score after this iteration | Self-score evidence |
+| --- | --- | --- |
+| Android | `N/C` | One 411×914 Notes-list runtime state and the compact header regression test pass; required matched Notion states, other viewports and workflow cells remain incomplete. |
+| Web — Chrome | `N/C` | Current Web release built and loaded Login; no authenticated inner-page comparison was captured. |
+| Web — Edge | `N/C` | No Edge runtime capture in this iteration. |
+| **Overall** | **`N/C` — 95/100 is not established** | This tranche verifies a single compact Notes-header fix; the §6 platform/browser × viewport × state denominator remains incomplete. |

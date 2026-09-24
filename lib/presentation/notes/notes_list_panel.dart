@@ -61,50 +61,51 @@ final class NotesListPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final Widget title = Text(
-                            copy.notes,
-                            style: Theme.of(context).textTheme.headlineLarge
-                                ?.copyWith(
-                                  fontSize: 40,
-                                  height: 1.2,
-                                  fontWeight: FontWeight.w700,
-                                  color: tokens.textPrimary,
-                                ),
-                          );
-                          final Widget create = TextButton.icon(
-                            key: const ValueKey<String>('new-note'),
-                            onPressed: actionBusy ? null : onNewNote,
-                            icon: const Icon(Icons.add, size: 20),
-                            label: Text(copy.newNote),
-                            style: TextButton.styleFrom(
-                              foregroundColor: tokens.textSecondary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: NoteFlowSpacing.sm,
-                              ),
+                    builder: (BuildContext context, BoxConstraints _) {
+                      final Widget title = Text(
+                        copy.notes,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineLarge
+                            ?.copyWith(
+                              fontSize: 40,
+                              height: 1.2,
+                              fontWeight: FontWeight.w700,
+                              color: tokens.textPrimary,
                             ),
-                          );
-                          if (constraints.maxWidth < 420) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                title,
-                                const SizedBox(height: NoteFlowSpacing.sm),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: create,
-                                ),
-                              ],
-                            );
-                          }
-                          return Row(
-                            children: <Widget>[
-                              Expanded(child: title),
-                              create,
-                            ],
-                          );
-                        },
+                      );
+                      final Widget create = TextButton.icon(
+                        key: const ValueKey<String>('new-note'),
+                        onPressed: actionBusy ? null : onNewNote,
+                        icon: const Icon(Icons.add, size: 20),
+                        label: Text(copy.newNote),
+                        style: TextButton.styleFrom(
+                          foregroundColor: tokens.textSecondary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NoteFlowSpacing.sm,
+                          ),
+                        ),
+                      );
+                      if (compact) {
+                        return Row(
+                          children: <Widget>[
+                            Expanded(child: title),
+                            IconButton(
+                              key: const ValueKey<String>('new-note'),
+                              tooltip: copy.newNote,
+                              onPressed: actionBusy ? null : onNewNote,
+                              icon: const Icon(Icons.add),
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: <Widget>[
+                          Expanded(child: title),
+                          create,
+                        ],
+                      );
+                    },
                   ),
                   if (error != null && notes.isNotEmpty) ...<Widget>[
                     const SizedBox(height: NoteFlowSpacing.sm),

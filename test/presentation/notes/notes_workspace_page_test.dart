@@ -243,6 +243,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('compact Notes keeps New note action beside the title', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(notes: <NoteDto>[buildNote()]),
+      size: const Size(411, 914),
+      embeddedInWorkspace: true,
+    );
+
+    final Rect titleRect = tester.getRect(find.text('Notes').last);
+    final Rect createRect = tester.getRect(
+      find.byKey(const ValueKey<String>('new-note')),
+    );
+    final Rect firstNoteRect = tester.getRect(
+      find.byKey(const ValueKey<String>('note-note-1')),
+    );
+
+    expect(createRect.top, closeTo(titleRect.top, 1));
+    expect(createRect.width, 48);
+    expect(find.byTooltip('New note'), findsOneWidget);
+    expect(
+      firstNoteRect.top - titleRect.bottom,
+      lessThanOrEqualTo(NoteFlowSpacing.xxl),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('compact create flow returns to the note list after save', (
     WidgetTester tester,
   ) async {
