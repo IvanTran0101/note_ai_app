@@ -246,9 +246,9 @@ final class _RegisterPageState extends State<RegisterPage> {
           subtitle: copy.registerSubtitle,
           compactTopPadding: 76,
           desktopTopPadding: 32,
-          compactBrandTitleSpacing: 34,
+          compactBrandTitleSpacing: 10,
           compactTitleSubtitleSpacing: 0,
-          compactContentSpacing: NoteFlowSpacing.lg + NoteFlowSpacing.md,
+          compactContentSpacing: NoteFlowSpacing.xxxl + NoteFlowSpacing.xs,
           desktopContentSpacing: NoteFlowSpacing.xl + NoteFlowSpacing.sm,
           desktopPanel: true,
           child: Form(

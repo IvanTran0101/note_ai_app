@@ -337,7 +337,7 @@ void main() {
     expect(tester.getRect(find.text('NoteFlow')).top, inInclusiveRange(74, 86));
     expect(
       tester.getRect(find.text('Create your account')).top,
-      inInclusiveRange(132, 136),
+      inInclusiveRange(108, 112),
     );
     expect(tester.getRect(find.text('Email')).top, inInclusiveRange(216, 222));
     expect(tester.getRect(find.text('Email')).left, inInclusiveRange(19, 21));
