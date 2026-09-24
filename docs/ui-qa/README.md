@@ -705,3 +705,23 @@ score by itself.
   Notion screenshot. Loaded Home/List/Grid and other states still need
   same-viewport pairs; no numeric fidelity score is assigned and the
   app-wide `>=95/100` gate remains unverified.
+
+### Loaded Home and Notes list — local-auth Android runtime — 2026-09-24
+
+- [Capture 131](131-noteflow-notes-list-loaded-1080x2400-android15-api35.png)
+  shows the Notes list after creating a temporary note through the existing
+  empty-state CTA. [Capture 132](132-noteflow-home-loaded-recent-1080x2400-android15-api35.png)
+  shows Home/Recently updated after force-stop and relaunch, with that note
+  still present. Both captures use the Android 15/API 35 AVD at 1080×2400 and
+  system font scale 1.0.
+- The editor showed “Note saved.” after entering the title and body. The note
+  remained after relaunch and opened from the list. More → Delete → confirmation
+  removed this exact QA note; Home returned to “No notes yet.” No app data was
+  cleared.
+- The original Cognito APK was reinstalled and the Login screen verified;
+  `build/app/outputs/flutter-apk/app-release.apk` retains SHA-256
+  `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
+- This adds Android behavior and layout evidence only. These captures are not
+  same-viewport comparisons against Notion, and they do not cover Grid, loading,
+  search, selected states, iOS, or macOS. The visual fidelity score remains
+  **unassigned; the `>=95/100` gate is not proven**.
