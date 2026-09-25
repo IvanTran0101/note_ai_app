@@ -12,6 +12,9 @@ typedef SummarizeFunction = Future<Summary> Function(String content);
 /// Loads a display-only model-readiness label for the diagnostics surface.
 typedef LoadModelReadiness = Future<String?> Function();
 
+/// Runs one authenticated remote sync smoke through Infrastructure.
+typedef RunRemoteSyncSmoke = Future<String> Function();
+
 /// Minimal debug screen proving the local-LLM summarization path end to end.
 ///
 /// Accepts note text and shows loading / error / result states. It calls the
@@ -24,12 +27,14 @@ class LocalLlmDebugPage extends StatefulWidget {
     this.loadModelReadiness,
     this.provisioningReader,
     this.onProvisioningCancel,
+    this.runRemoteSyncSmoke,
   });
 
   final SummarizeFunction summarize;
   final LoadModelReadiness? loadModelReadiness;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningCancel;
+  final RunRemoteSyncSmoke? runRemoteSyncSmoke;
 
   @override
   State<LocalLlmDebugPage> createState() => _LocalLlmDebugPageState();
@@ -40,6 +45,9 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
   bool _busy = false;
   String? _error;
   String? _result;
+  bool _remoteBusy = false;
+  String? _remoteError;
+  String? _remoteResult;
   Future<String?>? _readinessFuture;
 
   @override
@@ -85,6 +93,34 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
     } finally {
       if (mounted) {
         setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _onRemoteSyncSmoke() async {
+    final RunRemoteSyncSmoke? run = widget.runRemoteSyncSmoke;
+    if (run == null) {
+      return;
+    }
+    setState(() {
+      _remoteBusy = true;
+      _remoteError = null;
+      _remoteResult = null;
+    });
+    try {
+      final String result = await run();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _remoteResult = result);
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _remoteError = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _remoteBusy = false);
       }
     }
   }
@@ -154,6 +190,35 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
               onPressed: _busy ? null : _onSummarize,
               child: Text(copy.summarize),
             ),
+            if (widget.runRemoteSyncSmoke != null) ...<Widget>[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const ValueKey<String>('debug-remote-sync'),
+                onPressed: _remoteBusy ? null : _onRemoteSyncSmoke,
+                child: Text(
+                  _remoteBusy ? copy.remoteSyncRunning : copy.remoteSyncSmoke,
+                ),
+              ),
+              if (_remoteError != null)
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    '${copy.remoteSyncError} $_remoteError',
+                    key: const ValueKey<String>('debug-remote-sync-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (_remoteResult != null)
+                Card(
+                  key: const ValueKey<String>('debug-remote-sync-result'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(_remoteResult!),
+                  ),
+                ),
+            ],
             const SizedBox(height: 16),
             if (_busy) ...<Widget>[
               const LinearProgressIndicator(),

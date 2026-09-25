@@ -58,6 +58,12 @@ dependencies:
   local_llm_bridge:
     path: packages/local_llm_bridge
 
+  # Cross-platform HTTP client for the remote sync adapter (M1.3). One
+  # implementation serves iOS, macOS, and Web, so the sync adapter needs no
+  # conditional import per platform. Only the Infrastructure sync adapter
+  # imports it.
+  http: ^1.6.0
+
   # AWS Cognito authentication backend. Only the Infrastructure auth adapter
   # (lib/infrastructure/auth/) imports these packages; Domain, Application, and
   # Presentation stay provider-neutral. The two versions move in lockstep, so

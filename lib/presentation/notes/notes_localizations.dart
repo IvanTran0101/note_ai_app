@@ -109,6 +109,12 @@ final class NotesCopy {
       : 'Couldn’t create a summary. Please try again.';
   String get debugSummary =>
       _isVietnamese ? 'Kết quả tóm tắt' : 'Summary result';
+  String get remoteSyncSmoke =>
+      _isVietnamese ? 'Kiểm thử đồng bộ từ xa' : 'Run remote sync smoke';
+  String get remoteSyncRunning =>
+      _isVietnamese ? 'Đang kiểm thử đồng bộ…' : 'Running remote sync…';
+  String get remoteSyncError =>
+      _isVietnamese ? 'Đồng bộ từ xa thất bại: ' : 'Remote sync failed: ';
 
   String get provisioningStatus =>
       _isVietnamese ? 'Trạng thái thiết lập mô hình' : 'Model setup status';

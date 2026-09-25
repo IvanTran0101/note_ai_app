@@ -9,6 +9,9 @@ import 'amplify_outputs.dart';
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
+import 'application/sync/sync_mutation.dart';
+import 'application/sync/sync_result.dart';
+import 'application/sync/sync_snapshot.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
@@ -32,6 +35,8 @@ import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/sync/cognito_access_token_provider.dart';
+import 'infrastructure/sync/http_remote_note_data_source.dart';
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
@@ -58,6 +63,7 @@ const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',
 );
+const String _noteFlowSyncApi = String.fromEnvironment('NOTEFLOW_SYNC_API');
 const List<String> _noteFlowFontFallback = <String>[
   'Roboto',
   'Arial',
@@ -288,6 +294,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     ),
     recentLimit: 20,
   );
+  HttpRemoteNoteDataSource? _remoteNoteDataSource;
   final GlobalKey<WorkspaceShellState> _workspaceShellKey =
       GlobalKey<WorkspaceShellState>();
   final GlobalKey<DashboardPageState> _dashboardPageKey =
@@ -392,6 +399,55 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       // unsupported on the current platform.
       return 'unavailable';
     }
+  }
+
+  Future<String> _runRemoteSyncSmoke() async {
+    if (_noteFlowAuthMode != 'cognito') {
+      throw StateError('Remote sync smoke requires Cognito mode.');
+    }
+    final String endpoint = _noteFlowSyncApi.trim();
+    final Uri? baseUri = Uri.tryParse(endpoint);
+    if (baseUri == null || !baseUri.hasScheme || baseUri.host.isEmpty) {
+      throw StateError(
+        'Set NOTEFLOW_SYNC_API to the deployed sync API endpoint.',
+      );
+    }
+
+    final HttpRemoteNoteDataSource remote = _remoteNoteDataSource ??=
+        HttpRemoteNoteDataSource(
+          baseUri: baseUri,
+          tokenProvider: CognitoAccessTokenProvider().call,
+        );
+    final String noteId =
+        'flutter-smoke-${DateTime.now().microsecondsSinceEpoch}';
+    final SyncMutationResult result = await remote.push(
+      SyncMutation(
+        mutationId: '$noteId-create',
+        noteId: noteId,
+        operation: SyncMutationOperation.create,
+        baseRevision: 0,
+        payload: const SyncNotePayload(
+          title: 'Flutter adapter smoke',
+          content: 'Created through HttpRemoteNoteDataSource.',
+        ),
+      ),
+    );
+    if (!result.isApplied || result.note == null) {
+      throw StateError('Remote create returned a conflict.');
+    }
+
+    SyncChangesPage page = await remote.pull(limit: 50);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (page.snapshots.any((SyncNoteSnapshot note) => note.id == noteId)) {
+        return 'Remote sync passed · revision ${result.note!.revision} · '
+            'change feed ${page.snapshots.length} items';
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+      page = await remote.pull(limit: 50);
+    }
+    throw StateError(
+      'Remote create succeeded, but the change feed is not ready.',
+    );
   }
 
   Future<NoteSummaryAppService> _ensureService() async {
@@ -738,6 +794,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                       loadModelReadiness: _loadModelReadiness,
                       provisioningReader: _modelProvisioningStatus,
                       onProvisioningCancel: _cancelModelProvisioning,
+                      runRemoteSyncSmoke: _runRemoteSyncSmoke,
                     ),
                   ),
                 );
@@ -757,6 +814,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                       loadModelReadiness: _loadModelReadiness,
                       provisioningReader: _modelProvisioningStatus,
                       onProvisioningCancel: _cancelModelProvisioning,
+                      runRemoteSyncSmoke: _runRemoteSyncSmoke,
                     ),
                   ),
                 );
@@ -777,6 +835,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     if (client != null) {
       unawaited(client.dispose());
     }
+    _remoteNoteDataSource?.close();
     super.dispose();
   }
 }
