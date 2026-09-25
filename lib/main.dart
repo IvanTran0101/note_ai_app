@@ -9,6 +9,7 @@ import 'amplify_outputs.dart';
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
+import 'application/sync/local_sync_store.dart';
 import 'application/sync/sync_mutation.dart';
 import 'application/sync/sync_result.dart';
 import 'application/sync/sync_snapshot.dart';
@@ -37,6 +38,7 @@ import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/sync/cognito_access_token_provider.dart';
 import 'infrastructure/sync/http_remote_note_data_source.dart';
+import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
@@ -274,9 +276,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       AiConfiguration.fromEnvironment();
   late final AiConfigurationStore _aiConfigurationStore =
       createAiConfigurationStore();
-  late final INoteRepository _noteRepository = note_infrastructure
-      .createNoteRepository();
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
+  final Map<String, ILocalSyncStore> _localSyncStores =
+      <String, ILocalSyncStore>{};
+  late final INoteRepository _noteRepository = note_infrastructure
+      .createNoteRepository(
+        currentAccountUserId: () => _currentUserSession.requiredUserId,
+        localSyncStoreFactory: _localSyncStoreForAccount,
+        generateMutationId: _generateMutationId,
+        now: _nowUtc,
+      );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
@@ -374,7 +383,18 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
     return 'note-${DateTime.now().microsecondsSinceEpoch}-$_noteIdSequence';
   }
 
+  String _generateMutationId() => 'mutation-${_generateNoteId()}';
+
   DateTime _nowUtc() => DateTime.now().toUtc();
+
+  ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
+    return _localSyncStores.putIfAbsent(
+      accountUserId,
+      () => local_sync_infrastructure.createLocalSyncStore(
+        accountUserId: accountUserId,
+      ),
+    );
+  }
 
   Future<String?> _loadModelReadiness() async {
     try {

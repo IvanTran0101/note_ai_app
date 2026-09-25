@@ -64,6 +64,13 @@ dependencies:
   # imports it.
   http: ^1.6.0
 
+  # IndexedDB access for the Web local sync store (M2.1). A narrow wrapper over
+  # package:web that exposes read/write transactions and a completion future, so
+  # the adapter needs no hand-written JavaScript event interop and stays
+  # Wasm-compatible. Only lib/infrastructure/sync/local_sync_store_web.dart
+  # imports it; the Web store is never the source of truth on native platforms.
+  indexed_db: ^1.0.1
+
   # AWS Cognito authentication backend. Only the Infrastructure auth adapter
   # (lib/infrastructure/auth/) imports these packages; Domain, Application, and
   # Presentation stay provider-neutral. The two versions move in lockstep, so
