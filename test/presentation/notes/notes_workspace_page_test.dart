@@ -260,17 +260,15 @@ void main() {
     final Rect firstNoteRect = tester.getRect(
       find.byKey(const ValueKey<String>('note-note-1')),
     );
-    final Rect descriptionRect = tester.getRect(
-      find.text('Every idea, in one calm place.'),
-    );
 
     expect(createRect.left, greaterThanOrEqualTo(titleRect.right));
     expect(createRect.top, lessThan(titleRect.bottom));
     expect(createRect.bottom, greaterThan(titleRect.top));
     expect(createRect.width, 48);
     expect(find.byTooltip('New note'), findsOneWidget);
+    expect(find.text('Every idea, in one calm place.'), findsNothing);
     expect(
-      firstNoteRect.top - descriptionRect.bottom,
+      firstNoteRect.top - titleRect.bottom,
       lessThanOrEqualTo(NoteFlowSpacing.xxl),
     );
     expect(tester.takeException(), isNull);
