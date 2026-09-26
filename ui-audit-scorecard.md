@@ -2,7 +2,7 @@
 
 ## Current score snapshot
 
-**Snapshot date:** 2026-09-27. Current work is on branch `TuanKiet2`; release/runtime evidence uses the current working tree and is not yet a scoped commit.
+**Snapshot date:** 2026-09-27. UI-only commit `ac5e27b` is pushed to `origin/TuanKiet2`. Runtime screenshots/build still use the current working tree, which also has separate uncommitted browser-local QA wiring excluded from that commit.
 
 | Platform/runtime | Numeric score | Current evidence and interpretation |
 | --- | ---: | --- |
