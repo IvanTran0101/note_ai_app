@@ -29,6 +29,13 @@ const String _noteContent = 'Private note content';
 const String _mutationId = 'mutation-1';
 const String _noteId = 'note-1';
 
+String _tokenForSubject(String subject) {
+  final String payload = base64Url
+      .encode(utf8.encode(jsonEncode(<String, Object?>{'sub': subject})))
+      .replaceAll('=', '');
+  return 'header.$payload.signature';
+}
+
 /// A cursor with characters that must survive query encoding unchanged.
 const String _opaqueCursor = 'eyJzZXEiOjQyfQ==+/a b';
 
@@ -115,12 +122,14 @@ HttpRemoteNoteDataSource _adapter({
   required _FakeTokenProvider tokens,
   String baseUrl = _baseUrl,
   Duration timeout = const Duration(seconds: 30),
+  String? expectedAccountUserId,
 }) {
   return HttpRemoteNoteDataSource(
     baseUri: Uri.parse(baseUrl),
     tokenProvider: tokens.call,
     client: client,
     timeout: timeout,
+    expectedAccountUserId: expectedAccountUserId,
   );
 }
 
@@ -129,6 +138,7 @@ HttpRemoteNoteDataSource _singleTokenAdapter(
   Future<http.Response> Function(http.Request request) handler, {
   void Function(http.Request request)? onRequest,
   Duration timeout = const Duration(seconds: 30),
+  String? expectedAccountUserId,
 }) {
   return _adapter(
     client: MockClient((http.Request request) {
@@ -137,12 +147,17 @@ HttpRemoteNoteDataSource _singleTokenAdapter(
     }),
     tokens: _FakeTokenProvider(<String?>[_accessToken]),
     timeout: timeout,
+    expectedAccountUserId: expectedAccountUserId,
   );
 }
 
 Matcher _failsWith(SyncErrorCode code) {
   return throwsA(
-    isA<SyncFailure>().having((SyncFailure failure) => failure.code, 'code', code),
+    isA<SyncFailure>().having(
+      (SyncFailure failure) => failure.code,
+      'code',
+      code,
+    ),
   );
 }
 
@@ -150,12 +165,10 @@ void main() {
   group('request shaping', () {
     test('pushes one mutation to POST /sync/mutations as JSON', () async {
       late http.Request sent;
-      final adapter = _singleTokenAdapter(
-        (http.Request request) async {
-          sent = request;
-          return http.Response(_appliedBody(), 200);
-        },
-      );
+      final adapter = _singleTokenAdapter((http.Request request) async {
+        sent = request;
+        return http.Response(_appliedBody(), 200);
+      });
 
       final SyncMutationResult result = await adapter.push(_mutation());
 
@@ -163,19 +176,13 @@ void main() {
       expect(sent.url.toString(), '$_baseUrl/sync/mutations');
       expect(sent.headers['authorization'], 'Bearer $_accessToken');
       expect(sent.headers['content-type'], 'application/json');
-      expect(
-        jsonDecode(sent.body),
-        <String, Object?>{
-          'mutationId': _mutationId,
-          'noteId': _noteId,
-          'operation': 'create',
-          'baseRevision': 0,
-          'payload': <String, Object?>{
-            'title': 'Title',
-            'content': _noteContent,
-          },
-        },
-      );
+      expect(jsonDecode(sent.body), <String, Object?>{
+        'mutationId': _mutationId,
+        'noteId': _noteId,
+        'operation': 'create',
+        'baseRevision': 0,
+        'payload': <String, Object?>{'title': 'Title', 'content': _noteContent},
+      });
       expect(result.isApplied, isTrue);
       expect(result.note?.revision, 1);
       expect(result.note?.content, _noteContent);
@@ -196,27 +203,30 @@ void main() {
       expect(body.containsKey('payload'), isFalse);
     });
 
-    test('pulls a page from GET /sync/changes with the cursor and limit', () async {
-      late http.Request sent;
-      final adapter = _singleTokenAdapter((http.Request request) async {
-        sent = request;
-        return http.Response(_changesBody(nextCursor: _opaqueCursor), 200);
-      });
+    test(
+      'pulls a page from GET /sync/changes with the cursor and limit',
+      () async {
+        late http.Request sent;
+        final adapter = _singleTokenAdapter((http.Request request) async {
+          sent = request;
+          return http.Response(_changesBody(nextCursor: _opaqueCursor), 200);
+        });
 
-      final SyncChangesPage page = await adapter.pull(cursor: _opaqueCursor);
+        final SyncChangesPage page = await adapter.pull(cursor: _opaqueCursor);
 
-      expect(sent.method, 'GET');
-      expect(sent.url.path, '/prod/sync/changes');
-      expect(sent.headers['authorization'], 'Bearer $_accessToken');
-      expect(sent.headers['content-type'], 'application/json');
-      // The cursor is opaque: it round-trips byte for byte.
-      expect(sent.url.queryParameters['cursor'], _opaqueCursor);
-      expect(sent.url.queryParameters['limit'], '50');
-      // A GET carries no request body.
-      expect(sent.body, isEmpty);
-      expect(page.snapshots, hasLength(1));
-      expect(page.snapshots.single.id, _noteId);
-    });
+        expect(sent.method, 'GET');
+        expect(sent.url.path, '/prod/sync/changes');
+        expect(sent.headers['authorization'], 'Bearer $_accessToken');
+        expect(sent.headers['content-type'], 'application/json');
+        // The cursor is opaque: it round-trips byte for byte.
+        expect(sent.url.queryParameters['cursor'], _opaqueCursor);
+        expect(sent.url.queryParameters['limit'], '50');
+        // A GET carries no request body.
+        expect(sent.body, isEmpty);
+        expect(page.snapshots, hasLength(1));
+        expect(page.snapshots.single.id, _noteId);
+      },
+    );
 
     test('keeps nextCursor on a final page with hasMore false', () async {
       const String lastCursor = 'last-applied-cursor';
@@ -231,18 +241,21 @@ void main() {
       expect(page.nextCursor, lastCursor);
     });
 
-    test('omits the cursor on the first page and honours a custom limit', () async {
-      late http.Request sent;
-      final adapter = _singleTokenAdapter((http.Request request) async {
-        sent = request;
-        return http.Response(_changesBody(), 200);
-      });
+    test(
+      'omits the cursor on the first page and honours a custom limit',
+      () async {
+        late http.Request sent;
+        final adapter = _singleTokenAdapter((http.Request request) async {
+          sent = request;
+          return http.Response(_changesBody(), 200);
+        });
 
-      await adapter.pull(limit: 10);
+        await adapter.pull(limit: 10);
 
-      expect(sent.url.queryParameters.containsKey('cursor'), isFalse);
-      expect(sent.url.queryParameters['limit'], '10');
-    });
+        expect(sent.url.queryParameters.containsKey('cursor'), isFalse);
+        expect(sent.url.queryParameters['limit'], '10');
+      },
+    );
 
     test('keeps the base path with or without a trailing slash', () async {
       final List<String> urls = <String>[];
@@ -289,6 +302,46 @@ void main() {
   });
 
   group('credentials', () {
+    test(
+      'does not send one account local data with another account token',
+      () async {
+        int requestCount = 0;
+        final adapter = _adapter(
+          client: MockClient((http.Request request) async {
+            requestCount++;
+            return http.Response(_appliedBody(), 200);
+          }),
+          tokens: _FakeTokenProvider(<String?>[_tokenForSubject('account-b')]),
+          expectedAccountUserId: 'account-a',
+        );
+
+        await expectLater(
+          adapter.push(_mutation()),
+          _failsWith(SyncErrorCode.forbidden),
+        );
+        expect(requestCount, 0);
+      },
+    );
+
+    test(
+      'allows a token only when its subject matches the local account',
+      () async {
+        int requestCount = 0;
+        final adapter = _adapter(
+          client: MockClient((http.Request request) async {
+            requestCount++;
+            return http.Response(_appliedBody(), 200);
+          }),
+          tokens: _FakeTokenProvider(<String?>[_tokenForSubject('account-a')]),
+          expectedAccountUserId: 'account-a',
+        );
+
+        final SyncMutationResult result = await adapter.push(_mutation());
+        expect(result.isApplied, isTrue);
+        expect(requestCount, 1);
+      },
+    );
+
     test('refreshes the token once on 401 and retries exactly once', () async {
       final List<String> authorizations = <String>[];
       int attempts = 0;
@@ -345,7 +398,9 @@ void main() {
 
     test('sends no request at all when there is no token', () async {
       int attempts = 0;
-      final _FakeTokenProvider tokens = _FakeTokenProvider(const <String?>[null]);
+      final _FakeTokenProvider tokens = _FakeTokenProvider(const <String?>[
+        null,
+      ]);
       final adapter = _adapter(
         client: MockClient((http.Request request) async {
           attempts++;
@@ -354,37 +409,37 @@ void main() {
         tokens: tokens,
       );
 
-      await expectLater(
-        adapter.pull(),
-        _failsWith(SyncErrorCode.unauthorized),
-      );
+      await expectLater(adapter.pull(), _failsWith(SyncErrorCode.unauthorized));
 
       expect(attempts, 0);
       expect(tokens.forceRefreshCalls, <bool>[false]);
     });
 
-    test('fails as unauthorized when the forced refresh yields no token', () async {
-      int attempts = 0;
-      final _FakeTokenProvider tokens = _FakeTokenProvider(<String?>[
-        _accessToken,
-        null,
-      ]);
-      final adapter = _adapter(
-        client: MockClient((http.Request request) async {
-          attempts++;
-          return http.Response(_errorBody('UNAUTHORIZED'), 401);
-        }),
-        tokens: tokens,
-      );
+    test(
+      'fails as unauthorized when the forced refresh yields no token',
+      () async {
+        int attempts = 0;
+        final _FakeTokenProvider tokens = _FakeTokenProvider(<String?>[
+          _accessToken,
+          null,
+        ]);
+        final adapter = _adapter(
+          client: MockClient((http.Request request) async {
+            attempts++;
+            return http.Response(_errorBody('UNAUTHORIZED'), 401);
+          }),
+          tokens: tokens,
+        );
 
-      await expectLater(
-        adapter.push(_mutation()),
-        _failsWith(SyncErrorCode.unauthorized),
-      );
+        await expectLater(
+          adapter.push(_mutation()),
+          _failsWith(SyncErrorCode.unauthorized),
+        );
 
-      expect(attempts, 1);
-      expect(tokens.forceRefreshCalls, <bool>[false, true]);
-    });
+        expect(attempts, 1);
+        expect(tokens.forceRefreshCalls, <bool>[false, true]);
+      },
+    );
 
     test('refreshes on a 401 from the change feed as well', () async {
       int attempts = 0;
@@ -458,7 +513,8 @@ void main() {
 
     test('maps pull failures the same way', () async {
       final adapter = _singleTokenAdapter(
-        (http.Request request) async => http.Response(_errorBody('FORBIDDEN'), 403),
+        (http.Request request) async =>
+            http.Response(_errorBody('FORBIDDEN'), 403),
       );
 
       await expectLater(adapter.pull(), _failsWith(SyncErrorCode.forbidden));
@@ -469,7 +525,10 @@ void main() {
         (http.Request request) async => http.Response(_errorBody('BAD'), 400),
       );
 
-      await expectLater(adapter.push(_mutation()), _failsWith(SyncErrorCode.unexpected));
+      await expectLater(
+        adapter.push(_mutation()),
+        _failsWith(SyncErrorCode.unexpected),
+      );
     });
 
     test('classifies a malformed success body as unexpected', () async {
@@ -477,24 +536,21 @@ void main() {
         (http.Request request) async => http.Response('not json', 200),
       );
 
-      await expectLater(adapter.push(_mutation()), _failsWith(SyncErrorCode.unexpected));
+      await expectLater(
+        adapter.push(_mutation()),
+        _failsWith(SyncErrorCode.unexpected),
+      );
     });
   });
 
   group('transport mapping', () {
     test('maps a timeout to timeout', () async {
-      final adapter = _singleTokenAdapter(
-        (http.Request request) async {
-          await Future<void>.delayed(const Duration(milliseconds: 200));
-          return http.Response(_appliedBody(), 200);
-        },
-        timeout: const Duration(milliseconds: 20),
-      );
+      final adapter = _singleTokenAdapter((http.Request request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return http.Response(_appliedBody(), 200);
+      }, timeout: const Duration(milliseconds: 20));
 
-      await expectLater(
-        adapter.pull(),
-        _failsWith(SyncErrorCode.timeout),
-      );
+      await expectLater(adapter.pull(), _failsWith(SyncErrorCode.timeout));
     });
 
     test('maps a client exception to networkUnavailable', () async {
@@ -509,30 +565,33 @@ void main() {
       );
     });
 
-    test('maps an unknown error to unexpected without keeping its text', () async {
-      final adapter = _singleTokenAdapter(
-        (http.Request request) async => throw StateError(
-          'boom $_accessToken $_noteContent $_opaqueCursor',
-        ),
-      );
+    test(
+      'maps an unknown error to unexpected without keeping its text',
+      () async {
+        final adapter = _singleTokenAdapter(
+          (http.Request request) async => throw StateError(
+            'boom $_accessToken $_noteContent $_opaqueCursor',
+          ),
+        );
 
-      await expectLater(
-        adapter.push(_mutation()),
-        throwsA(
-          isA<SyncFailure>()
-              .having(
-                (SyncFailure failure) => failure.code,
-                'code',
-                SyncErrorCode.unexpected,
-              )
-              .having(
-                (SyncFailure failure) => failure.detail,
-                'detail',
-                isNull,
-              ),
-        ),
-      );
-    });
+        await expectLater(
+          adapter.push(_mutation()),
+          throwsA(
+            isA<SyncFailure>()
+                .having(
+                  (SyncFailure failure) => failure.code,
+                  'code',
+                  SyncErrorCode.unexpected,
+                )
+                .having(
+                  (SyncFailure failure) => failure.detail,
+                  'detail',
+                  isNull,
+                ),
+          ),
+        );
+      },
+    );
   });
 
   group('no credential leakage', () {
@@ -568,11 +627,7 @@ void main() {
         adapter.push(_mutation()),
         throwsA(
           isA<SyncFailure>()
-              .having(
-                (SyncFailure failure) => failure.detail,
-                'detail',
-                isNull,
-              )
+              .having((SyncFailure failure) => failure.detail, 'detail', isNull)
               .having(
                 (SyncFailure failure) => failure.toString(),
                 'toString',
@@ -585,27 +640,30 @@ void main() {
       );
     });
 
-    test('keeps the token, note content, and cursor out of error responses', () async {
-      final adapter = _singleTokenAdapter(
-        (http.Request request) async =>
-            http.Response(_errorBody('SERVER_UNAVAILABLE'), 500),
-      );
+    test(
+      'keeps the token, note content, and cursor out of error responses',
+      () async {
+        final adapter = _singleTokenAdapter(
+          (http.Request request) async =>
+              http.Response(_errorBody('SERVER_UNAVAILABLE'), 500),
+        );
 
-      await expectLater(
-        adapter.pull(cursor: _opaqueCursor),
-        throwsA(
-          isA<SyncFailure>().having(
-            (SyncFailure failure) => failure.toString(),
-            'toString',
-            allOf(
-              isNot(contains(_accessToken)),
-              isNot(contains(_noteContent)),
-              isNot(contains(_opaqueCursor)),
+        await expectLater(
+          adapter.pull(cursor: _opaqueCursor),
+          throwsA(
+            isA<SyncFailure>().having(
+              (SyncFailure failure) => failure.toString(),
+              'toString',
+              allOf(
+                isNot(contains(_accessToken)),
+                isNot(contains(_noteContent)),
+                isNot(contains(_opaqueCursor)),
+              ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   });
 
   group('client ownership', () {

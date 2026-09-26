@@ -16,6 +16,17 @@ abstract interface class ILocalSyncStore {
   /// returns null and never returns a partial state.
   Future<LocalSyncState> read();
 
+  /// Atomically reads, transforms, and persists the complete account state.
+  ///
+  /// The transform is synchronous and must not perform I/O. Native adapters
+  /// serialize it with other operations on the account store; Web adapters run
+  /// it within one IndexedDB read-write transaction. Callers use this instead
+  /// of `read` followed by `replace` for read-modify-write flows, so a local
+  /// edit cannot be lost to a concurrent sync checkpoint.
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  );
+
   /// Atomically replaces the whole stored state.
   ///
   /// The replacement is all-or-nothing: a reader observes either the previous

@@ -25,8 +25,9 @@ abstract interface class ISyncCoordinator {
 
   /// Runs one synchronization pass to completion.
   ///
-  /// Returns the report of what that pass changed. Failures surface as a
-  /// published [SyncStatusSnapshot] with status [SyncStatus.failed] and are
-  /// also reported to the caller through the returned future.
+  /// Returns the report of what that pass changed. A network-unavailable
+  /// failure publishes [SyncStatus.offline]; other failures publish
+  /// [SyncStatus.failed]. All failures are also reported through the returned
+  /// future.
   Future<SyncReport> syncNow();
 }

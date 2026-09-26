@@ -10,6 +10,9 @@
 /// [IndexedDbLocalSyncStore.replace] writes the envelope and then awaits
 /// transaction completion, so notes, outbox, cursor, and conflicts commit
 /// together or not at all: a reader can never observe a half-written state.
+/// [IndexedDbLocalSyncStore.update] reads, transforms, and writes that envelope
+/// in one read-write transaction, preventing local edits and sync checkpoints
+/// from replacing one another with stale snapshots.
 /// [IndexedDbLocalSyncStore.read] returns an empty state when the account has
 /// no record yet and strictly decodes an existing one, raising
 /// [LocalSyncStoreException] when it is malformed or belongs to another
@@ -22,6 +25,7 @@
 /// stored string is accepted back as a Dart or a JavaScript string.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 
@@ -127,6 +131,80 @@ final class IndexedDbLocalSyncStore implements ILocalSyncStore {
     }
   }
 
+  @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) async {
+    final Database database = await _database();
+    final Transaction transaction;
+    final ObjectStore store;
+    try {
+      transaction = _transaction(database, 'readwrite');
+      store = transaction.objectStore(_objectStoreName);
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state transaction could not be opened',
+      );
+    }
+
+    final Object? record;
+    try {
+      record = await store.getObject(_recordKey.toJS);
+    } on Object {
+      _abort(transaction);
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unreadable,
+        'the local sync state could not be read',
+      );
+    }
+
+    final LocalSyncState current;
+    try {
+      current = record == null
+          ? LocalSyncState(accountUserId: _namespace.accountUserId)
+          : _decode(record);
+    } on Object catch (error, stackTrace) {
+      _abort(transaction);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final LocalSyncState next;
+    try {
+      next = transform(current);
+      _namespace.requireOwned(next);
+    } on Object catch (error, stackTrace) {
+      _abort(transaction);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (next == current) {
+      await transaction.completed;
+      return current;
+    }
+
+    final String encoded;
+    try {
+      encoded = jsonEncode(LocalSyncStateCodec.encode(next));
+    } on Object {
+      _abort(transaction);
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state could not be encoded',
+      );
+    }
+
+    try {
+      await store.put(encoded.toJS, _recordKey.toJS);
+      await transaction.completed;
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state could not be replaced',
+      );
+    }
+    return next;
+  }
+
   /// Opens a transaction over the one envelope object store.
   ///
   /// Store names are passed as a converted list instead of through the
@@ -136,6 +214,15 @@ final class IndexedDbLocalSyncStore implements ILocalSyncStore {
   /// therefore runs on the JavaScript and the Wasm backends.
   Transaction _transaction(Database database, String mode) {
     return database.transactionList(<String>[_objectStoreName], mode);
+  }
+
+  void _abort(Transaction transaction) {
+    try {
+      transaction.abort();
+    } on Object {
+      // An already-finished transaction needs no further cleanup.
+    }
+    unawaited(transaction.completed.then<void>((_) {}, onError: (Object _) {}));
   }
 
   /// Decodes a stored record without ever letting a value escape.

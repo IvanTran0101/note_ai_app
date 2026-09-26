@@ -37,6 +37,7 @@ import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/sync/cognito_access_token_provider.dart';
+import 'infrastructure/sync/account_sync_runtime.dart';
 import 'infrastructure/sync/http_remote_note_data_source.dart';
 import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
@@ -265,7 +266,7 @@ class NoteFlowApp extends StatefulWidget {
   State<NoteFlowApp> createState() => _NoteFlowAppState();
 }
 
-class _NoteFlowAppState extends State<NoteFlowApp> {
+class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
   LlmWorkerClient? _workerClient;
@@ -279,6 +280,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
+  AccountSyncRuntime? _syncRuntime;
+  String? _lastSyncAccountUserId;
   late final INoteRepository _noteRepository = note_infrastructure
       .createNoteRepository(
         currentAccountUserId: () => _currentUserSession.requiredUserId,
@@ -293,6 +296,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
+        requestSync: _requestSyncForAccount,
       );
   late final NotesApplicationController _notesController =
       NoteApplicationServiceController(_noteApplicationService);
@@ -337,6 +341,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.authController.addListener(_onAuthenticationChanged);
     _router = createAppRouter(
       authController: widget.authController,
       workspaceBuilder: _buildWorkspace,
@@ -347,6 +353,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   Future<void> _initializeAuth() async {
     try {
       await widget.authController.initialize();
+      _onAuthenticationChanged();
     } on Object {
       // AuthController retains the safe mapped startup error for the router's
       // splash/retry page; startup must not become an uncaught async error.
@@ -386,6 +393,54 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   String _generateMutationId() => 'mutation-${_generateNoteId()}';
 
   DateTime _nowUtc() => DateTime.now().toUtc();
+
+  Uri? _syncApiBaseUri() {
+    final String endpoint = _noteFlowSyncApi.trim();
+    final Uri? uri = Uri.tryParse(endpoint);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  void _requestSyncForAccount(String accountUserId) {
+    if (_noteFlowAuthMode != 'cognito') {
+      return;
+    }
+    final Uri? baseUri = _syncApiBaseUri();
+    if (baseUri == null) {
+      return;
+    }
+    final AccountSyncRuntime runtime = _syncRuntime ??= AccountSyncRuntime(
+      baseUri: baseUri,
+      localSyncStoreFactory: _localSyncStoreForAccount,
+      clock: _nowUtc,
+    );
+    runtime.requestSync(accountUserId);
+  }
+
+  void _onAuthenticationChanged() {
+    final String? accountUserId = _currentUserSession.userId;
+    if (accountUserId == null) {
+      _lastSyncAccountUserId = null;
+      return;
+    }
+    if (accountUserId == _lastSyncAccountUserId) {
+      return;
+    }
+    _lastSyncAccountUserId = accountUserId;
+    _requestSyncForAccount(accountUserId);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final String? accountUserId = _currentUserSession.userId;
+      if (accountUserId != null) {
+        _requestSyncForAccount(accountUserId);
+      }
+    }
+  }
 
   ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
     return _localSyncStores.putIfAbsent(
@@ -849,6 +904,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    widget.authController.removeListener(_onAuthenticationChanged);
     _router.dispose();
     widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;
@@ -856,6 +913,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       unawaited(client.dispose());
     }
     _remoteNoteDataSource?.close();
+    final AccountSyncRuntime? syncRuntime = _syncRuntime;
+    if (syncRuntime != null) {
+      unawaited(syncRuntime.dispose());
+    }
     super.dispose();
   }
 }

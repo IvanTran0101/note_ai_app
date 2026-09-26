@@ -394,6 +394,12 @@ void main() {
       );
       final NoteRepository repository = buildRepository(factory);
 
+      await expectLater(
+        repository.save(testNote(id: 'note-b', title: 'Overwrite conflict')),
+        throwsStateError,
+      );
+      await expectLater(repository.deleteById('note-b'), throwsStateError);
+
       await repository.save(
         testNote(id: 'note-a', title: 'Edited a', content: 'Edited a'),
       );
@@ -812,6 +818,35 @@ void main() {
         <String>['note-1', 'note-2'],
       );
     });
+
+    test(
+      'keeps a note edit when a sync checkpoint updates the same store',
+      () async {
+        final FakeLocalSyncStoreFactory factory = FakeLocalSyncStoreFactory();
+        final NoteRepository repository = buildRepository(factory);
+        await repository.findByOwnerId('user-1');
+        final FakeLocalSyncStore store = factory.store('user-1');
+
+        await Future.wait<void>(<Future<void>>[
+          repository.save(testNote(id: 'note-1', title: 'Edited locally')),
+          store
+              .update((LocalSyncState current) {
+                return LocalSyncState(
+                  accountUserId: current.accountUserId,
+                  notes: current.notes,
+                  outbox: current.outbox,
+                  conflicts: current.conflicts,
+                  cursor: const SyncCursor('sync-cursor'),
+                );
+              })
+              .then<void>((_) {}),
+        ]);
+
+        expect(store.state.cursor, const SyncCursor('sync-cursor'));
+        expect(store.state.notes.single.title, 'Edited locally');
+        expect(store.state.outbox.single.noteId, 'note-1');
+      },
+    );
 
     test('a read waits for a preceding mutation to commit', () async {
       final FakeLocalSyncStoreFactory factory = FakeLocalSyncStoreFactory();

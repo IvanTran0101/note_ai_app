@@ -135,7 +135,10 @@ with the same `mutationId` replays the original applied response.
 
 The cursor is account-bound and opaque. The client stores it even when
 `hasMore` is false, because it represents the last successfully applied
-sequence.
+sequence. Since DynamoDB GSI reads are eventually consistent, a response may
+contain a gap in the account sequence. The server returns only the contiguous
+prefix before that gap and stops advancing; a later sync request retries from
+the same cursor after index propagation catches up.
 
 ## M1.0 stop gate
 

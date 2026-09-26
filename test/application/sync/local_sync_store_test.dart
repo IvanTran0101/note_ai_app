@@ -32,6 +32,18 @@ final class _InMemoryLocalSyncStore implements ILocalSyncStore {
   Future<LocalSyncState> read() async => _state;
 
   @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) async {
+    final LocalSyncState next = transform(_state);
+    if (next.accountUserId != accountUserId) {
+      throw StateError('refusing to store another account state');
+    }
+    _state = next;
+    return next;
+  }
+
+  @override
   Future<void> replace(LocalSyncState state) async {
     if (state.accountUserId != accountUserId) {
       throw StateError('refusing to store another account state');

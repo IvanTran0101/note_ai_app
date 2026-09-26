@@ -8,7 +8,8 @@ enum SyncStatus {
   /// Nothing is scheduled; the last run finished or none started.
   idle,
 
-  /// The device is offline, so sync is waiting for connectivity.
+  /// The last attempt found the remote network unavailable; a later sync
+  /// trigger can retry.
   offline,
 
   /// A sync run is in progress.

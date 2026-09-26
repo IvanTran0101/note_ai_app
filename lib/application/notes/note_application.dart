@@ -97,6 +97,9 @@ final class NoteOwnershipException implements Exception {
   }
 }
 
+/// Requests a non-blocking sync after one local note mutation has persisted.
+typedef RequestNoteSync = void Function(String accountUserId);
+
 /// Application use cases for the Note aggregate.
 ///
 /// This service coordinates domain behavior and persistence. It deliberately
@@ -110,6 +113,7 @@ final class NoteApplicationService {
     required this.generateId,
     required this.now,
     required this.summarizeContent,
+    this.requestSync,
   });
 
   final INoteRepository noteRepository;
@@ -117,6 +121,7 @@ final class NoteApplicationService {
   final NoteIdGenerator generateId;
   final NoteClock now;
   final SummarizeNoteContent summarizeContent;
+  final RequestNoteSync? requestSync;
 
   /// Lists the notes owned by the authenticated user.
   Future<List<NoteDto>> listNotes() async {
@@ -139,6 +144,7 @@ final class NoteApplicationService {
       now: now().toUtc(),
     );
     await noteRepository.save(note);
+    requestSync?.call(userId);
     return NoteDto.fromDomain(note);
   }
 
@@ -151,6 +157,7 @@ final class NoteApplicationService {
     final Note note = await _requireOwnedNote(noteId, userId);
     note.rename(title, now().toUtc());
     await noteRepository.save(note);
+    requestSync?.call(userId);
     return NoteDto.fromDomain(note);
   }
 
@@ -164,6 +171,7 @@ final class NoteApplicationService {
     final Note note = await _requireOwnedNote(noteId, userId);
     note.replaceContent(content, now().toUtc());
     await noteRepository.save(note);
+    requestSync?.call(userId);
     return NoteDto.fromDomain(note);
   }
 
@@ -172,6 +180,7 @@ final class NoteApplicationService {
     final String userId = currentUser.requiredUserId;
     await _requireOwnedNote(noteId, userId);
     await noteRepository.deleteById(noteId);
+    requestSync?.call(userId);
   }
 
   /// Summarizes an owned note without mutating or persisting it.

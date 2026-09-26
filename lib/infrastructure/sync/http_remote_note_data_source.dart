@@ -33,8 +33,9 @@ import 'sync_http_mapper.dart';
 ///
 /// `CognitoAccessTokenProvider` in `cognito_access_token_provider.dart` is the
 /// production implementation.
-typedef SyncAccessTokenProvider =
-    Future<String?> Function({required bool forceRefresh});
+typedef SyncAccessTokenProvider = Future<String?> Function({
+  required bool forceRefresh,
+});
 
 /// [IRemoteNoteDataSource] over the frozen M1.0 HTTP contract.
 ///
@@ -53,6 +54,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required SyncAccessTokenProvider tokenProvider,
     http.Client? client,
     Duration timeout = const Duration(seconds: 30),
+    String? expectedAccountUserId,
   }) {
     return HttpRemoteNoteDataSource._(
       baseUri: baseUri,
@@ -60,6 +62,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       client: client ?? http.Client(),
       ownsClient: client == null,
       timeout: timeout,
+      expectedAccountUserId: expectedAccountUserId,
     );
   }
 
@@ -71,6 +74,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required this._client,
     required this._ownsClient,
     required this._timeout,
+    required this._expectedAccountUserId,
   });
 
   /// Async mutation route.
@@ -87,6 +91,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
   final http.Client _client;
   final bool _ownsClient;
   final Duration _timeout;
+  final String? _expectedAccountUserId;
 
   @override
   Future<SyncMutationResult> push(SyncMutation mutation) {
@@ -160,6 +165,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     if (token == null) {
       throw const SyncFailure(code: SyncErrorCode.unauthorized);
     }
+    _requireExpectedAccount(token);
 
     http.Response response = await _dispatch(
       method: method,
@@ -175,6 +181,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     if (refreshed == null) {
       throw const SyncFailure(code: SyncErrorCode.unauthorized);
     }
+    _requireExpectedAccount(refreshed);
     response = await _dispatch(
       method: method,
       uri: uri,
@@ -182,6 +189,16 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       accessToken: refreshed,
     );
     return response;
+  }
+
+  /// Stops a token for another signed-in account before it can carry this
+  /// account's local notes to the API. This is a client-side consistency guard,
+  /// not JWT verification; API Gateway still verifies the token signature.
+  void _requireExpectedAccount(String token) {
+    final String? expected = _expectedAccountUserId;
+    if (expected != null && _jwtSubject(token) != expected) {
+      throw const SyncFailure(code: SyncErrorCode.forbidden);
+    }
   }
 
   /// Performs one HTTP round trip under [_timeout].
@@ -267,4 +284,23 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
   /// Whether [statusCode] is a 2xx success.
   static bool _isSuccess(int statusCode) =>
       statusCode >= 200 && statusCode < 300;
+}
+
+String? _jwtSubject(String token) {
+  final List<String> parts = token.split('.');
+  if (parts.length != 3) {
+    return null;
+  }
+  try {
+    final Object? payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+    );
+    if (payload is Map<String, dynamic>) {
+      final Object? subject = payload['sub'];
+      return subject is String && subject.isNotEmpty ? subject : null;
+    }
+  } on Object {
+    return null;
+  }
+  return null;
 }

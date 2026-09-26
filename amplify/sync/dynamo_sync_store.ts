@@ -48,11 +48,11 @@ import { decodeChangeCursor, encodeChangeCursor, stableDigest } from './cursor';
  *   retried - with a new `mutationId` as soon as any field changes.
  *
  * `listChanges` reads the `ChangesByOwnerSequence` index for the account in
- * ascending sequence order, above the sequence the caller's cursor covers. Like
- * any GSI that index is eventually consistent: a change can briefly be
- * invisible to a poll, which delays a change but never reorders one. Gap
- * guarantees, retention of `CHANGE#` rows, and TTLs belong to a later slice, as
- * do HTTP shapes (`handler.ts`), a repository over these items, and batches.
+ * ascending sequence order, above the sequence the caller's cursor covers. A
+ * GSI is eventually consistent, so a later sequence can become visible before
+ * an earlier one. The feed therefore returns and advances only across a
+ * contiguous sequence prefix; it stops at a gap and a later poll retries from
+ * that cursor. `CHANGE#` retention and TTLs remain a later concern.
  */
 
 export { SyncInvalidCursorError } from './cursor';
@@ -145,7 +145,9 @@ export interface SyncStore {
 
   /**
    * Lists changes above `cursor` in ascending sequence order. A missing cursor
-   * starts from the beginning; `limit` is clamped to 1..100 (default 50).
+   * starts from the beginning; `limit` is clamped to 1..100 (default 50). The
+   * cursor advances only across contiguous sequence numbers, so an eventually
+   * consistent GSI gap is retried on a later poll instead of being skipped.
    *
    * @throws SyncInvalidCursorError when the cursor is not this account's.
    * @throws SyncStorageError when storage failed.
@@ -581,12 +583,27 @@ export class DynamoSyncStore implements SyncStore {
     const pageSize = pageSizeOf(limit);
     const ownerKey = ownerKeyOf(ownerId);
 
-    // One row beyond the page: its presence is what `hasMore` means, and the
-    // cursor still stops at the last row actually returned.
+    // One row beyond the page supports `hasMore`; never advance across a GSI
+    // visibility gap, because that sequence may appear in a later poll.
     const response = await this.queryChanges(ownerKey, after, pageSize + 1);
     const rows = response.Items ?? [];
-    const hasMore = rows.length > pageSize;
-    const page = hasMore ? rows.slice(0, pageSize) : rows;
+    const contiguousRows: Record<string, unknown>[] = [];
+    let expectedSequence = after + 1;
+    let foundGap = false;
+    for (const row of rows) {
+      const sequence = sequenceOf(row);
+      if (sequence < expectedSequence) {
+        throw corruptData();
+      }
+      if (sequence > expectedSequence) {
+        foundGap = true;
+        break;
+      }
+      contiguousRows.push(row);
+      expectedSequence++;
+    }
+    const hasMore = !foundGap && contiguousRows.length > pageSize;
+    const page = contiguousRows.slice(0, pageSize);
 
     return {
       items: page.map((row) => toNoteSnapshot(row)),

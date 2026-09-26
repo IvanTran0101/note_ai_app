@@ -225,6 +225,47 @@ void main() {
       expect(_relativePaths(fixture.supportDirectory), isEmpty);
     });
 
+    test('serializes concurrent read-modify-write updates', () async {
+      final _Fixture fixture = await _newFixture();
+      await Future.wait(<Future<LocalSyncState>>[
+        for (final String id in <String>['note-a', 'note-b'])
+          fixture.store.update((LocalSyncState current) {
+            return LocalSyncState(
+              accountUserId: _account,
+              notes: <LocalNoteState>[
+                ...current.notes,
+                noteFixture(id: id, ownerId: _account),
+              ],
+              outbox: current.outbox,
+              conflicts: current.conflicts,
+              cursor: current.cursor,
+            );
+          }),
+      ]);
+
+      expect(
+        (await fixture.store.read()).notes.map(
+          (LocalNoteState note) => note.id,
+        ),
+        containsAll(<String>['note-a', 'note-b']),
+      );
+    });
+
+    test(
+      'a failed update transform leaves the stored document unchanged',
+      () async {
+        final _Fixture fixture = await _newFixture();
+        final LocalSyncState original = _stateFor(_account);
+        await fixture.store.replace(original);
+
+        await expectLater(
+          fixture.store.update((LocalSyncState _) => throw StateError('stop')),
+          throwsStateError,
+        );
+        expect(await fixture.store.read(), original);
+      },
+    );
+
     test(
       'round-trips a rich state through the schemaVersion 2 envelope',
       () async {
@@ -304,7 +345,7 @@ void main() {
     });
 
     test(
-      'replace rejects another account state and keeps the old one',
+      'replace and update reject another account state and keep the old one',
       () async {
         final _Fixture fixture = await _newFixture();
         final LocalSyncState stored = richStateFixture();
@@ -312,6 +353,13 @@ void main() {
 
         await expectLater(
           fixture.store.replace(_stateFor(_otherAccount)),
+          _storeError(
+            LocalSyncStoreFailure.foreignAccount,
+            'belongs to a different account',
+          ),
+        );
+        await expectLater(
+          fixture.store.update((LocalSyncState _) => _stateFor(_otherAccount)),
           _storeError(
             LocalSyncStoreFailure.foreignAccount,
             'belongs to a different account',

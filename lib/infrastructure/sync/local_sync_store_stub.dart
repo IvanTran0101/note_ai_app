@@ -34,6 +34,16 @@ final class UnsupportedLocalSyncStore implements ILocalSyncStore {
   }
 
   @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) {
+    throw UnsupportedError(
+      'The local sync store is not available on this platform. Local sync '
+      'state is not persisted here.',
+    );
+  }
+
+  @override
   Future<void> replace(LocalSyncState state) {
     throw UnsupportedError(
       'The local sync store is not available on this platform. Local sync '

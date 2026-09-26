@@ -17,8 +17,9 @@
 /// Writes are atomic: the encoded envelope is written to a same-directory
 /// temporary file, flushed and closed, then renamed over the target. On failure
 /// only the temporary file this write issued is cleaned up, so a failed
-/// replacement leaves the previously stored state in place. All operations are
-/// serialized per store instance. Reads never repair persisted data: a
+/// replacement leaves the previously stored state in place. All operations,
+/// including read-modify-write updates, are serialized per store instance.
+/// Reads never repair persisted data: a
 /// malformed document, or one that carries another account, raises
 /// [LocalSyncStoreException] and is left exactly as it was found.
 ///
@@ -91,83 +92,103 @@ final class FileLocalSyncStore implements ILocalSyncStore {
 
   @override
   Future<LocalSyncState> read() {
-    return _enqueue<LocalSyncState>(() async {
-      final File file = await _stateFile();
-      if (!await file.exists()) {
-        return _emptyState();
-      }
-
-      final String encoded;
-      try {
-        encoded = await file.readAsString();
-      } on Object {
-        throw const LocalSyncStoreException(
-          LocalSyncStoreFailure.unreadable,
-          'the local sync state could not be read',
-        );
-      }
-
-      return _decode(encoded);
-    });
+    return _enqueue<LocalSyncState>(_readState);
   }
 
   @override
   Future<void> replace(LocalSyncState state) {
-    return _enqueue<void>(() async {
-      _namespace.requireOwned(state);
+    return _enqueue<void>(() => _replaceState(state));
+  }
 
-      final File target = await _stateFile();
-
-      final String encoded;
-      try {
-        encoded = jsonEncode(LocalSyncStateCodec.encode(state));
-      } on Object {
-        throw const LocalSyncStoreException(
-          LocalSyncStoreFailure.unwritable,
-          'the local sync state could not be encoded',
-        );
+  @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) {
+    return _enqueue<LocalSyncState>(() async {
+      final LocalSyncState current = await _readState();
+      final LocalSyncState next = transform(current);
+      _namespace.requireOwned(next);
+      if (next == current) {
+        return current;
       }
-
-      try {
-        await target.parent.create(recursive: true);
-      } on Object {
-        throw const LocalSyncStoreException(
-          LocalSyncStoreFailure.unwritable,
-          'the local sync state namespace directory could not be created',
-        );
-      }
-
-      final File temporary = File(_temporaryPathFor(target));
-      bool temporaryIssued = false;
-      try {
-        await temporary.create(exclusive: true);
-        temporaryIssued = true;
-
-        final RandomAccessFile handle = await temporary.open(
-          mode: FileMode.writeOnly,
-        );
-        try {
-          await handle.writeString(encoded);
-          await handle.flush();
-        } finally {
-          await handle.close();
-        }
-
-        // The temporary file is in the same directory, so this is one
-        // filesystem rename rather than a copy followed by a delete. On the
-        // supported native filesystems it atomically replaces the old file, so
-        // a reader sees either the previous complete state or the new one.
-        await temporary.rename(target.path);
-      } on Object {
-        if (temporaryIssued) {
-          await _cleanIssuedTemporaryFile(temporary);
-        }
-        throw const LocalSyncStoreException(
-          LocalSyncStoreFailure.unwritable,
-          'the local sync state could not be replaced',
-        );
-      }
+      await _replaceState(next);
+      return next;
     });
+  }
+
+  Future<LocalSyncState> _readState() async {
+    final File file = await _stateFile();
+    if (!await file.exists()) {
+      return _emptyState();
+    }
+
+    final String encoded;
+    try {
+      encoded = await file.readAsString();
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unreadable,
+        'the local sync state could not be read',
+      );
+    }
+
+    return _decode(encoded);
+  }
+
+  Future<void> _replaceState(LocalSyncState state) async {
+    _namespace.requireOwned(state);
+
+    final File target = await _stateFile();
+
+    final String encoded;
+    try {
+      encoded = jsonEncode(LocalSyncStateCodec.encode(state));
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state could not be encoded',
+      );
+    }
+
+    try {
+      await target.parent.create(recursive: true);
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state namespace directory could not be created',
+      );
+    }
+
+    final File temporary = File(_temporaryPathFor(target));
+    bool temporaryIssued = false;
+    try {
+      await temporary.create(exclusive: true);
+      temporaryIssued = true;
+
+      final RandomAccessFile handle = await temporary.open(
+        mode: FileMode.writeOnly,
+      );
+      try {
+        await handle.writeString(encoded);
+        await handle.flush();
+      } finally {
+        await handle.close();
+      }
+
+      // The temporary file is in the same directory, so this is one
+      // filesystem rename rather than a copy followed by a delete. On the
+      // supported native filesystems it atomically replaces the old file, so
+      // a reader sees either the previous complete state or the new one.
+      await temporary.rename(target.path);
+    } on Object {
+      if (temporaryIssued) {
+        await _cleanIssuedTemporaryFile(temporary);
+      }
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'the local sync state could not be replaced',
+      );
+    }
   }
 
   LocalSyncState _emptyState() {

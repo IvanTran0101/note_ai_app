@@ -5,6 +5,7 @@ import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/pending_mutation.dart';
+import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_repository.dart' as domain;
@@ -13,9 +14,9 @@ import '../../domain/notes/note_repository.dart' as domain;
 ///
 /// The repository owns one account-scoped [ILocalSyncStore] per signed-in
 /// account and keeps local notes and their outbox entries in the same
-/// [LocalSyncState] document. Every mutation builds one complete new state and
-/// persists it with exactly one [ILocalSyncStore.replace], so a note change and
-/// its queued mutation can never diverge.
+/// [LocalSyncState] document. Every mutation transforms the current document
+/// through [ILocalSyncStore.update], so a note change and its queued mutation
+/// stay atomic even when sync is writing a checkpoint at the same time.
 ///
 /// All operations run through one FIFO queue. Reads therefore observe every
 /// preceding mutation, and concurrent read-modify-write calls cannot overwrite
@@ -95,13 +96,22 @@ final class NoteRepository implements domain.INoteRepository {
         );
       }
       final ILocalSyncStore store = _storeFor(accountUserId);
-      final LocalSyncState current = await _readStateFor(accountUserId);
-      final LocalNoteState? existing = _findNote(current, note.id);
-      if (existing?.isDeleted ?? false) {
-        throw StateError('A deleted note cannot be restored with the same id.');
-      }
-      final LocalSyncState next = _stateAfterSave(current, note, now());
-      await store.replace(next);
+      await store.update((LocalSyncState current) {
+        if (current.conflicts.any(
+          (SyncConflict conflict) => conflict.noteId == note.id,
+        )) {
+          throw StateError(
+            'Resolve the sync conflict before editing this note.',
+          );
+        }
+        final LocalNoteState? existing = _findNote(current, note.id);
+        if (existing?.isDeleted ?? false) {
+          throw StateError(
+            'A deleted note cannot be restored with the same id.',
+          );
+        }
+        return _stateAfterSave(current, note, now());
+      });
     });
   }
 
@@ -110,39 +120,41 @@ final class NoteRepository implements domain.INoteRepository {
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();
       final ILocalSyncStore store = _storeFor(accountUserId);
-      final LocalSyncState current = await _readStateFor(accountUserId);
-      final LocalNoteState? existing = _findNote(current, id);
-      if (existing == null || existing.isDeleted) {
-        // An absent or already tombstoned note is already deleted; rewriting
-        // unchanged state would add nothing.
-        return;
-      }
-      final int pendingIndex = _lastPendingIndexFor(current, id);
-      final PendingMutation? pending = pendingIndex == -1
-          ? null
-          : current.outbox[pendingIndex];
-      if (existing.serverRevision == 0 && pending == null) {
-        // No server version and no queued create means this note is only a
-        // local draft. Removing it locally cannot lose a remote delete.
-        await store.replace(
-          _stateWith(
+      await store.update((LocalSyncState current) {
+        if (current.conflicts.any(
+          (SyncConflict conflict) => conflict.noteId == id,
+        )) {
+          throw StateError(
+            'Resolve the sync conflict before deleting this note.',
+          );
+        }
+        final LocalNoteState? existing = _findNote(current, id);
+        if (existing == null || existing.isDeleted) {
+          // An absent or already tombstoned note is already deleted.
+          return current;
+        }
+        final int pendingIndex = _lastPendingIndexFor(current, id);
+        final PendingMutation? pending = pendingIndex == -1
+            ? null
+            : current.outbox[pendingIndex];
+        if (existing.serverRevision == 0 && pending == null) {
+          // No server version and no queued create means this note is only a
+          // local draft. Removing it locally cannot lose a remote delete.
+          return _stateWith(
             current,
             notes: current.notes
                 .where((LocalNoteState note) => note.id != id)
                 .toList(growable: false),
             outbox: current.outbox,
-          ),
-        );
-        return;
-      }
-      if (pending != null &&
-          pending.operation == SyncMutationOperation.create &&
-          existing.serverRevision == 0 &&
-          _isUnsent(pending)) {
-        // The create never reached the server, so dropping the note and its
-        // mutation is the whole delete: no remote tombstone is needed.
-        await store.replace(
-          _stateWith(
+          );
+        }
+        if (pending != null &&
+            pending.operation == SyncMutationOperation.create &&
+            existing.serverRevision == 0 &&
+            _isUnsent(pending)) {
+          // The create never reached the server, so dropping the note and its
+          // mutation is the whole delete: no remote tombstone is needed.
+          return _stateWith(
             current,
             notes: current.notes
                 .where((LocalNoteState note) => note.id != id)
@@ -153,24 +165,21 @@ final class NoteRepository implements domain.INoteRepository {
                       entry.mutationId != pending.mutationId,
                 )
                 .toList(growable: false),
-          ),
+          );
+        }
+        final DateTime timestamp = now();
+        final LocalNoteState tombstone = LocalNoteState(
+          id: existing.id,
+          ownerId: existing.ownerId,
+          title: '',
+          content: '',
+          createdAt: existing.createdAt,
+          updatedAt: timestamp,
+          serverRevision: existing.serverRevision,
+          deletedAt: timestamp,
+          status: NoteSyncStatus.pending,
         );
-        return;
-      }
-      final DateTime timestamp = now();
-      final LocalNoteState tombstone = LocalNoteState(
-        id: existing.id,
-        ownerId: existing.ownerId,
-        title: '',
-        content: '',
-        createdAt: existing.createdAt,
-        updatedAt: timestamp,
-        serverRevision: existing.serverRevision,
-        deletedAt: timestamp,
-        status: NoteSyncStatus.pending,
-      );
-      await store.replace(
-        _stateWith(
+        return _stateWith(
           current,
           notes: _notesWith(current.notes, tombstone),
           outbox: _outboxAfterDelete(
@@ -179,8 +188,8 @@ final class NoteRepository implements domain.INoteRepository {
             pendingIndex,
             timestamp,
           ),
-        ),
-      );
+        );
+      });
     });
   }
 

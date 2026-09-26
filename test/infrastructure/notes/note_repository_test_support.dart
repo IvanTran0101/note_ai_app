@@ -139,42 +139,80 @@ final class FakeLocalSyncStore implements ILocalSyncStore {
   int replaceCount = 0;
   int _activeOperations = 0;
   int maximumActiveOperations = 0;
+  Future<void> _operationTail = Future<void>.value();
 
   /// The persisted state, for direct assertions.
   LocalSyncState get state => _state;
 
   @override
-  Future<LocalSyncState> read() async {
-    readCount++;
-    await _runOperation(() async {
-      final Completer<void>? gate = readGate;
-      if (gate != null) {
-        await gate.future;
-      }
+  Future<LocalSyncState> read() {
+    return _enqueue<LocalSyncState>(() async {
+      readCount++;
+      await _runOperation(() async {
+        final Completer<void>? gate = readGate;
+        if (gate != null) {
+          await gate.future;
+        }
+      });
+      return _state;
     });
-    return _state;
   }
 
   @override
-  Future<void> replace(LocalSyncState state) async {
-    replaceCount++;
-    await _runOperation(() async {
-      final Completer<void>? gate = replaceGate;
-      if (gate != null) {
-        if (!replaceStarted.isCompleted) {
-          replaceStarted.complete();
+  Future<void> replace(LocalSyncState state) {
+    return _enqueue<void>(() async {
+      replaceCount++;
+      await _runOperation(() async {
+        final Completer<void>? gate = replaceGate;
+        if (gate != null) {
+          if (!replaceStarted.isCompleted) {
+            replaceStarted.complete();
+          }
+          await gate.future;
         }
-        await gate.future;
+      });
+      if (state.accountUserId != accountUserId) {
+        throw StateError('refusing to store another account state');
       }
+      final Object? error = failure;
+      if (error != null) {
+        throw error;
+      }
+      _state = state;
     });
-    if (state.accountUserId != accountUserId) {
-      throw StateError('refusing to store another account state');
-    }
-    final Object? error = failure;
-    if (error != null) {
-      throw error;
-    }
-    _state = state;
+  }
+
+  @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) {
+    return _enqueue<LocalSyncState>(() async {
+      late LocalSyncState next;
+      await _runOperation(() async {
+        final LocalSyncState current = _state;
+        next = transform(current);
+        if (next.accountUserId != accountUserId) {
+          throw StateError('refusing to store another account state');
+        }
+        if (next == current) {
+          return;
+        }
+        replaceCount++;
+        final Object? error = failure;
+        if (error != null) {
+          throw error;
+        }
+        final Completer<void>? gate = replaceGate;
+        if (gate != null) {
+          if (!replaceStarted.isCompleted) {
+            replaceStarted.complete();
+          }
+          await gate.future;
+        }
+        _state = next;
+      });
+      return next;
+    });
   }
 
   Future<void> _runOperation(Future<void> Function() body) async {
@@ -190,6 +228,13 @@ final class FakeLocalSyncStore implements ILocalSyncStore {
     } finally {
       _activeOperations--;
     }
+  }
+
+  Future<T> _enqueue<T>(Future<T> Function() operation) {
+    final Future<void> previous = _operationTail;
+    final Completer<void> release = Completer<void>();
+    _operationTail = release.future;
+    return previous.then((_) => operation()).whenComplete(release.complete);
   }
 }
 

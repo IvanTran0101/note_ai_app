@@ -160,6 +160,34 @@ void runLocalSyncStoreWebTests() {
       expect(state.cursor, isNull);
     });
 
+    test(
+      'serializes concurrent read-modify-write IndexedDB transactions',
+      () async {
+        const String account = 'web-atomic-update-account';
+        final ILocalSyncStore store = _storeFor(account);
+        await Future.wait(<Future<LocalSyncState>>[
+          for (final String id in <String>['note-a', 'note-b'])
+            store.update((LocalSyncState current) {
+              return LocalSyncState(
+                accountUserId: account,
+                notes: <LocalNoteState>[
+                  ...current.notes,
+                  noteFixture(id: id, ownerId: account),
+                ],
+                outbox: current.outbox,
+                conflicts: current.conflicts,
+                cursor: current.cursor,
+              );
+            }),
+        ]);
+
+        expect(
+          (await store.read()).notes.map((LocalNoteState note) => note.id),
+          containsAll(<String>['note-a', 'note-b']),
+        );
+      },
+    );
+
     test('round-trips the whole envelope as one committed record', () async {
       final ILocalSyncStore store = _storeFor(_richAccount);
       final LocalSyncState state = richStateFixture();
@@ -183,44 +211,54 @@ void runLocalSyncStoreWebTests() {
       expect(decoded[LocalSyncSchema.cursor], isNotNull);
     });
 
-    test('isolates accounts and rejects a foreign replacement', () async {
-      const String account = 'web-account-a';
-      const String otherAccount = 'web-account-b';
-      final ILocalSyncStore store = _storeFor(account);
-      final ILocalSyncStore otherStore = _storeFor(otherAccount);
-      final LocalSyncState state = _stateFor(account, noteId: 'note-a');
-      final LocalSyncState otherState = _stateFor(
-        otherAccount,
-        noteId: 'note-b',
-      );
+    test(
+      'isolates accounts and rejects foreign replacements and updates',
+      () async {
+        const String account = 'web-account-a';
+        const String otherAccount = 'web-account-b';
+        final ILocalSyncStore store = _storeFor(account);
+        final ILocalSyncStore otherStore = _storeFor(otherAccount);
+        final LocalSyncState state = _stateFor(account, noteId: 'note-a');
+        final LocalSyncState otherState = _stateFor(
+          otherAccount,
+          noteId: 'note-b',
+        );
 
-      await store.replace(state);
-      expect(
-        await otherStore.read(),
-        LocalSyncState(accountUserId: otherAccount),
-      );
-      await otherStore.replace(otherState);
+        await store.replace(state);
+        expect(
+          await otherStore.read(),
+          LocalSyncState(accountUserId: otherAccount),
+        );
+        await otherStore.replace(otherState);
 
-      expect(await store.read(), state);
-      expect(await otherStore.read(), otherState);
+        expect(await store.read(), state);
+        expect(await otherStore.read(), otherState);
 
-      await expectLater(
-        store.replace(otherState),
-        _storeError(
-          LocalSyncStoreFailure.foreignAccount,
-          'belongs to a different account',
-        ),
-      );
-      expect(await store.read(), state);
+        await expectLater(
+          store.replace(otherState),
+          _storeError(
+            LocalSyncStoreFailure.foreignAccount,
+            'belongs to a different account',
+          ),
+        );
+        await expectLater(
+          store.update((LocalSyncState _) => otherState),
+          _storeError(
+            LocalSyncStoreFailure.foreignAccount,
+            'belongs to a different account',
+          ),
+        );
+        expect(await store.read(), state);
 
-      for (final String name in <String>[
-        LocalSyncAccountNamespace(account).webDatabaseName,
-        LocalSyncAccountNamespace(otherAccount).webDatabaseName,
-      ]) {
-        expect(name, isNot(contains(account)));
-        expect(name, isNot(contains(otherAccount)));
-      }
-    });
+        for (final String name in <String>[
+          LocalSyncAccountNamespace(account).webDatabaseName,
+          LocalSyncAccountNamespace(otherAccount).webDatabaseName,
+        ]) {
+          expect(name, isNot(contains(account)));
+          expect(name, isNot(contains(otherAccount)));
+        }
+      },
+    );
 
     test('strictly decodes an existing record and never repairs it', () async {
       const String account = 'web-malformed-account';
