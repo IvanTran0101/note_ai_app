@@ -506,51 +506,124 @@ void main() {
       },
     );
 
-    test(
-      'preserves a blocked mutation and appends the next revision',
-      () async {
-        final PendingMutation blocked = testMutation(
-          mutationId: 'mutation-blocked',
-          noteId: 'note-1',
-          operation: SyncMutationOperation.update,
-          baseRevision: 5,
-          payload: const SyncNotePayload(title: 'Old', content: 'Old'),
-          retryCount: 2,
-          lastError: SyncErrorCode.invalidMutation,
-          blocked: true,
-        );
-        final FakeLocalSyncStoreFactory factory = statefulFactory(
-          LocalSyncState(
-            accountUserId: 'user-1',
-            notes: <LocalNoteState>[
-              testLocalNote(
-                id: 'note-1',
-                title: 'Old',
-                content: 'Old',
-                serverRevision: 5,
-                status: NoteSyncStatus.failed,
-              ),
-            ],
-            outbox: <PendingMutation>[blocked],
-          ),
-        );
-        final NoteRepository repository = buildRepository(factory);
+    test('replaces a rejected mutation chain after an explicit edit', () async {
+      final PendingMutation blocked = testMutation(
+        mutationId: 'mutation-blocked',
+        noteId: 'note-1',
+        operation: SyncMutationOperation.update,
+        baseRevision: 5,
+        payload: const SyncNotePayload(title: 'Old', content: 'Old'),
+        retryCount: 2,
+        lastError: SyncErrorCode.invalidMutation,
+        blocked: true,
+      );
+      final PendingMutation otherNote = testMutation(
+        mutationId: 'mutation-other',
+        noteId: 'note-2',
+        operation: SyncMutationOperation.create,
+        baseRevision: 0,
+        payload: const SyncNotePayload(title: 'Other', content: 'Other'),
+      );
+      final PendingMutation successor = testMutation(
+        mutationId: 'mutation-successor',
+        noteId: 'note-1',
+        operation: SyncMutationOperation.update,
+        baseRevision: 6,
+        payload: const SyncNotePayload(title: 'Later', content: 'Later'),
+      );
+      final PendingMutation anotherNote = testMutation(
+        mutationId: 'mutation-another',
+        noteId: 'note-3',
+        operation: SyncMutationOperation.create,
+        baseRevision: 0,
+        payload: const SyncNotePayload(title: 'Third', content: 'Third'),
+      );
+      final FakeLocalSyncStoreFactory factory = statefulFactory(
+        LocalSyncState(
+          accountUserId: 'user-1',
+          notes: <LocalNoteState>[
+            testLocalNote(
+              id: 'note-1',
+              title: 'Old',
+              content: 'Old',
+              serverRevision: 5,
+              status: NoteSyncStatus.failed,
+            ),
+          ],
+          outbox: <PendingMutation>[blocked, otherNote, successor, anotherNote],
+        ),
+      );
+      final NoteRepository repository = buildRepository(factory);
 
-        await repository.save(testNote(id: 'note-1', title: 'New'));
+      await repository.save(testNote(id: 'note-1', title: 'New'));
 
-        final LocalSyncState state = factory.store('user-1').state;
-        expect(state.outbox, hasLength(2));
-        expect(state.outbox.first, blocked);
-        final PendingMutation appended = state.outbox.last;
-        expect(appended.mutationId, 'mutation-1');
-        expect(appended.operation, SyncMutationOperation.update);
-        expect(appended.baseRevision, 6);
-        expect(
-          appended.payload,
-          const SyncNotePayload(title: 'New', content: 'Content'),
-        );
-      },
-    );
+      final LocalSyncState state = factory.store('user-1').state;
+      expect(state.outbox, hasLength(3));
+      expect(state.outbox.first, otherNote);
+      expect(state.outbox[1], anotherNote);
+      final PendingMutation appended = state.outbox.last;
+      expect(appended.mutationId, 'mutation-1');
+      expect(appended.operation, SyncMutationOperation.update);
+      expect(appended.baseRevision, 5);
+      expect(
+        appended.payload,
+        const SyncNotePayload(title: 'New', content: 'Content'),
+      );
+      expect(appended.blocked, isFalse);
+      expect(appended.retryCount, 0);
+      expect(
+        state.notes
+            .singleWhere((LocalNoteState note) => note.id == 'note-1')
+            .serverRevision,
+        5,
+      );
+      expect(
+        state.notes
+            .singleWhere((LocalNoteState note) => note.id == 'note-1')
+            .status,
+        NoteSyncStatus.pending,
+      );
+    });
+
+    test('recreates a rejected create at revision zero', () async {
+      final PendingMutation blocked = testMutation(
+        mutationId: 'mutation-blocked',
+        noteId: 'note-1',
+        operation: SyncMutationOperation.create,
+        baseRevision: 0,
+        payload: const SyncNotePayload(title: 'Old', content: 'Old'),
+        lastError: SyncErrorCode.invalidMutation,
+        blocked: true,
+      );
+      final FakeLocalSyncStoreFactory factory = statefulFactory(
+        LocalSyncState(
+          accountUserId: 'user-1',
+          notes: <LocalNoteState>[
+            testLocalNote(
+              id: 'note-1',
+              title: 'Old',
+              content: 'Old',
+              status: NoteSyncStatus.failed,
+            ),
+          ],
+          outbox: <PendingMutation>[blocked],
+        ),
+      );
+      final NoteRepository repository = buildRepository(factory);
+
+      await repository.save(testNote(id: 'note-1', title: 'Edited'));
+
+      final LocalSyncState state = factory.store('user-1').state;
+      final PendingMutation replacement = state.outbox.single;
+      expect(replacement.mutationId, 'mutation-1');
+      expect(replacement.operation, SyncMutationOperation.create);
+      expect(replacement.baseRevision, 0);
+      expect(
+        replacement.payload,
+        const SyncNotePayload(title: 'Edited', content: 'Content'),
+      );
+      expect(state.notes.single.status, NoteSyncStatus.pending);
+    });
 
     test('keeps outbox order and coalesces into the appended entry', () async {
       final PendingMutation attempted = testMutation(

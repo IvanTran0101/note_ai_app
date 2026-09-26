@@ -6,6 +6,7 @@ import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
+import '../sync/sync_presentation_controller.dart';
 
 /// Loaded Dashboard surface: toolbar, local filtering and responsive note list.
 final class DashboardContent extends StatelessWidget {
@@ -29,6 +30,7 @@ final class DashboardContent extends StatelessWidget {
     required this.onCreateNote,
     required this.onRetry,
     required this.onRefresh,
+    this.syncController,
   });
 
   final List<NoteDto> notes;
@@ -49,6 +51,7 @@ final class DashboardContent extends StatelessWidget {
   final VoidCallback onCreateNote;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
+  final SyncPresentationController? syncController;
 
   List<NoteDto> get visibleNotes {
     final String query = searchText.trim().toLowerCase();
@@ -260,6 +263,7 @@ final class DashboardContent extends StatelessWidget {
               copy: copy,
               layout: DashboardNoteCardLayout.list,
               selected: items[index].id == selectedNoteId,
+              syncController: syncController,
               onTap: onOpenNote,
             ),
             if (index < items.length - 1) const SizedBox(height: 12.0),
@@ -287,6 +291,7 @@ final class DashboardContent extends StatelessWidget {
                   copy: copy,
                   layout: DashboardNoteCardLayout.grid,
                   selected: note.id == selectedNoteId,
+                  syncController: syncController,
                   onTap: onOpenNote,
                 ),
               ),

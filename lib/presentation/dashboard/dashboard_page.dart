@@ -11,6 +11,8 @@ import 'dashboard_localizations.dart';
 import 'dashboard_state.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 export 'dashboard_view_models.dart' show DashboardLayout, DashboardSort;
 
@@ -29,6 +31,7 @@ final class DashboardPage extends StatefulWidget {
     required this.onCreateNote,
     this.onOpenSettings,
     this.onOpenDiagnostics,
+    this.syncController,
   });
 
   /// Controller for M5.1/M5.2 overview state.
@@ -54,6 +57,9 @@ final class DashboardPage extends StatefulWidget {
 
   /// Opens the existing diagnostics flow.
   final VoidCallback? onOpenDiagnostics;
+
+  /// Account-scoped status and conflict projection, absent when sync is not configured.
+  final SyncPresentationController? syncController;
 
   static const Key searchFieldKey = ValueKey<String>('dashboard-search-field');
   static const Key searchToggleKey = ValueKey<String>(
@@ -250,9 +256,14 @@ final class DashboardPageState extends State<DashboardPage> {
         ],
       ),
       body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          return _buildBody(context, constraints, copy);
-        },
+        builder: (BuildContext context, BoxConstraints constraints) => Column(
+          children: <Widget>[
+            if (widget.syncController
+                case final SyncPresentationController sync)
+              SyncStatusPanel(controller: sync),
+            Expanded(child: _buildBody(context, constraints, copy)),
+          ],
+        ),
       ),
     );
   }
@@ -295,6 +306,7 @@ final class DashboardPageState extends State<DashboardPage> {
       onCreateNote: _createNote,
       onRetry: reload,
       onRefresh: reload,
+      syncController: widget.syncController,
     );
   }
 

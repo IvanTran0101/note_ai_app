@@ -6,6 +6,7 @@ import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/pending_mutation.dart';
 import '../../application/sync/sync_conflict.dart';
+import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_repository.dart' as domain;
@@ -269,6 +270,29 @@ final class NoteRepository implements domain.INoteRepository {
     DateTime timestamp,
   ) {
     final SyncNotePayload payload = _payloadOf(note);
+    if (current.outbox.any(
+      (PendingMutation entry) =>
+          entry.noteId == note.id &&
+          entry.blocked &&
+          entry.lastError == SyncErrorCode.invalidMutation,
+    )) {
+      // An explicit edit repairs a rejected request with a fresh id and the
+      // last acknowledged revision; successors of that request cannot run.
+      return <PendingMutation>[
+        ...current.outbox.where(
+          (PendingMutation entry) => entry.noteId != note.id,
+        ),
+        _pendingMutation(
+          noteId: note.id,
+          operation: existing.serverRevision == 0
+              ? SyncMutationOperation.create
+              : SyncMutationOperation.update,
+          baseRevision: existing.serverRevision,
+          payload: payload,
+          timestamp: timestamp,
+        ),
+      ];
+    }
     final int index = _lastPendingIndexFor(current, note.id);
     if (index == -1) {
       // Nothing is queued yet: base the update on the acknowledged revision.

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import 'notes_localizations.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 /// Displays the saved Note projections and the list-level actions.
 final class NotesListPanel extends StatelessWidget {
@@ -14,6 +16,7 @@ final class NotesListPanel extends StatelessWidget {
     required this.onNewNote,
     required this.onSelectNote,
     required this.onRetry,
+    this.syncController,
   });
 
   final List<NoteDto> notes;
@@ -23,6 +26,7 @@ final class NotesListPanel extends StatelessWidget {
   final VoidCallback onNewNote;
   final ValueChanged<NoteDto> onSelectNote;
   final VoidCallback onRetry;
+  final SyncPresentationController? syncController;
 
   @override
   Widget build(BuildContext context) {
@@ -135,15 +139,26 @@ final class NotesListPanel extends StatelessWidget {
                                     : colors.onSurface,
                               ),
                             ),
-                            subtitle: Text(
-                              _preview(note.content, copy),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: selected
-                                    ? colors.onPrimaryContainer
-                                    : colors.onSurfaceVariant,
-                              ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  _preview(note.content, copy),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? colors.onPrimaryContainer
+                                        : colors.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (syncController
+                                    case final SyncPresentationController sync)
+                                  SyncNoteStatusBadge(
+                                    controller: sync,
+                                    noteId: note.id,
+                                  ),
+                              ],
                             ),
                             onTap: actionBusy ? null : () => onSelectNote(note),
                           ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import 'dashboard_localizations.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 /// Visual density used by a Dashboard note card.
 enum DashboardNoteCardLayout { list, grid }
@@ -15,6 +17,7 @@ final class DashboardNoteCard extends StatelessWidget {
     required this.copy,
     required this.layout,
     this.selected = false,
+    this.syncController,
   });
 
   /// Note projection shown by the card.
@@ -31,6 +34,8 @@ final class DashboardNoteCard extends StatelessWidget {
 
   /// Whether the card is the current selection in an expanded layout.
   final bool selected;
+
+  final SyncPresentationController? syncController;
 
   static const Key cardKeyPrefix = ValueKey<String>('dashboard-note-card');
 
@@ -99,6 +104,17 @@ final class DashboardNoteCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.labelMedium
                         ?.copyWith(color: secondaryForeground),
                   ),
+                  if (syncController
+                      case final SyncPresentationController sync) ...<Widget>[
+                    const SizedBox(height: 8.0),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SyncNoteStatusBadge(
+                        controller: sync,
+                        noteId: note.id,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

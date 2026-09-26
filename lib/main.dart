@@ -10,6 +10,7 @@ import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
 import 'application/sync/local_sync_store.dart';
+import 'application/sync/sync_conflict_resolver.dart';
 import 'application/sync/sync_mutation.dart';
 import 'application/sync/sync_result.dart';
 import 'application/sync/sync_snapshot.dart';
@@ -58,6 +59,8 @@ import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
 import 'presentation/routing/app_router.dart';
 import 'presentation/routing/app_routes.dart';
+import 'presentation/sync/sync_localizations.dart';
+import 'presentation/sync/sync_presentation_controller.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
@@ -280,6 +283,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
+  final Map<String, SyncPresentationController> _syncControllers =
+      <String, SyncPresentationController>{};
   AccountSyncRuntime? _syncRuntime;
   String? _lastSyncAccountUserId;
   late final INoteRepository _noteRepository = note_infrastructure
@@ -378,6 +383,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         builder: (_) => NoteDetailPage(
           notesController: _notesController,
           note: note,
+          syncController: _currentSyncController(),
           provisioningReader: _modelProvisioningStatus,
           onProvisioningCancel: _cancelModelProvisioning,
         ),
@@ -404,19 +410,44 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   void _requestSyncForAccount(String accountUserId) {
-    if (_noteFlowAuthMode != 'cognito') {
-      return;
-    }
+    _accountSyncRuntime()?.requestSync(accountUserId);
+  }
+
+  AccountSyncRuntime? _accountSyncRuntime() {
+    if (_noteFlowAuthMode != 'cognito') return null;
     final Uri? baseUri = _syncApiBaseUri();
-    if (baseUri == null) {
-      return;
-    }
-    final AccountSyncRuntime runtime = _syncRuntime ??= AccountSyncRuntime(
+    if (baseUri == null) return null;
+    return _syncRuntime ??= AccountSyncRuntime(
       baseUri: baseUri,
       localSyncStoreFactory: _localSyncStoreForAccount,
       clock: _nowUtc,
     );
-    runtime.requestSync(accountUserId);
+  }
+
+  SyncPresentationController? _syncControllerFor(String accountUserId) {
+    final AccountSyncRuntime? runtime = _accountSyncRuntime();
+    if (runtime == null) return null;
+    return _syncControllers.putIfAbsent(accountUserId, () {
+      final ILocalSyncStore store = _localSyncStoreForAccount(
+        accountUserId: accountUserId,
+      );
+      return SyncPresentationController(
+        accountUserId: accountUserId,
+        localStore: store,
+        coordinator: runtime.coordinatorFor(accountUserId),
+        conflictResolver: SyncConflictResolver(
+          localSyncStore: store,
+          generateNoteId: _generateNoteId,
+          generateMutationId: _generateMutationId,
+          now: _nowUtc,
+        ),
+      );
+    });
+  }
+
+  SyncPresentationController? _currentSyncController() {
+    final String? accountUserId = _currentUserSession.userId;
+    return accountUserId == null ? null : _syncControllerFor(accountUserId);
   }
 
   void _onAuthenticationChanged() {
@@ -836,6 +867,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
         DashboardCopy.delegate,
+        SyncCopy.delegate,
         WorkspaceCopy.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -847,6 +879,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   Widget _buildWorkspace(BuildContext context) {
+    final SyncPresentationController? syncController = _currentSyncController();
     return Column(
       children: <Widget>[
         EmailVerificationBanner(controller: widget.authController),
@@ -858,6 +891,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
               key: _dashboardPageKey,
               dashboardController: _dashboardController,
               notesController: _notesController,
+              syncController: syncController,
               onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
               onCreateNote: () => _openNoteDetail(context, null),
               onOpenSettings: () => _showAppearanceSettings(context),
@@ -878,6 +912,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             notes: NotesWorkspacePage(
               key: _notesPageKey,
               applicationService: _noteApplicationService,
+              syncController: syncController,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,
               onOpenSettings: () => _showAppearanceSettings(context),
@@ -913,6 +948,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       unawaited(client.dispose());
     }
     _remoteNoteDataSource?.close();
+    for (final SyncPresentationController controller
+        in _syncControllers.values) {
+      controller.dispose();
+    }
     final AccountSyncRuntime? syncRuntime = _syncRuntime;
     if (syncRuntime != null) {
       unawaited(syncRuntime.dispose());
