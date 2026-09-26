@@ -823,7 +823,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
             accountName: widget.currentUserSession.identity?.email
                 .split('@')
                 .first,
-            onDestinationChanged: _reloadWorkspaceDestination,
+            onDestinationChanged: (WorkspaceDestination destination) {
+              if (destination != WorkspaceDestination.dashboard) {
+                _dashboardPageKey.currentState?.closeSearch();
+              }
+              _reloadWorkspaceDestination(destination);
+            },
             onOpenSearch: () {
               _workspaceShellKey.currentState?.showDestination(
                 WorkspaceDestination.dashboard,
@@ -864,6 +869,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                     ),
                   ),
                 );
+              },
+              onSearchVisibilityChanged: (bool active) {
+                _workspaceShellKey.currentState?.setCompactSearchActive(active);
               },
             ),
             notes: NotesWorkspacePage(

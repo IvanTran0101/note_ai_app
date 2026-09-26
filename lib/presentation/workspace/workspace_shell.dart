@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../common/note_flow_primitives.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'workspace_localizations.dart';
+import 'workspace_ui_tokens.dart';
 
 /// Top-level destinations owned by the workspace shell.
 enum WorkspaceDestination { dashboard, notes }
@@ -101,6 +102,8 @@ class WorkspaceShell extends StatefulWidget {
   static const Key compactBrandKey = ValueKey<String>(
     'workspace-compact-brand-home',
   );
+  static const Key notionBrandMarkKey = ValueKey<String>('notion-brand-mark');
+  static const String notionBrandAsset = 'assets/branding/notion-logo.png';
   static const Key compactMenuSearchKey = ValueKey<String>(
     'workspace-compact-menu-search',
   );
@@ -173,6 +176,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
     with SingleTickerProviderStateMixin {
   late WorkspaceDestination _destination = widget.initialDestination;
   bool _sidebarCollapsed = false;
+  bool _compactSearchActive = false;
   late final AnimationController _pageMotionController = AnimationController(
     vsync: this,
     duration: NoteFlowMotion.standard,
@@ -183,6 +187,15 @@ class WorkspaceShellState extends State<WorkspaceShell>
 
   /// Destination currently shown by the shell.
   WorkspaceDestination get destination => _destination;
+
+  /// Hides compact workspace chrome while the Dashboard is in its dedicated
+  /// search state. The search page owns its own heading and close affordance.
+  void setCompactSearchActive(bool active) {
+    if (_compactSearchActive == active) {
+      return;
+    }
+    setState(() => _compactSearchActive = active);
+  }
 
   /// Selects [destination], rebuilding the shell and notifying
   /// [WorkspaceShell.onDestinationChanged] when the selection changes.
@@ -222,7 +235,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   IconData _iconFor(WorkspaceDestination destination, {required bool active}) {
     return switch (destination) {
       WorkspaceDestination.dashboard =>
-        active ? Icons.dashboard : Icons.dashboard_outlined,
+        active ? Icons.home_filled : Icons.home_outlined,
       WorkspaceDestination.notes =>
         active ? Icons.description : Icons.description_outlined,
     };
@@ -250,29 +263,19 @@ class WorkspaceShellState extends State<WorkspaceShell>
             ? WorkspaceShell.navigationRailWidth
             : WorkspaceShell.sidebarWidth;
         final double dividerWidth = compact || collapsedDesktop ? 0 : 1;
-        final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+        final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(
+          context,
+        );
 
         // Keep the page stack at the same element path at every width. Moving
         // it between a compact Scaffold/Column and an expanded Row used to
         // dispose an active editor, losing its unsaved draft on resize.
         return Scaffold(
           backgroundColor: tokens.pageSurface,
-          floatingActionButton:
-              compact &&
-                  _destination == WorkspaceDestination.dashboard &&
-                  widget.onCreateNote != null
-              ? FloatingActionButton(
-                  key: WorkspaceShell.compactFabNewNoteKey,
-                  onPressed: widget.onCreateNote,
-                  backgroundColor: tokens.link,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  tooltip: copy.newNote,
-                  child: const Icon(Icons.add),
-                )
+          floatingActionButton: null,
+          bottomNavigationBar: compact && !_compactSearchActive
+              ? _buildCompactBottomBar(copy)
               : null,
-          // Compact navigation lives beside the avatar in the top bar, like
-          // Notion's mobile shell. The existing FAB remains the create action.
-          bottomNavigationBar: null,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -282,20 +285,9 @@ class WorkspaceShellState extends State<WorkspaceShell>
                 right: compact,
                 bottom: false,
                 child: SizedBox(
-                  height: compact ? 57 : 0,
-                  child: compact
-                      ? Column(
-                          children: <Widget>[
-                            SizedBox(
-                              height: 56,
-                              child: _buildCompactTopBar(copy),
-                            ),
-                            const SizedBox(
-                              height: 1,
-                              child: Divider(height: 1),
-                            ),
-                          ],
-                        )
+                  height: compact && !_compactSearchActive ? 48 : 0,
+                  child: compact && !_compactSearchActive
+                      ? _buildCompactTopBar(copy)
                       : const SizedBox.shrink(),
                 ),
               ),
@@ -417,39 +409,114 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildCompactTopBar(WorkspaceCopy copy) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final ThemeData theme = Theme.of(context);
     return SizedBox(
-      height: 56,
-      child: Row(
-        children: <Widget>[
-          KeyedSubtree(
-            key: WorkspaceShell.compactBrandKey,
-            child: KeyedSubtree(
-              key: WorkspaceShell.compactMenuKey,
-              child: IconButton(
-                key: WorkspaceShell.compactAvatarKey,
-                tooltip: copy.openMenu,
-                onPressed: () => _showCompactMenu(copy),
-                padding: EdgeInsets.zero,
-                icon: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: tokens.selectedSurface,
-                  foregroundColor: tokens.textPrimary,
-                  child: Text(
-                    _avatarInitial,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w700,
+      height: 48,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16),
+        child: Row(
+          children: <Widget>[
+            KeyedSubtree(
+              key: WorkspaceShell.compactBrandKey,
+              child: KeyedSubtree(
+                key: WorkspaceShell.compactMenuKey,
+                child: IconButton(
+                  key: WorkspaceShell.compactAvatarKey,
+                  tooltip: copy.openMenu,
+                  onPressed: () => _showCompactMenu(copy),
+                  padding: EdgeInsets.zero,
+                  icon: CircleAvatar(
+                    radius: 19,
+                    backgroundColor: tokens.selectedSurface,
+                    foregroundColor: tokens.textPrimary,
+                    child: Text(
+                      _avatarInitial,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
+            const SizedBox(width: NoteFlowSpacing.xs),
+            Expanded(child: _buildCompactTopNavigation(copy)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildCompactBottomBar(WorkspaceCopy copy) {
+    final bool canSearch = widget.onOpenSearch != null;
+    final bool canCreate =
+        _destination == WorkspaceDestination.dashboard &&
+        widget.onCreateNote != null;
+    if (!canSearch && !canCreate) {
+      return null;
+    }
+
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
+    return KeyedSubtree(
+      key: WorkspaceShell.compactBottomNavigationKey,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            NoteFlowSpacing.lg,
+            NoteFlowSpacing.sm,
+            NoteFlowSpacing.lg,
+            NoteFlowSpacing.sm,
           ),
-          const SizedBox(width: NoteFlowSpacing.xs),
-          Expanded(child: _buildCompactTopNavigation(copy)),
-        ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              if (canSearch)
+                Tooltip(
+                  message: copy.search,
+                  child: Material(
+                    color: tokens.pageSurface,
+                    shape: CircleBorder(
+                      side: BorderSide(color: tokens.divider),
+                    ),
+                    child: InkWell(
+                      key: WorkspaceShell.compactSearchKey,
+                      customBorder: const CircleBorder(),
+                      onTap: widget.onOpenSearch,
+                      child: SizedBox.square(
+                        dimension: 48,
+                        child: Icon(Icons.search, color: tokens.textSecondary),
+                      ),
+                    ),
+                  ),
+                ),
+              if (canCreate)
+                Tooltip(
+                  message: copy.newNote,
+                  child: Material(
+                    color: tokens.pageSurface,
+                    shape: CircleBorder(
+                      side: BorderSide(color: tokens.divider),
+                    ),
+                    child: InkWell(
+                      key: WorkspaceShell.compactFabNewNoteKey,
+                      customBorder: const CircleBorder(),
+                      onTap: widget.onCreateNote,
+                      child: SizedBox.square(
+                        dimension: 48,
+                        child: Icon(
+                          Icons.edit_outlined,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -457,6 +524,21 @@ class WorkspaceShellState extends State<WorkspaceShell>
   String get _avatarInitial {
     final String value = widget.accountName?.trim() ?? '';
     return value.isEmpty ? 'U' : value.substring(0, 1).toUpperCase();
+  }
+
+  Widget _buildBrandMark(double size) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+      child: SizedBox.square(
+        dimension: size,
+        child: Image.asset(
+          WorkspaceShell.notionBrandAsset,
+          key: WorkspaceShell.notionBrandMarkKey,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    );
   }
 
   Widget _buildCompactTopNavigation(WorkspaceCopy copy) {
@@ -476,21 +558,6 @@ class WorkspaceShellState extends State<WorkspaceShell>
         activeIcon: _iconFor(WorkspaceDestination.notes, active: true),
         selected: _destination == WorkspaceDestination.notes,
         onPressed: () => showDestination(WorkspaceDestination.notes),
-      ),
-      if (widget.onOpenSearch != null)
-        _buildCompactTopAction(
-          key: WorkspaceShell.compactSearchKey,
-          tooltip: copy.search,
-          icon: Icons.search_outlined,
-          activeIcon: Icons.search,
-          onPressed: widget.onOpenSearch!,
-        ),
-      _buildCompactTopAction(
-        key: const ValueKey<String>('workspace-compact-more'),
-        tooltip: copy.openMenu,
-        icon: Icons.more_horiz,
-        activeIcon: Icons.more_horiz,
-        onPressed: () => _showCompactMenu(copy),
       ),
     ];
     return Align(
@@ -520,28 +587,28 @@ class WorkspaceShellState extends State<WorkspaceShell>
     required VoidCallback onPressed,
     bool selected = false,
   }) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: selected ? tokens.selectedSurface : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          key: key,
-          borderRadius: BorderRadius.circular(20),
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: NoteFlowSpacing.md,
-              vertical: NoteFlowSpacing.sm,
-            ),
-            child: AnimatedSwitcher(
-              duration: NoteFlowMotion.fast,
-              child: Icon(
-                selected ? activeIcon : icon,
-                key: ValueKey<bool>(selected),
-                size: selected ? 22 : 20,
-                color: tokens.textPrimary,
+      child: SizedBox(
+        width: 64,
+        height: 40,
+        child: Material(
+          color: selected ? tokens.selectedSurface : tokens.subtleSurface,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            key: key,
+            borderRadius: BorderRadius.circular(18),
+            onTap: onPressed,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: NoteFlowMotion.fast,
+                child: Icon(
+                  selected ? activeIcon : icon,
+                  key: ValueKey<bool>(selected),
+                  size: selected ? 22 : 20,
+                  color: tokens.textPrimary,
+                ),
               ),
             ),
           ),
@@ -593,6 +660,8 @@ class WorkspaceShellState extends State<WorkspaceShell>
                         children: <Widget>[
                           Row(
                             children: <Widget>[
+                              _buildBrandMark(28),
+                              const SizedBox(width: NoteFlowSpacing.sm),
                               Expanded(
                                 child: Text(
                                   copy.workspaceTitle,
@@ -700,7 +769,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildNavigationRail(WorkspaceCopy copy) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -733,7 +802,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildSidebar(WorkspaceCopy copy) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -782,6 +851,8 @@ class WorkspaceShellState extends State<WorkspaceShell>
                               ),
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size.fromHeight(44),
+                                backgroundColor: tokens.selectedSurface,
+                                foregroundColor: tokens.textPrimary,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: NoteFlowSpacing.md,
                                 ),
@@ -827,7 +898,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildSidebarHeader(WorkspaceCopy copy) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.titleSmall;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -844,23 +915,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
               onTap: () => showDestination(WorkspaceDestination.dashboard),
               child: Row(
                 children: <Widget>[
-                  Semantics(
-                    excludeSemantics: true,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: tokens.selectedSurface,
-                        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.description_outlined,
-                        size: 16,
-                        color: tokens.textSecondary,
-                      ),
-                    ),
-                  ),
+                  Semantics(excludeSemantics: true, child: _buildBrandMark(24)),
                   const SizedBox(width: NoteFlowSpacing.sm),
                   Expanded(
                     child: Text(
@@ -930,7 +985,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildCollapsedSidebar(WorkspaceCopy copy) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Semantics(
       container: true,
       explicitChildNodes: true,

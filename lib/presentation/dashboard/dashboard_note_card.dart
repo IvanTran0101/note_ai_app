@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import '../notes/notes_theme_tokens.dart';
+import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
 
 /// Visual density used by a Dashboard note card.
@@ -21,6 +22,8 @@ final class DashboardNoteCard extends StatelessWidget {
     required this.layout,
     this.selected = false,
     this.showPreview = true,
+    this.listHorizontalInset = NoteFlowSpacing.md,
+    this.listIconGap = NoteFlowSpacing.md,
   });
 
   /// Note projection shown by the card.
@@ -42,11 +45,15 @@ final class DashboardNoteCard extends StatelessWidget {
   /// may keep the original preview treatment.
   final bool showPreview;
 
+  /// Horizontal inset and icon gap used by list rows.
+  final double listHorizontalInset;
+  final double listIconGap;
+
   static const Key cardKeyPrefix = ValueKey<String>('dashboard-note-card');
 
   @override
   Widget build(BuildContext context) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final String title = note.title.trim().isEmpty ? copy.untitled : note.title;
     final String preview = _preview(note.content);
     final String updatedDate = MaterialLocalizations.of(context)
@@ -73,13 +80,13 @@ final class DashboardNoteCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         color: selected
             ? tokens.selectedSurface
-            : (listLayout ? tokens.elevatedSurface : tokens.subtleSurface),
+            : (listLayout ? Colors.transparent : tokens.subtleSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
             listLayout ? NoteFlowRadius.row : NoteFlowRadius.card,
           ),
-          side: selected
-              ? BorderSide(color: tokens.focusRing, width: 1.5)
+          side: listLayout
+              ? BorderSide.none
               : BorderSide(color: tokens.divider),
         ),
         child: InkWell(
@@ -94,8 +101,8 @@ final class DashboardNoteCard extends StatelessWidget {
             child: Padding(
               padding: layout == DashboardNoteCardLayout.grid
                   ? const EdgeInsets.all(NoteFlowSpacing.md)
-                  : const EdgeInsets.symmetric(
-                      horizontal: NoteFlowSpacing.md,
+                  : EdgeInsets.symmetric(
+                      horizontal: listHorizontalInset,
                       vertical: NoteFlowSpacing.sm,
                     ),
               child: layout == DashboardNoteCardLayout.grid
@@ -114,6 +121,7 @@ final class DashboardNoteCard extends StatelessWidget {
                       updatedDate: updatedDate,
                       foreground: foreground,
                       secondaryForeground: secondaryForeground,
+                      iconGap: listIconGap,
                     ),
             ),
           ),
@@ -130,7 +138,7 @@ final class DashboardNoteCard extends StatelessWidget {
     required Color foreground,
     required Color secondaryForeground,
   }) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -179,8 +187,9 @@ final class DashboardNoteCard extends StatelessWidget {
     required String updatedDate,
     required Color foreground,
     required Color secondaryForeground,
+    required double iconGap,
   }) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
@@ -189,7 +198,7 @@ final class DashboardNoteCard extends StatelessWidget {
           size: 20,
           color: selected ? foreground : tokens.textMuted,
         ),
-        const SizedBox(width: NoteFlowSpacing.md),
+        SizedBox(width: iconGap),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +208,7 @@ final class DashboardNoteCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
+                    ?.copyWith(fontWeight: FontWeight.w500, color: foreground),
               ),
               if (showPreview) ...<Widget>[
                 const SizedBox(height: 2),

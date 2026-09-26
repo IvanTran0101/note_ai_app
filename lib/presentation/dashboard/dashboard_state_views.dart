@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../common/note_flow_primitives.dart';
 import '../notes/notes_theme_tokens.dart';
+import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
 
 /// Loading state for Dashboard content.
@@ -12,7 +13,7 @@ final class DashboardLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return _DashboardStatePage(
       copy: copy,
       child: Semantics(
@@ -167,7 +168,7 @@ final class DashboardEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return _DashboardStatePage(
       copy: copy,
       child: Semantics(
@@ -177,8 +178,19 @@ final class DashboardEmptyView extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: NoteFlowSpacing.sm),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              Semantics(
+                header: true,
+                child: Text(
+                  copy.recents,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: NoteFlowSpacing.md),
               Row(
                 children: <Widget>[
                   Icon(
@@ -204,6 +216,13 @@ final class DashboardEmptyView extends StatelessWidget {
                 onPressed: onCreateNote,
                 icon: const Icon(Icons.add),
                 label: Text(copy.createFirstNote),
+                style: FilledButton.styleFrom(
+                  backgroundColor: tokens.selectedSurface,
+                  foregroundColor: tokens.textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(NoteFlowRadius.input),
+                  ),
+                ),
               ),
             ],
           ),
@@ -277,7 +296,7 @@ final class _DashboardStatePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final double viewportWidth = MediaQuery.sizeOf(context).width;
     final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     return ListView(
       padding: EdgeInsets.zero,
       children: <Widget>[
@@ -303,16 +322,19 @@ final class _DashboardStatePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text(
-                    copy.title,
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: compact ? 32 : 40,
-                      height: 1.2,
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
+                  if (!compact) ...<Widget>[
+                    Text(
+                      copy.title,
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
+                            fontSize: 40,
+                            height: 1.2,
+                            fontWeight: FontWeight.w700,
+                            color: tokens.textPrimary,
+                          ),
                     ),
-                  ),
-                  const SizedBox(height: NoteFlowSpacing.xl),
+                    const SizedBox(height: NoteFlowSpacing.xl),
+                  ],
                   child,
                 ],
               ),
@@ -343,7 +365,7 @@ final class _DashboardLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final String errorMessage = message ?? copy.loadError;
     return Semantics(
       key: stateKey,

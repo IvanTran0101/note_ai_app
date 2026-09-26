@@ -230,6 +230,30 @@ void main() {
     expect(find.byType(NavigationRail), findsNothing);
   });
 
+  testWidgets('compact header matches the reference avatar and pill geometry', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      onOpenSearch: () {},
+      onCreateNote: () {},
+    );
+
+    final Finder avatar = find.descendant(
+      of: find.byKey(WorkspaceShell.compactAvatarKey),
+      matching: find.byType(CircleAvatar),
+    );
+    final Finder homePill = find.byKey(
+      const ValueKey<String>('workspace-compact-home'),
+    );
+    expect(avatar, findsOneWidget);
+    expect(tester.getTopLeft(avatar).dx, closeTo(21, 0.1));
+    expect(tester.getSize(avatar), const Size(38, 38));
+    expect(tester.getTopLeft(homePill).dx, closeTo(68, 0.1));
+    expect(tester.getSize(homePill), const Size(64, 40));
+  });
+
   testWidgets('medium width shows a labelled NavigationRail', (
     WidgetTester tester,
   ) async {
@@ -255,10 +279,46 @@ void main() {
     expect(find.byKey(WorkspaceShell.navigationRailKey), findsNothing);
     expect(tester.getSize(sidebar).width, 280.0);
     expect(find.text('NoteFlow'), findsOneWidget);
+    expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
     expect(find.text('Workspace'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
     expect(find.text('Dashboard page').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('compact search hides the workspace top and bottom chrome', (
+    WidgetTester tester,
+  ) async {
+    final GlobalKey<WorkspaceShellState> shellKey =
+        GlobalKey<WorkspaceShellState>();
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      shellKey: shellKey,
+      onOpenSearch: () {},
+      onCreateNote: () {},
+    );
+
+    expect(find.byKey(WorkspaceShell.compactBrandKey), findsOneWidget);
+    expect(
+      find.byKey(WorkspaceShell.compactBottomNavigationKey),
+      findsOneWidget,
+    );
+
+    shellKey.currentState!.setCompactSearchActive(true);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(WorkspaceShell.compactBrandKey), findsNothing);
+    expect(find.byKey(WorkspaceShell.compactBottomNavigationKey), findsNothing);
+    expect(find.text('Dashboard page').hitTestable(), findsOneWidget);
+
+    shellKey.currentState!.setCompactSearchActive(false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.compactBrandKey), findsOneWidget);
+    expect(
+      find.byKey(WorkspaceShell.compactBottomNavigationKey),
+      findsOneWidget,
+    );
   });
 
   testWidgets('active destination is exposed as selected to accessibility', (
@@ -399,6 +459,7 @@ void main() {
 
     await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
     await tester.pumpAndSettle();
+    expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
@@ -458,6 +519,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(settingsCalls, 1);
   });
+
+  testWidgets(
+    'compact bottom icons call the existing search and create actions',
+    (WidgetTester tester) async {
+      int searchCalls = 0;
+      int createCalls = 0;
+      await pumpShell(
+        tester,
+        size: const Size(390, 844),
+        onOpenSearch: () => searchCalls++,
+        onCreateNote: () => createCalls++,
+      );
+
+      await tester.tap(find.byKey(WorkspaceShell.compactSearchKey));
+      await tester.pumpAndSettle();
+      expect(searchCalls, 1);
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.compactSearchKey)),
+        const Size(48, 48),
+      );
+      expect(
+        tester.getTopLeft(find.byKey(WorkspaceShell.compactSearchKey)).dx,
+        closeTo(16, 0.1),
+      );
+
+      await tester.tap(find.byKey(WorkspaceShell.compactFabNewNoteKey));
+      await tester.pumpAndSettle();
+      expect(createCalls, 1);
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.compactFabNewNoteKey)),
+        const Size(48, 48),
+      );
+      expect(
+        tester.getTopLeft(find.byKey(WorkspaceShell.compactFabNewNoteKey)).dx,
+        closeTo(326, 0.1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('footer settings and diagnostics fire their callbacks', (
     WidgetTester tester,

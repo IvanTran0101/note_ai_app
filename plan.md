@@ -1,1311 +1,405 @@
-# SOP: Nâng cấp UI/UX NoteFlow theo Notion (mục tiêu 95–100%)
+# Kế hoạch SOP: hoàn thiện UI/UX NoteFlow theo Notion trên Android và Web
 
-> **Trạng thái:** Kế hoạch thực thi, chưa phải bằng chứng đã implement.
+> **Trạng thái:** đang triển khai. Lượt 2026-09-27 căn lại Android Search và desktop Web Search overlay; Android dashboard/workspace tests pass và Web release render trên Chrome. Ma trận phát hiện nhóm ảnh Web 001–003 đang là trang note, không phải Home; hai platform vẫn chưa qua gate fidelity đầy đủ.
 >
-> **Historical UI/runtime revisions:** Android auth and Home/editor captures
-> 124–129 below were made from source revision `e0b6181`; later captures have
-> their own evidence notes and are not all from that revision. This compact
-> shell tranche starts from committed base `ed2eacb` and records its own
-> working-tree build/runtime evidence below.
-> The working tree also contains an unrelated modified macOS generated
-> registrant and existing untracked QA artifacts. Stage only the exact
-> UI/test/doc files for each tranche.
+> **Cập nhật kế hoạch:** 2026-09-27. Bằng chứng mới nhất và điểm lower-bound nằm ở đầu [ui-audit-scorecard.md](ui-audit-scorecard.md); cặp ref/current, metadata và giới hạn capability nằm trong [docs/ui-qa/notion-reference-matrix.md](docs/ui-qa/notion-reference-matrix.md). Chỉ capture từ source hiện tại được tính cho lượt này.
 >
-> **Mục tiêu:** đưa những màn hình và trạng thái NoteFlow đang hỗ trợ về cùng
-> ngôn ngữ thị giác, hierarchy, spacing, feedback và responsive behavior với
-> Notion ở mức **tối thiểu 95/100 trên từng target và viewport bắt buộc**.
-> Không tính tính năng Notion nằm ngoài contract NoteFlow vào mẫu số fidelity.
+> **Phạm vi của tài liệu:** giao diện Android portrait và Flutter Web trên Chrome, dựa trên chức năng và hợp đồng đang có trong NoteFlow. Mục tiêu tối thiểu là 95/100 cho từng cell UI áp dụng; không dùng điểm trung bình để che một màn hình hoặc viewport chưa đạt.
+>
+> **Tài liệu đi kèm:** nhật ký chấm điểm, ảnh kiểm thử và kết quả lịch sử nằm riêng trong [ui-audit-scorecard.md](ui-audit-scorecard.md). Các kết quả lịch sử phải được chạy lại nếu dùng làm bằng chứng cho source hiện tại.
+>
+> **Tham chiếu:** 218 ảnh Android trong hinhanh/UI_android_ref và 200 ảnh Web trong hinhanh/UI_web_ref. Đã xác nhận các thư mục này có trong checkout chính vào 2026-09-26.
 
 ---
 
-## 1. Nguyên tắc bắt buộc
+## 1. Quyết định phạm vi và các khóa bắt buộc
 
-### 1.1 Phạm vi được phép
+### 1.1 Chỉ sửa phần trình bày
 
-Chỉ thay đổi Presentation/UI/UX:
+Được phép sửa:
 
-- `lib/presentation/**`
-- phần theme và UI wiring trong `lib/main.dart`
-- UI tokens/assets chỉ khi thật sự cần cho giao diện
-- các test/golden test trực tiếp kiểm tra UI
+- Widget, layout, typography, spacing, màu, icon presentation, animation, focus, semantics và responsive behavior trong lib/presentation/**.
+- Theme hoặc cách nối theme vào UI trong lib/main.dart; không thay đổi router, controller, service hay composition có ảnh hưởng luồng nghiệp vụ.
+- UI assets cần thiết, widget/golden tests trực tiếp kiểm tra presentation và tài liệu QA.
+- Chỉ dùng callback, state, model và dữ liệu hiện có để render control.
 
-### 1.2 Phạm vi bị khóa
+### 1.2 Những phần bị khóa
 
-Không sửa, không đổi chữ ký, không đổi luồng gọi và không đổi dữ liệu của:
+Không sửa, đổi chữ ký, đổi cách gọi, đổi payload hoặc thay nguồn dữ liệu của:
 
-- `lib/domain/**`
-- `lib/application/**`
-- `lib/infrastructure/**`
-- `packages/local_llm_bridge/**`
-- repository, database, API, Cognito, model provisioning và local AI service
-- `lib/presentation/auth/controllers/**`
-- route path và redirect trong `lib/presentation/routing/**`
+- lib/domain/**, lib/application/**, lib/infrastructure/**.
+- Backend/API, database/schema, repository, Cognito, model provisioning và local AI service.
+- lib/presentation/auth/controllers/**, session/token, authentication, authorization và refresh.
+- Route, redirect và điều kiện truy cập trong lib/presentation/routing/**.
+- Autosave, persistence, retry, delete, summarize, search, sorting hoặc data lifecycle.
 
-`auth_pages.dart` chỉ được thay đổi cách trình bày. `AuthController`, session, token, logout, refresh và redirect phải giữ nguyên.
+**Login và Register bị khóa về visual design:** không restyle, bố cục lại, đổi logo/field/CTA, validator, copy, localization hay navigation của các trang Login/Register. Chỉ chạy regression smoke test hiện có; không đưa Login/Register vào phần chấm fidelity của đợt này.
 
-### 1.3 Hợp đồng hành vi phải giữ nguyên
+### 1.3 Hợp đồng lưu note
 
-Mọi bước UI phải giữ lại:
+- Editor tiếp tục autosave theo lifecycle hiện có. Không thêm nút Save, shortcut Save, endpoint hoặc callback mới.
+- Trên TuanKiet2, giao diện phải phản ánh đúng capability lưu của source đang chạy; baseline lịch sử ghi Web báo storage unavailable.
+- Ngoại lệ QA đã được yêu cầu: nhánh Test_Tuankiet có thể lưu note bằng localStorage trong đúng origin/profile của trình duyệt để kiểm tra UI workflow. Dữ liệu đó không gửi lên backend, không đồng bộ thiết bị, và adapter cùng test/factory wiring của nó tuyệt đối không được stage, commit, cherry-pick hoặc push lên TuanKiet2.
+- Nếu adapter QA đang nằm trong working tree TuanKiet2, giữ nguyên để chủ sở hữu xử lý; không xóa, reset hoặc đưa vào commit UI.
 
-- `NotesApplicationController.listNotes/createNote/renameNote/replaceContent/deleteNote/summarizeNote`.
-- callback `onSave`, `onSummarize`, `onMore`, `onDirtyChanged`, `onEmbeddedExit`.
-- trạng thái `canSave`, `isSaving`, `isDirty`, `actionBusy`, `summaryStale` và các trạng thái provisioning.
-- autosave, save khi mất focus, cảnh báo nội dung chưa lưu, delete confirmation và back confirmation.
-- `ValueKey`, `Semantics`, focus order và text localization hiện có.
-- route `/notes`, `/notes/:id`, các route auth và route diagnostics.
+### 1.4 Hợp đồng hành vi phải giữ
 
-**Save contract đã xác minh lại:** NoteFlow hiện dùng autosave; đây không phải
-manual-save UI. `_save()` được gọi bởi autosave timer, mất focus và dirty-back
-flow. `_buildSurface` truyền `canSave: false`/`onSave: null`, và test xác nhận
-không render nút Save. Giữ nguyên contract này; không thêm shortcut hoặc CTA Save
-mới. Lỗi tải danh sách từ Chrome không phải bằng chứng để sửa callback hay
-persistence.
+Mỗi milestone phải bảo toàn:
 
-### 1.4 Quy tắc làm việc
+- NotesApplicationController và các callback create/open/rename/update/delete/summarize hiện có.
+- canSave, onSave, isSaving, isDirty, actionBusy, summaryStale, provisioning status và thông báo lỗi/thành công đang dùng.
+- Autosave timer, save-on-focus-loss, dirty/back guard, delete confirmation và kết quả điều hướng.
+- ValueKey, Semantics, focus order, localization keys, route path và các test contract hiện có.
+- Tạo note phải gọi luồng tạo thật; UI không được hiển thị note thành công nếu lưu thất bại.
 
-- Mỗi step là một commit nhỏ, có kiểm tra riêng và có thể revert riêng. Theo
-  yêu cầu hiện tại, push từng tranche đã qua gate riêng lên `origin/TuanKiet2`;
-  không đợi đến khi toàn bộ giao diện đạt 95 mới push.
-- Không làm nhiều step trong cùng một patch lớn.
-- Không thêm tính năng backend mới để đạt điểm giống Notion.
-- Tính năng Notion không có API hoặc dữ liệu tương ứng trong NoteFlow phải được ẩn, disabled có giải thích, hoặc chỉ là trạng thái trình bày không gây side effect.
-- Không dùng dữ liệu giả để làm UI trông đầy đủ hơn.
-- Không gọi việc hoàn thành prompt là hoàn thành implementation. Chỉ đánh dấu step đạt khi có bằng chứng kiểm tra ở step đó.
+### 1.5 Dùng Notion làm chuẩn trình bày, không làm chuẩn chức năng
 
-### 1.5 Quy tắc "Notion chỉ là reference UI/UX"
+Mỗi control trong ảnh tham chiếu phải được phân loại trước khi làm:
 
-Plan này **không port danh sách tính năng của Notion vào NoteFlow**. Notion chỉ cung cấp reference về cách bố trí, màu sắc, typography, spacing, hierarchy, menu, feedback và responsive behavior.
+- **SUPPORTED:** chức năng và callback/state đã có trong NoteFlow; giữ nguyên behavior và thay presentation.
+- **PRESENTATION_ONLY:** chỉ mượn hierarchy, typography, spacing, iconography hoặc surface; không tạo tương tác mới.
+- **OUT_OF_SCOPE:** chưa có model/callback/route/service trong source hiện tại, hoặc người dùng đã khóa phạm vi; không render control giả, không giả dữ liệu, không giả trạng thái thành công.
 
-Mỗi màn hình phải đi theo quy trình sau:
+final_project.md là bối cảnh rubric/tính năng dự kiến. Nó không tự cấp phép tạo callback, model hoặc UI điều khiển cho tính năng chưa có trong source. M-01 phải đối chiếu từng tính năng với source đang chạy. Mục không có capability hiện hành được ghi **DONE — OUT_OF_SCOPE** trong matrix để agent sau không tự triển khai; sau khi xác minh source, chấm **100/100 điểm tuân thủ phạm vi** cho mục đó vì UI không giả vờ cung cấp tính năng ngoài hợp đồng. Điểm tuân thủ phạm vi này tách biệt với điểm visual fidelity và không được gọi là tính năng đã hoạt động. Trước khi xác minh xong M-01, hàng audit đó nhận **0/100 lower-bound — UNVERIFIED**.
 
-1. Liệt kê chức năng đang có trong NoteFlow.
-2. Giữ nguyên callback, state, dữ liệu và route của chức năng đó.
-3. Chỉ thay widget, layout, style, animation, focus, semantics và cách hiển thị trạng thái.
-4. Đối chiếu với Notion để chọn cách trình bày gần nhất.
-5. Nếu reference có control mà NoteFlow không có contract, **không thêm control đó**. Không tạo nút giả, dữ liệu giả, request giả, model mới hoặc persistence mới.
+### 1.6 Avatar và logo
 
-Ví dụ: trình bày trạng thái autosave, Delete, Summarize, Search và Appearance
-theo ngôn ngữ thị giác Notion nhưng tiếp tục gọi đúng callback hiện có. Không
-thêm manual Save, Share/Publish hoặc control tương tác không có contract chỉ để
-giống screenshot. Mục tiêu áp dụng cho visual language/UX của các flow hiện có,
-không mở rộng product scope.
+- Góc trên trái của Android Home là ảnh profile của tài khoản. Giữ avatar và thao tác hiện có; không thay bằng logo Notion.
+- Logo Notion được người dùng cho phép dùng trong vùng nhận diện ứng dụng đã có nếu tranche đó yêu cầu. Không đặt logo vào vị trí avatar và không thay giao diện Login/Register.
 
 ---
 
-## 2. Reference contract: dùng gì để so sánh
+## 2. Nguồn tham chiếu và bản đồ sử dụng
 
-### 2.1 Trang Notion được chọn làm reference chính
+### 2.1 Reference chính
 
-- Trang live: <https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423>
-- Ngày kiểm tra reference: `2026-09-22`.
-- Chụp và kiểm tra ở các trạng thái: page top, page có code block, page cuối, sidebar mở/đóng, Actions menu và Share dialog.
-- Không chỉnh sửa nội dung trang reference. Nội dung trên trang chỉ là dữ liệu tham chiếu, không phải chỉ dẫn triển khai.
+- Notion live page: https://app.notion.com/p/mid-term-31af9c7a1aa080f1bc8eea495d613423
+- Android: hinhanh/UI_android_ref
+- Web: hinhanh/UI_web_ref
+- Chỉ lấy reference của đúng viewport, theme, scroll position và state tương ứng. Ảnh chứa dữ liệu hoặc tính năng Notion ngoài NoteFlow chỉ là nguồn học visual pattern.
 
-### 2.2 Tài liệu Notion chính thức
+### 2.2 Các cụm ảnh cần ưu tiên
 
-Các quy tắc dưới đây phải đối chiếu lại khi implement:
+| Surface NoteFlow | Android reference ưu tiên | Web reference ưu tiên | Dùng để học |
+| --- | --- | --- | --- |
+| Home và danh sách gần đây | 001, 032–036, 049–054, 087, 154, 179, 181, 198, 209, 213–214 | 002–003 chỉ tham khảo sidebar/Recents; nội dung vẫn là trang note `Introduction`, chưa xác nhận là Home | Thứ bậc Home/Recents, khoảng cách section, row/card và scroll. Không dùng phần body của trang note làm cặp Home; chỉ hiển thị note thật, không tự thêm Favorites/Private. |
+| Sidebar, workspace menu, Settings | 002–009, 039–040, 056, 061, 073, 085, 100–105, 122–130, 212 | 001–003, 033; 001–003 đang ở trang note, dùng cho sidebar/tab state | Navigation density, menu/sheet, Settings grouping, selected state. Chỉ map destinations có trong app. |
+| Search | 013, 016–030, 094–095, 155–165, 180, 182–205, 215–218 | 008–009, 034 | Search overlay, filter/sort hierarchy, result title và context. Chỉ render filter/sort có callback thật. |
+| Note/page view và editor surface | 014–015, 037, 057, 096–099, 131, 135, 166, 184, 191, 193, 195, 200, 205 | 007, 010, 016, 026 | Breadcrumb, title, content width, page spacing, action placement và scroll. |
+| Page actions và overlays | 054–055, 074–076, 086, 093, 098–099, 132, 173–178 | 004–006, 012, 036 | Menu anchor, bottom sheet/dialog geometry, destructive action và dismiss. Chỉ giữ action NoteFlow hỗ trợ. |
+| Login/Register | 077–083 | 058 | Reference đã xem nhưng **không sửa và không chấm trong scope hiện tại**. Chỉ chạy regression không thay đổi. |
+| Notion-only surfaces | Chat, Calendar, Inbox, database, share/publish, comments, tasks, AI chat và page-version-history trong các ảnh tương ứng | 011, 015, 027–028, 035–038 và các trang database | Chỉ đánh dấu OUT_OF_SCOPE trừ khi M-01 chứng minh NoteFlow đang có đúng capability và callback. Không tạo màn hình hoặc control giả. |
 
-1. [Navigate with the sidebar](https://www.notion.com/en-gb/help/navigate-with-the-sidebar) — workspace switcher, Home, Recents, Favorites, nested pages, collapse/expand sidebar và Search.
-2. [Manage your Library](https://www.notion.com/help/manage-your-library) — nhóm nội dung, Recents/Favorites/Shared/Private và cách giữ sidebar gọn.
-3. [Style & customise your Notion page](https://www.notion.com/en-gb/help/customize-and-style-your-content) — page width, icon, cover, backlinks, comments và menu Customize page.
-4. [Intro to writing & editing](https://www.notion.com/help/writing-and-editing-basics) — page/block hierarchy, heading, list, quote, code block và empty states.
-5. [Keyboard shortcuts](https://www.notion.com/help/keyboard-shortcuts) — slash command grammar, block selection, keyboard focus, duplicate/move và formatting.
-6. [Search for pages & content](https://www.notion.com/help/search) — search entry point, search modal và result hierarchy.
-7. [Log in & out of Notion](https://www.notion.com/en-gb/help/log-in-and-out) — email/password, verification code, provider buttons và logout states để tham khảo visual hierarchy.
-8. [Notion for web](https://www.notion.com/help/notion-for-web) và [Notion sign up](https://app.notion.com/signup?from=marketing) — entry surface của Login/Sign up trên web.
+Danh sách trên là tập ảnh anchor để bắt đầu. M-02 phải lập matrix chứa đầy đủ tên file được chọn, không suy đoán nội dung từ số thứ tự; các ảnh chưa đọc trực tiếp không được ghi là reference đã xác nhận. 2026-09-27 kiểm tra trực tiếp `notion-web-001-home.jpg`, `notion-web-002-home-tab.jpg` và `notion-web-003-recents-expanded.jpg`: cả ba đang hiển thị page `Introduction`; 001–003 không phải cặp Home-content. Đánh giá matrix theo trạng thái thực tế của từng ảnh.
 
-### 2.3 UI inventory đã quan sát trên trang reference
+### 2.3 Output kiểm soát reference
 
-Đây là inventory phải được map vào NoteFlow, không phải danh sách bắt buộc phải tạo backend mới:
+Tạo hoặc cập nhật docs/ui-qa/notion-reference-matrix.md trong M-02. Mỗi dòng gồm:
 
-- **Top bar:** nút mở/khóa sidebar, breadcrumb workspace/teamspace/page, Share, Copy link, Favorite và Actions.
-- **Page header:** Add icon, Add cover, Add comment, title lớn, liên kết page con.
-- **Content:** heading, đoạn văn, list, code block, khoảng cách block rõ ràng, horizontal scroll cho code dài.
-- **Sidebar:** workspace switcher, Inbox, New page, Search/ask, Home/Chat/Meetings, Upcoming events, Recents, Shared/Notion apps, profile/settings.
-- **Actions menu:** font style, Copy link, Copy page contents, Duplicate, Move, Trash, Small text, Full width, Customize page, Lock, AI, Suggest edits, Translate, Undo, Import/Export, Version history và notification settings.
-- **Share dialog:** Share/Publish tabs, invite field, permission rows, General access, Advanced và Copy link.
-- **Mobile/compact behavior:** sidebar chuyển thành drawer hoặc sheet, page hiển thị một surface, action menu chuyển thành bottom sheet, bàn phím không che editor.
-
-### 2.4 Quy tắc phân biệt reference và chức năng có thật
-
-Mỗi item trong inventory phải ghi một trong ba nhãn khi implement:
-
-| Nhãn | Cách xử lý |
-| --- | --- |
-| `SUPPORTED` | Kết nối đúng callback hiện có và test hành vi end-to-end. |
-| `PRESENTATION_ONLY` | Chỉ dùng typography, grouping, icon/trang trí và hierarchy; control tương tác vẫn phải gọi callback/state hiện có. |
-| `OUT_OF_SCOPE` | Không hiển thị nếu không có contract tương ứng; không giả lập thành công. |
-
-Ví dụ: autosave, Delete, Summarize, Search notes và Appearance là `SUPPORTED`;
-manual Save, Share/Publish nếu chưa có contract là `OUT_OF_SCOPE`. Không render
-control gây hiểu nhầm rằng chức năng chưa có đang hoạt động.
+- Tên file reference chính xác và đường dẫn.
+- Platform, viewport, orientation, theme, locale, DPR và scroll position.
+- NoteFlow screen/state tương ứng.
+- Capability label ở mục 1.5.
+- Anchor/measurement cần so.
+- Ghi rõ lý do OUT_OF_SCOPE cho Notion-only screen.
 
 ---
 
-## 3. Bản đồ codebase hiện tại
+## 3. Baseline giao diện và chức năng trong source
 
-### 3.1 Shell và responsive
+M-01 phải xác nhận các file dưới đây còn nằm trên active route trước khi sửa. Nếu source đã đổi, cập nhật map theo source; không suy luận chỉ từ tên file.
 
-| File | Trách nhiệm hiện tại | Hướng Notion hóa |
+| Khu vực | File chính đã biết | Bất biến |
 | --- | --- | --- |
-| `lib/presentation/workspace/workspace_shell.dart` | Dashboard/Notes navigation, IndexedStack, rail/sidebar | Sidebar có section, active row, collapse/expand, workspace header, search affordance; giữ destination và key. |
-| `lib/presentation/notes/responsive_notes_workspace.dart` | compact/medium/expanded frame; Notes list hoặc editor chiếm toàn bộ vùng nội dung | Giữ ba breakpoint và việc chuyển list/editor; không dựng list pane song song với editor. |
-| `lib/presentation/notes/notes_workspace_page.dart` | load/list/select/create/detail/dirty state | Chỉ đổi composition và visual hierarchy; giữ state machine và controller. |
+| App shell và navigation | lib/presentation/workspace/workspace_shell.dart | Giữ destination, key, callback, selected state và navigation behavior. |
+| Responsive Notes frame | lib/presentation/notes/responsive_notes_workspace.dart, notes_workspace_page.dart | Giữ list/detail transition, dirty guard, create/select/load lifecycle. |
+| Home/Dashboard | lib/presentation/dashboard/dashboard_page.dart, dashboard_content.dart, dashboard_note_card.dart, dashboard_state_views.dart | Giữ create/open/search/sort/layout/retry và dữ liệu thật. Section nếu không có visit history phải gọi Recently updated, không giả là Recently visited. |
+| Notes list | lib/presentation/notes/notes_list_panel.dart | Giữ title, preview, selection, empty/loading/error/retry, create action và keys. |
+| Editor | lib/presentation/notes/note_detail_page.dart, note_detail_surface.dart, note_detail_editor_form.dart, note_detail_action_bar.dart | Giữ title/content lifecycle, autosave, focus, save status và callback; không thêm manual Save. |
+| Summary và actions | lib/presentation/notes/note_detail_summary.dart, note_detail_more_actions.dart, model_provisioning_status_panel.dart | Giữ summarize/delete/more/provisioning state và confirmation. |
+| Theme/localization | lib/presentation/notes/notes_theme_tokens.dart, các presentation localization files, phần theme trong lib/main.dart | Mở rộng token/label nếu cần, không đổi meaning/key/API của chuỗi đang được test. |
+| Auth | lib/presentation/auth/** | Chỉ regression. Không sửa Login/Register/AuthController. |
+| Diagnostics/Settings | lib/presentation/debug/** và UI Settings đang được shell gọi | Restyle chỉ khi route/callback hiện có; không thêm setting hoặc provisioning behavior. |
 
-Breakpoint hiện tại cần được kiểm chứng trước khi chỉnh:
-
-- `< 600`: compact; chỉ hiện Notes list hoặc editor.
-- `600–839`: navigation rail bên ngoài vùng nội dung; Notes list hoặc editor chiếm toàn vùng nội dung.
-- `>= 840`: sidebar mở `280dp` theo live reference đang dùng ở viewport 1280×720; khi thu gọn, control mở lại là overlay `44×44dp` ở mép trái, không giữ cột rộng cố định; Notes list hoặc editor chiếm toàn vùng nội dung.
-- Không có list width riêng ở medium/expanded vì layout hiện hành không hiển thị list và editor cạnh nhau.
-
-### 3.2 Notes và editor
-
-| File | Trách nhiệm hiện tại | Hướng Notion hóa |
-| --- | --- | --- |
-| `lib/presentation/notes/notes_list_panel.dart` | Notes list, empty/loading/error/retry, selection | Page tree/list kiểu Recents, search affordance, selected row và preview nhẹ. |
-| `lib/presentation/notes/note_detail_page.dart` | title/content lifecycle, save, delete, summarize, back, more | Page header/breadcrumb, large title, clean editor surface, status, action menu. |
-| `lib/presentation/notes/note_detail_surface.dart` | scroll editor, autosave feedback và action bar | Đổi bố cục/styling; giữ autosave và callback Summarize/More hiện có. Không thêm manual Save. |
-| `lib/presentation/notes/note_detail_editor_form.dart` | title/content fields, error/status/summary | Chuyển từ form card sang page-like borderless editor, giữ controller/focus/key. |
-| `lib/presentation/notes/note_detail_action_bar.dart` | Autosave status/Summarize/More | Đưa về toolbar/action row giống Notion, giữ disabled/busy semantics; không render manual Save. |
-| `lib/presentation/notes/note_detail_more_actions.dart` | More actions | Style menu và confirmation theo Notion; chỉ giữ action thật sự có callback. |
-| `lib/presentation/notes/note_detail_summary.dart` | AI summary | Callout/card tinh gọn, trạng thái stale/busy/error rõ ràng. |
-| `lib/presentation/notes/model_provisioning_status_panel.dart` | model loading/error/cancel/retry | Callout/status panel đồng nhất với page surface, không đổi provisioning logic. |
-
-`lib/presentation/notes/notes_page.dart` và `note_editor_panel.dart` là surface
-legacy/duplicate còn nằm trong repository. `main.dart` hiện compose
-`NotesWorkspacePage`; Step 0 phải xác nhận route active trước khi chỉnh, chỉ
-style một path đang chạy và không để hai implementation lệch nhau. Không xóa
-legacy surface trong task UI nếu chưa có route/test evidence cho phép.
-
-### 3.3 Dashboard, auth và theme
-
-| File | Trách nhiệm hiện tại | Hướng Notion hóa |
-| --- | --- | --- |
-| `lib/presentation/dashboard/dashboard_page.dart` | overview, search, layout toggle, create/open note | Đưa dashboard về Home/Recents: header gọn, sections, recent cards/list, empty/error rõ ràng. |
-| `lib/presentation/dashboard/dashboard_content.dart` | dashboard body | Dùng cùng spacing, typography và surfaces với Notes. |
-| `lib/presentation/dashboard/dashboard_note_card.dart` | note card | Giảm card elevation, tăng page-row hierarchy, giữ key/action. |
-| `lib/presentation/auth/auth_pages.dart` | login/register/forgot/reset/verify/change password | Style theo reference Login/Sign up của Notion: nền nhẹ, panel hẹp, field/CTA rõ, trạng thái lỗi/busy; giữ form validation, controller, redirect và keys. |
-| `_AuthStartupPage`, `EmailVerificationBanner` trong `lib/presentation/auth/` | session restore/retry và banner email chưa verify | Đưa vào cùng auth/workspace visual language; giữ retry, resend, refresh, verify route và controller callbacks. |
-| `lib/presentation/notes/notes_theme_tokens.dart` | semantic success colors | Mở rộng token UI nếu cần nhưng giữ `NoteFlowSemanticColors` API. |
-| `lib/main.dart` | ThemeData, locale, router composition, settings sheet | Chỉ đổi theme tokens/component themes và presentation wiring; không đổi auth/note composition. |
-| `lib/presentation/debug/local_llm_debug_page.dart` | diagnostics/model readiness UI | Restyle loading/ready/failed/cancelled và retry/cancel affordance; giữ reader/callback provisioning hiện có. |
-| `lib/presentation/notes/notes_localizations.dart` và các `*_localizations.dart` | EN/VI strings | Bổ sung label UI mới khi cần, không đổi key/meaning của text đang được test. |
-
-### 3.4 Hợp đồng test cần giữ
-
-Các test hiện có phải tiếp tục là regression gate:
-
-- `test/presentation/workspace/workspace_shell_test.dart`
-- `test/presentation/notes/notes_workspace_page_test.dart`
-- `test/presentation/notes/responsive_notes_workspace_test.dart`
-- `test/presentation/notes/note_detail_page_test.dart`
-- `test/presentation/notes/note_detail_surface_test.dart`
-- `test/presentation/notes/note_detail_action_bar_test.dart`
-- `test/presentation/dashboard/dashboard_page_test.dart`
-- `test/presentation/auth/auth_pages_test.dart`
-- `test/presentation/auth/auth_navigation_integration_test.dart`
-- `test/presentation/routing/app_router_test.dart`
+Feature map phải liệt kê capability có thật cho: Home, grid/list nếu source hỗ trợ, sort, search, create, edit, autosave, delete, summary, Settings/Appearance, diagnostics và provisioning. Các tính năng trong final_project.md như attachment, label, pin, khóa note, share, collaboration hoặc AI Q&A chỉ vào map SUPPORTED nếu source hiện tại có đầy đủ dữ liệu và callback phù hợp. Nếu không, ghi OUT_OF_SCOPE và ẩn control đó.
 
 ---
 
-## 4. Design contract để đạt 95–100%
+## 4. Design contract và ma trận đo
 
-### 4.1 Token nền tảng
+### 4.1 Quy tắc thiết kế
 
-Tạo một bộ token presentation duy nhất, ưu tiên đặt trong `lib/presentation/notes/notes_theme_tokens.dart` hoặc file UI token mới cùng thư mục:
+- Dùng một hệ token presentation cho light/dark: page/sidebar/menu surface, primary/secondary/muted text, divider, selected, hover/focus, error và success.
+- Giữ font fallback của platform trừ khi reference và runtime chứng minh cần điều chỉnh; không thêm font package chỉ để ép một screenshot.
+- Dùng spacing scale nhất quán 4/8/12/16/24/32/48; gom radius và elevation theo role; divider mảnh; icon cùng family/baseline.
+- Desktop ưu tiên sidebar gọn, page canvas phẳng và content width có giới hạn; mobile ưu tiên một surface mỗi lần, drawer/sheet phù hợp và vùng chạm tối thiểu 44×44 logical px.
+- Không biến mỗi note row hoặc đoạn editor thành card nổi. Không thêm border quanh mọi block.
+- Tôn trọng system bars/safe area, bàn phím, pointer hover, keyboard focus và system Back.
+- Xác nhận breakpoint hiện hành từ source và runtime trước khi thay đổi. Kế hoạch hiện tại là compact dưới 600dp, medium 600–839dp, expanded từ 840dp; chỉ thay presentation khi có bằng chứng overflow hoặc mismatch.
 
-| Nhóm | Quy tắc bắt buộc |
-| --- | --- |
-| Font | Để `fontFamily` theo mặc định của Flutter/nền tảng; không bundle hoặc ép Inter. Ghi nhận font thực tế trên từng target trước khi so ảnh; xác minh Android/iOS/macOS runtime trên thiết bị/runner tương ứng. |
-| Surface | Page surface, sidebar surface, elevated menu, selected row và callout phải có token riêng cho light/dark; không rải màu literal trong widget. |
-| Text | Có primary, secondary, muted, link, error, success; contrast đạt WCAG AA cho text thường. |
-| Spacing | Dùng scale 4/8/12/16/24/32/48; không tạo khoảng cách ngẫu nhiên cho từng màn hình. |
-| Radius | Dùng nhóm radius nhỏ cho row/input và radius lớn hơn cho dialog/card; không dùng mỗi component một radius. |
-| Divider | Mảnh, ít tương phản, chỉ dùng để phân vùng list/sidebar; tránh đường viền quanh mọi block. |
-| Elevation | Menu/dialog có phân cấp rõ; page và list không bị biến thành các card nổi dày. |
-| Motion | Hover/focus/selection/expand có transition ngắn, không chặn thao tác và không chạy khi `disableAnimations` của test. |
-| Icon | Icon cùng family, kích thước và baseline; tooltip cho icon-only action. |
+### 4.2 QA targets
 
-Không chốt màu bằng cảm giác. Mỗi token phải được kiểm tra trên screenshot reference ở cả light/dark nếu target state có tồn tại.
-
-### 4.2 Layout contract
-
-- Sidebar desktop mục tiêu: `280dp` theo live Notion page đang đối chiếu ở `1280×720`; tài liệu trợ giúp ghi khoảng mặc định 240–264dp nhưng live reference hiện đo được 280px. Row cao tối thiểu `40–44dp`.
-- Content page desktop: max width và gutter được đo từ reference; title, breadcrumb, first block và editor action bar phải có anchor ổn định.
-- Notes list: selected row có nền nhẹ và text contrast; không dùng primary container quá đậm.
-- Editor: title lớn, content borderless, block spacing rõ, scroll không làm trôi navigation shell.
-- Dialog/menu: mở gần control nguồn, không vượt viewport, dismiss bằng Escape/back/outside tap đúng nền tảng.
-- Safe area: Android gesture area, iOS home indicator, web browser inset và macOS title bar phải không che action/editor.
-
-### 4.3 Interaction contract
-
-- Sidebar toggle giữ trạng thái local trong presentation; không thay đổi route hoặc repository.
-- Search dùng flow search hiện có; không thêm endpoint tìm kiếm mới.
-- New note gọi đúng `onCreateNote`/`createNote`; không tạo note chỉ bằng cách đổi UI state.
-- Select note giữ quy tắc chặn khi dirty và message unsaved hiện tại.
-- Save giữ toàn bộ lifecycle: idle → dirty → saving → saved/error; label, progress và focus phải phản ánh state thật.
-- Summarize giữ điều kiện không summarize khi đang dirty/busy và giữ provisioning status.
-- Delete luôn qua confirmation hiện có.
-- More menu chỉ hiển thị action có callback. Action unsupported không được giả vờ thành công.
-
-### 4.4 Responsive contract theo platform đang có
-
-Repo hiện có `android/`, `ios/`, `web/`, `macos/`; không có `windows/` hoặc `linux/`. Phải kiểm tra tối thiểu:
-
-| Target | Kích thước/điều kiện | UI bắt buộc |
+| Target | Viewport bắt buộc | Điều kiện |
 | --- | --- | --- |
-| Android phone nhỏ | `360×800` | compact, drawer/sheet, bàn phím không che title/content, back gesture không mất dirty state. |
-| Android phone phổ biến | `412×915` | compact page/editor, action bar chạm được bằng một tay. |
-| Android tablet portrait | `768×1024` | medium rail và Notes surface toàn vùng nội dung; kiểm tra system bars, resize và landscape handoff. |
-| Android tablet landscape | `1024×768` | expanded navigation + một Notes surface; menu/dialog không bị cắt. |
-| iPhone SE | `375×667` | compact, safe area, text không overflow, scroll tới Summarize/action row; trạng thái autosave rõ và không thêm manual Save. |
-| iPhone hiện đại | `393×852` | compact, dynamic text cỡ lớn không vỡ layout. |
-| iPhone hiện đại landscape | `852×393` sau khi xoay từ `393×852` | Landscape được bật trong iOS runner; kiểm tra safe area, bàn phím, CTA/action bar, xoay khi note dirty và giữ nguyên state. |
-| iPad portrait | `768×1024` | medium rail; Notes list hoặc editor dùng toàn vùng nội dung, detail có gutter. |
-| iPad landscape | `1366×1024` | expanded sidebar + một Notes surface tại một thời điểm, menu không bị cắt. |
-| Web Chrome và Edge | `1280×800`, `1440×900` | sidebar mở/thu gọn, hover/focus, keyboard và resize; chấm từng browser engine rồi lấy điểm thấp hơn làm điểm Web. |
-| Web Chrome và Edge narrow | `390×844`; kiểm tra thêm `567×694` | cùng compact contract; đo title anchor tại cả hai mốc và kiểm tra interpolation giữa chúng. |
-| macOS | `1440×900` | pointer/hover, menu keyboard, sidebar và dialog theo desktop. |
+| Android phone nhỏ | 360×800 portrait | Status/navigation bar, keyboard, scroll, dirty/back flow và hit targets. |
+| Android phone tham chiếu | 412×915 portrait | Dùng Android emulator API 35 nếu khả dụng; kiểm tra Home, Notes và editor runtime. |
+| Android tablet | 768×1024 portrait khi có emulator/device phù hợp | Rail/layout medium, gutter và state retention. Nếu không có target thật thì cell vẫn được tính 0 điểm trong lower-bound; không thay bằng ảnh browser rồi chấm Android. |
+| Web Chrome compact | 390×844 | Sidebar chuyển responsive đúng thiết kế; keyboard/viewport; search và editor. |
+| Web Chrome tablet | 768×1024 và 1024×768 | Kiểm tra thay đổi chiều rộng/cao, overlay và scroll. |
+| Web Chrome desktop | 1280×800 và 1440×900 | Sidebar mở/thu gọn, pointer hover, keyboard focus, menu/dialog và page width. |
 
-`android/`, `ios/`, `web/`, `macos/` là các target được chấm. Windows có thể xuất hiện trong `flutter devices` như host, nhưng không phải target của repo khi `windows/` runner không tồn tại. Android tablet và iPad được chấm riêng dù dùng breakpoint chung. Chrome/Edge là hai runtime của cùng platform Web; platform score lấy mức thấp hơn.
+Ảnh Android đầu ra chỉ chụp portrait theo yêu cầu. Không tạo ảnh capture Android landscape. Kế hoạch này không yêu cầu chấm iOS, macOS hoặc Edge; không suy diễn điểm cho các target đó từ emulator Android hay Chrome.
 
----
+### 4.3 Quy tắc đo Notion fidelity
 
-## 5. SOP triển khai từng step nhỏ
+Chấm từng cell platform × viewport × screen/state đang được NoteFlow hỗ trợ:
 
-### Step 0 — Baseline và khóa hành vi
-
-**Mục tiêu:** có baseline trước khi đổi UI.
-
-Checklist:
-
-- [ ] Xác nhận `git status --short --branch`, branch và HEAD.
-- [ ] Chạy `flutter pub get`.
-- [ ] Chạy `dart format --output=none --set-exit-if-changed lib test`.
-- [ ] Chạy `flutter analyze`.
-- [ ] Chạy `flutter test`.
-- [ ] Ghi lại kết quả test hiện tại, các warning có sẵn và thiết bị có thể chạy.
-- [ ] Ghi route/composition active từ `main.dart`; đánh dấu `NotesPage` và `NoteEditorPanel` là legacy nếu không nằm trên active path.
-- [ ] Ghi snapshot save contract tại `NoteDetailPage._buildSurface`: `canSave`, `onSave`, autosave timer, save-on-focus-loss và dirty guard phải được kiểm chứng riêng.
-- [ ] Chụp thêm splash/session-restore, email-verification banner, appearance settings và diagnostics/model-provisioning states.
-- [ ] Nếu full `flutter analyze` bị chặn bởi package/test ngoài UI, chạy thêm `flutter analyze lib/main.dart lib/presentation` và ghi rõ hai kết quả, không sửa backend để làm sạch blocker đó.
-- [ ] Chụp baseline của login, dashboard, notes empty/list/detail, dirty/save/error/summary và dark/light.
-- [ ] Ghi snapshot của các key/semantics quan trọng trước khi chỉnh.
-
-**Pass:** baseline chạy được hoặc mọi blocker được ghi rõ, không có thay đổi source.
-
-**Không được tiếp tục:** nếu baseline fail vì lỗi behavior chưa được phân loại.
-
-### Step 1 — Chuẩn hóa reference và bảng đo
-
-**Mục tiêu:** biến reference Notion thành checklist đo được.
-
-- [ ] Mở trang reference chính và các tài liệu chính thức trong mục 2.
-- [ ] Ghi kích thước viewport, scroll position, theme và state cho từng ảnh.
-- [ ] Đo anchor: sidebar width, header height, title baseline, page gutter, list width, divider, menu/dialog bounds.
-- [ ] Lập bảng token tạm thời: color, typography, spacing, radius, elevation, icon size.
-- [ ] Đánh dấu từng component `SUPPORTED`, `PRESENTATION_ONLY` hoặc `OUT_OF_SCOPE`.
-- [ ] Không đưa Share/Publish, workspace collaboration, database block hay AI chat vào backend nếu repo chưa có contract.
-
-**Output:** `notion-reference-matrix.md` hoặc mục tương đương trong task/PR, gồm ảnh/state/viewport/anchor/tolerance.
-
-**Pass:** mọi state dự kiến implement có một reference và một tiêu chí đo.
-
-### Step 2 — Tạo token và component primitives
-
-**Mục tiêu:** mọi màn hình dùng cùng một ngôn ngữ thị giác.
-
-- [ ] Tạo/chuẩn hóa `NoteFlowUiTokens` hoặc mở rộng `NoteFlowSemanticColors`.
-- [ ] Đưa surface/text/divider/selected/focus/error/success vào token.
-- [ ] Chuẩn hóa `ThemeData` trong `_buildNoteFlowTheme` cho light/dark.
-- [ ] Chuẩn hóa `ButtonStyle`, `InputDecorationTheme`, `ListTileTheme`, `DialogTheme`, `BottomSheetTheme`, `TooltipTheme`.
-- [ ] Tạo primitives presentation-only nếu cần: `NotionSurface`, `NotionSidebarRow`, `NotionPageHeader`, `NotionSectionLabel`, `NotionActionMenu`.
-- [ ] Mỗi primitive phải có semantics, focus, hover/pressed/disabled và test widget tối thiểu.
-- [ ] Không thay đổi public contract của feature widgets.
-
-**Pass:** cùng một token cho cùng một visual role; không còn màu/radius/spacing literal trùng lặp trong các file đã chỉnh.
-
-### Step 3 — Làm lại workspace shell và sidebar
-
-**Mục tiêu:** đạt parity cho navigation frame của Notion.
-
-Files chính: `workspace_shell.dart`, `workspace_localizations.dart`, token/theme files.
-
-- [x] Giữ `WorkspaceDestination`, `showDestination`, IndexedStack và `onDestinationChanged` (18 shell widget tests pass).
-- [x] Desktop: static workspace identity header, search affordance, section label, the existing Home/Notes rows, and labeled Settings/Diagnostics footer actions when their callbacks are supplied (captures 115–117, 121).
-- [x] Do not add Favorites, profile identity, workspace switching, or Recents rows to the sidebar unless NoteFlow gains matching product contracts; existing Dashboard content may keep its real recent-note section.
-- [x] Map chỉ Dashboard/Notes vào dữ liệu hiện có; không tạo page giả.
-- [x] Active row có nền, icon và text weight rõ (Home/Notes active states in captures 115/116).
-- [ ] Xác minh focus ring của active/sidebar row khớp reference và thấy rõ bằng keyboard.
-- [x] Sidebar collapse/expand không làm mất page state (existing collapse and breakpoint-retention tests pass; capture 117 verifies collapsed geometry).
-- [x] Medium rail giữ labels và selected state (capture 120; shell widget tests pass).
-- [x] Compact dùng hamburger và bottom sheet cục bộ (capture 118; destination-switch test passes).
-- [x] Compact top bar chỉ giữ navigation, NoteFlow và Search; New note, Settings và Diagnostics chuyển vào bottom sheet hiện có, giữ nguyên callback/keys (captures 133–134; shell suite 19/19).
-- [ ] Kiểm tra keyboard focus của rail và system back/gesture trên thiết bị.
-- [x] Icon-only controls đang có tooltip/semantics; không thêm control tương tác mới.
-- [ ] Kiểm tra sidebar ở light/dark, text dài EN/VI và dynamic text.
-
-**Pass:** shell giống reference ở desktop; mobile không có navigation chrome thừa; route/state tests cũ vẫn pass.
-
-### Step 4 — Làm lại Home/Dashboard theo Recents
-
-**Mục tiêu:** dashboard nhìn như Home/Recents của Notion nhưng dùng dữ liệu NoteFlow thật.
-
-Files chính: `dashboard_page.dart`, `dashboard_content.dart`, `dashboard_note_card.dart`,
-`dashboard_state_views.dart`, dashboard localizations.
-
-- [x] Giữ `DashboardController`, `NotesApplicationController`, `onOpenNote`, `onCreateNote`;
-  không đổi sort/filter/create/open/reload data flow.
-- [x] Giữ title, search toggle/field, New note, sort/layout controls, settings/diagnostics
-  callbacks và mọi `ValueKey` hiện hữu.
-- [x] Chỉ hiển thị phần Home có dữ liệu NoteFlow: note count, supported update date,
-  sort theo `updatedAt`/`createdAt`, preview và hai layout List/Grid. `NoteDto` không có
-  visit history nên section phải ghi `Recently updated`, không giả là `Recently visited`.
-- [x] Desktop dùng top bar 44px, Dashboard outer column tối đa 768px (720px sau gutter
-  hai bên 24px) và inset trên 116px. Ở Web 1280×720 dark, sidebar mở, Home title hiện
-  tại đặt tại x≈420/y≈169, khớp anchor title Notion quan sát trực tiếp tại x≈420/y≈168;
-  xem capture 135 và cùng viewport. Compact Home dùng gutter trái linh hoạt: x=96 ở
-  390dp, giảm dần tới 16dp ở 320dp để giữ chỗ cho nội dung/cỡ chữ lớn. Capture 154 ghi
-  trạng thái Web storage-unavailable tại 390×844 dark; glyph Home bắt đầu x≈99/y≈213,
-  gần anchor page-title Notion x=96/y=212. Một anchor này chưa đại diện cho điểm fidelity
-  tổng thể; chưa có reference pair pixel-matched cho toàn Home.
-- [x] List row bỏ card elevation, giữ icon/title/preview/update date và selected/hover;
-  row chạm được tối thiểu 56px. Grid giữ layout toggle hiện có và thêm page marker chung,
-  không thêm icon field vào model.
-- [x] Loading skeleton theo header, controls và note rows của loaded view; empty/error,
-  Web storage limitation và filtered-empty giữ copy/callback/state semantics.
-- [x] Empty Home dùng canvas phẳng căn theo gutter của page; giữ nguyên semantics,
-  `dashboard-empty-create`, nút tạo note và callback hiện có. Capture runtime Android 130.
-- [ ] Capture cùng viewport/theme cho loaded List/Grid, loading, empty, error, search và
-  selected states; pair với Notion Home và chấm từng anchor. Không lấy widget-test fixture
-  hoặc Web storage error làm bằng chứng runtime có note data.
-
-**Pass:** create/open/search/sort/retry/empty/error/loading behavior tests pass; same-state
-visual comparison đạt tối thiểu 95/100 trên từng viewport/target được hỗ trợ. Chưa đánh dấu
-Pass khi chưa có cặp ảnh và rubric đã chấm.
-
-### Step 5 — Làm lại Notes list và chuyển sang editor
-
-**Mục tiêu:** Notes destination giống Notion page tree; khi chọn/tạo note, editor dùng cùng vùng nội dung như một trang tập trung.
-
-Files chính: `notes_workspace_page.dart`, `notes_list_panel.dart`, `responsive_notes_workspace.dart`.
-
-- [x] Giữ `_loadNotesInternal`, `_selectNote`, `_startNewNote`, dirty guard và `_handleDetailExit` (Notes presentation suite 93/93).
-- [x] List header gọn, New note là affordance rõ; Search/section label không được thêm vì Notes destination không có callback tương ứng.
-- [x] Row có icon/page marker, title, preview và selected background theo token.
-- [x] Loading dùng static skeleton theo cấu trúc list, giữ `notes-workspace-loading` live-region semantics và không tạo note/control giả (viewport tests 320/360/390/768/1280).
-- [x] Empty, error, retry và no-selection state giữ cùng token language; workspace tests xác nhận retry/persistence limitation và empty/error phân biệt.
-- [x] Medium/desktop không dựng list/detail cạnh nhau; list và editor lần lượt dùng cùng vùng nội dung (workspace/responsive tests pass).
-- [ ] Gutter, header và scroll ownership của từng page surface phải ổn định khi chuyển list/editor.
-- [ ] Compact chỉ hiển thị list hoặc detail; back không mất dirty state trên runtime.
-- [ ] Kiểm tra compact `NotesWorkspacePage` có đúng một back affordance trên runtime và gọi cùng dirty/back-confirmation flow.
-- [ ] Android API 35 pilot ở 412×915: mở Notes, tạo note qua affordance hiện có, nhập title/content, đợi autosave, quay lại danh sách rồi mở lại; xác minh title/content còn nguyên, keyboard không che editor và system back/dirty guard giữ đúng behavior. Dùng note QA dùng một lần, ghi rõ cách dọn trước khi tạo; không đổi sang manual Save.
-- [x] Giữ `compactKey`, `mediumKey`, `expandedKey`, `listPaneKey`, `detailPaneKey` (responsive widget tests pass).
-
-**Pass:** list/editor state transitions pass test; không có overflow ở width 360/375/390 hoặc medium/desktop.
-
-### Step 6 — Làm lại Notion-like page editor
-
-**Mục tiêu:** detail page đạt parity cao nhất vì đây là surface chính.
-
-Files chính: `note_detail_page.dart`, `note_detail_surface.dart`, `note_detail_editor_form.dart`, `note_editor_panel.dart`, `note_detail_summary.dart`, `note_detail_action_bar.dart`.
-
-- [ ] Header có back, breadcrumb/page title và more theo callback thật.
-- [ ] Title field trở thành page title lớn, borderless, focus ring tinh tế.
-- [ ] Content field trở thành editor surface sạch, multiline, gutter và line height giống reference.
-- [ ] Nếu chưa có block model, chỉ mô phỏng spacing/heading/paragraph bằng content hiện có; không đổi `NoteDto` thành block database.
-- [ ] Summary hiển thị dưới dạng callout/card nhẹ, giữ copy/regenerate và stale state nếu callback có.
-- [ ] Provisioning/error/status là callout đồng nhất, giữ retry/cancel.
-- [ ] Action bar theo toolbar grammar nhưng chỉ hiện Summarize/More khi callback hiện có cho phép; hiển thị dirty/saving/saved/error từ state autosave thật.
-- [x] Compact page-header status dùng icon phân biệt draft, dirty/pending, saving, save error, Web unavailable và saved; test tại 390×844 xác nhận busy/error/dirty/draft không bị trình bày nhầm là saved. Đây chỉ sửa presentation, không đổi autosave hay callback.
-- [ ] Giữ `canSave: false`/`onSave: null` vì baseline và test xác nhận autosave-only; không đổi thành manual Save. Kiểm chứng create/update/error qua controller test seam và đánh dấu riêng việc Chrome chưa kết nối được backend.
-- [ ] Dirty indicator hiển thị ở header/action bar nhưng không tự ý thay đổi autosave.
-- [ ] Delete/back confirmation giữ dialog và route result hiện tại.
-- [ ] Giữ toàn bộ keys: `note-detail-title-field`, `note-detail-content-field`, `note-detail-summary`, `note-detail-dirty`, `note-detail-more-delete`, `note-detail-delete`, `note-detail-back`, `note-detail-scroll`.
-
-**Pass:** xác minh create/update/error qua controller test seam và persistence thật trên target native có hỗ trợ; Web phải hiện trạng thái storage unavailable từ baseline, không giả thành công; visual score page/editor tối thiểu 95.
-
-### Step 7 — Actions, overlays và feedback states
-
-**Mục tiêu:** menu/dialog có cùng behavior grammar với Notion mà không giả lập backend.
-
-- [x] More menu dùng popup neo theo trigger ở màn hình từ 600dp; compact tiếp tục dùng bottom sheet. Delete giữ destructive color; kiểm tra geometry, Escape, barrier dismiss và system back ở widget tests.
-- [x] Delete và dirty-back dùng chung elevated dialog surface theo token sáng/tối, viền nhẹ, radius 12dp và typography/padding đồng nhất. Widget tests kiểm tra hình học ở viewport 360×640 với 220dp keyboard inset; kết quả và callback của từng nút giữ nguyên.
-- [x] Các transient message đang có ở Notes list/detail/workspace dùng chung floating toast theo token sáng/tối; Undo action được giữ nguyên callback.
-- [x] Chỉ gắn Delete bằng callback hiện có; không đổi hành vi xác nhận/xóa note.
-- [ ] Nếu có page width/theme/language là local presentation setting, hiển thị trong menu/sheet hiện có.
-- [x] Không thêm Share/Publish/Invite call nếu chưa có service contract.
-- [ ] Audit error/retry, saved/saving, summarizing, model provisioning và unsaved callouts trên đủ viewport/theme; giữ nguyên cách các trạng thái inline hoạt động.
-- [ ] Dialog và bottom sheet tôn trọng safe area, keyboard, barrier color và focus trap.
-- [x] More popup đóng bằng Escape; compact bottom sheet đóng bằng system back trong widget tests. Runtime keyboard/back QA trên từng target vẫn thuộc Step 10.
-
-**Pass:** mọi overlay có open/close/focus/dismiss test; không có menu bị cắt ở viewport nhỏ.
-
-### Step 8 — Auth UI theo Notion reference, chỉ dùng auth flow hiện có
-
-Files chính: `lib/presentation/auth/auth_pages.dart`, `auth_localizations.dart`, theme tokens.
-
-Reference visual: [Notion login](https://notion.com/login), [Notion sign up](https://app.notion.com/signup?from=marketing) và [Notion login methods](https://www.notion.com/en-gb/help/log-in-and-out). Đây là reference về layout, spacing, hierarchy, field treatment, provider grouping và feedback; không phải yêu cầu thêm provider hoặc auth capability vào NoteFlow.
-
-- [ ] Style Login/Register/Forgot/Reset/Verify/Change Password cùng surface, type scale, field, CTA và error callout.
-- [ ] Bao phủ riêng các màn hình Login và Sign up/Register, cùng các state initial, validation error, submit busy, provider/auth error, forgot password, reset code, email verification và change password.
-- [ ] Đối chiếu Login/Sign up ở desktop và phone: panel width, logo/brand area nếu hiện có, email/password order, primary CTA, secondary link, divider/provider area chỉ khi NoteFlow đã có provider tương ứng.
-- [ ] Không thêm Google/Apple/Microsoft/passkey/SSO chỉ vì Notion có; nếu backend NoteFlow không có callback thì control đó là `OUT_OF_SCOPE` và không được render.
-- [ ] Giữ các key email/password/submit và toàn bộ validator/autofill/onFieldSubmitted.
-- [ ] Giữ `AuthController` calls, busy state, safe mapped errors và `go_router` redirect.
-- [ ] Bao phủ splash/session restore + retry và `EmailVerificationBanner` trong workspace; giữ các key resend/refresh/open verification và không đổi auth controller.
-- [ ] Login compact có scroll, keyboard inset và CTA luôn tới được.
-- [ ] Không đổi Cognito, session, token, logout hay refresh.
-- [x] Register có checklist mật khẩu cập nhật khi nhập, chỉ hiện điều kiện còn thiếu và báo trạng thái đạt khi đủ cả năm điều kiện đang cấu hình trong `lib/amplify_outputs.dart`: tối thiểu 8 ký tự, chữ hoa, chữ thường, chữ số và ký tự đặc biệt. Có EN/VI và semantics label; validator chỉ kiểm tra ở presentation trước khi gọi luồng đăng ký hiện có.
-- [x] Phạm vi checklist: hiển thị các điều kiện còn thiếu khi nhập là yêu cầu UX; client-side gate phản ánh password policy đã có trong Cognito và chỉ chặn gọi flow đăng ký hiện có khi input không hợp lệ. Không đổi request/service/controller, auth state, Cognito hay backend.
-- [x] `test/presentation/auth/auth_pages_test.dart` pass 16/16, gồm checklist thay đổi theo input, bản dịch tiếng Việt, semantics, chặn submit phía client khi thiếu điều kiện và giữ nguyên RegisterInput/service call khi hợp lệ. `dart analyze` ba file auth/test không có issue.
-- [ ] Chụp và đối chiếu trực quan Login/Register cùng các state trên browser và native targets; checklist không làm thay đổi scorecard visual.
-
-**Pass:** Login và Sign up/Register đạt visual score tối thiểu 95 ở desktop/mobile; auth tests và auth navigation integration tests pass; không gửi request thêm.
-
-### Step 9 — Accessibility, localization và input parity
-
-- [ ] Semantics label/value/hint cho sidebar row, page title, editor, save, summarize, more, delete, retry và status live region.
-- [ ] Focus order: sidebar → header → title → content → action bar; focus visible ở light/dark.
-- [ ] Hit target tối thiểu `44×44dp` cho touch; pointer hover không thay thế pressed state.
-- [ ] Kiểm tra EN/VI, chuỗi dài, text scale 1.0/1.3/2.0 và screen reader labels.
-- [ ] Kiểm tra keyboard: Tab/Shift+Tab, Enter/Space và Escape. Không thêm Ctrl/Cmd+S vì không có manual-save contract.
-- [ ] Không đặt shortcut mới nếu nó đụng behavior hoặc không thể test cross-platform.
-
-**Pass:** không overflow, semantics tree không mất node quan trọng, labels không lộ key nội bộ.
-
-### Step 10 — Visual QA theo ma trận thiết bị
-
-Chạy lại cùng một workflow trên tất cả target có trong repo:
-
-1. Login và Sign up/Register: initial, validation, busy, auth error, provider area nếu được hỗ trợ, forgot/reset, verify email và change password.
-2. Dashboard loading/empty/loaded/search/filtered-empty/error/retry.
-3. Notes loading/empty/list/selected/new/dirty; kiểm tra saved/save-error trên target mà baseline hỗ trợ persistence. Web dùng trạng thái storage unavailable đã có trong baseline và phải được trình bày rõ.
-4. Detail summary loading/ready/stale/error, model provisioning loading/failed/cancelled.
-5. Sidebar open/closed, destination switch, More menu, delete/back confirmation, appearance settings.
-6. Splash/session restore, email-verification banner và diagnostics/model provisioning: loading/ready/error/retry/cancel.
-7. Dark/light và EN/VI.
-8. Rotate/resize hoặc viewport tương đương mobile/tablet/desktop; Android tablet và iPad được kiểm tra riêng, Web chạy trên cả Chrome và Edge.
-
-9. Với iOS, so riêng iPhone hiện đại portrait `393×852` và landscape `852×393`; kiểm tra safe area, bàn phím và xoay khi note dirty để xác minh draft vẫn được giữ.
-
-Mỗi state phải có screenshot baseline/reference, screenshot implementation và ghi chú sai lệch. Không chấp nhận screenshot chỉ khác vì đã scroll sai vị trí.
-
-**Pass:** weighted score ở mục 6 đạt `>= 95`, không có critical fail.
-
-### Step 11 — Regression, build và handoff
-
-- [ ] `dart format --set-exit-if-changed lib test`.
-- [ ] `flutter analyze`.
-- [ ] Bắt buộc có thêm `flutter analyze lib/main.dart lib/presentation`; full-repo analyze chỉ được coi là pass khi package test dependency đã hợp lệ, còn nếu vẫn vướng `packages/local_llm_bridge/test` thì ghi blocker ngoài UI.
-- [ ] `flutter test`.
-- [ ] Chạy riêng nhóm test presentation/auth/routing.
-- [ ] `flutter build web`.
-- [ ] `flutter build macos` trên macOS nếu có runner.
-- [ ] `flutter build apk --release` trên môi trường JDK 17+; lỗi JVM 11 phải xử lý ở môi trường build, không sửa Gradle/backend trong task UI.
-- [ ] `flutter build ios --no-codesign` trên macOS nếu có runner.
-- [ ] Kiểm tra `git diff --name-only` chỉ chứa UI/theme/test/docs được phép.
-- [ ] Kiểm tra mọi control mới bằng bảng callback: control phải trỏ tới callback/state hiện có; control không có contract phải bị loại khỏi UI.
-- [ ] Kiểm tra không có model/service/repository/API/route mới và không có thay đổi trong `lib/domain`, `lib/application`, `lib/infrastructure`, `packages/local_llm_bridge` hoặc auth controller.
-- [ ] Chạy review "UI-only diff": mọi diff chỉ giải thích được bằng layout/style/UX/state presentation của chức năng hiện có.
-- [ ] Ghi screenshot matrix, test command, commit hash và known limitation.
-- [ ] Sau khi gate của từng tranche pass, commit và push tranche đó lên
-  `origin/TuanKiet2`; giữ nguyên các thay đổi ngoài tranche. Chỉ công nhận Done
-  toàn bộ khi các gate cuối cùng trong mục 9 đều pass.
-
----
-
-## 6. Bộ tiêu chí chấm fidelity 100 điểm
-
-Chấm ở từng viewport và lấy điểm thấp nhất của từng nhóm; không lấy trung bình để che một màn hình lỗi.
-
-| Nhóm | Điểm | Cách chấm đạt |
+| Nhóm | Trọng số | Điều kiện chính |
 | --- | ---: | --- |
-| Cấu trúc và hierarchy | 27 | Sidebar/header/page/Notes list/editor nằm đúng vùng theo responsive contract; anchor chính lệch tối đa ±4 logical px. |
-| Màu và surface | 15 | Light/dark surface, text, selected, focus, error/success và divider khớp token/reference; không có màu ngẫu nhiên. |
-| Typography | 15 | Font/fallback, size, weight, line height, truncation và baseline đồng nhất; không wrap sai ở viewport mục tiêu. |
-| Spacing và geometry | 17 | Gutter, row height, block spacing, menu/dialog bounds và touch target khớp reference; cạnh control và khoảng cách lệch tối đa ±2 logical px. |
-| Component states | 10 | Hover, focus, pressed, selected, disabled, loading, dirty, saving, error, empty và summary có state rõ. |
-| Responsive/platform | 11 | Android/iOS phone, iPad/tablet, web và macOS đạt layout contract; không overflow/keyboard overlap. |
-| Accessibility/localization | 5 | Semantics, focus, contrast, EN/VI, text scale và keyboard pass. |
-| **Tổng** | **100** | **Release chỉ khi `>= 95` và không có critical fail.** |
+| Structure và hierarchy | 27 | Sidebar/header/page/list/editor đúng vùng; anchor chính lệch tối đa ±4 logical px. |
+| Surface và màu | 15 | Surface, text, selected, divider, error/success khớp reference; màu phẳng sai mỗi kênh RGB không quá 6. |
+| Typography | 15 | Font fallback, size sai tối đa 1 px, line height tối đa 2 px, weight/baseline/wrap hợp lý. |
+| Geometry và spacing | 17 | Control edge/khoảng cách lệch tối đa ±2 logical px; row, gutter, menu và dialog không bị cắt. |
+| Component states | 10 | Focus, hover, pressed, selected, disabled, loading, empty, dirty, saving, saved/error hiển thị đúng state thật. |
+| Responsive/platform | 11 | Không overflow, keyboard/system bar không che control; đúng touch/pointer/navigation behavior. |
+| Accessibility/localization | 5 | Semantics, focus order, contrast, EN/VI và text scale trong vùng sửa. |
+| **Tổng** | **100** | Mỗi platform chỉ đạt mục tiêu khi mọi cell áp dụng đã chấm và điểm thấp nhất đạt ít nhất 95. |
 
-Quy tắc ghi điểm:
-
-- Behavior không cộng điểm thị giác; toàn bộ test regression là release gate riêng ở Step 11 và mục 6.1.
-- Trước khi sửa một cell `target/browser + viewport + screen/state`, ghi danh sách anchor và checklist controls/state áp dụng trong QA log. Reference và current-source capture phải cùng viewport, DPR, theme, locale, data state và scroll position.
-- Tính từng nhóm trong cell bằng `trọng số nhóm × số checklist item PASS / số checklist item áp dụng`. Item chỉ PASS khi mọi điều kiện của item đạt; vị trí anchor chính lệch tối đa ±4 logical px, kích thước/cạnh control và khoảng cách lệch tối đa ±2 logical px. Với typography, font size lệch tối đa ±1 px, line height ±2 px và số dòng/wrap phải khớp. Với màu phẳng, mỗi kênh RGB lệch tối đa 6; bỏ pixel viền chữ/control bị antialiasing khi lấy mẫu.
-- Cộng điểm các nhóm đã chuẩn hóa trong cell. Ghi từng item PASS/FAIL, phép đo, reference/current và lý do; không tự đổi checklist hoặc dung sai sau khi xem kết quả.
-- Chuẩn hóa điểm sau khi loại N/A theo công thức: với mỗi nhóm còn ít nhất một item áp dụng, điểm nhóm = trọng số nhóm × PASS / số item áp dụng; bỏ qua nhóm không còn item áp dụng; điểm cell = 100 × tổng điểm nhóm / tổng trọng số của các nhóm còn áp dụng. Nếu không có nhóm nào áp dụng thì cell là `N/C`, không tạo điểm số.
-- `N/A` chỉ dùng cho Notion capability không có trong NoteFlow contract (ví dụ OAuth provider hoặc Share/Publish chưa có callback); loại đúng tiêu chí đó khỏi mẫu số rồi chuẩn hóa phần còn lại về thang 100. Không render control giả để lấy điểm.
-- `UNVERIFIED` dùng cho capability NoteFlow có hỗ trợ nhưng chưa có runner, thiết bị, capture hoặc cặp reference tương ứng. Không được loại khỏi mẫu số. Khi còn `UNVERIFIED`, cell/platform score là `N/C` (chưa đủ bằng chứng), không được suy ra đã đạt 95.
-- Platform score là điểm thấp nhất trong các cell bắt buộc của platform; chỉ công bố numeric platform score khi toàn bộ cell áp dụng đều được chấm. Overall score là mức thấp nhất trong các platform score, không lấy trung bình.
-- Có thể ghi riêng kết quả một anchor hoặc tranche (ví dụ `PASS ±4px`) nhưng không gọi đó là điểm toàn màn hình hay điểm platform.
-- Khóa mẫu số theo toàn bộ tổ hợp platform/browser × viewport trong §4.4 × screen/state được hỗ trợ trong feature map §2.4 và Steps 3–9; Step 10 xác minh từng cell. Trước khi chấm một cell, liệt kê mọi anchor, control và state nhìn thấy thuộc các nhóm điểm; không chỉ chọn phần đã sửa hoặc dễ đo. Thiếu reference/current capture hay thiếu một state được hỗ trợ thì giữ `UNVERIFIED` và cell đó là `N/C`.
-- Giữ evidence ledger ngay dưới scorecard cuối plan với các cột `platform/browser | viewport | screen/state | group/item/anchor | reference | current | measurement | PASS/FAIL/N/A/UNVERIFIED | reason`. Từng item `N/A` phải có lý do dựa trên NoteFlow contract; không xóa item khỏi ledger. Không thay đổi item, trọng số hoặc dung sai sau khi đã xem kết quả.
-
-### 6.1 Critical fail — điểm tổng không được dùng để bỏ qua
-
-Một trong các lỗi sau làm step fail dù tổng điểm cao:
-
-- không login được do đổi auth flow;
-- không tạo/lưu/sửa/xóa note được trên target mà baseline hỗ trợ thao tác đó;
-- autosave status/callback không còn phản ánh đúng lifecycle đang có; không yêu cầu manual Save button vì `_buildSurface` truyền `onSave: null`;
-- mất note khi đổi destination/resize/rotate;
-- route/redirect thay đổi ngoài yêu cầu;
-- backend/domain/application/infrastructure bị sửa;
-- lỗi overflow/blocked CTA trên phone;
-- semantics key hoặc test contract quan trọng bị xóa.
-
-Web persistence là limitation có sẵn: `FileDatabaseContext` chọn stub không hỗ trợ file read/write khi chạy Web. Không thêm Web storage/backend trong task UI; đây không phải regression do redesign, nhưng UI không được báo saved hoặc che trạng thái không lưu được.
-
-### 6.2 Visual diff protocol
-
-- Dùng cùng device pixel ratio, viewport, theme, locale, seed data và scroll offset.
-- So sánh overlay và pixel diff; bỏ qua sai khác antialiasing nhỏ do engine nhưng không bỏ qua geometry/color/text wrap.
-- Tách sai lệch do font engine khỏi sai lệch do layout; không hạ threshold để “cho pass”.
-- Mỗi lỗi ghi `screen/state/viewport/anchor/current/expected/fix`.
-- Lặp lại sau mỗi step, không chờ đến cuối mới phát hiện layout sai.
+Cùng cặp ảnh phải dùng cùng viewport, DPR, theme, locale, dữ liệu, state và scroll offset. Mỗi item được ghi PASS/FAIL cùng measurement; không nới tolerance sau khi xem kết quả. Không để trống điểm: capability áp dụng nhưng thiếu evidence phải nhận **0/100 (lower-bound) — UNVERIFIED**. N/A chỉ cho capability thật sự không thuộc current contract; ghi lý do, loại khỏi mẫu số rồi chuẩn hóa. Capability được hỗ trợ nhưng chưa chạy hoặc chưa có ảnh ghép reference/current mang trạng thái UNVERIFIED và nhận 0 điểm cho trọng số tương ứng. Luôn công bố điểm lower-bound bằng số: `100 × tổng trọng số PASS / tổng trọng số áp dụng`; FAIL và UNVERIFIED đều nhận 0, N/A được loại có bằng chứng. Hàng `OUT_OF_SCOPE` đã được M-01 xác minh nhận thêm **100/100 scope-compliance** riêng, không cộng vào điểm fidelity và không được mô tả như capability hoạt động. Công bố thêm số cell đã kiểm tra/tổng cell và phần trăm coverage. Điểm này chưa đủ coverage thì không được diễn giải là đã đạt cổng 95. Không chấm hành vi tính năng bằng điểm visual fidelity.
 
 ---
 
-## 7. Checklist theo dõi implementation
+## 5. Milestone triển khai
 
-### Re-review 2026-09-23 — corrective audit
+Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng. Không gộp nhiều M vào một patch lớn. Sau khi một M qua gate, commit riêng và push tranche UI đã duyệt lên origin/TuanKiet2 như yêu cầu trước; chỉ stage file thuộc tranche. Không stage toàn bộ working tree.
 
-Execution checkout: branch `TuanKiet2`, committed base `926b590` before the auth email-first tranche.
-The previous table's `DONE` labels for Steps 0–9 and its `95/100` claim are
-withdrawn. The checklists in Sections 5 and 6 were still unchecked, the stored
-captures were not paired with same-state Notion captures for every viewport,
-and the current browser cannot load a persisted note. The old score therefore
-does not prove the plan's `>=95` gate. Treat every step below as incomplete
-until its stated evidence is captured against the active checkout.
+### M-01 — Khóa source, branch, behavior và baseline
 
-This corrective UI pass now includes neutral Notion-matched theme tokens, a
-720px title block with 708px body-text width, a 112px editor content inset, a
-page header with the existing back/dirty-confirmation path, full-page
-list/editor navigation on medium and wide layouts, and explicit load-error
-states that do not claim the collection is empty. The collapsed desktop sidebar
-now uses a 44×44px reopen overlay and reserves no permanent content column.
-Current NoteFlow captures show the title anchor at x=280, y=168 for 1280px
-width when the desktop sidebar is collapsed. A same-state live comparison at
-1280×720 dark with both sidebars open measured the Notion title at x=420, y=170;
-the current source preview after matching the sidebar width measured NoteFlow
-at x=420, y=168. This is one paired anchor check, not a saved pixel-diff or a
-full-page score. Captures 54–55 record the collapsed NoteFlow state only. The sidebar, list,
-dashboard, auth, and other states still need paired review. Earlier targeted
-analyzer, presentation tests, web release build, and Android release APK build
-passed; the Android build used JDK 17. The latest targeted widget run after the
-editor and collapsed-sidebar adjustments did not reach assertions because the
-`local_llm_bridge` native-asset hook encountered a corrupt `.obj` file. The full
-repository run with the test shim reports 600 passed and two AI infrastructure
-tests unable to load; a direct test without the shim confirms native asset
-compilation stops at `llama-kv-cache-dsv4.obj : fatal error LNK1136: invalid or
-corrupt file`.
-The current Web preview explicitly reports that it cannot load or save notes;
-there is no persisted-note state to compare in the browser. Persistence and the
-full visual score remain unverified; no score of 95 or higher is claimed.
+**Mục tiêu:** agent biết chính xác đang làm trong checkout nào và không làm mất local work.
 
-Auth follow-up on 2026-09-23: captures 29–32 record the earlier Login/Register
-layout and are historical. Captures 66–69 recorded Login and Register at
-1280×800 and 390×844, paired by viewport with reference captures 24, 26, 20,
-and 22. Login captures 66/69 remain current; Register captures 67/68 predate
-the email-first and panel-top refinements. The side-by-side review finds the
-brand/header placement,
-form width, and core surfaces close, while the auth flows still differ in
-hierarchy and content: NoteFlow keeps its supported password Login and
-four-field registration; Notion's references show an email-first step and
-provider controls. No auth provider or backend behavior is added to imitate
-those unsupported controls. This is a qualitative visual review only, not a
-rubric score: the four captures do not cover all auth states, accessibility,
-or target platforms, so no auth or app-wide numeric score is assigned. The
-available evidence does not establish the `>=95/100` gate.
+**Làm:**
 
-Typography follow-up on 2026-09-23 (Inter experiment; later superseded): the app theme requested the `Inter` family,
-but the checkout contained no Inter font asset or pubspec font registration.
-The UI-only asset pass bundles the Inter variable font and OFL license and
-registers the family in `pubspec.yaml`; it adds no package and changes no auth,
-note, route, or data flow. FontTools confirms the `opsz` 14–32 and `wght`
-100–900 axes and Vietnamese glyph coverage (font SHA-256
-`29160A80FF49DDCAB2C97711247E08B1FAB27A484A329CE8B813D820DC559031`).
-`flutter analyze --no-pub lib` passes, and the current presentation suite passes
-191/191 with the temporary test-only `local_llm_bridge` shim and restored
-package-config hash below. The Web release build passes (Flutter 3.47.5,
-399.1s); `FontManifest.json`, the font, and OFL file are present in its output.
-The Android release APK also passes (92,217,544 bytes; 1,758.1s), and its
-archive contains the same font and license. Capture 86 shows the bundled font
-rendered in the 1280×720 light Web Home; this page displays the existing Web
-storage limitation and contains no loaded or persisted note. The unfiltered
-`flutter analyze --no-pub` still reports 42 existing issues in the unrelated
-`local_llm_bridge` tests and temporary output shim; no files in those areas are
-part of this asset change. iOS/macOS builds and device rendering remain
-unverified because this Windows environment lists only Windows, Chrome, and
-Edge in `flutter devices --machine`. These checks close the Web/Android font
-packaging gap only; they do not establish full cross-platform typography or the
-95-point visual gate.
+- Ghi branch, HEAD, git status, modified/untracked files và remote target. Hiện plan được chỉnh trong note_ai_app-note-ai-app; không dùng note_ai_app-note-ai-app-lite.
+- Ghi lại tất cả thay đổi sẵn có trước khi bắt đầu. Không reset, stash/pop, xóa, format hàng loạt hoặc stage file ngoài tranche.
+- Xác định active route/composition từ main.dart; xác nhận file/widget nào thực sự đang render. Không chỉnh legacy duplicate chỉ vì tên file giống nhau.
+- Với từng feature được dự kiến có UI, tìm model/state/callback hiện có và ghi SUPPORTED, PRESENTATION_ONLY hoặc OUT_OF_SCOPE.
+- Ghi behavior snapshot cho note create/edit/autosave/save error/delete/dirty back/summary/search/theme và keys/semantics quan trọng.
+- Chạy baseline test/analyze có thể chạy và chụp current-source Android portrait + Chrome. Tách lỗi sẵn có khỏi lỗi mới. Login/Register chỉ được smoke-test không sửa.
+- Ghi branch sở hữu localStorage QA. Giữ nguyên mọi thay đổi infrastructure đã có trong working tree; không đưa chúng vào tranche UI.
 
-Current Login uses 38px compact/72px desktop top padding. Register starts with
-Email, followed by Display name, Password, and Confirm password; it uses 76px
-compact/42px desktop top padding and a 496px desktop panel, with the existing
-32px fallback for short viewports. `_AuthFormScaffold` now keeps its selected
-page background painted through the available viewport while preserving scroll
-when content is taller. The auth widget suite passes 11/11 with the temporary
-test-only `local_llm_bridge` package-root shim. Coverage checks the background
-at 360×800, 393×852, 768×1024, 1280×550, 1280×800, and 1440×900 for both Login
-and Register, plus 200% text-scale submit reachability at 360×800.
-`.dart_tool/package_config.json` was restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Widget assertions cover the Email/Display name order and 393×852, 1280×800,
-and 768×1024 layout bounds; the desktop registration panel top is constrained
-to 28–36px around the 32px Notion reference anchor. Captures 67–68
-predate these changes. Capture 85 shows the current source at 1280×800 in a
-signed-out debug Web run; the Flutter debug ribbon is visible and excluded
-from fidelity scoring. The local-auth release preview rendered Home after
-navigation to `/register`; I did not override auth state. A
-previous current-source presentation run passed 189/189 using a temporary
-test-only package-root shim for the unrelated native `local_llm_bridge` hook.
-After adding the text-scale and viewport-background checks, the full
-current-source presentation suite passed 191/191 and the auth page suite passed
-11/11. The package config was
-restored byte-for-byte to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. An
-earlier run had hit a transient disk-full error and stalled; it is superseded
-by this completed presentation-suite run.
+**Output:** bảng capability, bảng file active/locked, git baseline, test baseline, ảnh baseline và known blockers.
 
-Web warning follow-up on 2026-09-23: the editor keeps the explicit notice that
-draft changes cannot be saved and will be lost when leaving, but uses a muted
-cloud-off icon and neutral surface for unsupported storage. The page-header
-status and Home limitation notice now use the same muted icon; ordinary
-save/load errors remain errors. Captures 47–48 record the 1280×800 Web states.
-Targeted `flutter analyze` and the Web release build pass. The focused
-note-detail widget test stops before assertions because native linking reports
-53 unresolved GGML/llama symbols in `local_llm_bridge.dll`. This remains a test
-environment blocker; paired Notion comparisons and device visual QA are still
-incomplete, so this does not establish the 95-point gate.
+**Gate:** agent khác có thể chỉ ra chính xác nơi render, callback được giữ và file bị cấm trước khi sửa. Baseline fail phải được phân loại trước khi qua M-02.
 
-Responsive editor recheck on 2026-09-23: captures 49–50 from an earlier release
-preview appeared to show the title resetting after resize. A fresh release
-build from the current source, served from a distinct output directory and
-port, retained the same title and body through 1280×800 → 390×844 → 768×1024 →
-1280×800, including after the Web storage-unavailable notice appeared. Treat
-49–50 as superseded observations; the original discrepancy is unresolved and
-must not be described as a confirmed current regression. The fresh run exposed
-a separate compact-width title clipping issue. `NoteDetailEditorForm` now lets
-long titles wrap, keeping its existing controller, key, focus node, and
-callbacks. The latest Web release build renders the title across multiple
-lines at 390×844 and retains the dirty draft at 768×1024 and 1280×800 (captures
-51–53). Targeted analyzer passes. The focused widget test remained in the
-`local_llm_bridge` native-asset hook for 90 seconds and was interrupted before
-assertions. This closes only the observed Web wrap/resize checks; it does not
-verify successful persistence or the overall 95-point gate.
+### M-02 — Lập reference/capability matrix theo ảnh thật
 
-The Web dirty-back flow was also checked in the release browser at 390×844:
-after entering a temporary title and navigating back, capture 56 shows the
-existing unsaved-changes dialog with the explicit Web draft-loss message and
-Cancel/Discard actions; it does not offer Save. This verifies the presentation
-of that one limitation state only, not persistence, the remaining overlays, or
-the overall 95-point gate.
+**Mục tiêu:** chốt ảnh anchor và loại bỏ Notion feature không thuộc app.
 
-The same browser flow revealed that discarding a Web draft cleared the notes
-load error and displayed the empty collection state. The presentation state now
-retains the load error on discard/cancel and clears it after save/delete;
-capture 57 confirms the Web storage-unavailable state remains visible after
-discard. The regression in
-`test/presentation/notes/notes_workspace_page_test.dart` passed as part of the
-37-test focused workspace suite using a temporary test-only
-`local_llm_bridge` shim. The original `.dart_tool/package_config.json` was
-restored byte-for-byte (SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`). This
-checks state retention only; it does not verify Web persistence or the overall
-95-point visual gate.
+**Làm:**
 
-Auth email-first presentation follow-up on 2026-09-23: Login now presents Email
-before the existing Password field; Register presents Email before the existing
-Display name, Password, and Confirm password fields. Continue only advances
-local presentation state; the final action still calls the existing controller
-with the existing `LoginInput` or `RegisterInput`. No auth controller, route,
-domain, application, infrastructure, or persistence file changed. The complete
-presentation suite passed 193/193 using the temporary test-only
-`local_llm_bridge` shim; `.dart_tool/package_config.json` was restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. Targeted
-`flutter analyze --no-pub` on the two auth sources and two auth test files found
-no issues, and `git diff --check` passed. No release/browser capture of these
-new auth steps has been made, so no auth or app-wide numeric visual score is
-assigned and the `>=95/100` gate remains unproven.
+- Mở ảnh Android/Web được chọn trực tiếp từ hinhanh; không lấy màn Chat/Calendar/Inbox/database/share làm feature yêu cầu.
+- Chọn ít nhất một reference pair cho mỗi screen/state hiện có trong scope: Home, Notes list/grid nếu được hỗ trợ, search, editor, autosave state, summary nếu được hỗ trợ, menu/delete confirmation, Settings/Appearance nếu có.
+- Đo sidebar, top bar, page gutter, title baseline, row height, content width, dialog/menu bound và mobile bottom/safe-area offset.
+- Ghi light/dark, EN/VI, viewport, orientation portrait và DPR của từng reference.
+- Chụp thêm anchor từ live Notion chỉ khi ảnh trong folder chưa thể hiện state cần đối chiếu; không sửa nội dung của Notion.
 
-Auth visual recheck on 2026-09-24 (historical Inter-era capture; superseded by
-the platform-font recapture below): the live public Notion Login and Sign up
-pages were captured at 1280×800 and 390×844 (references 111–114), with no form
-submission. Historical references 24 and 26 are 1280×720 despite their
-filenames. NoteFlow captures 104–110 cover the earlier Inter-rendered
-Login/Register states; their CTA measurements apply only to that source and
-must not be used as current geometry. The current source measurements and
-screenshots are in the later Platform-font and Register recapture entry. No
-auth controller, route, DTO, service, or persistence file changed. Neither the
-historical captures nor the current auth pair establish the app-wide
-`>=95/100` release gate.
+**Output:** docs/ui-qa/notion-reference-matrix.md và capability rows được đánh dấu.
 
-Shared navigation focus follow-up on 2026-09-24: `NoteFlowSidebarRow` now
-renders the existing theme `focusRing` token as a 2dp outline while focused.
-Keyboard Tab traversal, focus loss, and light/dark token colors are covered in
-the primitive widget test; callbacks, selected semantics, labels, and hit area
-remain unchanged. The full presentation suite passes 200/200 using a temporary
-test-only `local_llm_bridge` package-root shim; direct test startup still hits
-the unrelated `llama-vocab.obj` `LNK1136` hook failure. The package config was
-restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-`flutter analyze --no-pub lib/main.dart lib/presentation` and
-`dart format --output=none --set-exit-if-changed lib test` pass, as does
-`git diff --check`. Web
-release builds in 72.5s and Android release APK builds at 88.0 MB in 58.5s.
-The 2026-09-23 runtime discovery found only Windows, Chrome, and Edge, with no
-Android AVD. A later Android 15/API 35 Login/Register runtime check is recorded
-below; iOS/macOS runtime/build checks remain unavailable on this Windows host.
-The focus treatment and compile checks do not assign a numeric app-wide score;
-the `>=95/100` gate remains unproven.
+**Gate:** mọi control định giữ hoặc thêm đều có callback/state liên kết; mọi Notion-only control bị loại trước implementation. Không có dữ liệu giả để làm ảnh trông đầy đủ.
 
-Dashboard density follow-up on 2026-09-24: on available width >=840dp the
-existing Home collection now defaults to a compact card grid; below that
-breakpoint it defaults to the existing single-column List. The existing
-List/Grid control still overrides that default. Wide grid columns are sized
-from a 136dp minimum card width, capped at six; grid cards use the existing
-note title, preview, updated date, page icon, theme surfaces, semantics and
-open-note callback. List cards and all controller/data contracts are unchanged.
-The dashboard widget suite passes 39/39, including 200% desktop text scale, and
-the full presentation suite passes 202/202 with the temporary test-only bridge
-package root; both restore
-`.dart_tool/package_config.json` to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Targeted analyze reports no issues; Web release build passes in 53.5s and
-Android release APK builds at 88.0MB in 68.0s. These are compile checks only.
-Current Home screenshots predate this layout change; the Web runtime still
-cannot load a persisted note, so widget fixtures do not substitute for native
-data or same-state Notion captures. No numeric fidelity score is assigned and
-the `>=95/100` gate remains unproven.
+### M-03 — Chuẩn hóa token và primitive UI dùng chung
 
-Android Home/editor/autosave runtime follow-up on 2026-09-24: a temporary
-release APK built from `e0b6181` with the existing
-`NOTEFLOW_AUTH_MODE=local` build define installed on the Android 15/API 35 AVD
-using `adb install -r`; the signing certificate matched the backed-up Cognito
-release. Captures 128–129 record the actual empty Home and blank editor at
-1080×2400. A note entered through the existing UI appeared in the Home list,
-remained after force-stop/relaunch, and reopened with the existing “Note saved.”
-status. The exact QA note was deleted through the existing More → Delete flow;
-Home returned to “No notes yet.” The original Cognito release APK was restored
-byte-for-byte (SHA-256
-`5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`) and
-reinstalled; app data was not cleared. This verifies Android local-mode UI and
-autosave behavior only. It does not change the Web persistence limitation or
-provide a matched Notion visual pair. No numeric fidelity score is assigned;
-the `>=95/100` gate remains unproven.
+**Files sở hữu:** notes_theme_tokens.dart, theme wiring trong main.dart và primitive presentation mới nếu thật cần.
 
-Dashboard empty-state presentation tranche — 2026-09-24: on the `TuanKiet2`
-checkout based on `c162b4a`, `DashboardEmptyView` removes its tinted bordered
-surface so the existing empty message and create action sit directly on the
-page canvas, aligned with the Home content gutter. The semantics container,
-label, keys, `onCreateNote` callback, note data and all application contracts
-are unchanged. `flutter analyze --no-pub` on the Dashboard source/test passes;
-`dashboard_page_test.dart` passes 39/39 using the existing temporary test-only
-`local_llm_bridge` package root and restores `.dart_tool/package_config.json` to
-SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-The Android release QA APK builds in 72.7s at 87.2MB. Capture 130 shows the
-empty Home at 1080×2400 on the Android 15/API 35 AVD; tapping the existing CTA
-opens the new-note editor, and backing out of the clean draft returns to the
-empty Home without creating a note. The previous Cognito release APK and its
-SHA-1 sidecar were restored; the APK SHA-256 remains
-`5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`.
-`flutter build web --release --no-pub --dart-define=NOTEFLOW_AUTH_MODE=local`
-passes in 86.5s, and a 1280×720 dark Web runtime check displays the existing
-storage-unavailable message; the empty state is not reachable on Web. iOS and
-macOS builds/runtime remain unavailable on this Windows host. This tranche
-does not provide a same-state Notion pair or a 95-point score; the score stays
-unassigned and Step 4's visual comparison gate remains open.
+**Làm:**
 
-Home reference-anchor correction — 2026-09-24: a same-viewport Web 1280×720
-dark comparison with both sidebars open showed the Home title at x≈325/y≈117,
-while the live Notion page title anchor was x≈420/y≈168. The desktop Home
-content now uses a 768px outer column, 24px internal gutters (720px usable
-width), and 116px top inset; the measured title is x≈420/y≈169. The existing
-wide Grid sizes cards from 136px minimum width and caps at four columns to fit
-that measured content width; existing List/Grid selection and note callbacks
-remain intact. Capture 135 records the NoteFlow Web runtime at the matched
-viewport/theme, including its existing storage-unavailable message; no private
-Notion page screenshot or content was saved. Capture 136 records the Android
-15/API 35 empty Home at 1080×2400. `dashboard_page_test.dart` passes 39/39 with
-the temporary test-only bridge package root, targeted analyze and format pass,
-Web release build passes in 87.5s, and Android x64 local-auth release build
-passes in 62.1s at 35.7MB. The original Cognito APK was restored byte-for-byte
-and its SHA-256 remains
-`5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`; Android
-Login was verified after reinstall. The direct Windows test invocation still
-fails before tests at the native hook linker (`llama-vocab.obj`, `LNK1136`);
-the test-only shim run passed and `.dart_tool/package_config.json` was restored
-to SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-This improves one desktop Home anchor and adds Android empty-state evidence;
-other Home states, page workflows, theme/platform pairs, and accessibility
-remain open. No overall fidelity score is assigned and the `>=95/100` gate
-remains unproven.
+- Chuẩn hóa palette light/dark, text roles, divider, selected/focus/error/success, spacing/radius/elevation/icon.
+- Chỉ tạo primitive dùng lại khi ít nhất hai screen hiện có cùng pattern, ví dụ page header, sidebar row, section heading, popup surface hoặc status callout.
+- Kiểm tra hover, focus, pressed, disabled, keyboard navigation và semantics của mỗi primitive.
+- Chuyển component được sửa sang token; không mở một refactor toàn app không cần thiết.
 
-Register CTA alignment follow-up — 2026-09-24 (widget-only historical estimate; superseded by browser measurements below): the existing email-first
-Register step now uses the 12dp compact gap and 16dp desktop gap before its
-existing Continue action; the details-step gap remains unchanged. The shared
-auth submit button is 44dp high to retain the plan's minimum touch target. The
-widget test constrains the mobile CTA top to y=372–378 against the live Notion
-reference y=375, and desktop to y=392–400 against y=396. These are current
-widget-geometry checks, not a release screenshot or pixel-diff result. The auth
-page and navigation integration suites pass 18/18 using the temporary test-only
-`local_llm_bridge` package root; the original package-config SHA-256 is restored
-to `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Targeted analysis and formatting pass. Only `lib/presentation/auth/auth_pages.dart`
-and its presentation test changed; auth controllers, routes, DTOs, services,
-domain, application, infrastructure, persistence and backend remain untouched.
-Desktop Register details and validation/busy/error/success/change-password
-states remain to verify. Step 8 remains in progress; no numeric auth or overall
-fidelity score is assigned, and the `>=95/100` gate is still unproven.
+**Tests/gate:** test token light/dark và widget states; không đổi public feature widget contracts; focused presentation tests pass; screenshot một Android portrait và Chrome desktop cho color/spacing anchor. Nếu token làm regress screen đã đạt, dừng và sửa trong chính M-03.
 
-Register mobile heading alignment follow-up — 2026-09-24 (superseded and
-incorrect): the 10dp brand/title gap, 52dp content gap, and y=108–112 heading
-claim came from widget-test font metrics after changing the font setup; they did
-not represent the Web runtime. Do not use those values as current evidence. The
-replacement platform-font and browser measurements are recorded below.
+### M-04 — Android shell, avatar và navigation
 
-Platform-font and Register recapture — 2026-09-24: NoteFlow no longer forces
-Inter; `fontFamily` is unset and the Inter/OFL registration was removed from
-`pubspec.yaml`. The Web `FontManifest.json` contains only MaterialIcons and
-CupertinoIcons, and the fresh Android ARM64 release APK contains no Inter asset.
-The Register email step uses the browser-measured layout values: 34dp compact
-brand/title gap, 28dp content gap, 20dp compact Continue gap, 42dp desktop
-panel top padding, and a 48dp auth submit minimum. Fresh release Web captures [138](docs/ui-qa/138-noteflow-register-platform-font-390x844-current-20260924.png)
-and [139](docs/ui-qa/139-noteflow-register-platform-font-1280x800-current-20260924.png)
-show the blank, focused email field at 390×844 and 1280×800. Against Notion
-references 113 and 112, the blue CTA bounds are y=375–414 on mobile and
-y=396–435 on desktop, matching the reference's 40px visible height and top
-anchors. The desktop card top aligns at y≈43. Its lower content remains shorter
-because Notion's provider/legal actions have no NoteFlow contract and are not
-fabricated. The auth suite passes 34/34 and the complete presentation suite
-passes 209/209; scoped analysis and Web release plus Android ARM64 release
-builds pass.
-`.dart_tool/package_config.json` was restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. Only
-theme/font selection and unused font assets, auth presentation spacing/touch
-target, its widget test, and QA documentation changed; auth callbacks/routes
-and domain, application, infrastructure, persistence, and backend code remain
-untouched. Android font
-runtime plus iOS/macOS rendering remain unverified. This evidence covers only
-the existing Register email state in Web; no numeric auth/app score is assigned
-and the `>=95/100` gate remains unproven.
+**Files sở hữu:** workspace_shell.dart, UI localization/token phụ trợ khi cần.
 
-Login system-font recapture — 2026-09-24: fresh blank, focused email-state Web
-captures [140](docs/ui-qa/140-noteflow-login-platform-font-390x844-current-20260924.png)
-and [141](docs/ui-qa/141-noteflow-login-platform-font-1280x800-current-20260924.png)
-pair with Notion refs 114 and 111. The mobile CTA is within 1px of the reference
-at y=309–348 vs y=308–347; the desktop CTA is 5px high at y=333–372 vs
-y=338–377. The desktop heading/field group also begins roughly 8–10px early,
-and the existing recovery hint wraps to two lines. Notion provider/legal actions
-are omitted because NoteFlow has no matching callbacks. The auth suite passes
-34/34 and the full presentation suite passes 209/209 after the responsive spacing
-edit; scoped analysis and Web/Android ARM64 release builds pass. This adds Web
-evidence only; Login states after Continue, password, validation, recovery and
-errors plus Android/iOS/macOS visual pairs remain open.
+**Làm:**
 
-Compact editor title scale follow-up (superseded by the 40dp remeasurement
-below) — 2026-09-24: `NoteDetailEditorForm` now
-uses a 36dp page-title style below the existing 600dp compact breakpoint and
-retains 40dp at wider widths. The adjustment follows a visual review of the
-open Notion page at a 567px-wide browser viewport; no page content was changed
-or saved. Widget tests verify compact typography at 390px and 567px, desktop
-typography at 1024px, and long-title wrapping. The complete Notes presentation
-suite passes 86/86 with the test-only `local_llm_bridge` package root; targeted
-analysis, format, and diff checks pass, and the original package-config SHA-256
-is restored. Follow-up runtime QA on Android 15/API 35 used a temporary
-local-auth release APK: capture 137 records the blank compact editor at
-1080×2400, with its existing Back action, title, and content fields visible.
-No text was entered and no note was created. A local-auth Web release build
-also passed; at 1280×720 dark, the blank editor retained its existing “Saving
-unavailable on Web” state. That browser review was not saved as a screenshot,
-and neither runtime is a matched Notion pixel pair. The original Cognito APK
-was reinstalled and its Login screen restored; its original SHA-256 remains
-verified. The full presentation suite passes 203/203 and targeted editor
-analysis passes. A full-repository analyzer run reports 42 issues in the
-temporary `output/test-shim` and `packages/local_llm_bridge/test` dependency
-resolution; it does not pass the Step 11 full-analysis gate. Autosave, editor
-state, and all application/backend contracts remain unchanged. Step 6 remains
-in progress; no overall score is assigned and the `>=95/100` gate remains
-unproven.
+- Đối chiếu header/nav với reference portrait: giữ account avatar ở góc trái, vùng điều hướng hiện có, selected state và destination callbacks.
+- Dùng drawer hoặc bottom sheet theo width hiện tại; menu phải giữ đúng destination Home/Notes và Settings/Diagnostics chỉ khi callback đang được nối.
+- Làm rõ vùng thao tác, scroll ownership, safe area/status/navigation bars và system Back.
+- Không tạo Workspace switcher, Chat, Calendar, Inbox, Favorites, Private, Invite hoặc profile identity giả.
+- Giữ collapse/expand behavior/key; không làm mất state khi đổi destination.
 
-Editor breadcrumb de-duplication follow-up — 2026-09-24: the editor breadcrumb
-now displays the page title without repeating `NoteFlow`, which is already
-visible in the persistent app shell. The page-title breadcrumb, navigation,
-actions, autosave and data contracts remain in place. The focused editor surface
-suite passes 24/24 with the temporary test-only `local_llm_bridge` package root;
-targeted analysis/formatting, Web release build (81.5s) and Android ARM64
-release APK build (34.2MB, 69.7s) pass. `.dart_tool/package_config.json` was
-restored byte-for-byte to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`. Capture
-137 predates this source change and is not current visual evidence. iOS/macOS
-runtime and matched Notion editor comparisons remain open; Step 6 remains in
-progress and no numeric score or `>=95/100` result is claimed.
+**Tests/gate:** workspace shell tests, compact/responsive tests, semantics/keys; runtime captures 360×800 và 412×915 portrait; test mở/đóng sheet, đổi destination và Back. Sau gate, ghi điểm cell Android tương ứng vào scorecard.
 
-Notes list loading/title follow-up — 2026-09-24: the active workspace app bar now
-uses the Notes destination label without repeating the product name already
-shown by the shell. The Notes loading screen follows the real list hierarchy
-with a static, token-based title/action/row skeleton, while retaining the
-existing `notes-workspace-loading` live-region label and keeping placeholder
-rows outside the semantics tree. It adds no note data, search/action callback,
-or backend behavior. The Notes workspace test passes 20/20, the full
-`test/presentation/notes` suite passes 93/93 with the temporary test-only
-`local_llm_bridge` package root, scoped presentation analysis reports no issues,
-and the edited Dart files pass formatting. Web release builds in 84.2s and
-Android ARM64 release APK builds in 53.7s at 34.2MB. The package config was
-restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-`flutter devices --machine` currently lists Android 15/API 35 x86_64 emulator,
-Windows host, Chrome and Edge; the repo has no `windows/` or `linux/` runner,
-and this Windows host has no `xcodebuild`, so iOS/macOS runtime/build checks are
-unavailable here. Captures 71–76 and 131 predate this follow-up; there is no
-current runtime screenshot or matched Notion pair for the updated Notes list.
-Step 5 and the overall visual score remain open.
+### M-05 — Android Home, Notes list và Search
 
-Android current-source autosave/delete follow-up — 2026-09-24: captures
-142–151 (listed in [the QA capture inventory](docs/ui-qa/README.md)) were made from checkout `b900fec` on the
-Android 15/API 35 x86_64 AVD using the existing local-auth build define. The
-workflow created a synthetic note, displayed “Note saved.”, showed the note in
-the Notes list, retained it after force-stop/relaunch, reopened it, and deleted
-it through the existing More → Delete flow. Home returned to “No notes yet.”
-The system keyboard, bottom sheet, and confirmation are visible in captures
-144–145 and 149–150. No app data was cleared. The original Cognito APK was
-restored byte-for-byte and its installed copy was pulled from the AVD to verify
-SHA-256 `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`;
-capture 152 shows its Login screen. The previous ARM64 release artifact was
-also restored byte-for-byte. This confirms Android workflow behavior only:
-same-state Notion pairs, other platform runtime checks, and the rubric score
-remain open. The latest phone Home/editor images show substantial empty space;
-they do not support claiming `>=95/100`.
+**Files sở hữu:** dashboard_page.dart, dashboard_content.dart, dashboard_note_card.dart, dashboard_state_views.dart, notes_list_panel.dart, notes_workspace_page.dart chỉ ở vùng composition/presentation.
 
-Compact editor title remeasurement — 2026-09-24: the live Notion page in the
-in-app browser computes its page-title style as 40px font size, 48px line height
-and weight 700 at both 390×844 and 567×694; the title wraps at 390px. The
-browser viewport was restored to 567×694 after measurement. `NoteDetailEditorForm`
-now uses 40dp at compact and wider widths, replacing the previous 36dp compact
-value. Capture 153 records the current blank Android editor at 1080×2400
-(360dp). `note_detail_surface_test.dart` passes 24/24; the complete
-`test/presentation/notes` suite passes 92/92 using the temporary test-only
-package root, and `.dart_tool/package_config.json` was restored to SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Targeted analysis and formatting pass. The Android x64 local-auth release build
-passes at 35.2MB. The original Cognito APK was restored and verified against
-SHA-256 `5E0480792576BC417B497EF61548FBD2F24B642F1AEAADD5E30BA0D563988339`;
-the earlier ARM64 release artifact was restored with SHA-256
-`349C005D2025F3CEAB09C0C79C48A4FC137A3FF99C664FB6DB2C3E9B1812C8BE`. This
-tranche changes only editor presentation and its existing widget expectation;
-callbacks, autosave, routes and data flow are unchanged. Other editor states and
-same-state Notion pairs remain open, so it does not establish `>=95/100`.
+**Làm:**
 
-Compact mobile content-alignment follow-up — 2026-09-24: the read-only live Notion
-workspace page was measured at 390×844 (DPR 1); its title block starts at x=96,
-y=212 with 40px/48px/700 typography and wraps to two lines. At 567×694 the title
-starts at x=96, y=156 and uses the same typography. No private page text or
-reference screenshot was saved. Current NoteFlow Web capture 154 at 390×844 dark
-shows the Home title glyph at x≈99, y≈213; this checks one anchor in the existing
-Web storage-limitation state, not an equivalent Home data state. Compact
-Dashboard, state, list and editor surfaces now share the x=96 page inset at
-390dp. The inset tapers to 16dp at 320dp to preserve narrow-width and large-text
-layout. Editor content accounts for the existing shell and page-header bars;
-safe-area adjustment stays within presentation layout. Focused Dashboard/editor
-tests pass 65/65 and the full presentation suite passes 212/212, including
-320–1440dp and up to 2.0x text scale; scoped analysis reports no issues; Web
-release and Android x64 local-auth release builds pass.
-Current Web blank-editor capture 155 at 390×844 measures the title ink at
-x=96/y=157, 55px above the live Notion phone anchor at x=96/y=212. Current
-Android blank-editor capture 156 measures x≈96.8/y≈214.9dp at 411×914 logical
-pixels; this is close but not an exact viewport pair. The x64 APK was installed
-temporarily and the blank editor opened without entering content. The original
-Cognito APK and both generated APK outputs were restored byte-for-byte; app data
-was not cleared. `.dart_tool/package_config.json` was restored after the
-test-only `local_llm_bridge` package-root shim. No backend, application, domain,
-infrastructure, auth-controller or route contract changed. The Web editor
-anchor, loaded/list/editor states, light theme, Apple runtime, full same-state
-pairs and the app-wide score remain open; no `>=95/100` score is assigned.
+- Home dùng dữ liệu NoteFlow thật; tái tạo hierarchy, section spacing, page marker và preview của Notion.
+- Nếu current source có grid/list toggle hoặc sort, style lại đúng control/state; nếu không có callback thì không thêm.
+- Giữ search flow hiện có; làm overlay/filter/result presentation giống reference trong giới hạn filter/sort thật.
+- Có visual riêng cho loading, empty, filtered-empty, error, retry và loaded list/grid; loading không tạo note giả.
+- Giữ selected row, title/preview, count/date nếu hiện có. Không gọi note list là Favorites/Private/Recently visited nếu data không chứng minh điều đó.
+- Không thay đổi controller, query, ordering, model hoặc create/open callback.
 
-| Step | Evidence rechecked | Status | Remaining gate |
-| --- | --- | --- | --- |
-| 0. Baseline | Current checkout and Web load/error states inspected; Android 15/API 35 current-source local-auth QA captures 142–151 verify create, autosave, list, relaunch, reopen and delete; capture 152 verifies the restored Cognito Login screen. Browser persistence and the complete auth/session/error baseline remain unverified. | `PARTIAL` | Record remaining actual behavior on targets that support it, without changing the backend; capture all specified baseline states |
-| 1. Reference matrix | Live workspace-page observations retained with their original dates; public Login/Sign up captures 111–114 are same-size 1280×800 and 390×844; old files 24/26 are actually 1280×720; one editor anchor is paired, but workspace surface states still lack complete same-state diffs | `PARTIAL` | Pair shell, Home, list/editor, menus and overlays at supported viewports; keep auth comparison limited to supported controls |
-| 2. Tokens/primitives | Theme leaves `fontFamily` unset; Inter/OFL packaging removed. Web manifest contains MaterialIcons/CupertinoIcons only; Android ARM64 release APK contains no Inter asset. Shared sidebar focus outline uses existing light/dark `focusRing` tokens and is verified by keyboard test. Web Register captures 138–139 show platform-default rendering; Android font-to-reference comparison and iOS/macOS runtime remain unverified | `IN_PROGRESS` | Verify actual font rendering on Android/iOS/macOS; recheck light/dark screenshots, text contrast, and all shared components after final styling |
-| 3. Shell/sidebar | Release Web captures 115–121 cover Home/Notes selected, expanded 280px sidebar, labeled Settings/Diagnostics footer, collapsed overlay, compact menu/header, 768px rail, and 1024px expanded layout. Captures 133–134 verify the revised compact header and navigation sheet on Android 15/API 35; `workspace_shell_test.dart` passes 19/19, including each moved action's existing callback. Shared row focus tests pass 9/9. | `IN_PROGRESS` | Pair current shell screenshots with Notion references, verify dark/light and long localized labels visually, test Android navigation/back and run Apple device checks; no Favorites/profile/workspace-switching controls |
-| 4. Dashboard/Recents | Capture 154 records dark Home at 390×844; current light Chrome captures 167–168 show Home at 390×844 and 567×694. Title glyphs are near x≈99/y≈213 and x≈96/y≈157 against Notion title blocks x=96/y=212 and x=96/y=156. These remain storage-limitation states, not equivalent Home data states. Dashboard tests pass 40/40. Grid, loading, search, selected states, equivalent Home data state and broader same-state pairs remain open. | `PARTIAL` | Capture remaining supported states; pair equivalent Home data states with Notion and score every required anchor |
-| 5. Notes list/detail frame | Current Chrome captures 165–166 and Edge captures 169–170 show the storage-unavailable Notes state at 390×844 and 567×694. The title glyph anchors are within 1px of the measured Notion title blocks; New note remains visible and the warning wraps without clipping. `notes_workspace_page_test.dart` passes 44/44, including loading at 320/360/390/768/1280dp, compact/detail/back, create, error/retry and dirty-state cases. Loaded/list/selected/loading pairs and an equivalent Notion list pair remain missing. | `IN_PROGRESS` | Capture loaded/selected/loading states with controlled data and pair them against Notion; verify compact dirty-back and destination retention on native runtime |
-| 6. Page editor | Compact title typography is 40dp. Historical Web capture 155 is superseded at the two compact anchors by current Chrome/Edge captures 157–160: title glyph bounds x=104/y=225–256 at 390×844 and x=104/y=169–200 at 567×694, DPR 1. The 567px glyph matches the live Notion observation; the 390px glyph y≈225 is inferred from its measured x=96/y=212 title box and the observed 13px glyph offset. Android capture 156 remains a blank editor at 411×914 logical, not a matched pair. Full presentation suite passes 213/213. | `IN_PROGRESS` | Capture desktop, keyboard, save/error/summary states and exact same-state Notion pairs; complete visual review |
-| 7. Menus/overlays/status | More is anchored at ≥600dp and uses a bottom sheet below 600dp. Delete/dirty-back surfaces and callbacks have widget coverage; current-source Android captures 149–150 show the existing More → Delete sheet and “Delete note?” confirmation while removing only the temporary QA note. Full overlay/theme and paired visual states remain unverified. | `PARTIAL` | Capture same-state menu/dialog pairs and verify focus, keyboard, barrier/system-back behavior on supported targets |
-| 8. Auth UI | Captures 138–141 are fresh system-font Web Register/Login email states at 390×844 and 1280×800, paired with public Notion refs 111–114. Register CTA bounds align at y=375–414 mobile and y=396–435 desktop after increasing the auth-only minimum to 48dp. Login is within 1px on mobile and 5px above Notion on desktop; its desktop heading/fields begin about 8–10px early. Unsupported provider/legal controls remain absent. The earlier widget-derived y=108–112 heading claim is superseded. Auth suites pass 34/34 and the full presentation suite passes 209/209 after the responsive spacing edit. | `IN_PROGRESS` | Capture Login and Register details plus supported validation/busy/error/success/change-password states; finish accessibility/localization checks and supported-state pairs |
-| 9. Accessibility/localization | Login/Register test checks submit reachability at 200% text scale in a 360×800 viewport; Android API 35 capture 127 visually confirms the Login brand and heading remain separated at system font scale 2.0; page background fills six phone/tablet/desktop dimensions for both auth forms; existing semantics and locale tests cover only tested widgets; shared sidebar row Tab focus/blur is verified in light and dark themes | `PARTIAL` | Re-run focus, semantics, EN/VI, 1.0/1.3/2.0 scale, keyboard and touch-target gates across all final UI surfaces |
-| 10. Device visual QA | Repo targets are Android/iOS/Web/macOS; there are no Windows/Linux runners. Web Chrome captures 165–168 and Edge captures 169–170 verify Notes warning layout and compact Home/Notes title anchors at 390×844 and 567×694, DPR 1. Earlier captures 157–160 verify blank-editor anchors. Android API 35 emulator is available, but no current-source runtime capture was made; tablet/rotation, other screens, Apple runtime and same-state pairs remain open. | `PARTIAL` | Capture loaded Home/list/menus on available targets; verify tablet/rotation/accessibility; run iOS/macOS checks on an Apple runner |
-| 11. Regression/build/handoff | Focused `notes_workspace_page_test.dart` passes 44/44 with the temporary test-only package-root shim and restored package-config hash; scoped analysis and current-source Web release build pass. Current Chrome/Edge Notes/Home evidence is recorded in 165–170. Android x64 debug build did not finish after >4 minutes in the `local_llm_bridge` NDK/llama.cpp hook and was stopped before APK creation or install. Full presentation/repository regression, remaining runtime matrix and Apple checks are open. | `IN_PROGRESS` | Run required regression gates and audit the allowlisted diff before each push; retry Android only through the project's supported test dependency setup |
+**Tests/gate:** dashboard + Notes workspace/responsive suites; Android runtime tạo note bằng affordance hiện có, tìm note, mở note, Back và kiểm tra list state. So ảnh Home/Search cùng viewport với ref portrait. Mỗi unsupported filter/search option được đánh dấu OUT_OF_SCOPE.
+
+### M-06 — Android editor, autosave feedback và overlays
+
+**Files sở hữu:** note_detail_page.dart, note_detail_surface.dart, note_detail_editor_form.dart, note_detail_action_bar.dart, note_detail_more_actions.dart, note_detail_summary.dart, model_provisioning_status_panel.dart.
+
+**Làm:**
+
+- Biến detail thành page surface: back/breadcrumb/action area hiện có, title phân cấp rõ, content borderless, readable line height và gutter nhất quán.
+- Giữ title/content fields, text controller, focus lifecycle, scroll key, dirty guard và autosave callback.
+- Trình bày draft/dirty/saving/saved/save-error/Web storage unavailable theo state thật. Không thêm manual Save.
+- Summary, busy/stale/error và model provisioning là callout/status theo data thật; không giả AI answer hoặc progress.
+- More/delete menu chỉ chứa action có callback; Delete luôn dùng confirmation hiện có.
+- Compact menus thành bottom sheet khi pattern hiện hữu yêu cầu; tôn trọng keyboard, safe area, barrier, focus và system Back.
+- Trên phone portrait, keyboard không che title/content/action; khi quay lại list dirty note không được mất.
+
+**Tests/gate:** note detail/page/surface/action-bar tests; Android 360×800 và 412×915 portrait cho empty, filled, dirty, saving/saved/error, summary nếu hỗ trợ, More, delete/back confirmation. Ghi rõ note QA được tạo và dọn; không đổi data source.
+
+### M-07 — Web Chrome shell, Home, Notes và Search
+
+**Files sở hữu:** cùng các UI workspace/dashboard/notes files trong M-04/M-05; chỉ thay presentation và responsive layout.
+
+**Làm:**
+
+- Desktop: sidebar, workspace header, search affordance, selected row, page canvas và gutter theo anchor Notion. 280 px là điểm đo lịch sử cần xác minh lại từ reference/current viewport trước khi chốt.
+- Compact: navigation chuyển thành affordance/sheet phù hợp; không để sidebar hoặc toolbar đè content.
+- Home/Notes/Search dùng chung visual grammar với Android nhưng điều khiển phù hợp pointer, hover, focus, Tab/Enter/Escape.
+- Resize khi đang ở Home, list hoặc editor phải giữ selected note và state; overlay không tràn viewport.
+- Dữ liệu/state vẫn lấy từ callback và store đang chạy; không fake recents, filters hay results.
+
+**Tests/gate:** responsive/workspace/dashboard tests; Chrome captures 390×844, 768×1024, 1280×800 và 1440×900; verify không horizontal overflow, controls usable, drawer/sidebar open/closed, search open/result/empty. Login/Register chỉ smoke regression.
+
+### M-08 — Web editor và browser-local QA save
+
+**Files UI sở hữu:** editor/detail/surface files như M-06. Local QA adapter không thuộc tranche UI.
+
+**Làm:**
+
+- Áp dụng page header, title, content, summary/status, More và confirmation theo cùng reference matrix.
+- Trên TuanKiet2 không che giấu storage-unavailable/error bằng status Saved.
+- Để chạy workflow create/edit/autosave/reload/reopen, dùng nhánh Test_Tuankiet và adapter localStorage đã được user yêu cầu. Chỉ lưu trong browser origin/profile hiện tại; không gọi backend và không đồng bộ.
+- Tạo note QA rõ ràng, sửa title/content, chờ autosave thật, quay lại, mở lại, reload Chrome rồi xác nhận dữ liệu còn; kiểm tra dirty/back, delete và empty/error state.
+- Trước khi kết thúc QA, xác định chính xác files adapter/factory/test liên quan để loại khỏi staging/cherry-pick/push sang TuanKiet2. Không xóa local data của người dùng.
+
+**Tests/gate:** Chrome runtime chứng minh cùng-origin reload/reopen; UI báo đúng lifecycle; local adapter tests nếu runner cho phép; lưu cả kết quả pass và blocker. Chỉ presentation files được push trong M-08 UI tranche; không push adapter, local note fixtures/data hoặc test-only persistence.
+
+### M-09 — Settings, diagnostics, localization và accessibility đang có
+
+**Phạm vi:** chỉ các screen/control hiện hữu và được M-01 xác nhận.
+
+**Làm:**
+
+- Nếu appearance/theme, language, diagnostics hoặc model provisioning đang có route/callback, đưa style về cùng token và kiểm tra light/dark.
+- Rà EN/VI và text dài trên Home/list/editor/menu; không đổi meaning của localization key.
+- Rà semantics label/value/hint/live region, keyboard focus order, focus visibility, touch target và contrast AA.
+- Không thêm Settings section, diagnostics action, keyboard shortcut hoặc provider auth không có behavior hiện tại.
+- Login/Register/auth screens giữ nguyên byte-for-byte về source nếu tranche không cần sửa phần khác trong auth file; nếu file dùng chung buộc phải sửa thì chỉ được thay đoạn ngoài auth screen và phải chứng minh auth UI/callback không đổi bằng test/capture diff.
+
+**Tests/gate:** localized/widget tests và keyboard/semantics checks cho các screen trong scope; Login/Register screenshot/route smoke chỉ xác nhận không regress, không cộng vào điểm fidelity tranche.
+
+### M-10 — Android native QA và chấm fidelity
+
+**Thiết bị:** Android emulator API 35; portrait only.
+
+**Workflow tối thiểu:**
+
+1. Mở app session hợp lệ; xác nhận Home/Notes shell.
+2. Home empty/loading/error/loaded state tùy baseline data; mở note thật.
+3. Tạo note bằng action hiện có; nhập title và content; chờ autosave/state thật.
+4. Back về list; mở lại note; xác nhận dữ liệu/state còn theo capability của native store.
+5. Search note và mở result; kiểm tra clear/no-results nếu hỗ trợ.
+6. Chạy Summary nếu capability và môi trường model đang sẵn; nếu không, ghi UNVERIFIED hoặc OUT_OF_SCOPE đúng nguyên nhân.
+7. Mở More/Delete, kiểm tra confirmation/cancel/confirm theo behavior hiện có.
+8. Mở navigation/settings/diagnostics hiện có; kiểm tra Back, keyboard, system bars, text scale và EN/VI.
+
+**Captures:** 360×800 và 412×915; 768×1024 portrait nếu thiết bị thật khả dụng. Tên ảnh: M-10_android_<screen>_<state>_<width>x<height>_<theme>.png. Mỗi ảnh phải là current-source native capture, portrait, không lấy Web viewport làm chứng cứ Android.
+
+**Gate:** từng state có ref/current pair và item measurements; mọi cell áp dụng được chấm; điểm thấp nhất trên Android ít nhất 95/100. Cell thiếu current-source emulator capture nhận 0 điểm và phải được nêu trong coverage; không suy ra pass từ Web capture.
+
+### M-11 — Web Chrome QA và chấm fidelity
+
+**Workflow:** tái chạy Home → Notes → create/edit → autosave → back/reopen → reload → search → summarize nếu hỗ trợ → delete confirmation. Chạy đúng nhánh cho localStorage QA; không dùng dữ liệu giả trong TuanKiet2.
+
+**Captures:** 390×844, 768×1024, 1024×768, 1280×800 và 1440×900. Đổi viewport phải reload cùng origin/data/state; ghi browser profile, theme, locale, DPR và scroll offset. Tên ảnh: M-11_web-chrome_<screen>_<state>_<width>x<height>_<theme>.png.
+
+**Gate:** không overflow hoặc keyboard/overlay che control; mọi state hiện đúng dữ liệu thật; score từng cell và Web Chrome platform score ít nhất 95/100. Nếu chỉ có browser-local QA trên Test_Tuankiet mà baseline TuanKiet2 chưa lưu được thì ghi riêng hai capability; không gộp hoặc trình bày local-only như backend sync.
+
+### M-12 — Regression cuối, commit/push và handoff
+
+**Lệnh gate tham khảo:**
+
+- dart format --output=none --set-exit-if-changed <danh-sách file Dart đã sửa>.
+- flutter analyze lib/main.dart lib/presentation.
+- flutter test <các test presentation liên quan>; chạy flutter test toàn repo nếu dependency/native hook cho phép và ghi riêng blocker nếu không.
+- flutter build web --release --no-pub.
+- flutter build apk --debug để cài lên emulator; flutter build apk --release chỉ trên môi trường JDK 17 trở lên. Không hạ Gradle hay sửa backend để né lỗi JDK.
+
+**Gate trước commit của mỗi M:**
+
+- Format chỉ các file Dart đã sửa; analyze lib/main.dart và lib/presentation; chạy test suites liên quan và regression workspace/notes/dashboard/routing/auth không bị tác động.
+- Build Web release; cài/run Android emulator và tạo capture native cho tranche chạm Android.
+- Đọc git diff và git diff --name-only; allowlist chỉ gồm presentation/theme, UI tests, kế hoạch/scorecard và reference matrix.
+- Dừng nếu diff chạm domain, application, infrastructure, API, auth controller, routing hoặc backend. Kiểm tra riêng danh sách staged files trước mỗi commit.
+- Không commit APK, output, browser profile, screenshot dữ liệu riêng tư, localStorage fixture, generated file, .dart_tool, cache hoặc thay đổi ngoài tranche.
+- Sau gate: commit một M riêng, push UI-only commit lên origin/TuanKiet2; cập nhật scorecard sau mỗi tranche. Nếu remote/branch không khớp hoặc push chứa file local QA thì dừng và ghi blocker, không force-push.
+
+**Kết quả bàn giao:** commit hash và remote branch; file list; commands/output test/build; Android/Chrome captures; scorecard có điểm lower-bound bằng số, coverage, N/A/UNVERIFIED và giới hạn còn lại.
 
 ---
 
-## 8. Rollback protocol
+## 6. Critical fail và dừng an toàn
 
-1. Dừng ngay ở step đang fail.
-2. Lưu screenshot, test output và `git diff` của step đó.
-3. Revert đúng commit của step hiện tại; không revert các step đã được duyệt.
-4. Không apply hoặc drop stash cũ nếu không có yêu cầu riêng.
-5. Nếu lỗi liên quan save/backend, trả về commit trước step UI đó và kiểm tra lại `canSave`, `onSave`, dirty state và controller call.
-6. Chỉ tiếp tục sau khi baseline regression trở lại pass.
+Bất kỳ mục nào dưới đây làm tranche fail bất kể điểm:
 
----
+- Thay đổi backend/domain/application/infrastructure hoặc data flow để đạt visual similarity.
+- Sửa giao diện, validation, callback hoặc navigation của Login/Register.
+- Thêm nút Save hoặc làm UI báo Saved khi storage chưa lưu thành công.
+- Mất note, dirty state, focus, route, selected item hoặc callback sau Back/resize/keyboard.
+- Đổi avatar Android thành logo; tạo Workspace switcher/Favorites/Share/filter/action giả.
+- Bỏ delete confirmation, làm CTA bị che, có overflow hoặc mất semantics/key quan trọng.
+- Đưa localStorage adapter, local note data hoặc test-only persistence vào push TuanKiet2.
+- Báo score >=95 khi cell còn UNVERIFIED, thiếu reference/current pair hoặc chấm một phần state.
 
-## 9. Definition of Done
-
-Kế hoạch chỉ được đánh dấu hoàn tất khi tất cả điều kiện sau đúng:
-
-- [ ] UI NoteFlow đạt `>= 95/100` ở mọi viewport bắt buộc; mục tiêu tốt nhất là 98–100.
-- [ ] Sidebar, page header, list/detail, editor, action menu, overlays, auth và dark/light cùng một design system.
-- [ ] Save note, create, edit, delete, summarize, search, auth và routing giữ đúng behavior trên từng target mà baseline hỗ trợ; Web giữ nguyên limitation persistence và hiển thị trạng thái không lưu được.
-- [ ] Không có thay đổi trong domain/application/infrastructure/backend/persistence/auth controller.
-- [ ] Không có critical fail, overflow, mất focus, mất dirty state hoặc CTA bị che.
-- [ ] `dart format`, `flutter analyze`, presentation/auth tests và build target phù hợp đã chạy; output được ghi lại.
-- [ ] Diff cuối cùng đã được review theo allowlist và từng step có thể rollback độc lập.
+**Dừng và khôi phục:** giữ log/screenshot/test/diff; dừng tại M đang lỗi; revert riêng commit M đó nếu đã commit, không revert tranche được duyệt trước. Không reset hard, không xóa thay đổi sẵn có, không stash/pop cũ. Nếu lỗi save xuất hiện, đưa UI về trạng thái phản ánh thật và khoanh vùng; không sửa backend trong SOP này.
 
 ---
 
-## 10. Historical per-platform scorecard — 2026-09-24
+## 7. Definition of Done
 
-`N/C` means required evidence is incomplete; it is not a numeric score and does
-not imply a pass. The anchor results below are tranche results only.
+- [ ] Mỗi M trong phạm vi đã qua gate hoặc được ghi DONE — OUT_OF_SCOPE kèm bằng chứng capability/contract.
+- [ ] Android portrait và Web Chrome đều có đủ cell đang áp dụng; điểm thấp nhất của từng platform đạt ít nhất 95/100.
+- [ ] Mọi kết quả đều có điểm số bằng số; UNVERIFIED mang 0 điểm và không bị trình bày nhầm là pass; không có critical fail.
+- [ ] Login/Register giữ nguyên và regression pass.
+- [ ] Tạo/sửa/autosave/search/delete/summary và responsive navigation giữ đúng capability hiện có; không có backend thay đổi.
+- [ ] Web local save QA, nếu chạy, được chứng minh trong origin/profile browser-local và không xuất hiện trong push TuanKiet2.
+- [ ] Scorecard, reference matrix, screenshots, test/build evidence, branch/commit hash và known limitations được lưu rõ.
+- [ ] Final staged diff chỉ gồm file UI/test/docs đã duyệt; từng M có thể rollback độc lập.
 
-| Platform/runtime | Evidence available to date | Current status | Remaining evidence before numeric scoring |
+## 8. Trạng thái thực thi hiện tại — 2026-09-27
+
+| M | Trạng thái | Bằng chứng của lượt này | Việc còn lại trước khi đóng M |
 | --- | --- | --- | --- |
-| Android | Existing API 35 phone workflow captures 142–153; blank editor at 411×914 logical in 156 | `N/C` | Exact matched reference states; tablet portrait/landscape; other screens, themes, accessibility and full workflow matrix |
-| iOS | No Apple runtime available on this host | `N/C (UNVERIFIED)` | iPhone and iPad required viewport, workflow and visual captures |
-| Web — Chrome | Editor anchor 157–158; Login email CTA 161–162; compact Notes/Home anchors and Web warning layout 165–168 | `N/C` | All other screens/states; matched Notion pairs; keyboard, loaded/error/summary, theme, locale and accessibility checks |
-| Web — Edge | Editor anchor 159–160; Login email CTA 163–164; compact Notes warning state 169–170 | `N/C` | Same remaining Web matrix as Chrome; platform Web score is the lower browser score |
-| macOS | No Apple runtime available on this host | `N/C (UNVERIFIED)` | Desktop workflow and visual captures on macOS |
-| **Overall** | Required platform and workflow cells are incomplete | **`N/C` — 95% is not established** | Complete all applicable platform cells, then score using §6; keep unsupported capabilities `N/A` only when NoteFlow has no corresponding contract/callback |
+| M-01 Source/scope/behavior lock | IN_PROGRESS | Checkout chính ở nhánh `TuanKiet2`; browser-local adapter, auth và editor diffs nhận diện để không stage. Codebase-memory MCP (`list_projects`, `index_repository`) trả `Transport closed`; thực hiện source fallback có giới hạn. Matrix ghi rõ chưa audit hết capability của `final_project.md`. | Hoàn tất source → callback/state cho toàn bộ yêu cầu; xác minh mỗi capability trước khi gắn `DONE — OUT_OF_SCOPE` và scope score 100/100. Mục chưa xác minh nhận 0/100 lower-bound. |
+| M-02 Reference matrix | IN_PROGRESS | Tạo `docs/ui-qa/notion-reference-matrix.md` với 7 screenshot captures Android/Web, metadata viewport/theme/locale và điểm số. Ba entries có ảnh ref được đối chiếu; Home Web chưa có cặp đúng state. Đã mở trực tiếp ảnh 001–003 Web; nội dung là trang note `Introduction`, không phải Home. | Kiểm tra inventory còn lại theo từng ảnh và platform; tìm đúng Web Home reference; hoàn tất danh sách cell áp dụng/coverage. |
+| M-03 Shared UI tokens | IN_PROGRESS | Token workspace/dashboard nằm riêng trong `workspace_ui_tokens.dart`; Login/Register vẫn dùng palette ứng dụng hiện hữu. Workspace suite 22/22. Không stage thay đổi `notes_theme_tokens.dart` hoặc màu toàn app. | Kiểm tra đầy đủ light/dark, contrast, focus, semantics và 320–360dp; giữ Login/Register nguyên vẹn trong UI commit. |
+| M-04 Android shell/navigation | IN_PROGRESS | Emulator Android 15/API 35, portrait 1080×2400 (411×914 logical), rotation 0. Capture mới Home/Search; workspace shell tests 22/22. Avatar góc trái vẫn là chữ K/profile, không bị thay bằng logo. | Hoàn tất các menu/Back/selected states, 360×800, theme tối, text scale, accessibility và ref measurements; điểm mọi cell áp dụng tối thiểu 95 trước khi đóng. |
+| M-05 Android Home/Notes/Search | IN_PROGRESS | Dashboard suite 44/44; analyzer sạch. Home 411×914: 96/100 provisional estimate; Search 411×914: 97/100 provisional estimate. Hai formal cell đều 0/100 lower-bound cho tới khi ghép đủ cùng data/state và matrix. | Hoàn tất Notes/list/grid, empty/no-match/clear, sort, dark mode, 360×800 và đo anchor/pixel theo ref. Không gọi estimate là gate-pass. |
+| M-06 Android editor | IN_PROGRESS | Editor có UI diff trong working tree nhưng không thuộc code thay đổi của lượt này; không có capture editor mới từ source hiện tại trong lượt này. Score 0/100 lower-bound — UNVERIFIED. | Review editor diff riêng, capture portrait/light/dark, kiểm title/content/summary/status/More/delete/dirty-back và autosave lifecycle; chỉ chạm presentation. |
+| M-07 Web Chrome shell/Home/Search | IN_PROGRESS | Web release build pass 77.1s; Chrome hiển thị Flutter UI ở 390×844, 1280×800 và ref-sized 1363×936. Search overlay 1363×936: 96/100 provisional estimate, formal cell 0/100 lower-bound. Home cell 0/100 do nhóm ref 001–003 không cùng state. | Tìm Web Home ref đúng state; hoàn tất 768×1024, 1024×768, 1440×900, dark, focus, menu, empty/error và không tràn. |
+| M-08 Web editor/browser-local QA | IN_PROGRESS | Browser-local note đã được tạo, autosave/reload/reopen xác nhận trong origin/profile hiện tại; QA note sau đó đã xóa đúng key và localStorage hiện trống. Chỉ là local QA, không chứng minh backend sync; adapter/factory/test không stage/push. | Capture workflow mới sau khi hoàn tất UI M-06/M-07; xác nhận error/dirty/delete; giữ adapter và fixture khỏi TuanKiet2. |
+| M-09 Settings/localization/accessibility | IN_PROGRESS | Settings/Diagnostics destinations hiện có; không sửa auth/settings/diagnostics trong lượt này. EN screenshot, workspace tests EN/VI pass. | Kiểm theme, language, text scale, contrast, semantics, keyboard/focus và từng destination hiện hữu; các cell chưa kiểm nhận 0/100. |
+| M-10 Android native QA | IN_PROGRESS | Screenshot current-source Home/Search v6 ở 1080×2400 portrait; sampled estimate 96/100 và 97/100. Android platform lower-bound **0/100** vì coverage còn thiếu; không có landscape capture. | Chạy các state/viewport/theme trong plan; ghép ảnh đúng state; đạt từng cell >=95 và đủ coverage. |
+| M-11 Web Chrome QA | IN_PROGRESS | Build release thành công; 0 console errors/0 warnings; network sample chỉ static app/assets, fonts, CanvasKit, không thấy API/backend request. Web Search estimate 96/100; Home/formal platform lower-bound **0/100**. | Chụp 768×1024, 1024×768, 1440×900 và mọi states/themes; xác minh local QA data trống và không stage persistence changes; đạt từng cell >=95. |
+| M-12 Regression/commit/push | IN_PROGRESS | Dashboard 44/44, workspace 22/22, targeted analyzer sạch, format check và `git diff --check` pass; Web release build pass. Diff đang được allowlist để loại backend/local-save/auth. | Stage đúng UI tranche; đọc staged diff; xác nhận không có domain/application/infrastructure/auth/local-save, rồi commit và push `origin/TuanKiet2`; cập nhật hash. |
 
-Unsupported Notion-only controls are excluded from the denominator only where
-the existing NoteFlow contract does not support that capability. Supported but
-uncaptured states stay `UNVERIFIED` and block a numeric score.
-
-This tranche's Login email-first anchor result is `PASS`: the desktop Continue
-bounds match live Notion at 1280×800 in Chrome and Edge; the 390×844 bounds are
-1px lower in both. This is not a numeric Login, Web, or overall score. Android,
-iOS, macOS, the remaining Web screens/states, and the full workflow matrix are
-still incomplete, so `>=95/100` remains unestablished.
-
-## Historical compact-Web scorecard and evidence ledger — 2026-09-24
-
-No numeric overall score is assigned. The measured Web anchors below cover a
-small subset of the required matrix; they do not show that any platform has
-reached 95/100.
-
-| Platform/runtime | Current score | Evidence in this tranche | Missing evidence |
-| --- | --- | --- | --- |
-| Android | `N/C` | Historical API 35 workflow captures 142–153 are from checkout `b900fec`; capture 156 is one current-source editor anchor at 411×914 logical. No Android device/AVD was available in the 2026-09-24 platform audit (`adb devices` empty). | Final-source phone/tablet captures at required viewports, same-state Notion references, themes, keyboard/back, accessibility and the rest of the workflow matrix |
-| iOS | `N/C (UNVERIFIED)` | No Apple runner on this Windows host | iPhone and iPad build/runtime captures for all applicable states |
-| Web — Chrome | `N/C` | Captures 165–168: compact Notes/Home title anchors and existing storage-unavailable presentation at 390×844 and 567×694 | Loaded/list/editor/workflow pairs, other viewports, dark theme, locale, keyboard and accessibility cells |
-| Web — Edge | `N/C` | Captures 169–170: compact Notes storage-unavailable state at 390×844 and 567×694 | Same remaining Web matrix; Web score is the lower of Chrome and Edge after all cells are scored |
-| macOS | `N/C (UNVERIFIED)` | No Apple runner on this Windows host | macOS build/runtime captures for all applicable desktop states |
-| **Overall** | **`N/C` — 95/100 is not established** | Required platform/browser × viewport × screen/state denominator remains incomplete | Complete every applicable cell, score with §6, and preserve behavior as a separate critical gate |
-
-### Evidence ledger — compact Web tranche only
-
-| platform/browser | viewport | screen/state | group/item/anchor | reference | current | measurement | status | reason |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Chrome | 390×844 | Home, Web storage unavailable | Page-title painted anchor | Live Notion title anchor x=96/y=212 | `docs/ui-qa/167-noteflow-home-storage-unavailable-390x844-light-chrome-current.png` | x≈99/y≈213; Δ≈(+3,+1)px | `PASS` — anchor only | Within the §6 ±4px positional tolerance; this is not a same-state Home comparison |
-| Chrome | 567×694 | Home, Web storage unavailable | Page-title painted anchor | Live Notion title anchor x=96/y=156 | `docs/ui-qa/168-noteflow-home-storage-unavailable-567x694-light-chrome-current.png` | x≈96/y≈157; Δ≈(0,+1)px | `PASS` — anchor only | Within tolerance; storage-limitation Home state has no equivalent data-state pair |
-| Chrome | 390×844 | Notes, Web storage unavailable | Warning card and New note CTA | No same-state Notion persistence-error reference | `docs/ui-qa/165-noteflow-notes-storage-unavailable-390x844-light-chrome-current.png` | Warning wraps to 3 lines; CTA visible; no clipping | `UNVERIFIED` | Layout is visible, but this backend limitation has no matched Notion error-state reference |
-| Chrome | 567×694 | Notes, Web storage unavailable | Warning card and New note CTA | No same-state Notion persistence-error reference | `docs/ui-qa/166-noteflow-notes-storage-unavailable-567x694-light-chrome-current.png` | Warning wraps to 2 lines; CTA visible; no clipping | `UNVERIFIED` | Layout is visible, but this backend limitation has no matched Notion error-state reference |
-| Edge | 390×844 | Notes, Web storage unavailable | Page-title anchor, warning card and CTA | Live Notion title anchor x=96/y=212; no equivalent persistence-error state | `docs/ui-qa/169-noteflow-notes-storage-unavailable-390x844-light-edge-current.png` | Title glyph near x=96/y=213; warning 278.4×74px / 3 lines; New note visible | `PASS` for title anchor; `UNVERIFIED` for card | Title anchor is within tolerance; no matched Notion error-state reference for the card |
-| Edge | 567×694 | Notes, Web storage unavailable | Page-title anchor, warning card and CTA | Live Notion title anchor x=96/y=156; no equivalent persistence-error state | `docs/ui-qa/170-noteflow-notes-storage-unavailable-567x694-light-edge-current.png` | Title glyph near x=96/y=157; warning 360×58px / 2 lines; New note visible | `PASS` for title anchor; `UNVERIFIED` for card | Title anchor is within tolerance; no matched Notion error-state reference for the card |
-| Android | Required phone/tablet cells in Step 5/10 | Workflow screens | All applicable visual groups | Same-state Notion captures required | Selected earlier workflow captures 142–153 only | No complete matched-cell measurements | `UNVERIFIED` | Workflow behavior evidence does not score visual fidelity; latest debug build did not produce an APK |
-| iOS | iPhone/iPad cells in Step 5/10 | Applicable workflows | All applicable visual groups | Same-state Notion captures required | No native runtime | No measurements | `UNVERIFIED` | No Apple runtime is available on this host |
-| macOS | 1440×900 and required desktop states | Applicable workflows | All applicable visual groups | Same-state Notion captures required | No native runtime | No measurements | `UNVERIFIED` | No Apple runtime is available on this host |
-
-All other supported browser/platform × viewport × screen/state cells remain
-`UNVERIFIED` until their reference/current evidence is recorded. Only controls
-mapped `OUT_OF_SCOPE` in the NoteFlow contract tables above may be `N/A`.
-
-### Registration password-guidance tranche — 2026-09-24
-
-This tranche ports the live missing-requirement feedback from `TanMinh2` into
-the existing two-step Register form. The displayed rules match the password
-policy already present in `lib/amplify_outputs.dart`. Changes are limited to
-`lib/presentation/auth/auth_pages.dart`,
-`lib/presentation/auth/auth_localizations.dart`, and the directly related auth
-page tests. Domain, application, infrastructure, Cognito configuration,
-auth-controller, API, and persistence files were not changed.
-
-| Target | Verified evidence from this tranche | Visual score |
-| --- | --- | --- |
-| Android | Shared Flutter auth-page tests pass; no new Android runtime capture | `N/C` |
-| iOS | Shared Flutter auth-page tests pass; no Apple runtime capture | `N/C (UNVERIFIED)` |
-| Web — Chrome | Shared Flutter auth-page tests pass; no browser capture of the password checklist | `N/C` |
-| Web — Edge | Shared Flutter auth-page tests pass; no browser capture of the password checklist | `N/C` |
-| macOS | Shared Flutter auth-page tests pass; no Apple runtime capture | `N/C (UNVERIFIED)` |
-| **Overall** | Behavior/localization verified by widget tests; this is not a visual reference comparison | **`N/C` — 95/100 remains unestablished** |
-
-The focused `flutter test` run needed a temporary `.dart_tool` package-root
-shim because the existing `local_llm_bridge` native hook failed with
-`LNK1136: invalid or corrupt file` for `llama-vocab.obj`. The shim and temporary
-package-config edit were restored after the passing 16/16 run. Scoped Dart
-analysis reported no issues.
-
-### Notes error announcement accessibility tranche — 2026-09-24
-
-The expanded and compact Notes load-error states had an explicit live-region
-label as well as a child Text semantics label. A semantics-tree regression test
-reproduced the warning twice in one accessible label. The presentation now
-excludes only the duplicate Text semantics while retaining the live-region
-announcement and the Retry action. No data, callback, route, persistence,
-application, domain, infrastructure, or backend behavior changed.
-
-The new semantics check covers 1024×700 and 390×844. The complete
-`notes_workspace_page_test.dart` and `workspace_shell_test.dart` run passed via
-the existing temporary test-only package shim; `.dart_tool/package_config.json`
-was restored to SHA-256 `BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-Scoped `dart analyze` on the changed UI/test files and `git diff --check` passed.
-This is an accessibility regression repair, not a matched visual comparison;
-it does not add points to the visual score.
-
-## Authoritative platform scorecard and evidence ledger — 2026-09-24
-
-This final section supersedes earlier scorecard snapshots in this plan.
-`N/C` means the required denominator still has supported but unverified cells;
-it is not a numeric score and does not mean below 95. No platform or overall
-score can currently be stated as `>=95/100`.
-
-| Platform/runtime | Current score | Confirmed evidence from the audit | Missing evidence before numeric scoring |
-| --- | --- | --- | --- |
-| Android | `N/C` | AVD `NoteFlow_API35` is booted as `emulator-5554` (Android 15/API 35). The current working-tree release APK (87.7 MB) built successfully, installed with `adb install -r`, and launched. Capture 171 records Login/email-first at 411×914 logical (1080×2400 px, 420 dpi); it does not verify the authenticated editor lifecycle. Captures 142–153 are older workflow evidence, and capture 156 is a single 411×914 editor anchor. | Matched Notion reference pairs and current runtime captures for every required phone/tablet workflow/state/theme/locale; editor autosave and notes round-trip; keyboard/back, text scale and accessibility; complete the 412×915 pilot in Step 5 |
-| iOS | `N/C (UNVERIFIED)` | No Apple runtime or `xcodebuild` on this Windows host. iPhone landscape is supported by the runner and is now an explicit required cell in §4.4. | iPhone portrait/landscape and iPad portrait/landscape captures for supported workflows, safe areas, keyboard, accessibility and matched references |
-| Web — Chrome | `N/C` | The current working-tree Web release build succeeded and rendered the email-first Login screen in an IAB/Playwright-managed Chromium runner at 567×694; capture `output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png`. This is Chromium smoke evidence, not proof of the required installed Chrome cell or a matched Notion pair. Older captures 157–158, 161–162 and 165–168 remain limited anchors/states. | Installed Chrome current-source runtime at 1280×800, 1440×900, 390×844 and 567×694; loaded supported note states, all auth/workflow states, same-state pairs, theme, locale, keyboard and accessibility |
-| Web — Edge | `N/C` | Captures 159–164 and 169–170 cover only editor/Login anchors and compact storage-unavailable Notes states. Served bundle predates current HEAD; no fresh Edge browser runtime was available through CUA. | Same current-source, viewport and workflow matrix as Chrome; Web score is the lower of the two browser scores |
-| macOS | `N/C (UNVERIFIED)` | No Mac runtime, `xcodebuild`, or macOS capture on this host. | Current build and matched captures at 1440×900 for supported desktop workflows, title bar/menu, hover/focus, keyboard, themes and locale |
-| **Overall** | **`N/C` — 95/100 is not established** | Every platform has at least one supported state without a current matched visual measurement; Apple runtimes are absent. | Complete and score every applicable cell using §6; keep supported-but-unverified items in the denominator and use `N/A` only for capabilities absent from NoteFlow contracts |
-
-### Latest narrow visual evidence — Login Continue button
-
-The following rows score only the Continue-button anchor, not the Login screen or
-platform. Login states, password checklist, error/busy/verification states and
-all other supported controls remain unverified until current-source pairs are
-captured.
-
-| platform/browser | viewport | screen/state | group/item/anchor | reference | current | measurement | status | reason |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Chrome | 1280×800 | Login, email-first | Continue button bounds | `docs/ui-qa/111-notion-login-1280x800-reference-live-20260924.png` — x=460–819, y=338–377 | `docs/ui-qa/161-noteflow-login-email-anchor-1280x800-chrome-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
-| Chrome | 390×844 | Login, email-first | Continue button bounds | `docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png` — x=20–369, y=308–347 | `docs/ui-qa/162-noteflow-login-email-anchor-390x844-chrome-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
-| Edge | 1280×800 | Login, email-first | Continue button bounds | `docs/ui-qa/111-notion-login-1280x800-reference-live-20260924.png` — x=460–819, y=338–377 | `docs/ui-qa/163-noteflow-login-email-anchor-1280x800-edge-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
-| Edge | 390×844 | Login, email-first | Continue button bounds | `docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png` — x=20–369, y=308–347 | `docs/ui-qa/164-noteflow-login-email-anchor-390x844-edge-current-20260924.png` | Δ≈(0,+1)px | `PASS` — anchor only | Within ±4px position tolerance; not a whole-screen score |
-
-### Compact editor autosave-status tranche — 2026-09-24
-
-The compact page header now reflects the existing editor lifecycle: an unsaved
-draft uses an edit icon, pending changes use an upload icon, an active save uses
-the existing progress indicator, save failure uses the error color/icon, and a
-saved note uses the cloud-done icon. The Web storage-unavailable state keeps its
-existing unavailable icon. Labels, autosave scheduling, callbacks, persistence,
-and all non-presentation layers remain unchanged.
-
-The regression test exercises these states at 390×844. The complete focused
-`note_detail_surface_test.dart` suite passed 27/27 via the existing temporary
-test-only package shim; scoped `dart analyze` and `git diff --check` passed.
-Android API 35 is available and booted. The current working-tree release APK
-built, installed with `adb install -r`, and launched. Capture
-`docs/ui-qa/171-noteflow-login-email-411x914-android-current-20260924.png`
-records the initial Login screen at 411×914 logical; the authenticated editor
-was not reached, so this capture is not evidence that autosave status works at
-runtime. The Web release build also succeeded and rendered the Login screen in
-an IAB/Playwright-managed Chromium runner at 567×694; the capture is
-`output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png`.
-The accessibility tree exposed the email field, Continue, and Create account.
-This is a Web smoke check, not an installed Chrome/Edge score or a matched
-Notion comparison. The Playwright-managed Chromium console reported zero
-errors and zero warnings during this render.
-
-| Android | 411×914 logical (1080×2400 px, 420 dpi) | Login/email-first initial state | Full screen and input anchors | No matched reference | `docs/ui-qa/171-noteflow-login-email-411x914-android-current-20260924.png` | Not measured | `UNVERIFIED` | Current runtime capture only; no paired reference or editor state |
-| Web/Chromium runner | 567×694 CSS px | Login/email-first initial state, light theme | Full screen and input/control anchors | No matched reference | `output/playwright/20260924-current-web-tranche/172-noteflow-login-email-567x694-web-chromium-current-20260924.png` | Not measured | `UNVERIFIED` | Successful Web build and render; runner does not establish installed Chrome/Edge cells or visual parity |
-
-| Target | Score after this iteration | Self-score evidence |
-| --- | --- | --- |
-| Android | `N/C` | Lifecycle states are regression-tested and the current APK Login screen was captured; authenticated editor runtime and matched Notion pairs remain outstanding. |
-| Web — Chrome | `N/C` | Current Web build and Chromium-runner Login smoke capture verified; installed Chrome capture, matched reference, and required workflow/state cells remain outstanding. |
-| Web — Edge | `N/C` | No current-source Edge capture or complete matched cell matrix in this iteration. |
-| **Overall** | **`N/C`** | This presentation correction fixes a false-saved visual state; it does not establish a full-screen or platform visual score. |
-
-## Login/Register secondary-link layout tranche — 2026-09-25
-
-The compact Login `Create account` link stays near the Notion Login sign-up
-anchor. Register's `Log in` link now uses the higher Sign up anchor on its email
-step. The longer Register details form returns the link to natural scroll flow,
-so it cannot cover or clip `Create account`. With a keyboard or a short viewport,
-both pages continue using the existing scroll fallback. Existing navigation
-callbacks, validators, controller calls, routes, and backend behavior are
-unchanged.
-
-Current-source Web release build passed in 115.1s. Installed Chrome and Edge
-rendered the 390×844 Login and Register email states; capture files are
-`docs/ui-qa/187-noteflow-login-email-390x844-{chrome,edge}-current-20260925.png`
-and `docs/ui-qa/188-noteflow-register-email-390x844-{chrome,edge}-current-20260925.png`.
-The Edge Register details capture `docs/ui-qa/190-noteflow-register-details-390x844-edge-current-20260925.png`
-shows the complete Create account CTA with the login link below it. Both browser
-console checks reported zero errors and zero warnings. The dummy email used to
-advance to Register details was not submitted.
-
-The current-source Android release APK built successfully (87.7 MB), installed
-on `NoteFlow_API35` / Android 15, and restored the existing signed-in Home
-session. No final-source Android auth screen was captured in this tranche.
-`auth_pages_test.dart` passed 19/19 using the existing temporary test-only
-package shim; `dart analyze` reported no issues. The exact original
-`.dart_tool/package_config.json` was restored (SHA-256
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`).
-
-The Login footer is visually near the live Notion Login reference at
-`docs/ui-qa/114-notion-login-390x844-reference-live-20260924.png`; the Register
-email footer is visually near the live Notion Sign up reference at
-`docs/ui-qa/113-notion-signup-390x844-reference-live-20260924.png`. These are
-secondary-link anchor checks only; the Register details state has no matched
-Notion password-form capture and is not assigned a numeric screen score.
-
-| Target | Score after this iteration | Self-score evidence |
-| --- | --- | --- |
-| Android | `N/C` | Current APK build/install passed, but no final-source Android auth capture or complete auth/platform matrix was scored. |
-| Web — Chrome | `N/C` | Current Login/Register email captures and browser console are verified; the full auth states, remaining viewports, and all inner-page cells remain incomplete. |
-| Web — Edge | `N/C` | Current Login/Register email and Register details captures show the CTA remains usable; the full auth and inner-page matrix remains incomplete. |
-| **Overall** | **`N/C` — 95/100 is not established** | This tranche adjusts secondary-link placement and prevents CTA overlap; it is not a whole-platform score. |
-
-## Compact Android Notes-header CTA tranche — 2026-09-25
-
-On compact layouts, the Notes header now keeps its title and create action on
-one row by using a plus icon with the existing localized `New note` tooltip.
-The `new-note` key, busy-state handling, and `onNewNote` callback are unchanged;
-wide layouts keep the labeled button. This is a presentation-only adjustment.
-No application, domain, infrastructure, route, persistence, API, or backend
-code changed.
-
-The focused `notes_workspace_page_test.dart` suite passed 27/27 with the
-existing test-only package shim. Scoped `dart analyze` reported no issues and
-`git diff --check` passed. The original `.dart_tool/package_config.json` was
-restored and its SHA-256 verified as
-`BB1F5D5C8F88BED214DF461A6D8B4B7F62CAB1F38829E65E05C4FEA9C9D73025`.
-
-The Android release APK built successfully (87.7 MB), installed, and launched
-on `NoteFlow_API35` / Android 15 at 411×914 logical (1080×2400 px, 420 dpi).
-The current Notes capture is
-`docs/ui-qa/192-noteflow-notes-list-411x914-android-current-20260925.png`.
-On-device accessibility bounds confirm the Notes title and `New note` action
-share the same row, and the saved note row remains visible. This verifies one
-current Android state and the CTA affordance; it is not a matched Notion
-comparison or a full workflow score.
-
-The Web release build also succeeded (137.9s). The current local preview loaded
-the Login screen after rebuild. The authenticated Notes screen was not reached
-in this browser pass, so this is only a Web build/smoke result.
-
-| Target | Score after this iteration | Self-score evidence |
-| --- | --- | --- |
-| Android | `N/C` | One 411×914 Notes-list runtime state and the compact header regression test pass; required matched Notion states, other viewports and workflow cells remain incomplete. |
-| Web — Chrome | `N/C` | Current Web release built and loaded Login; no authenticated inner-page comparison was captured. |
-| Web — Edge | `N/C` | No Edge runtime capture in this iteration. |
-| **Overall** | **`N/C` — 95/100 is not established** | This tranche verifies a single compact Notes-header fix; the §6 platform/browser × viewport × state denominator remains incomplete. |
+**Giới hạn triển khai:** browser-local storage adapter và test/factory wiring đang có sẵn trong working tree để QA, nhưng nằm ngoài file allowlist của UI và không được đưa vào commit/push `TuanKiet2`. Không sửa `lib/domain`, `lib/application`, `lib/infrastructure`, backend/API, auth controller, route hay Login/Register để thay đổi UI. Điểm platform hiện tại vẫn là 0/100 lower-bound; các estimate riêng của màn không chứng minh mức đạt 95/100.
