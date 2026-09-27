@@ -89,11 +89,11 @@ void main() {
     );
     await tester.enterText(
       find.byKey(RegisterPage.passwordFieldKey),
-      'password',
+      'Existing1!',
     );
     await tester.enterText(
       find.byKey(RegisterPage.confirmPasswordFieldKey),
-      'password',
+      'Existing1!',
     );
     await tester.ensureVisible(find.byKey(RegisterPage.submitKey));
     await tester.tap(find.byKey(RegisterPage.submitKey));
@@ -182,6 +182,7 @@ void main() {
       find.byKey(ChangePasswordPage.confirmPasswordFieldKey),
       'new-password',
     );
+    await tester.ensureVisible(find.byKey(ChangePasswordPage.submitKey));
     await tester.tap(find.byKey(ChangePasswordPage.submitKey));
     await tester.pumpAndSettle();
 
