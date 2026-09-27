@@ -830,6 +830,68 @@ void main() {
     expect(find.byKey(ChangePasswordPage.submitKey), findsOneWidget);
     expect(find.text('Change password'), findsAtLeastNWidgets(1));
   });
+
+  testWidgets('desktop login is unboxed and register stays centered', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final AuthController loginController = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(loginController.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: LoginPage(controller: loginController),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
+      findsNothing,
+    );
+    final Rect loginField = tester.getRect(
+      find.byKey(LoginPage.emailFieldKey),
+    );
+    expect(loginField.width, 360);
+    expect(loginField.center.dx, 640);
+
+    final AuthController registerController = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(registerController.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: RegisterPage(controller: registerController),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder registerPanel = find.byKey(
+      const ValueKey<String>('auth-register-desktop-panel'),
+    );
+    expect(registerPanel, findsOneWidget);
+    final Rect panelRect = tester.getRect(registerPanel);
+    final Rect loginLink = tester.getRect(find.text('Log in'));
+    final Rect footerRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Log in'),
+        matching: find.byType(Wrap),
+      ),
+    );
+    expect(panelRect.width, 496);
+    expect(panelRect.center.dx, 640);
+    expect(footerRect.center.dx, 640);
+    expect(loginLink.top, greaterThanOrEqualTo(panelRect.bottom));
+    expect(loginLink.top - panelRect.bottom, lessThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 const AuthUserDto testUser = AuthUserDto(

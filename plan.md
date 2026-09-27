@@ -29,7 +29,7 @@
 5. Chạy format/analyze/test theo gate của M; chạy đúng Android emulator portrait hoặc Chrome viewport mà M yêu cầu.
 6. Chụp current source, đo anchor theo cùng đơn vị và cập nhật điểm **bằng số** trong `ui-audit-scorecard.md` cùng trạng thái trong mục 8.
 7. Thiếu cặp ảnh, thiếu runtime, lỗi chưa phân loại hoặc phép đo chưa đạt thì cell ghi `0/100 lower-bound — UNVERIFIED`; không dùng `N/C`. Chỉ capability đã chứng minh là ngoài hợp đồng mới nhận `100/100 scope-compliance`, tách khỏi điểm fidelity.
-8. Đọc staged diff và file list; chỉ stage file của M. Chặn commit nếu diff chứa backend, browser-local adapter/data, auth/Login/Register, output hoặc ảnh QA.
+8. Đọc staged diff và file list; chỉ stage file của M. Chặn commit nếu diff chứa backend, browser-local adapter/data, output, ảnh QA hoặc auth ngoài ngoại lệ layout được giới hạn rõ trong M-13. Với file đang có thay đổi từ trước, stage riêng đúng hunk thuộc M; không stage validators, auth flow hoặc thay đổi khác.
 9. Sau gate, tạo một commit riêng cho M rồi push lên `origin/TuanKiet2`; xác minh HEAD và remote cùng commit. Không force-push.
 
 Nếu một bước không đạt, giữ bằng chứng, đánh dấu M `IN_PROGRESS`, ghi nguyên nhân và việc cần làm tiếp; không tuyên bố đạt 95% dựa trên estimate.
@@ -52,11 +52,11 @@ Không sửa, đổi chữ ký, đổi cách gọi, đổi payload hoặc thay n
 - lib/domain/**, lib/application/**, lib/infrastructure/**.
 - Backend/API, database/schema, repository, Cognito, model provisioning và local AI service.
 - lib/presentation/auth/controllers/**, session/token, authentication, authorization và refresh.
-- Mọi source trong `lib/presentation/auth/**` và `test/presentation/auth/**`: được chạy để regression nhưng không sửa trong plan này.
+- Source trong `lib/presentation/auth/**` và `test/presentation/auth/**` chỉ được sửa trong M-13, đúng allowlist layout và test geometry của tranche đó. Mọi auth controller/service, validation rule, form field, callback, copy/localization và test ngoài M-13 vẫn khóa.
 - Route, redirect và điều kiện truy cập trong lib/presentation/routing/**.
 - Autosave, persistence, retry, delete, summarize, search, sorting hoặc data lifecycle.
 
-**Login và Register bị khóa về visual design:** không restyle, bố cục lại, đổi logo/field/CTA, validator, copy, localization hay navigation của các trang Login/Register. Chỉ chạy regression smoke test hiện có; không đưa Login/Register vào phần chấm fidelity của đợt này.
+**Login và Register — ngoại lệ M-13 có giới hạn:** M-13 được phép chỉnh căn giữa và bố cục responsive của các widget Login/Register hiện có để khớp phân cấp thị giác của ref. Không đổi logo, field, CTA, validator, copy, localization, callback, controller, route, auth flow hoặc thêm chức năng. Mọi tranche khác tiếp tục chỉ regression và không sửa auth.
 
 ### 1.3 Hợp đồng lưu note
 
@@ -88,7 +88,7 @@ final_project.md là bối cảnh rubric/tính năng dự kiến. Nó không t�
 ### 1.6 Avatar và logo
 
 - Góc trên trái của Android Home là ảnh profile của tài khoản. Giữ avatar và thao tác hiện có; không thay bằng logo Notion.
-- Logo Notion được người dùng cho phép dùng trong vùng nhận diện ứng dụng đã có nếu tranche đó yêu cầu. Không đặt logo vào vị trí avatar và không thay giao diện Login/Register.
+- Logo Notion được người dùng cho phép dùng trong vùng nhận diện ứng dụng đã có nếu tranche đó yêu cầu. Không đặt logo vào vị trí avatar. M-13 không thay logo hoặc nội dung nhận diện Login/Register.
 
 ---
 
@@ -110,7 +110,7 @@ final_project.md là bối cảnh rubric/tính năng dự kiến. Nó không t�
 | Search | 013, 016–030, 094–095, 155–165, 180, 182–205, 215–218 | 008–009, 034 | Search overlay, filter/sort hierarchy, result title và context. Chỉ render filter/sort có callback thật. |
 | Note/page view và editor surface | 014–015, 037, 057, 096–099, 131, 135, 166, 184, 191, 193, 195, 200, 205 | 007, 010, 016, 026 | Breadcrumb, title, content width, page spacing, action placement và scroll. |
 | Page actions và overlays | 054–055, 074–076, 086, 093, 098–099, 132, 173–178 | 004–006, 012, 036 | Menu anchor, bottom sheet/dialog geometry, destructive action và dismiss. Chỉ giữ action NoteFlow hỗ trợ. |
-| Login/Register | 077–083 | 058 | Reference đã xem nhưng **không sửa và không chấm trong scope hiện tại**. Chỉ chạy regression không thay đổi. |
+| Login/Register | 077–083 | 058 | Dùng làm tham chiếu bố cục cho M-13; chỉ sửa căn chỉnh/surface của control hiện có. Không thêm provider, field hay auth behavior không được NoteFlow hỗ trợ. |
 | Notion-only surfaces | Chat, Calendar, Inbox, database, share/publish, comments, tasks, AI chat và page-version-history trong các ảnh tương ứng | 011, 015, 027–028, 035–038 và các trang database | Chỉ đánh dấu OUT_OF_SCOPE trừ khi M-01 chứng minh NoteFlow đang có đúng capability và callback. Không tạo màn hình hoặc control giả. |
 
 Danh sách trên là tập ảnh anchor để bắt đầu. M-02 phải lập matrix chứa đầy đủ tên file được chọn, không suy đoán nội dung từ số thứ tự; các ảnh chưa đọc trực tiếp không được ghi là reference đã xác nhận. 2026-09-27 kiểm tra trực tiếp `notion-web-001-home.jpg`, `notion-web-002-home-tab.jpg` và `notion-web-003-recents-expanded.jpg`: cả ba đang hiển thị page `Introduction`; 001–003 không phải cặp Home-content. Đánh giá matrix theo trạng thái thực tế của từng ảnh.
@@ -155,7 +155,7 @@ M-01 phải xác nhận các file dưới đây còn nằm trên active route tr
 | Editor | lib/presentation/notes/note_detail_page.dart, note_detail_surface.dart, note_detail_editor_form.dart, note_detail_action_bar.dart | Giữ title/content lifecycle, autosave, focus, save status và callback; không thêm manual Save. |
 | Summary và actions | lib/presentation/notes/note_detail_summary.dart, note_detail_more_actions.dart, model_provisioning_status_panel.dart | Giữ summarize/delete/more/provisioning state và confirmation. |
 | Theme/localization | lib/presentation/notes/notes_theme_tokens.dart, các presentation localization files, phần theme trong lib/main.dart | Mở rộng token/label nếu cần, không đổi meaning/key/API của chuỗi đang được test. |
-| Auth | lib/presentation/auth/** | Chỉ regression. Không sửa Login/Register/AuthController. |
+| Auth | lib/presentation/auth/** | Chỉ M-13 được sửa layout Login/Register trong allowlist hẹp; không sửa AuthController, validation, auth flow, route hay localization. Các file auth khác chỉ regression. |
 | Diagnostics/Settings | lib/presentation/debug/** và UI Settings đang được shell gọi | Restyle chỉ khi route/callback hiện có; không thêm setting hoặc provisioning behavior. |
 
 Feature map phải liệt kê capability có thật cho: Home, grid/list nếu source hỗ trợ, sort, search, create, edit, autosave, delete, summary, Settings/Appearance, diagnostics và provisioning. Các tính năng trong final_project.md như attachment, label, pin, khóa note, share, collaboration hoặc AI Q&A chỉ vào map SUPPORTED nếu source hiện tại có đầy đủ dữ liệu và callback phù hợp. Nếu không, ghi OUT_OF_SCOPE và ẩn control đó.
@@ -345,7 +345,7 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 - Rà EN/VI và text dài trên Home/list/editor/menu; không đổi meaning của localization key.
 - Rà semantics label/value/hint/live region, keyboard focus order, focus visibility, touch target và contrast AA.
 - Không thêm Settings section, diagnostics action, keyboard shortcut hoặc provider auth không có behavior hiện tại.
-- Không sửa source trong `lib/presentation/auth/**` hoặc test trong `test/presentation/auth/**`. Nếu một thay đổi token/global theme làm Login/Register đổi thì thu hẹp token/theme về workspace hoặc hoãn thay đổi; không tạo ngoại lệ chỉnh auth.
+- Trong M-09 không sửa source trong `lib/presentation/auth/**` hoặc test trong `test/presentation/auth/**`. Nếu token/global theme làm Login/Register đổi thì thu hẹp token/theme về workspace hoặc hoãn M-09; ngoại lệ layout M-13 chỉ áp dụng cho tranche M-13.
 
 **Tests/gate:** localized/widget tests và keyboard/semantics checks cho các screen trong scope; Login/Register screenshot/route smoke chỉ xác nhận không regress, không cộng vào điểm fidelity tranche.
 
@@ -408,7 +408,7 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 Bất kỳ mục nào dưới đây làm tranche fail bất kể điểm:
 
 - Thay đổi backend/domain/application/infrastructure hoặc data flow để đạt visual similarity.
-- Sửa giao diện, validation, callback hoặc navigation của Login/Register.
+- Sửa Login/Register ngoài bố cục được cho phép trong M-13; sửa auth validation, callback, controller, flow, copy, localization hoặc navigation ở bất kỳ tranche nào.
 - Thêm nút Save hoặc làm UI báo Saved khi storage chưa lưu thành công.
 - Mất note, dirty state, focus, route, selected item hoặc callback sau Back/resize/keyboard.
 - Đổi avatar Android thành logo; tạo Workspace switcher/Favorites/Share/filter/action giả.
@@ -425,7 +425,7 @@ Bất kỳ mục nào dưới đây làm tranche fail bất kể điểm:
 - [ ] Mỗi M trong phạm vi đã qua gate hoặc được ghi DONE — OUT_OF_SCOPE kèm bằng chứng capability/contract.
 - [ ] Android portrait và Web Chrome đều có đủ cell đang áp dụng; điểm thấp nhất của từng platform đạt ít nhất 95/100.
 - [ ] Mọi kết quả đều có điểm số bằng số; UNVERIFIED mang 0 điểm và không bị trình bày nhầm là pass; không có critical fail.
-- [ ] Login/Register giữ nguyên và regression pass.
+- [ ] M-13 chỉ thay bố cục Login/Register; auth behavior, fields, validators, routes và backend giữ nguyên, regression được ghi rõ.
 - [ ] Tạo/sửa/autosave/search/delete/summary và responsive navigation giữ đúng capability hiện có; không có backend thay đổi.
 - [ ] Web local save QA, nếu chạy, được chứng minh trong origin/profile browser-local và không xuất hiện trong push TuanKiet2.
 - [ ] Scorecard, reference matrix, screenshots, test/build evidence, branch/commit hash và known limitations được lưu rõ.
@@ -447,5 +447,6 @@ Bất kỳ mục nào dưới đây làm tranche fail bất kể điểm:
 | M-10 Android native QA | IN_PROGRESS | Screenshot current-source Home/Search v6 ở 1080×2400 portrait; sampled estimate 96/100 và 97/100. Android platform lower-bound **0/100** vì coverage còn thiếu; không có landscape capture. | Chạy các state/viewport/theme trong plan; ghép ảnh đúng state; đạt từng cell >=95 và đủ coverage. |
 | M-11 Web Chrome QA | IN_PROGRESS | Build release thành công; 0 console errors/0 warnings; network sample chỉ static app/assets, fonts, CanvasKit, không thấy API/backend request. Web Search estimate 96/100; Home/formal platform lower-bound **0/100**. | Chụp 768×1024, 1024×768, 1440×900 và mọi states/themes; xác minh local QA data trống và không stage persistence changes; đạt từng cell >=95. |
 | M-12 Regression/commit/push | IN_PROGRESS | Dashboard 44/44, workspace 22/22, targeted analyzer sạch, format check, `git diff --check`, Web release build đều pass theo evidence của các tranche trước. UI-only commit `ac5e27b` và scorecard/docs commit `3fe9e9c` đã push lên `origin/TuanKiet2`; staged diff của hai commit không có backend/auth/local-save. | Hoàn tất các platform gate và M còn mở; giữ local-save/browser QA changes ngoài commit; ghi hash cho mỗi đợt tiếp theo. |
+| M-13 Login/Register layout follow-up | IN_PROGRESS | Đã bỏ panel desktop của Login; Register desktop không còn ghim link đăng nhập xa form và nhóm panel/footer được căn giữa. Auth fields, callback, controller, validation, route và backend không thuộc diff M-13. Computer Use đã xem Login/Register compact trên Web preview 397×675; desktop Login có release capture 1920×906. `flutter analyze` và Web release build pass; auth widget suite pass **23/23** qua test-only package-root shim, package config khôi phục đúng SHA-256. Điểm Android, Web Login và Web Register vẫn **0/100 lower-bound — UNVERIFIED** vì chưa đủ cặp ref/current theo platform, viewport và state. | Đẩy riêng lát UI đã qua analyzer/test/build để user review; M-13 vẫn IN_PROGRESS. Tiếp tục chụp current-source Register desktop ở 1280×800 và auth portrait trên Android emulator, rồi đo với ref matched state/viewport trước khi thay đổi điểm lower-bound. Không stage thay đổi auth/test có sẵn từ trước. |
 
-**Giới hạn triển khai:** browser-local storage adapter và test/factory wiring đang có sẵn trong working tree để QA, nhưng nằm ngoài file allowlist của UI và không được đưa vào commit/push `TuanKiet2`. Không sửa `lib/domain`, `lib/application`, `lib/infrastructure`, backend/API, auth controller, route hay Login/Register để thay đổi UI. Điểm platform hiện tại vẫn là 0/100 lower-bound; các estimate riêng của màn không chứng minh mức đạt 95/100.
+**Giới hạn triển khai:** browser-local storage adapter và test/factory wiring đang có sẵn trong working tree để QA, nhưng nằm ngoài file allowlist của UI và không được đưa vào commit/push `TuanKiet2`. Không sửa `lib/domain`, `lib/application`, `lib/infrastructure`, backend/API, auth controller, route hoặc auth behavior. Login/Register chỉ được đổi bố cục theo M-13. Điểm platform hiện tại vẫn là 0/100 lower-bound; các estimate riêng của màn không chứng minh mức đạt 95/100.

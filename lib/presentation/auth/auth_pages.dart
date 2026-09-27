@@ -45,7 +45,6 @@ final class _LoginPageState extends State<LoginPage> {
         return _AuthFormScaffold(
           title: copy.loginTitle,
           subtitle: copy.loginSubtitle,
-          desktopPanel: true,
           compactTopPadding: 38,
           desktopTopPadding: 82,
           compactBrandTitleSpacing: 34,
@@ -272,7 +271,7 @@ final class _RegisterPageState extends State<RegisterPage> {
             onPressed: state.isBusy ? null : _openLogin,
           ),
           compactFooterBottomPadding: 220,
-          allowAnchoredFooter: !_detailsStep,
+          allowAnchoredFooter: compactWidth && !_detailsStep,
           desktopPanel: true,
           child: Form(
             key: _formKey,
@@ -1300,7 +1299,9 @@ final class _AuthFormScaffold extends StatelessWidget {
                         minHeight: minScrollContentHeight,
                       ),
                       child: Align(
-                        alignment: Alignment.topCenter,
+                        alignment: showDesktopPanel
+                            ? Alignment.center
+                            : Alignment.topCenter,
                         child: pageContent,
                       ),
                     )
@@ -1309,14 +1310,22 @@ final class _AuthFormScaffold extends StatelessWidget {
                         minHeight: minScrollContentHeight,
                       ),
                       child: Align(
-                        alignment: Alignment.topCenter,
+                        alignment: showDesktopPanel
+                            ? Alignment.center
+                            : Alignment.topCenter,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: <Widget>[
                             pageContent,
                             const SizedBox(height: 12),
-                            footer!,
+                            if (showDesktopPanel)
+                              SizedBox(
+                                width: 496,
+                                child: Center(child: footer!),
+                              )
+                            else
+                              footer!,
                           ],
                         ),
                       ),
