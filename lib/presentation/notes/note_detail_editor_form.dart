@@ -138,8 +138,15 @@ final class NoteDetailEditorForm extends StatelessWidget {
           child: Align(
             alignment: Alignment.topLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: NoteFlowLayout.editorTextMaxWidth,
+              constraints: BoxConstraints(
+                maxWidth:
+                    kIsWeb &&
+                        MediaQuery.sizeOf(context).width >=
+                            NoteFlowLayout.compactBreakpoint
+                    ? NoteFlowLayout.wideWebEditorTextMaxWidthFor(
+                        MediaQuery.sizeOf(context).width,
+                      )
+                    : NoteFlowLayout.editorTextMaxWidth,
               ),
               child: _SummaryContentMotion(
                 active: isSummarizing,

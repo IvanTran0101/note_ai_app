@@ -116,6 +116,10 @@ final class NoteDetailSurface extends StatelessWidget {
         MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
     final double editorMaxWidth = compact
         ? NoteFlowLayout.compactEditorMaxWidth
+        : kIsWeb
+        ? NoteFlowLayout.wideWebEditorMaxWidthFor(
+            MediaQuery.sizeOf(context).width,
+          )
         : NoteFlowLayout.editorMaxWidth;
     final double editorTopPadding = compact
         ? NoteFlowLayout.compactEditorTopInset(context) +

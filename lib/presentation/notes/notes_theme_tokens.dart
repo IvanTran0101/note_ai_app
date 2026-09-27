@@ -101,8 +101,20 @@ abstract final class NoteFlowLayout {
   static const double compactWebEditorTitleLeadingInset = 8;
   static const double editorMaxWidth = 720;
   static const double editorTextMaxWidth = 708;
+  static const double wideWebEditorMaxWidth = 1200;
   static const double dashboardContentMaxWidth = 768;
   static const double dashboardTopPadding = 72;
+
+  /// Lets the Web editor use more of a wide desktop canvas while keeping the
+  /// measured 720px page column at normal desktop widths.
+  static double wideWebEditorMaxWidthFor(double viewportWidth) =>
+      (viewportWidth - 720)
+          .clamp(editorMaxWidth, wideWebEditorMaxWidth)
+          .toDouble();
+
+  static double wideWebEditorTextMaxWidthFor(double viewportWidth) =>
+      wideWebEditorMaxWidthFor(viewportWidth) -
+      (editorMaxWidth - editorTextMaxWidth);
 
   static double compactPageLeadingInsetFor(BuildContext context) {
     final double viewportWidth = MediaQuery.sizeOf(context).width;
