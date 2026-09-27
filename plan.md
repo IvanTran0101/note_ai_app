@@ -1,6 +1,6 @@
 # Kế hoạch SOP: hoàn thiện UI/UX NoteFlow theo Notion trên Android và Web
 
-> **Trạng thái:** đang triển khai. Lượt 2026-09-27 căn lại Android Search và desktop Web Search overlay; Android dashboard/workspace tests pass và Web release render trên Chrome. Ma trận phát hiện nhóm ảnh Web 001–003 đang là trang note, không phải Home; hai platform vẫn chưa qua gate fidelity đầy đủ.
+> **Trạng thái:** đang triển khai. Checkout đích là `D:\kiet\hk7\flutter\midterm\note_ai_app-note-ai-app` trên nhánh `TuanKiet2`; không thực hiện kế hoạch này trong thư mục `note_ai_app-note-ai-app-lite`. Lượt 2026-09-27 có capture Android editor portrait và Web editor ở compact/desktop; điểm platform vẫn chưa qua gate fidelity đầy đủ.
 >
 > **Cập nhật kế hoạch:** 2026-09-27. Bằng chứng mới nhất và điểm lower-bound nằm ở đầu [ui-audit-scorecard.md](ui-audit-scorecard.md); cặp ref/current, metadata và giới hạn capability nằm trong [docs/ui-qa/notion-reference-matrix.md](docs/ui-qa/notion-reference-matrix.md). Chỉ capture từ source hiện tại được tính cho lượt này.
 >
@@ -12,6 +12,28 @@
 
 ---
 
+## 0. Khóa checkout và nhánh triển khai
+
+- **Repo duy nhất:** `D:\kiet\hk7\flutter\midterm\note_ai_app-note-ai-app`.
+- **Repo không được dùng:** `D:\kiet\hk7\flutter\midterm\note_ai_app-note-ai-app-lite`.
+- Trước mỗi M, chạy `git rev-parse --show-toplevel` và `git branch --show-current`. Nếu root không khớp repo duy nhất ở trên thì dừng, không sửa file và không chép plan từ Lite sang.
+- Commit UI đã được duyệt lên `origin/TuanKiet2` theo từng M sau khi qua gate. Browser-local QA chỉ chạy trong profile/origin hiện tại; adapter và dữ liệu local không được đưa vào commit.
+- Một M chỉ được tính là hoàn tất khi status, diff, test, runtime capture và scorecard đều được kiểm tra ở checkout này.
+
+## 0.1 Vòng thực hiện bắt buộc cho mỗi milestone
+
+1. Chốt một M và đọc lại file sở hữu, behavior contract, ref anchor cùng scorecard của M đó.
+2. Ghi `git status --short`, HEAD, branch và file thay đổi trước M; không reset, stash, xóa hoặc format cả repo.
+3. Chụp baseline cùng platform, viewport, orientation, DPR, theme, locale, dữ liệu, UI state và scroll position với ref đã chọn.
+4. Sửa presentation trong allowlist của M. Giữ nguyên callback, controller, model, route, key, semantics key và data source.
+5. Chạy format/analyze/test theo gate của M; chạy đúng Android emulator portrait hoặc Chrome viewport mà M yêu cầu.
+6. Chụp current source, đo anchor theo cùng đơn vị và cập nhật điểm **bằng số** trong `ui-audit-scorecard.md` cùng trạng thái trong mục 8.
+7. Thiếu cặp ảnh, thiếu runtime, lỗi chưa phân loại hoặc phép đo chưa đạt thì cell ghi `0/100 lower-bound — UNVERIFIED`; không dùng `N/C`. Chỉ capability đã chứng minh là ngoài hợp đồng mới nhận `100/100 scope-compliance`, tách khỏi điểm fidelity.
+8. Đọc staged diff và file list; chỉ stage file của M. Chặn commit nếu diff chứa backend, browser-local adapter/data, auth/Login/Register, output hoặc ảnh QA.
+9. Sau gate, tạo một commit riêng cho M rồi push lên `origin/TuanKiet2`; xác minh HEAD và remote cùng commit. Không force-push.
+
+Nếu một bước không đạt, giữ bằng chứng, đánh dấu M `IN_PROGRESS`, ghi nguyên nhân và việc cần làm tiếp; không tuyên bố đạt 95% dựa trên estimate.
+
 ## 1. Quyết định phạm vi và các khóa bắt buộc
 
 ### 1.1 Chỉ sửa phần trình bày
@@ -19,7 +41,7 @@
 Được phép sửa:
 
 - Widget, layout, typography, spacing, màu, icon presentation, animation, focus, semantics và responsive behavior trong lib/presentation/**.
-- Theme hoặc cách nối theme vào UI trong lib/main.dart; không thay đổi router, controller, service hay composition có ảnh hưởng luồng nghiệp vụ.
+- Token/theme và cách nối vào UI trong `lib/main.dart` chỉ khi style được scope riêng cho workspace/notes. Không sửa `ThemeData` toàn app theo cách có thể làm đổi Login/Register; không thay router, controller, service hay composition nghiệp vụ.
 - UI assets cần thiết, widget/golden tests trực tiếp kiểm tra presentation và tài liệu QA.
 - Chỉ dùng callback, state, model và dữ liệu hiện có để render control.
 
@@ -30,6 +52,7 @@ Không sửa, đổi chữ ký, đổi cách gọi, đổi payload hoặc thay n
 - lib/domain/**, lib/application/**, lib/infrastructure/**.
 - Backend/API, database/schema, repository, Cognito, model provisioning và local AI service.
 - lib/presentation/auth/controllers/**, session/token, authentication, authorization và refresh.
+- Mọi source trong `lib/presentation/auth/**` và `test/presentation/auth/**`: được chạy để regression nhưng không sửa trong plan này.
 - Route, redirect và điều kiện truy cập trong lib/presentation/routing/**.
 - Autosave, persistence, retry, delete, summarize, search, sorting hoặc data lifecycle.
 
@@ -91,6 +114,20 @@ final_project.md là bối cảnh rubric/tính năng dự kiến. Nó không t�
 | Notion-only surfaces | Chat, Calendar, Inbox, database, share/publish, comments, tasks, AI chat và page-version-history trong các ảnh tương ứng | 011, 015, 027–028, 035–038 và các trang database | Chỉ đánh dấu OUT_OF_SCOPE trừ khi M-01 chứng minh NoteFlow đang có đúng capability và callback. Không tạo màn hình hoặc control giả. |
 
 Danh sách trên là tập ảnh anchor để bắt đầu. M-02 phải lập matrix chứa đầy đủ tên file được chọn, không suy đoán nội dung từ số thứ tự; các ảnh chưa đọc trực tiếp không được ghi là reference đã xác nhận. 2026-09-27 kiểm tra trực tiếp `notion-web-001-home.jpg`, `notion-web-002-home-tab.jpg` và `notion-web-003-recents-expanded.jpg`: cả ba đang hiển thị page `Introduction`; 001–003 không phải cặp Home-content. Đánh giá matrix theo trạng thái thực tế của từng ảnh.
+
+### 2.2.1 Các anchor đã mở trực tiếp trong lượt rà plan
+
+| Ảnh đã xem | Quan sát trực tiếp | Cách dùng trong plan | Không được sao chép thành chức năng |
+| --- | --- | --- | --- |
+| Android `001_01_home_recents-favorites-private.png` | Avatar tài khoản ở góc trên trái; thanh Home/chat/calendar/inbox; Recent cards; các nhóm Favorites/Private; thanh tìm kiếm và tạo ở đáy. | Tham chiếu vị trí avatar, mật độ điều hướng, Recents và nhịp dọc của Home. | Chat, Calendar, Inbox, Favorites, Private hoặc AI composer nếu NoteFlow không có route/state/callback tương ứng. Avatar vẫn là ảnh tài khoản. |
+| Android `014_06_recent-final-page.png` | Page title lớn, nút Back và More/Share, các trang con dạng hàng. | Tham chiếu page hierarchy, title, khoảng cách và vùng actions; ghép với ref editor phù hợp ở M-02 trước khi chấm editor. | Share hoặc child-page creation nếu NoteFlow không hỗ trợ. Đây là page có child rows, không mặc định coi là màn nhập title/content. |
+| Android `018_07_search-aptis-results.png` | Search heading, query/AI prompt, result title, parent context, snippet và dock tìm kiếm. | Tham chiếu thứ bậc Search/results và khoảng cách giữa kết quả. | Ask AI, filter hoặc preview nếu không có callback NoteFlow. |
+| Android `217_search-filters-sheet-portrait.png` | Bottom sheet Filters có Sort, Title only, Created by. | Chỉ tham chiếu hình thức sheet nếu app đã có sheet tương ứng. | Filter và sort trong Search nếu current NoteFlow không có state/callback cho chính các điều kiện đó. Sort Home không tự chứng minh Search filter được hỗ trợ. |
+| Web `notion-web-007-page-view.jpg` | Sidebar khoảng 270 px, breadcrumb/actions trên top bar, page title và body trong content column. | Anchor desktop cho shell/page header, title baseline, content gutter và độ rộng vùng đọc. | Không dùng screenshot này làm Home; nội dung là page `Data mining`. |
+| Web `notion-web-008-search-overlay.jpg` | Search overlay giữa màn hình, result list bên trái và preview pane bên phải. | Đo bounds, top offset, radius, hàng query và danh sách kết quả. | Preview pane và các filter không được dựng giả nếu NoteFlow chưa có dữ liệu/hành vi tương ứng. |
+| Web `notion-web-010-lecture-page.jpg` | Page icon/title, callout và body có heading/list trong Notion page canvas. | Tham chiếu page typography và content rhythm khi có cùng loại block trong NoteFlow. | Không thêm icon, callout, rich-text block hoặc attachment chỉ để khớp ảnh. |
+
+M-02 vẫn phải kiểm inventory và metadata toàn bộ ref được chọn. Bảng này là bằng chứng những anchor vừa được mở trực tiếp, không thay thế audit tất cả 218 ảnh Android/200 ảnh Web.
 
 ### 2.3 Output kiểm soát reference
 
@@ -179,17 +216,17 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Làm:**
 
-- Ghi branch, HEAD, git status, modified/untracked files và remote target. Hiện plan được chỉnh trong note_ai_app-note-ai-app; không dùng note_ai_app-note-ai-app-lite.
+- Xác nhận root đúng tuyệt đối `D:\kiet\hk7\flutter\midterm\note_ai_app-note-ai-app`, branch `TuanKiet2`, HEAD, remote `origin` và `git status --short`; không thao tác trong `note_ai_app-note-ai-app-lite`.
 - Ghi lại tất cả thay đổi sẵn có trước khi bắt đầu. Không reset, stash/pop, xóa, format hàng loạt hoặc stage file ngoài tranche.
 - Xác định active route/composition từ main.dart; xác nhận file/widget nào thực sự đang render. Không chỉnh legacy duplicate chỉ vì tên file giống nhau.
 - Với từng feature được dự kiến có UI, tìm model/state/callback hiện có và ghi SUPPORTED, PRESENTATION_ONLY hoặc OUT_OF_SCOPE.
 - Ghi behavior snapshot cho note create/edit/autosave/save error/delete/dirty back/summary/search/theme và keys/semantics quan trọng.
 - Chạy baseline test/analyze có thể chạy và chụp current-source Android portrait + Chrome. Tách lỗi sẵn có khỏi lỗi mới. Login/Register chỉ được smoke-test không sửa.
-- Ghi branch sở hữu localStorage QA. Giữ nguyên mọi thay đổi infrastructure đã có trong working tree; không đưa chúng vào tranche UI.
+- Ghi branch sở hữu localStorage QA. Giữ nguyên mọi thay đổi infrastructure đã có trong working tree; không đưa chúng vào tranche UI. Browser test chỉ chứng minh lưu trong origin/profile hiện tại và không được trình bày là backend sync.
 
 **Output:** bảng capability, bảng file active/locked, git baseline, test baseline, ảnh baseline và known blockers.
 
-**Gate:** agent khác có thể chỉ ra chính xác nơi render, callback được giữ và file bị cấm trước khi sửa. Baseline fail phải được phân loại trước khi qua M-02.
+**Gate:** agent khác có thể chỉ ra chính xác root/branch, nơi render, callback được giữ và file bị cấm trước khi sửa. Baseline fail phải được phân loại trước khi qua M-02; source/backend/auth contract chưa xác minh thì M-01 chưa được đóng.
 
 ### M-02 — Lập reference/capability matrix theo ảnh thật
 
@@ -198,25 +235,25 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 **Làm:**
 
 - Mở ảnh Android/Web được chọn trực tiếp từ hinhanh; không lấy màn Chat/Calendar/Inbox/database/share làm feature yêu cầu.
-- Chọn ít nhất một reference pair cho mỗi screen/state hiện có trong scope: Home, Notes list/grid nếu được hỗ trợ, search, editor, autosave state, summary nếu được hỗ trợ, menu/delete confirmation, Settings/Appearance nếu có.
+- Chọn reference pair theo từng state có thật: Home empty/loaded/error, Notes list/grid nếu có, Search landing/results/no-results, editor empty/filled/dirty/saving/saved/error, Summary nếu có, More/delete confirmation và Settings/Appearance nếu có.
 - Đo sidebar, top bar, page gutter, title baseline, row height, content width, dialog/menu bound và mobile bottom/safe-area offset.
 - Ghi light/dark, EN/VI, viewport, orientation portrait và DPR của từng reference.
 - Chụp thêm anchor từ live Notion chỉ khi ảnh trong folder chưa thể hiện state cần đối chiếu; không sửa nội dung của Notion.
 
-**Output:** docs/ui-qa/notion-reference-matrix.md và capability rows được đánh dấu.
+**Output:** `docs/ui-qa/notion-reference-matrix.md` có tên ref/current chính xác, capability, viewport/theme/locale/data/state/scroll, anchors đo được, score số và lý do cho từng mục OUT_OF_SCOPE. Không ghi ref đã xem nếu chưa mở file ảnh.
 
 **Gate:** mọi control định giữ hoặc thêm đều có callback/state liên kết; mọi Notion-only control bị loại trước implementation. Không có dữ liệu giả để làm ảnh trông đầy đủ.
 
 ### M-03 — Chuẩn hóa token và primitive UI dùng chung
 
-**Files sở hữu:** notes_theme_tokens.dart, theme wiring trong main.dart và primitive presentation mới nếu thật cần.
+**Files sở hữu:** `workspace_ui_tokens.dart` cho workspace shell, `notes_theme_tokens.dart` cho Notes/editor, `note_flow_primitives.dart` nếu cần shared primitive. `main.dart` chỉ được sửa phần theme/wiring scope riêng cho workspace/notes; không đổi màu/theme global đang áp vào Login/Register.
 
 **Làm:**
 
 - Chuẩn hóa palette light/dark, text roles, divider, selected/focus/error/success, spacing/radius/elevation/icon.
 - Chỉ tạo primitive dùng lại khi ít nhất hai screen hiện có cùng pattern, ví dụ page header, sidebar row, section heading, popup surface hoặc status callout.
 - Kiểm tra hover, focus, pressed, disabled, keyboard navigation và semantics của mỗi primitive.
-- Chuyển component được sửa sang token; không mở một refactor toàn app không cần thiết.
+- Chuyển component được sửa sang token; không mở một refactor toàn app không cần thiết. Kiểm tra riêng một màn Auth trước/sau để xác nhận token workspace không rò sang Login/Register.
 
 **Tests/gate:** test token light/dark và widget states; không đổi public feature widget contracts; focused presentation tests pass; screenshot một Android portrait và Chrome desktop cho color/spacing anchor. Nếu token làm regress screen đã đạt, dừng và sửa trong chính M-03.
 
@@ -226,7 +263,7 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Làm:**
 
-- Đối chiếu header/nav với reference portrait: giữ account avatar ở góc trái, vùng điều hướng hiện có, selected state và destination callbacks.
+- Đối chiếu header/nav với Android refs `001`, `002`, `212`: giữ account avatar ở góc trái, vùng điều hướng hiện có, selected state và destination callbacks. Ref `001` có Chat/Calendar/Inbox/Favorites/Private; chỉ dùng bố cục, không dựng các destination/nhóm chưa có.
 - Dùng drawer hoặc bottom sheet theo width hiện tại; menu phải giữ đúng destination Home/Notes và Settings/Diagnostics chỉ khi callback đang được nối.
 - Làm rõ vùng thao tác, scroll ownership, safe area/status/navigation bars và system Back.
 - Không tạo Workspace switcher, Chat, Calendar, Inbox, Favorites, Private, Invite hoặc profile identity giả.
@@ -240,9 +277,9 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Làm:**
 
-- Home dùng dữ liệu NoteFlow thật; tái tạo hierarchy, section spacing, page marker và preview của Notion.
+- Home dùng dữ liệu NoteFlow thật; đối chiếu Android `001`/`087`, tái tạo hierarchy, section spacing, page marker và preview của note hiện có. Ẩn hoặc bỏ các section Favorites/Private nếu không có state tương ứng.
 - Nếu current source có grid/list toggle hoặc sort, style lại đúng control/state; nếu không có callback thì không thêm.
-- Giữ search flow hiện có; làm overlay/filter/result presentation giống reference trong giới hạn filter/sort thật.
+- Giữ search flow hiện có; dùng Android `215` cho landing/recent, `018` cho results, `162` cho no-results và `217`/`218` chỉ làm visual reference cho sheet/options nếu đúng callback đã tồn tại. Sort Home không được xem là bằng chứng Search có filter/sort.
 - Có visual riêng cho loading, empty, filtered-empty, error, retry và loaded list/grid; loading không tạo note giả.
 - Giữ selected row, title/preview, count/date nếu hiện có. Không gọi note list là Favorites/Private/Recently visited nếu data không chứng minh điều đó.
 - Không thay đổi controller, query, ordering, model hoặc create/open callback.
@@ -255,7 +292,7 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Làm:**
 
-- Biến detail thành page surface: back/breadcrumb/action area hiện có, title phân cấp rõ, content borderless, readable line height và gutter nhất quán.
+- Biến detail thành page surface: back/breadcrumb/action area hiện có, title phân cấp rõ, content borderless, readable line height và gutter nhất quán. Android `014`/`015` chỉ là anchor page hierarchy; Web `007`/`010` chỉ là anchor desktop page/title/body, không mặc định là editor form cùng state.
 - Giữ title/content fields, text controller, focus lifecycle, scroll key, dirty guard và autosave callback.
 - Trình bày draft/dirty/saving/saved/save-error/Web storage unavailable theo state thật. Không thêm manual Save.
 - Summary, busy/stale/error và model provisioning là callout/status theo data thật; không giả AI answer hoặc progress.
@@ -265,13 +302,15 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Tests/gate:** note detail/page/surface/action-bar tests; Android 360×800 và 412×915 portrait cho empty, filled, dirty, saving/saved/error, summary nếu hỗ trợ, More, delete/back confirmation. Ghi rõ note QA được tạo và dọn; không đổi data source.
 
+**Anchor kiểm:** action row top inset, title left/top baseline, title/body gap, body line-height và bottom Search inset. Không chấm share/action trong ảnh ref nếu NoteFlow không có callback. Ảnh editor hiện có `M-06_editor-existing-note_411x914_light_20260927-current-v5.png` là debug-emulator evidence; loại debug ribbon khỏi fidelity score, không xem nó là thiết kế của app.
+
 ### M-07 — Web Chrome shell, Home, Notes và Search
 
 **Files sở hữu:** cùng các UI workspace/dashboard/notes files trong M-04/M-05; chỉ thay presentation và responsive layout.
 
 **Làm:**
 
-- Desktop: sidebar, workspace header, search affordance, selected row, page canvas và gutter theo anchor Notion. 280 px là điểm đo lịch sử cần xác minh lại từ reference/current viewport trước khi chốt.
+- Desktop: sidebar, workspace header, search affordance, selected row, page canvas và gutter theo Web `033`/`007`; 280 px là điểm đo lịch sử cần xác minh lại từ reference/current viewport trước khi chốt.
 - Compact: navigation chuyển thành affordance/sheet phù hợp; không để sidebar hoặc toolbar đè content.
 - Home/Notes/Search dùng chung visual grammar với Android nhưng điều khiển phù hợp pointer, hover, focus, Tab/Enter/Escape.
 - Resize khi đang ở Home, list hoặc editor phải giữ selected note và state; overlay không tràn viewport.
@@ -285,13 +324,16 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Làm:**
 
-- Áp dụng page header, title, content, summary/status, More và confirmation theo cùng reference matrix.
+- Áp dụng page header, title, content, summary/status, More và confirmation theo cùng reference matrix; desktop dùng Web `007`/`010` cho page hierarchy, compact chỉ chấm formal khi M-02 có viewport/state ref ghép phù hợp.
+- Đo trước title/body container trong Notion và NoteFlow. Capture 1280×800 hiện có title bắt đầu gần x=420 px trong NoteFlow so với x≈465 px trong ref `007`; xử lý gutter/column alignment trong M-08 nếu sai lệch còn tồn tại ở cặp cùng viewport, không hard-code offset khi chưa đo lại.
 - Trên TuanKiet2 không che giấu storage-unavailable/error bằng status Saved.
 - Để chạy workflow create/edit/autosave/reload/reopen, dùng nhánh Test_Tuankiet và adapter localStorage đã được user yêu cầu. Chỉ lưu trong browser origin/profile hiện tại; không gọi backend và không đồng bộ.
 - Tạo note QA rõ ràng, sửa title/content, chờ autosave thật, quay lại, mở lại, reload Chrome rồi xác nhận dữ liệu còn; kiểm tra dirty/back, delete và empty/error state.
 - Trước khi kết thúc QA, xác định chính xác files adapter/factory/test liên quan để loại khỏi staging/cherry-pick/push sang TuanKiet2. Không xóa local data của người dùng.
 
 **Tests/gate:** Chrome runtime chứng minh cùng-origin reload/reopen; UI báo đúng lifecycle; local adapter tests nếu runner cho phép; lưu cả kết quả pass và blocker. Chỉ presentation files được push trong M-08 UI tranche; không push adapter, local note fixtures/data hoặc test-only persistence.
+
+**Anchor kiểm:** sidebar width/edge, top action row, page title x/y/size, content left edge/line width, body line-height, bottom Search placement ở compact và keyboard/focus ở desktop. Web compact hiện có screenshot `M-08_editor-existing-note_390x844_light_20260927-current-v1.png`; desktop có `M-08_editor-existing-note_1280x800_light_20260927-current-v1.png`. Hai capture là runtime QA; formal score vẫn 0 cho tới khi M-02 ghép cùng viewport/state reference.
 
 ### M-09 — Settings, diagnostics, localization và accessibility đang có
 
@@ -303,7 +345,7 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 - Rà EN/VI và text dài trên Home/list/editor/menu; không đổi meaning của localization key.
 - Rà semantics label/value/hint/live region, keyboard focus order, focus visibility, touch target và contrast AA.
 - Không thêm Settings section, diagnostics action, keyboard shortcut hoặc provider auth không có behavior hiện tại.
-- Login/Register/auth screens giữ nguyên byte-for-byte về source nếu tranche không cần sửa phần khác trong auth file; nếu file dùng chung buộc phải sửa thì chỉ được thay đoạn ngoài auth screen và phải chứng minh auth UI/callback không đổi bằng test/capture diff.
+- Không sửa source trong `lib/presentation/auth/**` hoặc test trong `test/presentation/auth/**`. Nếu một thay đổi token/global theme làm Login/Register đổi thì thu hẹp token/theme về workspace hoặc hoãn thay đổi; không tạo ngoại lệ chỉnh auth.
 
 **Tests/gate:** localized/widget tests và keyboard/semantics checks cho các screen trong scope; Login/Register screenshot/route smoke chỉ xác nhận không regress, không cộng vào điểm fidelity tranche.
 
@@ -326,6 +368,8 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 
 **Gate:** từng state có ref/current pair và item measurements; mọi cell áp dụng được chấm; điểm thấp nhất trên Android ít nhất 95/100. Cell thiếu current-source emulator capture nhận 0 điểm và phải được nêu trong coverage; không suy ra pass từ Web capture.
 
+**Numeric rule:** ghi cả điểm ước lượng (nếu có) và điểm lower-bound. Chưa có cặp matched evidence thì ghi `0/100 lower-bound — UNVERIFIED`, không ghi `N/C`. Control được M-01 chứng minh không thuộc hợp đồng nhận `100/100 scope-compliance`, không cộng vào điểm giao diện.
+
 ### M-11 — Web Chrome QA và chấm fidelity
 
 **Workflow:** tái chạy Home → Notes → create/edit → autosave → back/reopen → reload → search → summarize nếu hỗ trợ → delete confirmation. Chạy đúng nhánh cho localStorage QA; không dùng dữ liệu giả trong TuanKiet2.
@@ -333,6 +377,8 @@ Mỗi M là một tranche nhỏ, có file sở hữu, test và screenshot riêng
 **Captures:** 390×844, 768×1024, 1024×768, 1280×800 và 1440×900. Đổi viewport phải reload cùng origin/data/state; ghi browser profile, theme, locale, DPR và scroll offset. Tên ảnh: M-11_web-chrome_<screen>_<state>_<width>x<height>_<theme>.png.
 
 **Gate:** không overflow hoặc keyboard/overlay che control; mọi state hiện đúng dữ liệu thật; score từng cell và Web Chrome platform score ít nhất 95/100. Nếu chỉ có browser-local QA trên Test_Tuankiet mà baseline TuanKiet2 chưa lưu được thì ghi riêng hai capability; không gộp hoặc trình bày local-only như backend sync.
+
+**Numeric rule:** mỗi Web state × viewport áp dụng có điểm số. Cell chưa có ref/current cặp khớp ghi `0/100 lower-bound — UNVERIFIED`; không ghi `N/C`. Không dùng Web Android emulator, Edge hay ảnh tĩnh để cấp điểm native Android.
 
 ### M-12 — Regression cuối, commit/push và handoff
 
@@ -389,17 +435,17 @@ Bất kỳ mục nào dưới đây làm tranche fail bất kể điểm:
 
 | M | Trạng thái | Bằng chứng của lượt này | Việc còn lại trước khi đóng M |
 | --- | --- | --- | --- |
-| M-01 Source/scope/behavior lock | IN_PROGRESS | Checkout chính ở nhánh `TuanKiet2`; browser-local adapter, auth và editor diffs nhận diện để không stage. Codebase-memory MCP (`list_projects`, `index_repository`) trả `Transport closed`; thực hiện source fallback có giới hạn. Matrix ghi rõ chưa audit hết capability của `final_project.md`. | Hoàn tất source → callback/state cho toàn bộ yêu cầu; xác minh mỗi capability trước khi gắn `DONE — OUT_OF_SCOPE` và scope score 100/100. Mục chưa xác minh nhận 0/100 lower-bound. |
-| M-02 Reference matrix | IN_PROGRESS | Tạo `docs/ui-qa/notion-reference-matrix.md` với 7 screenshot captures Android/Web, metadata viewport/theme/locale và điểm số. Ba entries có ảnh ref được đối chiếu; Home Web chưa có cặp đúng state. Đã mở trực tiếp ảnh 001–003 Web; nội dung là trang note `Introduction`, không phải Home. | Kiểm tra inventory còn lại theo từng ảnh và platform; tìm đúng Web Home reference; hoàn tất danh sách cell áp dụng/coverage. |
+| M-01 Source/scope/behavior lock | IN_PROGRESS | Checkout đúng `D:\kiet\hk7\flutter\midterm\note_ai_app-note-ai-app`, branch `TuanKiet2`; browser-local adapter, auth và editor diffs được nhận diện để không stage. Codebase-memory MCP (`list_projects`, `index_repository`) trả `Transport closed`; source fallback xác nhận một số UI contracts nhưng chưa hoàn tất feature audit. | Hoàn tất source → callback/state cho toàn bộ yêu cầu; xác minh từng capability trước khi gắn `DONE — OUT_OF_SCOPE` và scope score 100/100. Mục chưa xác minh nhận 0/100 lower-bound. Tuyệt đối không dùng `note_ai_app-note-ai-app-lite`. |
+| M-02 Reference matrix | IN_PROGRESS | `docs/ui-qa/notion-reference-matrix.md` đang có 10 capture rows sau khi thêm Android editor portrait và Web editor compact/desktop. Đã mở trực tiếp 4 Android anchors (`001`, `014`, `018`, `217`) và 3 Web anchors (`007`, `008`, `010`); Web `001–003` vẫn là page view, không Home. | Kiểm tra inventory còn lại theo từng ảnh/platform; tìm ref Home Web đúng state hoặc giữ cell 0/100; hoàn tất danh sách screen/state/viewport áp dụng. |
 | M-03 Shared UI tokens | IN_PROGRESS | Token workspace/dashboard nằm riêng trong `workspace_ui_tokens.dart`; Login/Register vẫn dùng palette ứng dụng hiện hữu. Workspace suite 22/22. Không stage thay đổi `notes_theme_tokens.dart` hoặc màu toàn app. | Kiểm tra đầy đủ light/dark, contrast, focus, semantics và 320–360dp; giữ Login/Register nguyên vẹn trong UI commit. |
 | M-04 Android shell/navigation | IN_PROGRESS | Emulator Android 15/API 35, portrait 1080×2400 (411×914 logical), rotation 0. Capture mới Home/Search; workspace shell tests 22/22. Avatar góc trái vẫn là chữ K/profile, không bị thay bằng logo. | Hoàn tất các menu/Back/selected states, 360×800, theme tối, text scale, accessibility và ref measurements; điểm mọi cell áp dụng tối thiểu 95 trước khi đóng. |
 | M-05 Android Home/Notes/Search | IN_PROGRESS | Dashboard suite 44/44; analyzer sạch. Home 411×914: 96/100 provisional estimate; Search 411×914: 97/100 provisional estimate. Hai formal cell đều 0/100 lower-bound cho tới khi ghép đủ cùng data/state và matrix. | Hoàn tất Notes/list/grid, empty/no-match/clear, sort, dark mode, 360×800 và đo anchor/pixel theo ref. Không gọi estimate là gate-pass. |
-| M-06 Android editor | IN_PROGRESS | Editor có UI diff trong working tree nhưng không thuộc code thay đổi của lượt này; không có capture editor mới từ source hiện tại trong lượt này. Score 0/100 lower-bound — UNVERIFIED. | Review editor diff riêng, capture portrait/light/dark, kiểm title/content/summary/status/More/delete/dirty-back và autosave lifecycle; chỉ chạm presentation. |
+| M-06 Android editor | IN_PROGRESS | UI diff compact editor đang ở working tree; capture `output/playwright/20260927-android-native/M-06_editor-existing-note_411x914_light_20260927-current-v5.png` là Android API 35 portrait. Title/action hierarchy được so trực tiếp với ref `014`; score **94/100 provisional estimate; formal 0/100 lower-bound** vì ref là page có child rows, không phải same-state editable note, và chưa có dark/small-phone/matched autosave states. Focused editor/workspace tests được chạy trong lượt hiện tại theo scorecard. | Chốt cặp editor reference đúng state; capture 360×800 và dark/light; kiểm title/content/summary/status/More/delete/dirty-back/autosave, bỏ debug ribbon khỏi capture chấm điểm; đo anchors và đạt >=95 cho từng cell. |
 | M-07 Web Chrome shell/Home/Search | IN_PROGRESS | Web release build pass 77.1s; Chrome hiển thị Flutter UI ở 390×844, 1280×800 và ref-sized 1363×936. Search overlay 1363×936: 96/100 provisional estimate, formal cell 0/100 lower-bound. Home cell 0/100 do nhóm ref 001–003 không cùng state. | Tìm Web Home ref đúng state; hoàn tất 768×1024, 1024×768, 1440×900, dark, focus, menu, empty/error và không tràn. |
-| M-08 Web editor/browser-local QA | IN_PROGRESS | Browser-local note đã được tạo, autosave/reload/reopen xác nhận trong origin/profile hiện tại; QA note sau đó đã xóa đúng key và localStorage hiện trống. Chỉ là local QA, không chứng minh backend sync; adapter/factory/test không stage/push. | Capture workflow mới sau khi hoàn tất UI M-06/M-07; xác nhận error/dirty/delete; giữ adapter và fixture khỏi TuanKiet2. |
+| M-08 Web editor/browser-local QA | IN_PROGRESS | QA note `M-06 Web local QA 20260927` được tạo/autosave/back/reopen/reload trong origin/profile hiện tại; capture 390×844 và 1280×800 lưu ở `output/playwright/20260927-web-chrome/`. Sau capture, chỉ key `note_ai_app.notes.v1` đã được xóa và `localstorage-list` xác nhận trống. Console: 0 errors; sampled requests không có backend/API. Web 1280×800 có title x≈420 so với x≈465 ở ref `007`, nên **92/100 provisional chrome estimate; formal 0/100 lower-bound**; compact cell **0/100 lower-bound** vì chưa có same-viewport Web ref. | Đo lại cặp cùng viewport; căn content column nếu sai lệch còn tồn tại; capture keyboard/focus/dirty/error/delete và dark; giữ adapter/fixture khỏi TuanKiet2. |
 | M-09 Settings/localization/accessibility | IN_PROGRESS | Settings/Diagnostics destinations hiện có; không sửa auth/settings/diagnostics trong lượt này. EN screenshot, workspace tests EN/VI pass. | Kiểm theme, language, text scale, contrast, semantics, keyboard/focus và từng destination hiện hữu; các cell chưa kiểm nhận 0/100. |
 | M-10 Android native QA | IN_PROGRESS | Screenshot current-source Home/Search v6 ở 1080×2400 portrait; sampled estimate 96/100 và 97/100. Android platform lower-bound **0/100** vì coverage còn thiếu; không có landscape capture. | Chạy các state/viewport/theme trong plan; ghép ảnh đúng state; đạt từng cell >=95 và đủ coverage. |
 | M-11 Web Chrome QA | IN_PROGRESS | Build release thành công; 0 console errors/0 warnings; network sample chỉ static app/assets, fonts, CanvasKit, không thấy API/backend request. Web Search estimate 96/100; Home/formal platform lower-bound **0/100**. | Chụp 768×1024, 1024×768, 1440×900 và mọi states/themes; xác minh local QA data trống và không stage persistence changes; đạt từng cell >=95. |
-| M-12 Regression/commit/push | IN_PROGRESS | Dashboard 44/44, workspace 22/22, targeted analyzer sạch, format check, `git diff --check`, Web release build đều pass. UI-only commit `ac5e27b` đã push lên `origin/TuanKiet2`; staged diff không có domain/application/infrastructure/auth/local-save. | Hoàn tất các platform gate và các M còn mở; giữ local-save/browser QA changes ngoài commit; ghi hash cho mỗi đợt tiếp theo. |
+| M-12 Regression/commit/push | IN_PROGRESS | Dashboard 44/44, workspace 22/22, targeted analyzer sạch, format check, `git diff --check`, Web release build đều pass theo evidence của các tranche trước. UI-only commit `ac5e27b` và scorecard/docs commit `3fe9e9c` đã push lên `origin/TuanKiet2`; staged diff của hai commit không có backend/auth/local-save. | Hoàn tất các platform gate và M còn mở; giữ local-save/browser QA changes ngoài commit; ghi hash cho mỗi đợt tiếp theo. |
 
 **Giới hạn triển khai:** browser-local storage adapter và test/factory wiring đang có sẵn trong working tree để QA, nhưng nằm ngoài file allowlist của UI và không được đưa vào commit/push `TuanKiet2`. Không sửa `lib/domain`, `lib/application`, `lib/infrastructure`, backend/API, auth controller, route hay Login/Register để thay đổi UI. Điểm platform hiện tại vẫn là 0/100 lower-bound; các estimate riêng của màn không chứng minh mức đạt 95/100.
