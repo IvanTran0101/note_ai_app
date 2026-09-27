@@ -1,16 +1,35 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
+import { createSyncHttpApi } from './sync/http_api';
+import { createNotesTable } from './sync/notes_table';
+import { createSyncFunction } from './sync/sync_function';
 
 /**
  * NoteFlow Amplify Gen 2 backend.
  *
- * Auth only: this scaffold deliberately defines no data, storage, or function
- * resource yet, so the generated outputs stay limited to the Cognito user pool.
+ * Auth and the first remote-sync infrastructure slice. Note mutation behavior
+ * remains intentionally unimplemented until the next slice.
  *
  * @see https://docs.amplify.aws/react/build-a-backend/
  */
 const backend = defineBackend({
   auth,
+});
+
+const syncStack = backend.createStack('SyncStack');
+const notesTable = createNotesTable(syncStack);
+const syncFunction = createSyncFunction(syncStack, notesTable);
+const syncHttpApi = createSyncHttpApi({
+  scope: syncStack,
+  handler: syncFunction.lambda,
+  issuerUrl: `https://cognito-idp.${syncStack.region}.amazonaws.com/${backend.auth.resources.userPool.userPoolId}`,
+  audience: [backend.auth.resources.userPoolClient.userPoolClientId],
+});
+
+backend.addOutput({
+  custom: {
+    syncApiEndpoint: syncHttpApi.api.apiEndpoint,
+  },
 });
 
 /**

@@ -315,6 +315,24 @@ void main() {
         throwsA(same(error)),
       );
     });
+
+    test('requests a sync only after the local save succeeds', () async {
+      final _FakeNoteRepository repository = _FakeNoteRepository();
+      final List<String> requestedAccounts = <String>[];
+      final NoteApplicationService service = NoteApplicationService(
+        noteRepository: repository,
+        currentUser: _authenticatedUser('user-a'),
+        generateId: _defaultId,
+        now: _defaultNow,
+        summarizeContent: _defaultSummary,
+        requestSync: requestedAccounts.add,
+      );
+
+      await service.createNote(title: 'Title', content: 'Content');
+
+      expect(requestedAccounts, <String>['user-a']);
+      expect(repository.savedNotes, hasLength(1));
+    });
   });
 
   group('NoteApplicationService.renameNote', () {

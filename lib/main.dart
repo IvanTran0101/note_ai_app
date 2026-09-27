@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'amplify_outputs.dart';
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
+import 'application/sync/local_sync_store.dart';
+import 'application/sync/sync_conflict_resolver.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
@@ -32,6 +35,8 @@ import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/sync/account_sync_runtime.dart';
+import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
@@ -48,6 +53,8 @@ import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/sync/sync_localizations.dart';
+import 'presentation/sync/sync_presentation_controller.dart';
 import 'presentation/routing/app_router.dart';
 import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
@@ -57,6 +64,7 @@ const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',
 );
+const String _noteFlowSyncApi = String.fromEnvironment('NOTEFLOW_SYNC_API');
 const Color _noteFlowSeedColor = Color(0xFF0F766E);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
@@ -331,7 +339,7 @@ class NoteFlowApp extends StatefulWidget {
   State<NoteFlowApp> createState() => _NoteFlowAppState();
 }
 
-class _NoteFlowAppState extends State<NoteFlowApp> {
+class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
   LlmWorkerClient? _workerClient;
@@ -342,9 +350,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       AiConfiguration.fromEnvironment();
   late final AiConfigurationStore _aiConfigurationStore =
       createAiConfigurationStore();
-  late final INoteRepository _noteRepository = note_infrastructure
-      .createNoteRepository();
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
+  final Map<String, ILocalSyncStore> _localSyncStores =
+      <String, ILocalSyncStore>{};
+  AccountSyncRuntime? _syncRuntime;
+  SyncPresentationController? _syncPresentationController;
+  String? _syncPresentationAccountUserId;
+  String? _lastSyncAccountUserId;
+  late final INoteRepository _noteRepository = note_infrastructure
+      .createNoteRepository(
+        currentAccountUserId: () => _currentUserSession.requiredUserId,
+        localSyncStoreFactory: _localSyncStoreForAccount,
+        generateMutationId: _generateMutationId,
+        now: _nowUtc,
+      );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
@@ -352,6 +371,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
+        requestSync: _requestSyncForAccount,
       );
   late final NotesApplicationController _notesController =
       NoteApplicationServiceController(_noteApplicationService);
@@ -395,6 +415,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.authController.addListener(_onAuthenticationChanged);
     _router = createAppRouter(
       authController: widget.authController,
       workspaceBuilder: _buildWorkspace,
@@ -409,6 +431,126 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       // AuthController retains the safe mapped startup error for the router's
       // splash/retry page; startup must not become an uncaught async error.
     }
+    _onAuthenticationChanged();
+  }
+
+  String _generateMutationId() => 'mutation-${_generateNoteId()}';
+
+  String _syncApiEndpoint() {
+    final String configuredEndpoint = _noteFlowSyncApi.trim();
+    if (configuredEndpoint.isNotEmpty) {
+      return configuredEndpoint;
+    }
+
+    try {
+      final Object? decoded = jsonDecode(amplifyConfig);
+      if (decoded is Map) {
+        final Object? custom = decoded['custom'];
+        if (custom is Map) {
+          final Object? endpoint = custom['syncApiEndpoint'];
+          if (endpoint is String) {
+            return endpoint.trim();
+          }
+        }
+      }
+    } on Object {
+      // Sync remains local-only when generated Amplify outputs are unavailable.
+    }
+    return '';
+  }
+
+  Uri? _syncApiBaseUri() {
+    final Uri? uri = Uri.tryParse(_syncApiEndpoint());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  void _requestSyncForAccount(String accountUserId) {
+    _accountSyncRuntime()?.requestSync(accountUserId);
+  }
+
+  AccountSyncRuntime? _accountSyncRuntime() {
+    if (_noteFlowAuthMode != 'cognito') {
+      return null;
+    }
+    final Uri? baseUri = _syncApiBaseUri();
+    if (baseUri == null) {
+      return null;
+    }
+    return _syncRuntime ??= AccountSyncRuntime(
+      baseUri: baseUri,
+      localSyncStoreFactory: _localSyncStoreForAccount,
+      clock: _nowUtc,
+    );
+  }
+
+  void _onAuthenticationChanged() {
+    final String? accountUserId = _currentUserSession.userId;
+    if (accountUserId == null) {
+      _lastSyncAccountUserId = null;
+      _disposeSyncPresentationController();
+      return;
+    }
+    if (accountUserId == _lastSyncAccountUserId) {
+      return;
+    }
+    _lastSyncAccountUserId = accountUserId;
+    _disposeSyncPresentationController();
+    _requestSyncForAccount(accountUserId);
+  }
+
+  void _disposeSyncPresentationController() {
+    _syncPresentationController?.dispose();
+    _syncPresentationController = null;
+    _syncPresentationAccountUserId = null;
+  }
+
+  SyncPresentationController? _syncPresentationControllerForCurrentAccount() {
+    final String? accountUserId = _currentUserSession.userId;
+    if (accountUserId == null) return null;
+    final AccountSyncRuntime? runtime = _accountSyncRuntime();
+    if (runtime == null) return null;
+    if (_syncPresentationAccountUserId == accountUserId &&
+        _syncPresentationController != null) {
+      return _syncPresentationController;
+    }
+    _disposeSyncPresentationController();
+    final ILocalSyncStore localStore = _localSyncStoreForAccount(
+      accountUserId: accountUserId,
+    );
+    _syncPresentationAccountUserId = accountUserId;
+    return _syncPresentationController = SyncPresentationController(
+      accountUserId: accountUserId,
+      localStore: localStore,
+      coordinator: runtime.coordinatorFor(accountUserId),
+      conflictResolver: SyncConflictResolver(
+        localSyncStore: localStore,
+        generateNoteId: _generateNoteId,
+        generateMutationId: _generateMutationId,
+        now: _nowUtc,
+      ),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final String? accountUserId = _currentUserSession.userId;
+      if (accountUserId != null) {
+        _requestSyncForAccount(accountUserId);
+      }
+    }
+  }
+
+  ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
+    return _localSyncStores.putIfAbsent(
+      accountUserId,
+      () => local_sync_infrastructure.createLocalSyncStore(
+        accountUserId: accountUserId,
+      ),
+    );
   }
 
   Future<Summary> _summarize(String content) async {
@@ -429,6 +571,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         builder: (_) => NoteDetailPage(
           notesController: _notesController,
           note: note,
+          syncController: _syncPresentationControllerForCurrentAccount(),
           provisioningReader: _modelProvisioningStatus,
           onProvisioningCancel: _cancelModelProvisioning,
           showAppBar: false,
@@ -802,6 +945,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
+        SyncCopy.delegate,
         DashboardCopy.delegate,
         WorkspaceCopy.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -880,6 +1024,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
               applicationService: _noteApplicationService,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,
+              syncController: _syncPresentationControllerForCurrentAccount(),
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: () {
                 Navigator.of(context).push(
@@ -903,11 +1048,18 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    widget.authController.removeListener(_onAuthenticationChanged);
+    _disposeSyncPresentationController();
     _router.dispose();
     widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;
     if (client != null) {
       unawaited(client.dispose());
+    }
+    final AccountSyncRuntime? syncRuntime = _syncRuntime;
+    if (syncRuntime != null) {
+      unawaited(syncRuntime.dispose());
     }
     super.dispose();
   }

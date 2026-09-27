@@ -13,6 +13,8 @@ import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 import 'notes_workspace_loading_view.dart';
 import 'responsive_notes_workspace.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 /// Responsive Notes workspace for the shell's Notes destination.
 ///
@@ -30,6 +32,7 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.onOpenDiagnostics,
     this.provisioningReader,
     this.onProvisioningCancel,
+    this.syncController,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -42,6 +45,7 @@ final class NotesWorkspacePage extends StatefulWidget {
   final VoidCallback? onOpenDiagnostics;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningCancel;
+  final SyncPresentationController? syncController;
 
   @override
   NotesWorkspacePageState createState() => NotesWorkspacePageState();
@@ -272,21 +276,30 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
           : _buildWorkspaceAppBar(copy),
       body: _loading
           ? NotesWorkspaceLoadingView(copy: copy)
-          : ResponsiveNotesWorkspace(
-              list: NotesListPanel(
-                notes: _notes,
-                selectedNoteId: _selectedNoteId,
-                error: loadError,
-                actionBusy: false,
-                onNewNote: _startNewNote,
-                onSelectNote: _selectNote,
-                onRetry: persistenceUnavailable ? null : reload,
-              ),
-              detail: _buildDetail(
-                copy,
-                showAppBar: compact && !widget.embeddedInWorkspace,
-              ),
-              hasSelection: _showDetail,
+          : Column(
+              children: <Widget>[
+                if (widget.syncController
+                    case final SyncPresentationController sync)
+                  SyncStatusPanel(controller: sync),
+                Expanded(
+                  child: ResponsiveNotesWorkspace(
+                    list: NotesListPanel(
+                      notes: _notes,
+                      selectedNoteId: _selectedNoteId,
+                      error: loadError,
+                      actionBusy: false,
+                      onNewNote: _startNewNote,
+                      onSelectNote: _selectNote,
+                      onRetry: persistenceUnavailable ? null : reload,
+                    ),
+                    detail: _buildDetail(
+                      copy,
+                      showAppBar: compact && !widget.embeddedInWorkspace,
+                    ),
+                    hasSelection: _showDetail,
+                  ),
+                ),
+              ],
             ),
     );
   }
@@ -389,6 +402,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       showAppBar: showAppBar,
       onEmbeddedExit: _handleDetailExit,
       onDirtyChanged: _handleDetailDirtyChanged,
+      syncController: widget.syncController,
     );
   }
 
