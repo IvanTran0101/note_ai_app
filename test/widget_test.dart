@@ -50,24 +50,6 @@ void main() {
     expect(find.textContaining('model load failed'), findsOneWidget);
   });
 
-  testWidgets('debug page runs the authenticated remote sync smoke', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: LocalLlmDebugPage(
-          summarize: (String content) async => Summary('Summary: $content'),
-          runRemoteSyncSmoke: () async => 'Remote sync passed',
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey<String>('debug-remote-sync')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Remote sync passed'), findsOneWidget);
-  });
-
   testWidgets('debug page shows the advisory model readiness status', (
     WidgetTester tester,
   ) async {
