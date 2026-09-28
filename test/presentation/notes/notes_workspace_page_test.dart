@@ -1,14 +1,33 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 1, 1);
+
+List<String> _semanticsLabelsWithin(SemanticsNode node) {
+  final List<String> labels = <String>[];
+
+  void visit(SemanticsNode current) {
+    if (current.label.isNotEmpty) {
+      labels.add(current.label);
+    }
+    current.visitChildren((SemanticsNode child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  visit(node);
+  return labels;
+}
 
 void main() {
   NoteDto buildNote({
@@ -30,16 +49,230 @@ void main() {
     WidgetTester tester,
     _FakeNotesController controller, {
     required Size size,
+    bool embeddedInWorkspace = false,
   }) async {
     tester.view
       ..physicalSize = size
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: NotesWorkspacePage(controller: controller)),
+      MaterialApp(
+        home: NotesWorkspacePage(
+          controller: controller,
+          embeddedInWorkspace: embeddedInWorkspace,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
   }
+
+  test('compact Web page title inset follows measured Notion anchors', () {
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(320), 0);
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(390), 0);
+    expect(
+      NoteFlowLayout.compactWebPageTopAdjustmentFor(478.5),
+      closeTo(-28, 1),
+    );
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(567), -56);
+    expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(600), 0);
+  });
+
+  testWidgets('workspace entry points open notes and drafts inline', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _FakeNotesController controller = _FakeNotesController();
+    final GlobalKey<NotesWorkspacePageState> pageKey =
+        GlobalKey<NotesWorkspacePageState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotesWorkspacePage(
+          key: pageKey,
+          controller: controller,
+          embeddedInWorkspace: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    pageKey.currentState!.openNote(buildNote());
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      'First note',
+    );
+
+    pageKey.currentState!.startNewNote();
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      isEmpty,
+    );
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Unsaved draft',
+    );
+    await tester.pump();
+    pageKey.currentState!.openNote(
+      buildNote(id: 'note-2', title: 'Another note'),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller
+          ?.text,
+      'Unsaved draft',
+    );
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final int width in <int>[320, 360, 390, 768, 1280]) {
+    testWidgets('loading state keeps Notes list structure at ${width}dp', (
+      WidgetTester tester,
+    ) async {
+      tester.view
+        ..physicalSize = Size(width.toDouble(), width < 600 ? 568 : 800)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final _FakeNotesController controller = _FakeNotesController()
+        ..listNotesGate = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NotesWorkspacePage(
+            controller: controller,
+            embeddedInWorkspace: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final Semantics loading = tester.widget<Semantics>(
+        find.byKey(const ValueKey<String>('notes-workspace-loading')),
+      );
+      expect(loading.properties.liveRegion, isTrue);
+      expect(loading.properties.label, isNotEmpty);
+      expect(
+        find.byKey(const ValueKey<String>('notes-workspace-loading-skeleton')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('notes-workspace-loading-row-0')),
+        findsOneWidget,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byKey(const ValueKey<String>('new-note')), findsNothing);
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.listNotesGate!.complete();
+      await tester.pump();
+    });
+  }
+
+  testWidgets('desktop Notes app bar does not repeat the product name', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(),
+      size: const Size(1280, 800),
+    );
+
+    final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar).first);
+    expect(appBar.title, isA<Text>());
+    expect((appBar.title! as Text).data, 'Notes');
+    expect(find.text('NoteFlow · Notes'), findsNothing);
+  });
+
+  for (final int width in <int>[360, 375, 390]) {
+    testWidgets('compact list renders without overflow at ${width}dp', (
+      WidgetTester tester,
+    ) async {
+      final _FakeNotesController controller = _FakeNotesController(
+        notes: <NoteDto>[
+          buildNote(),
+          buildNote(
+            id: 'note-2',
+            title:
+                'Second note with a much longer title that must ellipsize '
+                'safely on narrow screens',
+          ),
+        ],
+      );
+      await pumpWorkspace(
+        tester,
+        controller,
+        size: Size(width.toDouble(), 800),
+      );
+
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('compact Notes title uses the shared page anchor', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(notes: <NoteDto>[buildNote()]),
+      size: const Size(390, 844),
+      embeddedInWorkspace: true,
+    );
+
+    final Finder pageTitle = find.text('Notes').last;
+    expect(tester.getTopLeft(pageTitle).dx, 20);
+    expect(tester.getTopLeft(pageTitle).dy, 29);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact Notes keeps New note action beside the title', (
+    WidgetTester tester,
+  ) async {
+    await pumpWorkspace(
+      tester,
+      _FakeNotesController(notes: <NoteDto>[buildNote()]),
+      size: const Size(411, 914),
+      embeddedInWorkspace: true,
+    );
+
+    final Rect titleRect = tester.getRect(find.text('Notes').last);
+    final Rect createRect = tester.getRect(
+      find.byKey(const ValueKey<String>('new-note')),
+    );
+    final Rect firstNoteRect = tester.getRect(
+      find.byKey(const ValueKey<String>('note-note-1')),
+    );
+
+    expect(createRect.left, greaterThanOrEqualTo(titleRect.right));
+    expect(createRect.top, lessThan(titleRect.bottom));
+    expect(createRect.bottom, greaterThan(titleRect.top));
+    expect(createRect.width, 48);
+    expect(find.byTooltip('New note'), findsOneWidget);
+    expect(find.text('Every idea, in one calm place.'), findsNothing);
+    expect(
+      firstNoteRect.top - titleRect.bottom,
+      lessThanOrEqualTo(NoteFlowSpacing.xxl),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('compact create flow returns to the note list after save', (
     WidgetTester tester,
@@ -108,7 +341,7 @@ void main() {
   });
 
   testWidgets(
-    'expanded workspace opens the same detail surface beside the list',
+    'expanded workspace opens the detail as a full page with a back path',
     (WidgetTester tester) async {
       final _FakeNotesController controller = _FakeNotesController(
         notes: <NoteDto>[buildNote()],
@@ -119,10 +352,7 @@ void main() {
         find.byKey(const ValueKey<String>('responsive-notes-expanded-surface')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
       await tester.pumpAndSettle();
 
@@ -132,13 +362,21 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('responsive-notes-list-pane')),
-        findsOneWidget,
+        findsNothing,
+      );
+      expect(find.byKey(NoteDetailPage.backKey), findsOneWidget);
+      await tester.tap(find.byKey(NoteDetailPage.backKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('note-detail-content-field')),
+        findsNothing,
       );
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('does not replace a selected note while its detail is dirty', (
+  testWidgets('wide editor back keeps dirty changes behind confirmation', (
     WidgetTester tester,
   ) async {
     final _FakeNotesController controller = _FakeNotesController(
@@ -156,13 +394,17 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey<String>('note-note-2')));
-    await tester.pump();
-
+    await tester.tap(find.byKey(NoteDetailPage.backKey));
+    await tester.pumpAndSettle();
     expect(
-      find.text('Unsaved changes. Save before summarizing or switching notes.'),
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
       findsOneWidget,
     );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+    );
+    await tester.pumpAndSettle();
+
     expect(
       tester
           .widget<TextField>(
@@ -198,6 +440,213 @@ void main() {
     expect(controller.listNotesCalls, greaterThan(callsBefore));
     expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('load failure is not presented as an empty notes collection', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = StateError('offline');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-error')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
+      findsNothing,
+    );
+
+    controller.listNotesError = null;
+    await tester.tap(find.byKey(const ValueKey<String>('retry-notes')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('notes-workspace-detail-empty')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('notes load error is announced once in both layouts', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    try {
+      for (final (Size size, bool embeddedInWorkspace) in <(Size, bool)>[
+        (const Size(1024, 700), false),
+        (const Size(390, 844), true),
+      ]) {
+        final _FakeNotesController controller = _FakeNotesController()
+          ..listNotesError = StateError('offline');
+        await pumpWorkspace(
+          tester,
+          controller,
+          size: size,
+          embeddedInWorkspace: embeddedInWorkspace,
+        );
+
+        final String error = tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('notes-list-error')),
+            )
+            .data!;
+        final SemanticsNode errorNode = tester.getSemantics(
+          find.byKey(const ValueKey<String>('notes-load-error-state')),
+        );
+        final String accessibleLabels = _semanticsLabelsWithin(errorNode)
+            .join('\n');
+        expect(
+          accessibleLabels.split(error).length - 1,
+          1,
+          reason: 'Semantics labels: $accessibleLabels',
+        );
+        expect(
+          tester
+              .getSemantics(find.byKey(const ValueKey<String>('retry-notes')))
+              .flagsCollection
+              .isButton,
+          isTrue,
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets('compact load failure keeps its retry callback', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = StateError('offline');
+    await pumpWorkspace(
+      tester,
+      controller,
+      size: const Size(390, 844),
+      embeddedInWorkspace: true,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('retry-notes')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    controller.listNotesError = null;
+    await tester.tap(find.byKey(const ValueKey<String>('retry-notes')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unsupported note storage has no futile retry action', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = UnsupportedError('web storage unavailable');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    expect(
+      find.text(
+        'This Web build cannot load or save notes. Use the installed app to continue.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('retry-notes')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('new-note')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final Size size in <Size>[
+    const Size(320, 568),
+    const Size(390, 844),
+    const Size(567, 694),
+  ]) {
+    testWidgets('compact storage status stays readable at ${size.width}dp', (
+      WidgetTester tester,
+    ) async {
+      final _FakeNotesController controller = _FakeNotesController()
+        ..listNotesError = UnsupportedError('web storage unavailable');
+      await pumpWorkspace(
+        tester,
+        controller,
+        size: size,
+        embeddedInWorkspace: true,
+      );
+
+      final Finder notice = find.byKey(
+        const ValueKey<String>('notes-list-error'),
+      );
+      final Rect noticeBounds = tester.getRect(notice);
+      final Rect cardBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('notes-load-error-card')),
+      );
+      final Rect createBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('new-note')),
+      );
+      expect(noticeBounds.left, greaterThanOrEqualTo(0));
+      expect(noticeBounds.right, lessThanOrEqualTo(size.width));
+      expect(noticeBounds.top, lessThan(createBounds.bottom + 80));
+      expect(cardBounds.right, lessThanOrEqualTo(size.width));
+      expect(cardBounds.height, lessThan(180));
+      expect(
+        find.byKey(const ValueKey<String>('notes-load-error-state')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey<String>('retry-notes')), findsNothing);
+      expect(find.byKey(const ValueKey<String>('new-note')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey<String>('new-note')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('discarding a draft preserves the unsupported storage state', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..listNotesError = UnsupportedError('web storage unavailable');
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+
+    await tester.tap(find.byKey(const ValueKey<String>('new-note')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('note-detail-title-field')),
+      'QA draft',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(NoteDetailPage.backKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This Web build cannot load or save notes. Use the installed app to continue.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('notes-empty')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -249,6 +698,8 @@ final class _FakeNotesController implements NotesApplicationController {
   /// test can observe the page while a reload request is in flight.
   Completer<void>? listNotesGate;
 
+  Object? listNotesError;
+
   /// Number of [listNotes] calls, used to prove reloads are coalesced.
   int listNotesCalls = 0;
 
@@ -258,6 +709,9 @@ final class _FakeNotesController implements NotesApplicationController {
     final Completer<void>? gate = listNotesGate;
     if (gate != null) {
       await gate.future;
+    }
+    if (listNotesError != null) {
+      throw listNotesError!;
     }
     return List<NoteDto>.of(notes);
   }

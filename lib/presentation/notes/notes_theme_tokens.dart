@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 /// Product-specific semantic colors that are not part of Material's core
@@ -61,6 +62,312 @@ final class NoteFlowSemanticColors
       onSuccessContainer:
           Color.lerp(onSuccessContainer, other.onSuccessContainer, t) ??
           onSuccessContainer,
+    );
+  }
+}
+
+/// Shared responsive breakpoints and page widths measured from the reference.
+abstract final class NoteFlowLayout {
+  static const double compactBreakpoint = 600;
+  static const double expandedBreakpoint = 840;
+
+  /// Compact pages use a normal mobile reading gutter. The previous 96dp
+  /// value left the phone layout looking like a desktop canvas with the
+  /// content stranded in the middle.
+  static const double compactPageLeadingInset = 20;
+
+  /// Includes the page inset and trailing gutter around the content column.
+  static const double compactPageMaxWidth = 360;
+  static const double compactPageNarrowLeadingInset = 16;
+  static const double compactEditorMaxWidth = compactPageMaxWidth;
+
+  /// Keep the first useful action within the first viewport on phones.
+  static const double compactPageTopPadding = 24;
+  static const double editorTopPadding = 48;
+
+  /// Space after the compact page toolbar before the title field.
+  ///
+  /// The toolbar is already part of [NoteDetailSurface]; counting it again
+  /// here pushed the title 60dp below the measured Notion page-title anchor.
+  static const double compactEditorTopPadding = 24;
+  static const double compactWebPagePhoneAnchorWidth = 390;
+  static const double compactWebPageWideAnchorWidth = 567;
+  static const double compactWebPagePhoneTopAdjustment = 0;
+  static const double compactWebPageWideTopAdjustment = -56;
+  static const double compactWebEditorPhoneAnchorWidth = 390;
+  static const double compactWebEditorWideAnchorWidth = 567;
+  static const double compactWebEditorPhoneTitleGlyphAdjustment = 68;
+  static const double compactWebEditorWideTitleGlyphAdjustment = 12;
+  static const double compactWebEditorTitleLeadingInset = 8;
+  static const double editorMaxWidth = 720;
+  static const double editorTextMaxWidth = 708;
+  static const double wideWebEditorMaxWidth = 1200;
+  static const double dashboardContentMaxWidth = 768;
+  static const double dashboardTopPadding = 72;
+
+  /// Lets the Web editor use more of a wide desktop canvas while keeping the
+  /// measured 720px page column at normal desktop widths.
+  static double wideWebEditorMaxWidthFor(double viewportWidth) =>
+      (viewportWidth - 720)
+          .clamp(editorMaxWidth, wideWebEditorMaxWidth)
+          .toDouble();
+
+  static double wideWebEditorTextMaxWidthFor(double viewportWidth) =>
+      wideWebEditorMaxWidthFor(viewportWidth) -
+      (editorMaxWidth - editorTextMaxWidth);
+
+  static double compactPageLeadingInsetFor(BuildContext context) {
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final double progress = ((viewportWidth - 320) / 70).clamp(0.0, 1.0);
+    return compactPageNarrowLeadingInset +
+        (compactPageLeadingInset - compactPageNarrowLeadingInset) * progress;
+  }
+
+  static double compactPageFrameMaxWidthFor(BuildContext context) =>
+      compactPageMaxWidth +
+      compactPageLeadingInsetFor(context) +
+      NoteFlowSpacing.lg;
+
+  static double compactPageTopInset(BuildContext context) =>
+      (compactPageTopPadding +
+              (kIsWeb
+                  ? compactWebPageTopAdjustmentFor(
+                      MediaQuery.sizeOf(context).width,
+                    )
+                  : 0) -
+              MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  static double compactEditorTopInset(BuildContext context) =>
+      (compactEditorTopPadding - MediaQuery.viewPaddingOf(context).top)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+  /// Interpolates the Web compact page-title inset between the measured
+  /// 390px/y=212 and 567px/y=156 Notion anchors. Native targets retain their
+  /// platform-specific safe-area layout.
+  static double compactWebPageTopAdjustmentFor(double viewportWidth) {
+    if (viewportWidth >= compactBreakpoint) {
+      return 0;
+    }
+    final double progress =
+        ((viewportWidth - compactWebPagePhoneAnchorWidth) /
+                (compactWebPageWideAnchorWidth -
+                    compactWebPagePhoneAnchorWidth))
+            .clamp(0.0, 1.0);
+    return compactWebPagePhoneTopAdjustment +
+        (compactWebPageWideTopAdjustment - compactWebPagePhoneTopAdjustment) *
+            progress;
+  }
+
+  /// Interpolates the Web-only compact editor offset between the 390px
+  /// Notion title-block reference (with its glyph offset inferred from the
+  /// 567px observation) and the measured 567px title glyph. Native targets
+  /// retain their system safe-area layout and do not use this adjustment.
+  static double compactWebEditorTopAdjustmentFor(double viewportWidth) {
+    if (viewportWidth >= compactBreakpoint) {
+      return 0;
+    }
+    final double progress =
+        ((viewportWidth - compactWebEditorPhoneAnchorWidth) /
+                (compactWebEditorWideAnchorWidth -
+                    compactWebEditorPhoneAnchorWidth))
+            .clamp(0.0, 1.0);
+    return compactWebEditorWideTitleGlyphAdjustment +
+        (compactWebEditorPhoneTitleGlyphAdjustment -
+                compactWebEditorWideTitleGlyphAdjustment) *
+            (1 - progress);
+  }
+}
+
+/// Shared spacing scale (dp). Every gap in presentation code must pick one of
+/// these values instead of an arbitrary number.
+abstract final class NoteFlowSpacing {
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
+  static const double xxl = 32;
+  static const double xxxl = 48;
+}
+
+/// Shared corner radii: small for rows and inputs, large for dialogs and cards.
+abstract final class NoteFlowRadius {
+  static const double row = 6;
+  static const double input = 8;
+  static const double card = 8;
+  static const double dialog = 12;
+}
+
+/// Shared motion timings. Keep transitions short and non-blocking, and honour
+/// `MediaQuery.disableAnimations` at every call site.
+abstract final class NoteFlowMotion {
+  static const Duration fast = Duration(milliseconds: 150);
+  static const Duration standard = Duration(milliseconds: 200);
+}
+
+/// Notion-inspired surface/text/line tokens for both brightnesses.
+///
+/// Values are measured against the Notion reference matrix
+/// (`docs/notion-reference-matrix.md`). Components must read these instead of
+/// literal colours so one visual role always maps to one token.
+@immutable
+final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
+  const NoteFlowUiTokens({
+    required this.pageSurface,
+    required this.sidebarSurface,
+    required this.elevatedSurface,
+    required this.subtleSurface,
+    required this.selectedSurface,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.divider,
+    required this.link,
+    required this.focusRing,
+    required this.error,
+    required this.success,
+    required this.onDestructive,
+  });
+
+  factory NoteFlowUiTokens.light() {
+    return const NoteFlowUiTokens(
+      pageSurface: Color(0xFFFFFFFF),
+      sidebarSurface: Color(0xFFF7F7F5),
+      elevatedSurface: Color(0xFFFFFFFF),
+      subtleSurface: Color(0xFFF4F6F4),
+      selectedSurface: Color(0xFFE4F2EF),
+      textPrimary: Color(0xFF252525),
+      textSecondary: Color(0xFF5D625F),
+      textMuted: Color(0xFF777C78),
+      divider: Color(0xFFE5E8E5),
+      link: Color(0xFF0F766E),
+      focusRing: Color(0xFF0F766E),
+      error: Color(0xFFEB5757),
+      success: Color(0xFF2F7D5B),
+      onDestructive: Color(0xFFFFFFFF),
+    );
+  }
+
+  factory NoteFlowUiTokens.dark() {
+    return const NoteFlowUiTokens(
+      pageSurface: Color(0xFF191919),
+      sidebarSurface: Color(0xFF202020),
+      elevatedSurface: Color(0xFF2F2F2F),
+      subtleSurface: Color(0xFF252525),
+      selectedSurface: Color(0xFF24413D),
+      textPrimary: Color(0xFFF4F4F1),
+      textSecondary: Color(0xFFC0C5C1),
+      textMuted: Color(0xFF969C98),
+      divider: Color(0xFF353A37),
+      link: Color(0xFF5EEAD4),
+      focusRing: Color(0xFF5EEAD4),
+      error: Color(0xFFE06A6A),
+      success: Color(0xFF5FA784),
+      onDestructive: Color(0xFF191919),
+    );
+  }
+
+  /// Page/editor background.
+  final Color pageSurface;
+
+  /// Navigation sidebar background.
+  final Color sidebarSurface;
+
+  /// Menus, dialogs and bottom sheets.
+  final Color elevatedSurface;
+
+  /// Hover/press wash on interactive rows.
+  final Color subtleSurface;
+
+  /// Background of the active/selected row.
+  final Color selectedSurface;
+
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color divider;
+  final Color link;
+  final Color focusRing;
+  final Color error;
+  final Color success;
+
+  /// Foreground for destructive menu items and destructive buttons.
+  final Color onDestructive;
+
+  static NoteFlowUiTokens of(BuildContext context) {
+    return Theme.of(context).extension<NoteFlowUiTokens>() ??
+        NoteFlowUiTokens.light();
+  }
+
+  @override
+  NoteFlowUiTokens copyWith({
+    Color? pageSurface,
+    Color? sidebarSurface,
+    Color? elevatedSurface,
+    Color? subtleSurface,
+    Color? selectedSurface,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? textMuted,
+    Color? divider,
+    Color? link,
+    Color? focusRing,
+    Color? error,
+    Color? success,
+    Color? onDestructive,
+  }) {
+    return NoteFlowUiTokens(
+      pageSurface: pageSurface ?? this.pageSurface,
+      sidebarSurface: sidebarSurface ?? this.sidebarSurface,
+      elevatedSurface: elevatedSurface ?? this.elevatedSurface,
+      subtleSurface: subtleSurface ?? this.subtleSurface,
+      selectedSurface: selectedSurface ?? this.selectedSurface,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      textMuted: textMuted ?? this.textMuted,
+      divider: divider ?? this.divider,
+      link: link ?? this.link,
+      focusRing: focusRing ?? this.focusRing,
+      error: error ?? this.error,
+      success: success ?? this.success,
+      onDestructive: onDestructive ?? this.onDestructive,
+    );
+  }
+
+  @override
+  NoteFlowUiTokens lerp(
+    covariant ThemeExtension<NoteFlowUiTokens>? other,
+    double t,
+  ) {
+    if (other is! NoteFlowUiTokens) {
+      return this;
+    }
+    return NoteFlowUiTokens(
+      pageSurface: Color.lerp(pageSurface, other.pageSurface, t) ?? pageSurface,
+      sidebarSurface:
+          Color.lerp(sidebarSurface, other.sidebarSurface, t) ?? sidebarSurface,
+      elevatedSurface:
+          Color.lerp(elevatedSurface, other.elevatedSurface, t) ??
+          elevatedSurface,
+      subtleSurface:
+          Color.lerp(subtleSurface, other.subtleSurface, t) ?? subtleSurface,
+      selectedSurface:
+          Color.lerp(selectedSurface, other.selectedSurface, t) ??
+          selectedSurface,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t) ?? textPrimary,
+      textSecondary:
+          Color.lerp(textSecondary, other.textSecondary, t) ?? textSecondary,
+      textMuted: Color.lerp(textMuted, other.textMuted, t) ?? textMuted,
+      divider: Color.lerp(divider, other.divider, t) ?? divider,
+      link: Color.lerp(link, other.link, t) ?? link,
+      focusRing: Color.lerp(focusRing, other.focusRing, t) ?? focusRing,
+      error: Color.lerp(error, other.error, t) ?? error,
+      success: Color.lerp(success, other.success, t) ?? success,
+      onDestructive:
+          Color.lerp(onDestructive, other.onDestructive, t) ?? onDestructive,
     );
   }
 }

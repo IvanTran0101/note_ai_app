@@ -12,12 +12,8 @@ void main() {
       return;
     }
 
-    final IHardwareDetectionService service =
-        createHardwareDetectionService();
+    final IHardwareDetectionService service = createHardwareDetectionService();
 
-    expect(
-      () => service.getDeviceCapability(),
-      throwsUnsupportedError,
-    );
+    expect(() => service.getDeviceCapability(), throwsUnsupportedError);
   });
 }

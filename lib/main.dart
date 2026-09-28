@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' hide Summary;
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'amplify_outputs.dart';
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
+import 'application/sync/local_sync_store.dart';
+import 'application/sync/sync_conflict_resolver.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
@@ -32,6 +35,8 @@ import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/sync/account_sync_runtime.dart';
+import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
@@ -48,34 +53,53 @@ import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/sync/sync_localizations.dart';
+import 'presentation/sync/sync_presentation_controller.dart';
 import 'presentation/routing/app_router.dart';
 import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
-const String _noteFlowFontFamily = 'Inter';
 const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',
 );
-const List<String> _noteFlowFontFallback = <String>[
-  'Roboto',
-  'Arial',
-  'monospace',
-];
-const Color _noteFlowSeedColor = Color(0xFF5B4FA6);
+const String _noteFlowSyncApi = String.fromEnvironment('NOTEFLOW_SYNC_API');
+const Color _noteFlowSeedColor = Color(0xFF0F766E);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
 
 ThemeData _buildNoteFlowTheme(Brightness brightness) {
-  final ColorScheme colorScheme = ColorScheme.fromSeed(
-    seedColor: _noteFlowSeedColor,
-    brightness: brightness,
-  );
-  final BorderRadius fieldRadius = BorderRadius.circular(12.0);
-  final BorderSide fieldBorder = BorderSide(color: colorScheme.outline);
+  final bool isDark = brightness == Brightness.dark;
+  final NoteFlowUiTokens tokens = isDark
+      ? NoteFlowUiTokens.dark()
+      : NoteFlowUiTokens.light();
+  final ColorScheme colorScheme =
+      ColorScheme.fromSeed(
+        seedColor: _noteFlowSeedColor,
+        brightness: brightness,
+      ).copyWith(
+        primary: tokens.link,
+        onPrimary: isDark ? const Color(0xFF16312E) : const Color(0xFFFFFFFF),
+        primaryContainer: tokens.selectedSurface,
+        onPrimaryContainer: tokens.textPrimary,
+        secondaryContainer: tokens.selectedSurface,
+        onSecondaryContainer: tokens.textPrimary,
+        error: tokens.error,
+        outline: tokens.divider,
+        surface: tokens.pageSurface,
+        onSurface: tokens.textPrimary,
+        onSurfaceVariant: tokens.textSecondary,
+        surfaceContainerLowest: tokens.pageSurface,
+        surfaceContainerLow: tokens.sidebarSurface,
+        surfaceContainer: tokens.elevatedSurface,
+        surfaceContainerHigh: tokens.elevatedSurface,
+        surfaceContainerHighest: tokens.subtleSurface,
+      );
+  final BorderRadius fieldRadius = BorderRadius.circular(NoteFlowRadius.input);
+  final BorderSide fieldBorder = BorderSide(color: tokens.divider);
   final BorderSide focusedFieldBorder = BorderSide(
-    color: colorScheme.primary,
+    color: tokens.focusRing,
     width: 2.0,
   );
 
@@ -85,39 +109,51 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
     useMaterial3: true,
     extensions: <ThemeExtension<dynamic>>[
       NoteFlowSemanticColors.fromColorScheme(colorScheme),
+      tokens,
     ],
-    fontFamily: _noteFlowFontFamily,
-    fontFamilyFallback: _noteFlowFontFallback,
     appBarTheme: AppBarThemeData(
-      backgroundColor: colorScheme.surface,
-      foregroundColor: colorScheme.onSurface,
+      backgroundColor: tokens.pageSurface,
+      foregroundColor: tokens.textPrimary,
       elevation: 0.0,
-      scrolledUnderElevation: 2.0,
-      surfaceTintColor: colorScheme.surfaceTint,
-      centerTitle: true,
+      scrolledUnderElevation: 0.0,
+      surfaceTintColor: Colors.transparent,
+      toolbarHeight: 52.0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: tokens.textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     cardTheme: CardThemeData(
-      color: colorScheme.surfaceContainerLow,
-      surfaceTintColor: colorScheme.surfaceTint,
+      color: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
       elevation: 0.0,
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+      margin: const EdgeInsets.symmetric(vertical: NoteFlowSpacing.sm),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+        side: BorderSide(color: tokens.divider),
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        backgroundColor: tokens.link,
+        foregroundColor: colorScheme.onPrimary,
+        disabledBackgroundColor: tokens.subtleSurface,
+        disabledForegroundColor: tokens.textMuted,
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest,
+      fillColor: tokens.subtleSurface,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16.0,
-        vertical: 14.0,
+        horizontal: NoteFlowSpacing.lg,
+        vertical: NoteFlowSpacing.md + 2,
       ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
@@ -133,52 +169,98 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: fieldRadius,
-        borderSide: BorderSide(color: colorScheme.error),
+        borderSide: BorderSide(color: tokens.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: fieldRadius,
-        borderSide: BorderSide(color: colorScheme.error, width: 2.0),
+        borderSide: BorderSide(color: tokens.error, width: 2.0),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        backgroundColor: tokens.textPrimary,
+        foregroundColor: tokens.pageSurface,
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        foregroundColor: tokens.textSecondary,
+        side: BorderSide(color: tokens.divider),
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.lg),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        minimumSize: const Size(48.0, 48.0),
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        foregroundColor: tokens.link,
+        minimumSize: const Size(48.0, 44.0),
+        padding: const EdgeInsets.symmetric(horizontal: NoteFlowSpacing.md),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.0),
+          borderRadius: BorderRadius.circular(NoteFlowRadius.input),
         ),
       ),
     ),
+    listTileTheme: ListTileThemeData(
+      iconColor: tokens.textSecondary,
+      textColor: tokens.textPrimary,
+      minTileHeight: 44.0,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: NoteFlowSpacing.md,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.dialog),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(NoteFlowRadius.dialog),
+        ),
+      ),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: colorScheme.inverseSurface,
+        borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+      ),
+      textStyle: TextStyle(color: colorScheme.onInverseSurface, fontSize: 12.0),
+    ),
+    dividerTheme: DividerThemeData(
+      color: tokens.divider,
+      thickness: 1.0,
+      space: 1.0,
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
-      color: colorScheme.primary,
-      linearTrackColor: colorScheme.surfaceContainerHighest,
-      circularTrackColor: colorScheme.surfaceContainerHighest,
+      color: tokens.link,
+      linearTrackColor: tokens.subtleSurface,
+      circularTrackColor: tokens.subtleSurface,
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: colorScheme.inverseSurface,
       contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
       actionTextColor: colorScheme.inversePrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
-      insetPadding: const EdgeInsets.all(16.0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+      ),
+      insetPadding: const EdgeInsets.all(NoteFlowSpacing.lg),
     ),
   );
 }
@@ -257,7 +339,7 @@ class NoteFlowApp extends StatefulWidget {
   State<NoteFlowApp> createState() => _NoteFlowAppState();
 }
 
-class _NoteFlowAppState extends State<NoteFlowApp> {
+class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
   LlmWorkerClient? _workerClient;
@@ -268,9 +350,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       AiConfiguration.fromEnvironment();
   late final AiConfigurationStore _aiConfigurationStore =
       createAiConfigurationStore();
-  late final INoteRepository _noteRepository = note_infrastructure
-      .createNoteRepository();
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
+  final Map<String, ILocalSyncStore> _localSyncStores =
+      <String, ILocalSyncStore>{};
+  AccountSyncRuntime? _syncRuntime;
+  SyncPresentationController? _syncPresentationController;
+  String? _syncPresentationAccountUserId;
+  String? _lastSyncAccountUserId;
+  late final INoteRepository _noteRepository = note_infrastructure
+      .createNoteRepository(
+        currentAccountUserId: () => _currentUserSession.requiredUserId,
+        localSyncStoreFactory: _localSyncStoreForAccount,
+        generateMutationId: _generateMutationId,
+        now: _nowUtc,
+      );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
@@ -278,6 +371,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         generateId: _generateNoteId,
         now: _nowUtc,
         summarizeContent: _summarize,
+        requestSync: _requestSyncForAccount,
       );
   late final NotesApplicationController _notesController =
       NoteApplicationServiceController(_noteApplicationService);
@@ -321,6 +415,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.authController.addListener(_onAuthenticationChanged);
     _router = createAppRouter(
       authController: widget.authController,
       workspaceBuilder: _buildWorkspace,
@@ -335,6 +431,126 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
       // AuthController retains the safe mapped startup error for the router's
       // splash/retry page; startup must not become an uncaught async error.
     }
+    _onAuthenticationChanged();
+  }
+
+  String _generateMutationId() => 'mutation-${_generateNoteId()}';
+
+  String _syncApiEndpoint() {
+    final String configuredEndpoint = _noteFlowSyncApi.trim();
+    if (configuredEndpoint.isNotEmpty) {
+      return configuredEndpoint;
+    }
+
+    try {
+      final Object? decoded = jsonDecode(amplifyConfig);
+      if (decoded is Map) {
+        final Object? custom = decoded['custom'];
+        if (custom is Map) {
+          final Object? endpoint = custom['syncApiEndpoint'];
+          if (endpoint is String) {
+            return endpoint.trim();
+          }
+        }
+      }
+    } on Object {
+      // Sync remains local-only when generated Amplify outputs are unavailable.
+    }
+    return '';
+  }
+
+  Uri? _syncApiBaseUri() {
+    final Uri? uri = Uri.tryParse(_syncApiEndpoint());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  void _requestSyncForAccount(String accountUserId) {
+    _accountSyncRuntime()?.requestSync(accountUserId);
+  }
+
+  AccountSyncRuntime? _accountSyncRuntime() {
+    if (_noteFlowAuthMode != 'cognito') {
+      return null;
+    }
+    final Uri? baseUri = _syncApiBaseUri();
+    if (baseUri == null) {
+      return null;
+    }
+    return _syncRuntime ??= AccountSyncRuntime(
+      baseUri: baseUri,
+      localSyncStoreFactory: _localSyncStoreForAccount,
+      clock: _nowUtc,
+    );
+  }
+
+  void _onAuthenticationChanged() {
+    final String? accountUserId = _currentUserSession.userId;
+    if (accountUserId == null) {
+      _lastSyncAccountUserId = null;
+      _disposeSyncPresentationController();
+      return;
+    }
+    if (accountUserId == _lastSyncAccountUserId) {
+      return;
+    }
+    _lastSyncAccountUserId = accountUserId;
+    _disposeSyncPresentationController();
+    _requestSyncForAccount(accountUserId);
+  }
+
+  void _disposeSyncPresentationController() {
+    _syncPresentationController?.dispose();
+    _syncPresentationController = null;
+    _syncPresentationAccountUserId = null;
+  }
+
+  SyncPresentationController? _syncPresentationControllerForCurrentAccount() {
+    final String? accountUserId = _currentUserSession.userId;
+    if (accountUserId == null) return null;
+    final AccountSyncRuntime? runtime = _accountSyncRuntime();
+    if (runtime == null) return null;
+    if (_syncPresentationAccountUserId == accountUserId &&
+        _syncPresentationController != null) {
+      return _syncPresentationController;
+    }
+    _disposeSyncPresentationController();
+    final ILocalSyncStore localStore = _localSyncStoreForAccount(
+      accountUserId: accountUserId,
+    );
+    _syncPresentationAccountUserId = accountUserId;
+    return _syncPresentationController = SyncPresentationController(
+      accountUserId: accountUserId,
+      localStore: localStore,
+      coordinator: runtime.coordinatorFor(accountUserId),
+      conflictResolver: SyncConflictResolver(
+        localSyncStore: localStore,
+        generateNoteId: _generateNoteId,
+        generateMutationId: _generateMutationId,
+        now: _nowUtc,
+      ),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final String? accountUserId = _currentUserSession.userId;
+      if (accountUserId != null) {
+        _requestSyncForAccount(accountUserId);
+      }
+    }
+  }
+
+  ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
+    return _localSyncStores.putIfAbsent(
+      accountUserId,
+      () => local_sync_infrastructure.createLocalSyncStore(
+        accountUserId: accountUserId,
+      ),
+    );
   }
 
   Future<Summary> _summarize(String content) async {
@@ -355,11 +571,36 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         builder: (_) => NoteDetailPage(
           notesController: _notesController,
           note: note,
+          syncController: _syncPresentationControllerForCurrentAccount(),
           provisioningReader: _modelProvisioningStatus,
           onProvisioningCancel: _cancelModelProvisioning,
+          showAppBar: false,
         ),
       ),
     );
+  }
+
+  Future<NoteDetailRouteResult?> _openNoteInWorkspace(
+    BuildContext context, {
+    NoteDto? note,
+  }) async {
+    final NotesWorkspacePageState? notesPage = _notesPageKey.currentState;
+    final bool preserveUnsavedChanges = notesPage?.hasUnsavedChanges ?? false;
+    _workspaceShellKey.currentState?.showDestination(
+      WorkspaceDestination.notes,
+    );
+    if (notesPage == null) {
+      return _openNoteDetail(context, note);
+    }
+    if (!preserveUnsavedChanges) {
+      await notesPage.reload();
+    }
+    if (note == null) {
+      notesPage.startNewNote();
+    } else {
+      notesPage.openNote(note);
+    }
+    return null;
   }
 
   String _generateNoteId() {
@@ -576,7 +817,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         }
       case WorkspaceDestination.notes:
         final NotesWorkspacePageState? page = _notesPageKey.currentState;
-        if (page != null) {
+        if (page != null && !page.hasUnsavedChanges) {
           unawaited(page.reload());
         }
     }
@@ -704,6 +945,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
+        SyncCopy.delegate,
         DashboardCopy.delegate,
         WorkspaceCopy.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -722,13 +964,43 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
         Expanded(
           child: WorkspaceShell(
             key: _workspaceShellKey,
-            onDestinationChanged: _reloadWorkspaceDestination,
+            accountName: widget.currentUserSession.identity?.email
+                .split('@')
+                .first,
+            onDestinationChanged: (WorkspaceDestination destination) {
+              if (destination != WorkspaceDestination.dashboard) {
+                _dashboardPageKey.currentState?.closeSearch();
+              }
+              _reloadWorkspaceDestination(destination);
+            },
+            onOpenSearch: () {
+              _workspaceShellKey.currentState?.showDestination(
+                WorkspaceDestination.dashboard,
+              );
+              _dashboardPageKey.currentState?.openSearch();
+            },
+            onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
+            onOpenSettings: () => _showAppearanceSettings(context),
+            onOpenDiagnostics: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LocalLlmDebugPage(
+                    summarize: _summarize,
+                    loadModelReadiness: _loadModelReadiness,
+                    provisioningReader: _modelProvisioningStatus,
+                    onProvisioningCancel: _cancelModelProvisioning,
+                  ),
+                ),
+              );
+            },
             dashboard: DashboardPage(
               key: _dashboardPageKey,
+              embeddedInWorkspace: true,
               dashboardController: _dashboardController,
               notesController: _notesController,
-              onOpenNote: (NoteDto note) => _openNoteDetail(context, note),
-              onCreateNote: () => _openNoteDetail(context, null),
+              onOpenNote: (NoteDto note) =>
+                  _openNoteInWorkspace(context, note: note),
+              onCreateNote: () => _openNoteInWorkspace(context),
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: () {
                 Navigator.of(context).push(
@@ -742,12 +1014,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
                   ),
                 );
               },
+              onSearchVisibilityChanged: (bool active) {
+                _workspaceShellKey.currentState?.setCompactSearchActive(active);
+              },
             ),
             notes: NotesWorkspacePage(
               key: _notesPageKey,
+              embeddedInWorkspace: true,
               applicationService: _noteApplicationService,
               provisioningReader: _modelProvisioningStatus,
               onProvisioningCancel: _cancelModelProvisioning,
+              syncController: _syncPresentationControllerForCurrentAccount(),
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: () {
                 Navigator.of(context).push(
@@ -771,11 +1048,18 @@ class _NoteFlowAppState extends State<NoteFlowApp> {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    widget.authController.removeListener(_onAuthenticationChanged);
+    _disposeSyncPresentationController();
     _router.dispose();
     widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;
     if (client != null) {
       unawaited(client.dispose());
+    }
+    final AccountSyncRuntime? syncRuntime = _syncRuntime;
+    if (syncRuntime != null) {
+      unawaited(syncRuntime.dispose());
     }
     super.dispose();
   }

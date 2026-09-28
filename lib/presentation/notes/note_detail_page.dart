@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
+import '../../application/sync/sync_conflict.dart';
+import '../../application/sync/sync_conflict_resolver.dart';
 import 'note_detail_back_confirmation.dart';
 import 'note_detail_delete_confirmation.dart';
 import 'note_detail_focus.dart';
@@ -13,7 +15,12 @@ import 'note_detail_localizations.dart';
 import 'note_detail_more_actions.dart';
 import 'note_detail_route_result.dart';
 import 'note_detail_surface.dart';
+import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
+import '../sync/sync_conflict_prompt.dart';
+import '../sync/sync_localizations.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 /// Focused mobile-first editor for one note.
 ///
@@ -30,6 +37,7 @@ final class NoteDetailPage extends StatefulWidget {
     this.showAppBar = true,
     this.onEmbeddedExit,
     this.onDirtyChanged,
+    this.syncController,
   });
 
   final NotesApplicationController notesController;
@@ -39,6 +47,7 @@ final class NoteDetailPage extends StatefulWidget {
   final bool showAppBar;
   final ValueChanged<NoteDetailRouteResult>? onEmbeddedExit;
   final ValueChanged<bool>? onDirtyChanged;
+  final SyncPresentationController? syncController;
   static const Key titleFieldKey = ValueKey<String>('note-detail-title-field');
   static const Key contentFieldKey = ValueKey<String>(
     'note-detail-content-field',
@@ -78,6 +87,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _summaryError = false;
   bool _backConfirmationVisible = false;
   bool _ignoreNextEditorFocusLoss = false;
+  bool _conflictFlowActive = false;
+  bool _resolvingConflict = false;
 
   @override
   void initState() {
@@ -91,15 +102,44 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _contentController.addListener(_editorChanged);
     _titleFocusNode.addListener(_titleFocusChanged);
     _contentFocusNode.addListener(_contentFocusChanged);
+    widget.syncController?.addListener(_syncStateChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant NoteDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.syncController != widget.syncController) {
+      oldWidget.syncController?.removeListener(_syncStateChanged);
+      widget.syncController?.addListener(_syncStateChanged);
+      _syncStateChanged();
+    }
+  }
+
+  void _syncStateChanged() {
+    if (!mounted) return;
+    if (_currentConflict != null) {
+      _autosaveTimer?.cancel();
+      _autosaveTimer = null;
+    } else if (_isDirty) {
+      _scheduleAutosave();
+    }
+    setState(() {});
+  }
+
+  SyncConflict? get _currentConflict {
+    final String? noteId = _note?.id;
+    return noteId == null ? null : widget.syncController?.conflictFor(noteId);
   }
 
   bool get _isDirty =>
       _titleController.text != _savedTitle ||
       _contentController.text != _savedContent;
 
-  bool get _actionBusy => _saving || _deleting || _summarizing;
+  bool get _actionBusy =>
+      _saving || _deleting || _summarizing || _resolvingConflict;
 
-  bool get _canSave => !_actionBusy && (_note == null || _isDirty);
+  bool get _canSave =>
+      !_actionBusy && _currentConflict == null && (_note == null || _isDirty);
 
   bool get _canSummarize => !_actionBusy && _note != null && !_isDirty;
 
@@ -154,7 +194,10 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   void _scheduleAutosave({bool immediate = false}) {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
-    if (!mounted || !_isDirty) {
+    if (!mounted ||
+        !_isDirty ||
+        _conflictFlowActive ||
+        _currentConflict != null) {
       return;
     }
     if (immediate) {
@@ -179,6 +222,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (!_canSave && _note != null) {
       return false;
     }
+    if (_currentConflict != null) return false;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
     bool persisted = false;
@@ -230,11 +274,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _notifyDirtyChanged();
       persisted = true;
       return true;
-    } on Object {
+    } on Object catch (error) {
       if (!mounted) {
         return false;
       }
-      setState(() => _error = copy.saveError);
+      setState(() {
+        _error = error is UnsupportedError
+            ? copy.persistenceUnavailable
+            : copy.saveError;
+      });
       return false;
     } finally {
       if (mounted) {
@@ -299,6 +347,49 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (_actionBusy) {
       return;
     }
+    if (_currentConflict != null && _isDirty) {
+      _autosaveTimer?.cancel();
+      _autosaveTimer = null;
+      _conflictFlowActive = true;
+      _backConfirmationVisible = true;
+      final SyncDirtyDraftChoice? draftChoice = await showSyncDirtyDraftChoices(
+        context: context,
+      );
+      _backConfirmationVisible = false;
+      if (!mounted ||
+          draftChoice == null ||
+          draftChoice == SyncDirtyDraftChoice.cancel) {
+        _conflictFlowActive = false;
+        return;
+      }
+      if (draftChoice == SyncDirtyDraftChoice.discard) {
+        _pop(
+          reason: _didPersist
+              ? NoteDetailExitReason.saved
+              : NoteDetailExitReason.cancelled,
+        );
+        return;
+      }
+      setState(() => _saving = true);
+      try {
+        final NoteDto copy = await widget.notesController.createNote(
+          title: _titleController.text,
+          content: _contentController.text,
+        );
+        if (mounted) {
+          _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);
+        }
+      } on Object {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+            _conflictFlowActive = false;
+            _error = NoteDetailCopy.of(context).saveError;
+          });
+        }
+      }
+      return;
+    }
     if (!_isDirty) {
       _pop();
       return;
@@ -311,6 +402,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     final NoteDetailBackDecision? action = await showNoteDetailBackConfirmation(
       context: context,
       copy: copy,
+      canSave: true,
     );
     _backConfirmationVisible = false;
     _ignoreNextEditorFocusLoss = true;
@@ -336,7 +428,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   Future<void> _delete() async {
     final NoteDto? current = _note;
-    if (current == null || _actionBusy) {
+    if (current == null || _actionBusy || _currentConflict != null) {
       return;
     }
 
@@ -386,7 +478,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     });
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(copiedMessage)));
+      ..showSnackBar(
+        buildNoteFlowSnackBar(context: context, message: copiedMessage),
+      );
     try {
       await Clipboard.setData(ClipboardData(text: summary));
     } on Object {
@@ -395,7 +489,106 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     }
   }
 
-  void _pop({NoteDetailExitReason? reason}) {
+  Future<void> _resolveConflict() async {
+    final SyncPresentationController? sync = widget.syncController;
+    final SyncConflict? conflict = _currentConflict;
+    if (sync == null || conflict == null || _actionBusy) return;
+
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    _conflictFlowActive = true;
+    if (_isDirty) {
+      _backConfirmationVisible = true;
+      final SyncDirtyDraftChoice? draftChoice = await showSyncDirtyDraftChoices(
+        context: context,
+      );
+      _backConfirmationVisible = false;
+      if (!mounted ||
+          draftChoice == null ||
+          draftChoice == SyncDirtyDraftChoice.cancel) {
+        _conflictFlowActive = false;
+        return;
+      }
+      if (draftChoice == SyncDirtyDraftChoice.discard) {
+        _titleController.text = conflict.local.title;
+        _contentController.text = conflict.local.content;
+        _savedTitle = conflict.local.title;
+        _savedContent = conflict.local.content;
+        _notifyDirtyChanged();
+      } else {
+        await _saveDraftAsNewAndResolve(conflict, sync);
+        return;
+      }
+    }
+
+    final SyncConflictChoice? choice = await showSyncConflictChoices(
+      context: context,
+      conflict: conflict,
+    );
+    if (!mounted || choice == null) {
+      _conflictFlowActive = false;
+      return;
+    }
+    if (choice == SyncConflictChoice.later) {
+      await sync.resolveConflict(displayedConflict: conflict, choice: choice);
+      _conflictFlowActive = false;
+      return;
+    }
+    setState(() => _resolvingConflict = true);
+    final bool resolved = await sync.resolveConflict(
+      displayedConflict: conflict,
+      choice: choice,
+    );
+    if (!mounted) return;
+    setState(() {
+      _resolvingConflict = false;
+      _conflictFlowActive = false;
+      _statusMessage = resolved ? null : SyncCopy.of(context).conflictChanged;
+    });
+    if (resolved) _pop(reason: NoteDetailExitReason.saved);
+  }
+
+  Future<void> _saveDraftAsNewAndResolve(
+    SyncConflict conflict,
+    SyncPresentationController sync,
+  ) async {
+    NoteDto? copy;
+    setState(() {
+      _saving = true;
+      _resolvingConflict = true;
+      _error = null;
+    });
+    try {
+      copy = await widget.notesController.createNote(
+        title: _titleController.text,
+        content: _contentController.text,
+      );
+      if (!mounted) return;
+      setState(() => _saving = false);
+      final SyncConflictChoice? choice = await showSyncConflictChoices(
+        context: context,
+        conflict: conflict,
+      );
+      if (choice != null) {
+        await sync.resolveConflict(displayedConflict: conflict, choice: choice);
+      }
+    } on Object {
+      if (copy == null && mounted) {
+        setState(() {
+          _saving = false;
+          _resolvingConflict = false;
+          _conflictFlowActive = false;
+          _error = NoteDetailCopy.of(context).saveError;
+        });
+        return;
+      }
+    }
+    if (mounted && copy != null) {
+      _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);
+    }
+  }
+
+  void _pop({NoteDetailExitReason? reason, NoteDto? noteOverride}) {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     if (mounted) {
@@ -406,7 +599,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
               : NoteDetailExitReason.cancelled);
       final NoteDetailRouteResult result = NoteDetailRouteResult(
         reason: exitReason,
-        note: exitReason == NoteDetailExitReason.saved ? _note : null,
+        note: exitReason == NoteDetailExitReason.saved
+            ? noteOverride ?? _note
+            : null,
       );
       final ValueChanged<NoteDetailRouteResult>? onEmbeddedExit =
           widget.onEmbeddedExit;
@@ -421,10 +616,11 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   @override
   Widget build(BuildContext context) {
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final String pageTitle = _note == null
-        ? copy.newNote
-        : (_note!.title.trim().isEmpty ? copy.editNote : _note!.title);
-    final Widget surface = _buildSurface(copy);
+    final String currentTitle = _titleController.text.trim();
+    final String pageTitle = currentTitle.isNotEmpty
+        ? currentTitle
+        : (_note == null ? copy.newNote : copy.editNote);
+    final Widget surface = _buildSurface(copy, pageTitle);
     final Widget content = widget.onEmbeddedExit != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -466,33 +662,61 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       actions: moreAction == null
           ? null
           : <Widget>[
-              IconButton(
-                key: const ValueKey<String>('note-detail-more'),
-                tooltip: copy.more,
-                onPressed: moreAction,
-                icon: const Icon(Icons.more_horiz),
+              Builder(
+                builder: (BuildContext buttonContext) => IconButton(
+                  key: const ValueKey<String>('note-detail-more'),
+                  tooltip: copy.more,
+                  onPressed: () => unawaited(
+                    _showMoreActions(copy, anchorContext: buttonContext),
+                  ),
+                  icon: const Icon(Icons.more_horiz),
+                ),
               ),
             ],
     );
   }
 
   VoidCallback? _moreAction(NoteDetailCopy copy) {
-    if (_note == null || _actionBusy) {
+    if (_note == null || _actionBusy || _currentConflict != null) {
       return null;
     }
-    return () => unawaited(
-      runNoteDetailMoreActions(context: context, copy: copy, onDelete: _delete),
+    return () => unawaited(_showMoreActions(copy));
+  }
+
+  ValueChanged<BuildContext>? _moreActionWithContext(NoteDetailCopy copy) {
+    if (_note == null || _actionBusy || _currentConflict != null) {
+      return null;
+    }
+    return (BuildContext anchorContext) =>
+        unawaited(_showMoreActions(copy, anchorContext: anchorContext));
+  }
+
+  Future<void> _showMoreActions(
+    NoteDetailCopy copy, {
+    BuildContext? anchorContext,
+  }) {
+    return runNoteDetailMoreActions(
+      context: context,
+      copy: copy,
+      anchorContext: anchorContext,
+      onDelete: _delete,
     );
   }
 
-  Widget _buildSurface(NoteDetailCopy copy) {
-    return NoteDetailSurface(
+  Widget _buildSurface(NoteDetailCopy copy, String pageTitle) {
+    final Widget editor = NoteDetailSurface(
       titleController: _titleController,
       contentController: _contentController,
       titleFocusNode: _titleFocusNode,
       contentFocusNode: _contentFocusNode,
       contentFieldContextKey: _contentFieldContextKey,
       copy: copy,
+      pageTitle: pageTitle,
+      showPageHeader: !widget.showAppBar,
+      statusUnavailable: false,
+      onBack: widget.showAppBar ? null : () => unawaited(_handleBack()),
+      backTooltip: copy.back,
+      backKey: NoteDetailPage.backKey,
       hasSavedNote: _note != null,
       isDirty: _isDirty,
       error: _error,
@@ -516,17 +740,59 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       onSave: null,
       onSummarize: _canSummarize ? () => unawaited(_summarize()) : null,
       onMore: widget.showAppBar ? null : _moreAction(copy),
+      onMoreWithContext: widget.showAppBar
+          ? null
+          : _moreActionWithContext(copy),
       saveLabel: copy.save,
       summarizeLabel: copy.summarize,
       moreLabel: copy.more,
       savingLabel: copy.saving,
       summarizingLabel: copy.summarizing,
     );
+    final SyncConflict? conflict = _currentConflict;
+    final SyncPresentationController? sync = widget.syncController;
+    if (conflict == null && (sync == null || widget.onEmbeddedExit != null)) {
+      return editor;
+    }
+    return Column(
+      children: <Widget>[
+        if (sync != null && widget.onEmbeddedExit == null)
+          SyncStatusPanel(controller: sync),
+        if (conflict != null) _buildConflictNotice(),
+        Expanded(child: editor),
+      ],
+    );
+  }
+
+  Widget _buildConflictNotice() {
+    final SyncCopy copy = SyncCopy.of(context);
+    return Card(
+      key: const ValueKey<String>('note-sync-conflict'),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.compare_arrows),
+            const SizedBox(width: 10),
+            Expanded(child: Text(copy.conflictTitle)),
+            FilledButton.tonal(
+              key: const ValueKey<String>('note-sync-resolve-conflict'),
+              onPressed: _actionBusy
+                  ? null
+                  : () => unawaited(_resolveConflict()),
+              child: Text(copy.resolveConflict),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _autosaveTimer?.cancel();
+    widget.syncController?.removeListener(_syncStateChanged);
     _titleController.removeListener(_editorChanged);
     _contentController.removeListener(_editorChanged);
     _titleFocusNode.removeListener(_titleFocusChanged);

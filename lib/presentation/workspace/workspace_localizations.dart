@@ -34,18 +34,42 @@ final class WorkspaceCopy {
   final bool _isVietnamese;
 
   /// Label for the Dashboard destination.
-  String get dashboard => _isVietnamese ? 'Bảng điều khiển' : 'Dashboard';
+  String get dashboard => _isVietnamese ? 'Trang chủ' : 'Home';
 
   /// Label for the Notes destination.
   String get notes => _isVietnamese ? 'Ghi chú' : 'Notes';
 
   /// Visible title for the expanded workspace sidebar.
-  String get workspaceTitle =>
+  String get workspaceTitle => 'NoteFlow';
+
+  /// Visible section for the two existing top-level destinations.
+  String get pagesSection =>
       _isVietnamese ? 'Không gian làm việc' : 'Workspace';
+
+  /// Existing Dashboard search action.
+  String get search => _isVietnamese ? 'Tìm kiếm' : 'Search';
+
+  /// Existing create-note action.
+  String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
 
   /// Accessible label describing the shell's primary navigation region.
   String get navigationLabel =>
       _isVietnamese ? 'Điều hướng chính' : 'Primary navigation';
+
+  /// Tooltip for the compact navigation menu button.
+  String get openMenu => _isVietnamese ? 'Mở điều hướng' : 'Open navigation';
+
+  /// Tooltip for the sidebar collapse toggle.
+  String get collapseSidebar => _isVietnamese ? 'Ẩn thanh bên' : 'Hide sidebar';
+
+  /// Tooltip for the control that reopens the hidden sidebar.
+  String get expandSidebar => _isVietnamese ? 'Mở thanh bên' : 'Open sidebar';
+
+  /// Tooltip for the appearance/settings action.
+  String get settings => _isVietnamese ? 'Cài đặt' : 'Settings';
+
+  /// Tooltip for the local-AI diagnostics action.
+  String get diagnostics => _isVietnamese ? 'Chẩn đoán' : 'Diagnostics';
 }
 
 /// Alias matching the file name; [WorkspaceCopy] remains the canonical name.

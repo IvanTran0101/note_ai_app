@@ -68,6 +68,7 @@ skills-lock.json
 /credentials/
 **/secrets/
 **/credentials/
+/hinhanh/
 *.pem
 *.p12
 *.pfx
@@ -80,3 +81,12 @@ skills-lock.json
 /android/local.properties
 google-services.json
 GoogleService-Info.plist
+
+# Local UI audit references and generated captures (kept on this machine)
+/docs/ui-qa/
+/docs/notion-reference-matrix.md
+/docs/ui-upgrade-baseline.md
+/docs/ui-upgrade-handoff.md
+/output/
+/plan.md
+/ui-audit-scorecard.md

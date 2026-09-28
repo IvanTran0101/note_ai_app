@@ -24,10 +24,18 @@ final class DashboardCopy {
 
   final bool _isVietnamese;
 
-  String get title => 'NoteFlow';
-  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get title => _isVietnamese ? 'Trang chủ' : 'Home';
+  String get workspaceLabel => 'NoteFlow';
+  String get workspaceHint => _isVietnamese
+      ? 'Lưu ý tưởng, sắp xếp công việc và để AI tổng hợp phần quan trọng.'
+      : 'Capture ideas, organize work, and let AI surface what matters.';
   String get recentlyUpdated =>
       _isVietnamese ? 'Cập nhật gần đây' : 'Recently updated';
+  String get recents => _isVietnamese ? 'Gần đây' : 'Recents';
+  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get today => _isVietnamese ? 'Hôm nay' : 'Today';
+  String get yesterday => _isVietnamese ? 'Hôm qua' : 'Yesterday';
+  String get results => _isVietnamese ? 'Kết quả' : 'Results';
   String notesCount(int count) => _isVietnamese
       ? '$count ghi chú'
       : '$count ${count == 1 ? 'note' : 'notes'}';
@@ -51,6 +59,9 @@ final class DashboardCopy {
   String get loadError => _isVietnamese
       ? 'Không thể tải ghi chú. Vui lòng thử lại.'
       : 'Couldn’t load notes. Please try again.';
+  String get storageUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ tải hoặc lưu ghi chú. Hãy dùng ứng dụng đã cài đặt để tiếp tục.'
+      : 'This Web build cannot load or save notes. Use the installed app to continue.';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get noMatches =>
       _isVietnamese ? 'Không tìm thấy ghi chú phù hợp' : 'No matching notes';

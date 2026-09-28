@@ -14,6 +14,10 @@ import 'package:note_ai_app/presentation/dashboard/dashboard_page.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_state.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_route_result.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_localizations.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_ui_tokens.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 9, 10, 9);
 
@@ -33,8 +37,9 @@ void main() {
         const Locale('vi'),
       );
 
-      expect(english.allNotes, 'All notes');
-      expect(vietnamese.allNotes, 'Tất cả ghi chú');
+      expect(english.title, 'Home');
+      expect(vietnamese.title, 'Trang chủ');
+      expect(english.workspaceLabel, 'NoteFlow');
       expect(english.noteCount(1), '1 note');
       expect(english.noteCount(3), '3 notes');
       expect(vietnamese.noteCount(3), '3 ghi chú');
@@ -95,11 +100,12 @@ void main() {
         tester,
         dashboardController: controller,
         notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
       );
       await tester.pumpAndSettle();
 
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('All notes'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('2 notes'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('dashboard-total-count')),
@@ -110,12 +116,296 @@ void main() {
         findsOneWidget,
       );
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
+      final Card firstCard = tester.widget<Card>(
+        find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+      );
+      expect(firstCard.elevation, 0);
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+            )
+            .height,
+        greaterThanOrEqualTo(56),
+      );
 
       await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+
+      await tester.tap(find.byIcon(Icons.grid_view_outlined));
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
+      expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.grid);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-card-a')),
+          matching: find.byIcon(Icons.description_outlined),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+    });
+
+    testWidgets('wide Home matches the Notion page column and title anchor', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+        embeddedInWorkspace: true,
+      );
+      await tester.pumpAndSettle();
+
+      final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.toolbarHeight, 44);
+      expect(find.text('NoteFlow / Home'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
+
+      final Finder pageColumn = find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is ConstrainedBox &&
+            widget.constraints.maxWidth ==
+                NoteFlowLayout.dashboardContentMaxWidth,
+      );
+      expect(pageColumn, findsOneWidget);
+      expect(tester.getSize(pageColumn).width, 768);
+      expect(tester.getTopLeft(find.text('Home')).dx, closeTo(360, 4));
+      expect(tester.getTopLeft(find.text('Home')).dy, closeTo(120, 4));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('compact Home starts with the Notion-style Recents section', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(390, 844),
+        embeddedInWorkspace: true,
+      );
+      await tester.pumpAndSettle();
+
+      final Finder pageColumn = find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is ConstrainedBox &&
+            widget.constraints.maxWidth ==
+                NoteFlowLayout.compactPageFrameMaxWidthFor(
+                  tester.element(find.byType(DashboardPage)),
+                ),
+      );
+      expect(pageColumn, findsOneWidget);
+      expect(tester.getSize(pageColumn).width, 390);
+      // The compact page starts with the section title at the phone edge.
+      expect(find.text('Home'), findsNothing);
+      expect(find.text('Recents'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Recents')).dx, closeTo(24, 1));
+      expect(tester.getTopLeft(find.text('Recents')).dy, closeTo(20, 1));
+      final Text recentHeading = tester.widget<Text>(find.text('Recents'));
+      expect(
+        recentHeading.style?.color,
+        NoteFlowWorkspaceTokens.light().textSecondary,
+      );
+      expect(recentHeading.style?.fontWeight, FontWeight.w500);
+      final Finder recentCard = find.byType(Card).first;
+      expect(tester.getSize(recentCard).width, closeTo(132, 0.1));
+      expect(tester.getSize(recentCard).height, closeTo(132, 0.1));
+      expect(find.text('First note body.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('compact Home keeps Recents clear of its shell actions', (
+      WidgetTester tester,
+    ) async {
+      const Size viewport = Size(390, 844);
+      tester.view
+        ..physicalSize = viewport
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('vi'),
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            DashboardCopy.delegate,
+            WorkspaceCopy.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: viewport,
+              devicePixelRatio: 1,
+              padding: EdgeInsets.only(top: 24),
+              viewPadding: EdgeInsets.only(top: 24),
+            ),
+            child: WorkspaceShell(
+              dashboard: DashboardPage(
+                dashboardController: controller,
+                notesController: _FakeNotesController(notes: notes),
+                onOpenNote: (NoteDto _) => null,
+                onCreateNote: () => null,
+                embeddedInWorkspace: true,
+              ),
+              notes: const SizedBox.shrink(),
+              onOpenSearch: () {},
+              onCreateNote: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gần đây'), findsOneWidget);
+      final Rect heading = tester.getRect(find.text('Gần đây'));
+      expect(heading.top, greaterThanOrEqualTo(24));
+      expect(heading.top, lessThan(120));
+      final Rect bottomActions = tester.getRect(
+        find.byKey(WorkspaceShell.compactBottomNavigationKey),
+      );
+      expect(heading.bottom, lessThan(bottomActions.top));
+      expect(find.byKey(WorkspaceShell.compactSearchKey), findsOneWidget);
+      expect(find.byKey(WorkspaceShell.compactFabNewNoteKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final Size viewport in <Size>[
+      const Size(360, 800),
+      const Size(375, 667),
+      const Size(393, 852),
+      const Size(412, 915),
+      const Size(600, 900),
+      const Size(768, 1024),
+      const Size(839, 1024),
+      const Size(840, 900),
+      const Size(1024, 1366),
+      const Size(1280, 800),
+      const Size(1440, 900),
+    ]) {
+      testWidgets('keeps Home usable at ${viewport.width}dp', (
+        WidgetTester tester,
+      ) async {
+        final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+        final DashboardController controller = DashboardController(
+          query: _FakeDashboardQuery(_overview(notes: notes)),
+        );
+
+        await _pumpDashboard(
+          tester,
+          dashboardController: controller,
+          notesController: _FakeNotesController(notes: notes),
+          size: viewport,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(DashboardPage.contentKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.newNoteKey), findsOneWidget);
+        expect(
+          _cardFor(tester, 'a').layout,
+          viewport.width >= 840
+              ? DashboardNoteCardLayout.grid
+              : DashboardNoteCardLayout.list,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('wide Home uses four cards across its centered page column', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        for (int index = 0; index < 7; index++)
+          _buildNote(id: 'note-$index', title: 'Note $index'),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+      );
+      await tester.pumpAndSettle();
+
+      final double firstRowY = tester
+          .getTopLeft(
+            find.byKey(const ValueKey<String>('dashboard-note-note-0')),
+          )
+          .dy;
+      for (int index = 1; index < 4; index++) {
+        final Finder card = find.byKey(
+          ValueKey<String>('dashboard-note-note-$index'),
+        );
+        expect(tester.getTopLeft(card).dy, closeTo(firstRowY, 0.5));
+        expect(tester.getSize(card).width, greaterThanOrEqualTo(136));
+      }
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('dashboard-note-note-4')),
+            )
+            .dy,
+        greaterThan(firstRowY),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('wide Home grid survives 200 percent text scaling', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(
+          id: 'long',
+          title: 'A long page title that should wrap and truncate safely',
+          content:
+              'A long note preview that should remain inside the compact grid '
+              'card at large text sizes.',
+        ),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(1440, 900),
+        textScale: 2.0,
+      );
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'long').layout, DashboardNoteCardLayout.grid);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('Grid and List use distinct compact layouts', (
@@ -137,6 +427,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final double listA = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
+          .dy;
+      final double listB = tester
+          .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
+          .dy;
+      expect(listA, isNot(listB));
+
+      await tester.tap(find.byIcon(Icons.grid_view_outlined));
+      await tester.pumpAndSettle();
+
       final double compactA = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
           .dy;
@@ -148,13 +449,13 @@ void main() {
       await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
 
-      final double listA = tester
+      final double listAfterToggleA = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-a')))
           .dy;
-      final double listB = tester
+      final double listAfterToggleB = tester
           .getTopLeft(find.byKey(const ValueKey<String>('dashboard-note-b')))
           .dy;
-      expect(listA, isNot(listB));
+      expect(listAfterToggleA, isNot(listAfterToggleB));
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
@@ -189,7 +490,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Tất cả ghi chú'), findsOneWidget);
+        expect(find.text('Trang chủ'), findsOneWidget);
         expect(
           tester
               .getSize(
@@ -301,6 +602,232 @@ void main() {
       expect(find.byType(DashboardNoteCard), findsOneWidget);
     });
 
+    testWidgets('compact Search matches the page hierarchy and can close', (
+      WidgetTester tester,
+    ) async {
+      final List<bool> searchVisibilityChanges = <bool>[];
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(
+          id: 'a',
+          title: 'Alpha',
+          content: 'Alpha body',
+          updatedAt: DateTime.now(),
+        ),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        size: const Size(390, 844),
+        onSearchVisibilityChanged: searchVisibilityChanges.add,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-search-toggle')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('dashboard-search-field')),
+        'Alpha',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Search'), findsOneWidget);
+      expect(find.text('Results'), findsOneWidget);
+      expect(find.text('Today'), findsNothing);
+      expect(find.text('Recents'), findsNothing);
+      expect(find.text('All notes'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-layout-toggle')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-search-sort')),
+        findsOneWidget,
+      );
+      expect(find.text('Alpha'), findsWidgets);
+      expect(searchVisibilityChanges, <bool>[true]);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-search-close')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-search-close')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-search-field')),
+        findsNothing,
+      );
+      expect(searchVisibilityChanges, <bool>[true, false]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('workspace Search docks the existing query and sort actions', (
+      WidgetTester tester,
+    ) async {
+      final List<bool> searchVisibilityChanges = <bool>[];
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(id: 'a', title: 'Alpha', content: 'Alpha body'),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        embeddedInWorkspace: true,
+        size: const Size(390, 844),
+        onSearchVisibilityChanged: searchVisibilityChanges.add,
+      );
+      await tester.pumpAndSettle();
+
+      tester.state<DashboardPageState>(find.byType(DashboardPage)).openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.searchDockKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockSortKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockCloseKey), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-search-close')),
+        findsNothing,
+      );
+      expect(find.text('Recents'), findsNothing);
+      expect(find.text('All notes'), findsNothing);
+
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(find.text('Results'), findsOneWidget);
+      expect(find.text('Alpha'), findsWidgets);
+      expect(find.byKey(DashboardPage.searchDockSortKey), findsOneWidget);
+
+      await tester.tap(find.byKey(DashboardPage.searchDockCloseKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+      expect(searchVisibilityChanges, <bool>[true, false]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('workspace desktop Search opens a dismissible overlay', (
+      WidgetTester tester,
+    ) async {
+      final List<bool> searchVisibilityChanges = <bool>[];
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(
+          id: 'a',
+          title: 'Alpha',
+          content: 'Alpha body',
+          updatedAt: DateTime.now(),
+        ),
+      ];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(notes: notes),
+        embeddedInWorkspace: true,
+        size: const Size(1200, 900),
+        onSearchVisibilityChanged: searchVisibilityChanges.add,
+      );
+      await tester.pumpAndSettle();
+
+      tester.state<DashboardPageState>(find.byType(DashboardPage)).openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      expect(find.text('Search'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-search-close')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DashboardPage.layoutToggleKey).hitTestable(),
+        findsNothing,
+      );
+      final Finder desktopSearchOverlay = find.byKey(
+        DashboardPage.desktopSearchOverlayKey,
+      );
+      final Rect desktopSearchRect = tester.getRect(
+        find.byKey(DashboardPage.desktopSearchSurfaceKey),
+      );
+      expect(desktopSearchRect.width, closeTo(1008, 1));
+      expect(desktopSearchRect.height, closeTo(704, 1));
+      expect(desktopSearchRect.top, closeTo(65, 1));
+      expect(
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('Recents'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('All notes'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('Results'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: desktopSearchOverlay, matching: find.text('Today')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.byType(DashboardNoteCard),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: desktopSearchOverlay, matching: find.text('Alpha')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('Alpha body'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byType(PopupMenuButton<DashboardSort>).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DashboardPage.layoutToggleKey).hitTestable(),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-search-close')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsNothing);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsNothing);
+      expect(searchVisibilityChanges, <bool>[true, false]);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('shows a friendly error and retries without raw text', (
       WidgetTester tester,
     ) async {
@@ -368,6 +895,41 @@ void main() {
       );
     });
 
+    testWidgets('explains unsupported note storage without a retry action', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: _FakeNotesController(
+          notes: notes,
+          listNotesError: UnsupportedError('web storage unavailable'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'This Web build cannot load or save notes. Use the installed app to continue.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-notes-retry')),
+        findsNothing,
+      );
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.cloud_off_outlined)).color,
+        NoteFlowWorkspaceTokens.light().textMuted,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('opens a note and marks its card selected when tapped', (
       WidgetTester tester,
     ) async {
@@ -413,15 +975,18 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('dashboard-note-a')));
       await tester.pump();
 
-      final ThemeData theme = Theme.of(
+      final Finder cardFinder = find.byKey(
+        const ValueKey<String>('dashboard-note-card-a'),
+      );
+      final Text title = tester.widget<Text>(
+        find.descendant(of: cardFinder, matching: find.text('Alpha')),
+      );
+      final Card card = tester.widget<Card>(cardFinder);
+      final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(
         tester.element(find.byType(DashboardPage)),
       );
-      final Text title = tester.widget<Text>(find.text('Alpha'));
-      final Card card = tester.widget<Card>(
-        find.byKey(const ValueKey<String>('dashboard-note-card-a')),
-      );
-      expect(card.color, theme.colorScheme.primaryContainer);
-      expect(title.style?.color, theme.colorScheme.onPrimaryContainer);
+      expect(card.color, tokens.selectedSurface);
+      expect(title.style?.color, tokens.textPrimary);
 
       expect(
         tester
@@ -468,7 +1033,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(query.calls, greaterThan(callsBeforeTap));
-      expect(find.text('Renamed'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-a')),
+          matching: find.text('Renamed'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('invokes create from the loaded state action', (
@@ -540,10 +1111,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('NoteFlow'), findsOneWidget);
-      expect(find.text('All notes'), findsOneWidget);
+      expect(find.text('NoteFlow / Home'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('1 note'), findsOneWidget);
-      expect(find.text('NoteFlow'), findsOneWidget);
     });
 
     testWidgets('renders Vietnamese labels when the locale is vi', (
@@ -562,7 +1132,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Tất cả ghi chú'), findsOneWidget);
+      expect(find.text('NoteFlow / Trang chủ'), findsOneWidget);
+      expect(find.text('Trang chủ'), findsOneWidget);
       expect(find.text('1 ghi chú'), findsOneWidget);
     });
 
@@ -632,7 +1203,13 @@ void main() {
       expect(notesController.listNotesCalls, greaterThan(notesCallsBefore));
       expect(query.calls, greaterThan(queryCallsBefore));
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('Beta'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-b')),
+          matching: find.text('Beta'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('2 notes'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -686,7 +1263,13 @@ void main() {
       expect(notesController.listNotesCalls, notesCallsBefore + 1);
       expect(query.calls, queryCallsBefore + 1);
       expect(find.byType(DashboardNoteCard), findsNWidgets(2));
-      expect(find.text('Beta'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dashboard-note-b')),
+          matching: find.text('Beta'),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -701,9 +1284,11 @@ Future<void> _pumpDashboard(
   VoidCallback? onCreateNote,
   VoidCallback? onOpenSettings,
   VoidCallback? onOpenDiagnostics,
+  bool embeddedInWorkspace = false,
   Locale locale = const Locale('en'),
   Size size = const Size(1200, 900),
   double textScale = 1.0,
+  ValueChanged<bool>? onSearchVisibilityChanged,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -741,8 +1326,10 @@ Future<void> _pumpDashboard(
                     onCreateNote();
                     return null;
                   },
+            embeddedInWorkspace: embeddedInWorkspace,
             onOpenSettings: onOpenSettings,
             onOpenDiagnostics: onOpenDiagnostics,
+            onSearchVisibilityChanged: onSearchVisibilityChanged,
           );
           return MediaQuery(
             data: MediaQuery.of(context)

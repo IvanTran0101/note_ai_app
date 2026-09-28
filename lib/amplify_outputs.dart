@@ -25,5 +25,8 @@ const amplifyConfig = r'''{
     },
     "unauthenticated_identities_enabled": false
   },
-  "version": "1.5"
+  "version": "1.5",
+  "custom": {
+    "syncApiEndpoint": "https://gx25uupkri.execute-api.ap-southeast-1.amazonaws.com"
+  }
 }''';

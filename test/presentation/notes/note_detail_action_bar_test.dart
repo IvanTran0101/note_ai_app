@@ -12,6 +12,8 @@ void main() {
     VoidCallback? onSave,
     VoidCallback? onSummarize,
     VoidCallback? onMore,
+    bool iconOnly = false,
+    String? summarizeTooltip,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -28,6 +30,8 @@ void main() {
           moreLabel: 'More',
           savingLabel: 'Saving…',
           summarizingLabel: 'Summarizing…',
+          summarizeTooltip: summarizeTooltip,
+          iconOnly: iconOnly,
         ),
       ),
     );
@@ -58,6 +62,54 @@ void main() {
     expect(more, 1);
   });
 
+  testWidgets(
+    'icon-only placement retains the same action callbacks and keys',
+    (WidgetTester tester) async {
+      int saves = 0;
+      int summaries = 0;
+      int more = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topRight,
+              child: NoteDetailActionBar(
+                isSaving: false,
+                isSummarizing: false,
+                canSave: true,
+                canSummarize: true,
+                onSave: () => saves++,
+                onSummarize: () => summaries++,
+                onMore: () => more++,
+                saveLabel: 'Save',
+                summarizeLabel: 'Summarize',
+                moreLabel: 'More',
+                savingLabel: 'Saving…',
+                summarizingLabel: 'Summarizing…',
+                iconOnly: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      for (final String key in <String>[
+        'note-detail-save',
+        'note-detail-summarize',
+        'note-detail-more',
+      ]) {
+        await tester.tap(find.byKey(ValueKey<String>(key)));
+      }
+
+      expect(saves, 1);
+      expect(summaries, 1);
+      expect(more, 1);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(OutlinedButton), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('disables actions and replaces labels while busy', (
     WidgetTester tester,
   ) async {
@@ -86,6 +138,30 @@ void main() {
       tester
           .widget<OutlinedButton>(
             find.byKey(const ValueKey<String>('note-detail-more')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('explains why summarize is disabled for a new note', (
+    WidgetTester tester,
+  ) async {
+    const String explanation =
+        'Your note is created automatically as you type. You can summarize it once it is created.';
+    await tester.pumpWidget(
+      buildBar(
+        canSummarize: false,
+        summarizeTooltip: explanation,
+        iconOnly: true,
+      ),
+    );
+
+    expect(find.byTooltip(explanation), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey<String>('note-detail-summarize')),
           )
           .onPressed,
       isNull,

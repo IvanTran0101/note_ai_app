@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
   final DateTime createdAt = DateTime.utc(2026, 1, 1);
@@ -82,6 +85,45 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('shows a specific notice when note storage is unsupported', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..createNoteError = UnsupportedError('web storage unavailable');
+    await pumpPage(tester, controller);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Temporary draft',
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Couldn’t save the note. Please try again.'),
+      findsNothing,
+    );
+    final Container unavailableNotice = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('note-detail-error')),
+    );
+    final BoxDecoration noticeDecoration =
+        unavailableNotice.decoration! as BoxDecoration;
+    expect(
+      noticeDecoration.border!.top.color,
+      NoteFlowUiTokens.light().divider,
+    );
+    expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
+    expect(controller.notes, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('updates only changed fields on an existing note', (
@@ -333,6 +375,56 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
+  testWidgets('dirty back explains Web limitation without a Save action', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          NoteDetailCopy.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+        home: Builder(
+          builder: (BuildContext context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showNoteDetailBackConfirmation(
+                context: context,
+                copy: NoteDetailCopy.of(context),
+                canSave: false,
+              ),
+              child: const Text('Open confirmation'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open confirmation'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('You have unsaved changes.'), findsOneWidget);
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-save')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('deletes an existing note after confirmation', (
     WidgetTester tester,
   ) async {
@@ -351,6 +443,94 @@ void main() {
 
     expect(controller.notes, isEmpty);
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
+  });
+
+  testWidgets('desktop more menu dismisses and preserves delete confirmation', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    final Rect triggerRect = tester.getRect(
+      find.byKey(const ValueKey<String>('note-detail-more')),
+    );
+    final Rect menuItemRect = tester.getRect(
+      find.byKey(NoteDetailPage.moreDeleteKey),
+    );
+    expect(menuItemRect.top, greaterThanOrEqualTo(triggerRect.bottom));
+    expect(menuItemRect.right, lessThanOrEqualTo(triggerRect.right));
+    expect(triggerRect.right - menuItemRect.right, lessThanOrEqualTo(8));
+    expect(
+      menuItemRect.right,
+      lessThanOrEqualTo(tester.view.physicalSize.width),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    // Tapping the barrier dismisses the menu without running any action.
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    // The delete confirmation can be cancelled from its dialog.
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(NoteDetailPage.moreDeleteKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete note?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete note?'), findsNothing);
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.notes, hasLength(1));
+  });
+
+  testWidgets('compact more actions remain a dismissible bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    await tester.tapAt(const Offset(195, 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
   });
 
   testWidgets('renders Vietnamese detail copy', (WidgetTester tester) async {
@@ -376,6 +556,7 @@ final class _FakeNotesController implements NotesApplicationController {
   String? summarizedNoteId;
   int summarizeCalls = 0;
   int summarizeFailuresRemaining = 0;
+  Object? createNoteError;
   int _nextId = 1;
 
   @override
@@ -386,6 +567,10 @@ final class _FakeNotesController implements NotesApplicationController {
     required String title,
     required String content,
   }) async {
+    final Object? error = createNoteError;
+    if (error != null) {
+      throw error;
+    }
     final DateTime now = DateTime.utc(2026, 1, 2);
     final NoteDto created = NoteDto(
       id: 'note-${_nextId++}',

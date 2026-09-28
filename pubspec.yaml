@@ -65,6 +65,8 @@ dependencies:
   amplify_flutter: ^2.15.0
   amplify_auth_cognito: ^2.15.0
   go_router: ^18.0.1
+  http: ^1.6.0
+  indexed_db: ^1.0.1
 
 dev_dependencies:
   flutter_test:
@@ -87,6 +89,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/branding/notion-logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
