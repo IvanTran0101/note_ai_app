@@ -129,4 +129,95 @@ void main() {
       );
     });
   });
+
+  group('shared summary chunk boundaries', () {
+    test('keeps the narrow whitespace and newline set', () {
+      for (final int unit in <int>[9, 10, 13, 32]) {
+        expect(isSummaryChunkWhitespace(unit), isTrue);
+      }
+      for (final int unit in <int>[0x85, 0xA0, 0x2028, 0x2029, 0xFEFF]) {
+        expect(isSummaryChunkWhitespace(unit), isFalse);
+      }
+      expect(isSummaryChunkNewline(10), isTrue);
+      expect(isSummaryChunkNewline(13), isTrue);
+      expect(isSummaryChunkNewline(9), isFalse);
+      expect(isSummaryChunkNewline(0x2028), isFalse);
+    });
+
+    test('prefers the highest newline over any whitespace', () {
+      const String text = 'alpha beta\ngamma';
+
+      expect(
+        chooseSummaryChunkBoundary(start: 0, end: 12, unitAt: text.codeUnitAt),
+        11,
+      );
+    });
+
+    test('falls back to the highest whitespace without a newline', () {
+      const String text = 'alpha beta gamma';
+
+      expect(
+        chooseSummaryChunkBoundary(start: 0, end: 11, unitAt: text.codeUnitAt),
+        11,
+      );
+      expect(
+        chooseSummaryChunkBoundary(start: 0, end: 10, unitAt: text.codeUnitAt),
+        6,
+      );
+    });
+
+    test('returns the proposed end when no boundary is in range', () {
+      const String text = 'abcdefghij';
+
+      expect(
+        chooseSummaryChunkBoundary(start: 0, end: 4, unitAt: text.codeUnitAt),
+        4,
+      );
+      expect(
+        chooseSummaryChunkBoundary(start: 3, end: 6, unitAt: text.codeUnitAt),
+        6,
+      );
+    });
+
+    test('picks the same boundary from runes and from code units', () {
+      const String text = 'a😀 b';
+      final List<int> runes = text.runes.toList(growable: false);
+
+      final int byRune = chooseSummaryChunkBoundary(
+        start: 0,
+        end: 3,
+        unitAt: (int index) => runes[index],
+      );
+      final int byCodeUnit = chooseSummaryChunkBoundary(
+        start: 0,
+        end: 4,
+        unitAt: text.codeUnitAt,
+      );
+
+      expect(byRune, 3);
+      expect(byCodeUnit, 4);
+      expect(
+        text.substring(0, byCodeUnit),
+        String.fromCharCodes(runes.sublist(0, byRune)),
+      );
+    });
+
+    test('local split still normalizes boundary whitespace away', () {
+      final NoteSummaryResourcePolicy policy = NoteSummaryResourcePolicy(
+        contextSize: 30,
+        maxOutputTokens: 10,
+        promptReserveTokens: 5,
+        estimatedCharactersPerToken: 1,
+      );
+
+      final List<String> chunks = policy.split(
+        'alpha one\nbeta two\ngamma three\ndelta four',
+      );
+
+      expect(chunks, isNotEmpty);
+      for (final String chunk in chunks) {
+        expect(chunk, chunk.trim());
+      }
+    });
+  });
 }
