@@ -33,6 +33,7 @@ enum NoteSecurityFailureCode {
   pendingSync,
   recoveryUnavailable,
   invalidChallenge,
+  rateLimited,
   recoveryCiphertextRetained,
 }
 

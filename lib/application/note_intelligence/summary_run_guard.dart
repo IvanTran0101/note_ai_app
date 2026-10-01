@@ -7,6 +7,8 @@ import '../sync/local_sync_store.dart';
 import '../sync/note_sync_status.dart';
 import 'summary_cloud_consent.dart';
 import 'summary_run_context.dart';
+import '../notes/note_access.dart';
+import '../../domain/notes/note_protection.dart';
 
 /// Revalidates one saved note run using its captured account and session.
 ///
@@ -18,6 +20,7 @@ final class SummaryRunGuard {
     required this.session,
     required this.consent,
     required this.localSyncStoreForAccount,
+    this.accessGuardForAccount,
   });
 
   final ICurrentUser currentUser;
@@ -25,6 +28,7 @@ final class SummaryRunGuard {
   final SummaryCloudConsent consent;
   final ILocalSyncStore Function({required String accountUserId})
   localSyncStoreForAccount;
+  final INoteAccessGuard Function(String accountId)? accessGuardForAccount;
 
   /// Checks the session, optional cloud consent, and the exact persisted note.
   Future<void> revalidate(
@@ -45,6 +49,24 @@ final class SummaryRunGuard {
       if (note.isDeleted) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
       }
+      if (!note.contentAvailable ||
+          (note.protection.enabled &&
+              !(accessGuardForAccount
+                      ?.call(context.accountUserId)
+                      .allows(
+                        ownerId: note.ownerId,
+                        noteId: note.id,
+                        protection: note.protection,
+                        operation: NoteOperation.summary,
+                      ) ??
+                  false))) {
+        throw const SummaryRunFailure(SummaryRunFailureCode.noteLocked);
+      }
+      if (requireConsent &&
+          (note.serverRevision < 1 ||
+              state.outbox.any((m) => m.noteId == note.id))) {
+        throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
+      }
       if (note.status == NoteSyncStatus.conflict ||
           state.conflicts.any((conflict) => conflict.noteId == note.id)) {
         throw const SummaryRunFailure(SummaryRunFailureCode.conflict);
@@ -56,6 +78,10 @@ final class SummaryRunGuard {
         content: note.content,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
+        contentRevision: note.serverRevision,
+        isProtected: note.protection.enabled,
+        protectionRevision: note.protection.revision,
+        contentAvailable: note.contentAvailable,
       );
       if (persisted != context.noteSnapshot) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
@@ -81,6 +107,23 @@ final class SummaryRunGuard {
     }
     if (requireConsent && !consent.isCurrent(context.consent)) {
       return SummaryRunFailureCode.consentRequired;
+    }
+    final note = context.noteSnapshot;
+    if (!note.contentAvailable ||
+        (note.isProtected &&
+            !(accessGuardForAccount
+                    ?.call(context.accountUserId)
+                    .allows(
+                      ownerId: note.ownerId,
+                      noteId: note.id,
+                      protection: NoteProtection(
+                        enabled: true,
+                        revision: note.protectionRevision,
+                      ),
+                      operation: NoteOperation.summary,
+                    ) ??
+                false))) {
+      return SummaryRunFailureCode.noteLocked;
     }
     return null;
   }

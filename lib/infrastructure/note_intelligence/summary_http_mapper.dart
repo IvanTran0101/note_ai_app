@@ -50,6 +50,7 @@ final class SummaryHttpMapper {
         400: SummaryApiErrorCode.invalidInput,
         401: SummaryApiErrorCode.unauthorized,
         403: SummaryApiErrorCode.consentRequired,
+        409: SummaryApiErrorCode.noteChanged,
         413: SummaryApiErrorCode.inputTooLong,
         429: SummaryApiErrorCode.rateLimited,
         500: SummaryApiErrorCode.unexpected,
@@ -66,7 +67,11 @@ final class SummaryHttpMapper {
       <int, Set<SummaryApiErrorCode>>{
         400: <SummaryApiErrorCode>{SummaryApiErrorCode.invalidInput},
         401: <SummaryApiErrorCode>{SummaryApiErrorCode.unauthorized},
-        403: <SummaryApiErrorCode>{SummaryApiErrorCode.consentRequired},
+        403: <SummaryApiErrorCode>{
+          SummaryApiErrorCode.consentRequired,
+          SummaryApiErrorCode.noteLocked,
+        },
+        409: <SummaryApiErrorCode>{SummaryApiErrorCode.noteChanged},
         413: <SummaryApiErrorCode>{SummaryApiErrorCode.inputTooLong},
         429: <SummaryApiErrorCode>{SummaryApiErrorCode.rateLimited},
         500: <SummaryApiErrorCode>{SummaryApiErrorCode.unexpected},

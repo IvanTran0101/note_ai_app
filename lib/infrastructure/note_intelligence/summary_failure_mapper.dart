@@ -49,6 +49,8 @@ SummaryRunFailureCode _appCode(SummaryApiErrorCode code) => switch (code) {
     SummaryRunFailureCode.pipelineTooLarge,
   SummaryApiErrorCode.unauthorized => SummaryRunFailureCode.unauthorized,
   SummaryApiErrorCode.consentRequired => SummaryRunFailureCode.consentRequired,
+  SummaryApiErrorCode.noteLocked => SummaryRunFailureCode.noteLocked,
+  SummaryApiErrorCode.noteChanged => SummaryRunFailureCode.noteChanged,
   SummaryApiErrorCode.rateLimited => SummaryRunFailureCode.rateLimited,
   SummaryApiErrorCode.providerUnavailable =>
     SummaryRunFailureCode.serviceUnavailable,

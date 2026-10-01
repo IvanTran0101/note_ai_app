@@ -28,6 +28,7 @@ enum SummaryRunFailureCode {
 
   /// The saved revision differs from the revision the UI selected.
   noteChanged,
+  noteLocked,
 
   /// A sync conflict blocks the run.
   conflict,

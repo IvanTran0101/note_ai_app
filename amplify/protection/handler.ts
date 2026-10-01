@@ -48,7 +48,8 @@ const operations = (value: unknown): readonly NoteOperation[] => {
 };
 
 /** Only verified JWT identity/mailbox enter the use cases. No body identity is accepted. */
-export const handleProtection = async (event: Event, actor: string, service: ProtectionUseCases) => {
+export const handleProtection = async (event: Event, actor: string, service: ProtectionUseCases,
+  resolveMailbox: (event: Event, actor: string) => Promise<string>) => {
   try {
     const match = /^\/notes\/([^/]+)\/(content|protection(?:\/(enable|unlock|change|disable|reset\/request|reset\/confirm))?)$/.exec(event.rawPath);
     if (!match) return notFoundResponse();
@@ -61,14 +62,15 @@ export const handleProtection = async (event: Event, actor: string, service: Pro
     if (method === 'GET' && match[2] === 'content') return jsonResponse(200, noteBodyOf(await service.content(actor, owner, noteId, grant), true));
     if (method === 'GET' && !action) return jsonResponse(200, await service.metadata(actor, owner, noteId));
     if (method !== 'POST' || !action) return notFoundResponse();
-    return jsonResponse(200, await dispatch(action, event, actor, owner, noteId, grant, service));
+    return jsonResponse(200, await dispatch(action, event, actor, owner, noteId, grant, service, resolveMailbox));
   } catch (error) {
     return securityErrorResponse(error instanceof NoteSecurityError ? error : new NoteSecurityError('unavailable'));
   }
 };
 
 const dispatch = async (action: string, event: Event, actor: string, owner: string,
-  id: string, grant: string | undefined, service: ProtectionUseCases) => {
+  id: string, grant: string | undefined, service: ProtectionUseCases,
+  resolveMailbox: (event: Event, actor: string) => Promise<string>) => {
   switch (action) {
     case 'enable': {
       const b = bodyOf(event, ['password', 'expectedContentRevision']);
@@ -88,18 +90,13 @@ const dispatch = async (action: string, event: Event, actor: string, owner: stri
     }
     case 'reset/request': {
       bodyOf(event, []);
-      return service.requestRecovery(actor, owner, id, mailboxOf(event));
+      return service.requestRecovery(actor, owner, id, await resolveMailbox(event, actor));
     }
     case 'reset/confirm': {
       const b = bodyOf(event, ['challengeId', 'code', 'newPassword']);
       if (typeof b.code !== 'string') throw new NoteSecurityError('invalidInput');
-      return service.confirmRecovery(actor, owner, id, mailboxOf(event), identifier(b.challengeId), b.code, password(b.newPassword));
+      return service.confirmRecovery(actor, owner, id, await resolveMailbox(event, actor), identifier(b.challengeId), b.code, password(b.newPassword));
     }
     default: throw new NoteSecurityError('invalidInput');
   }
-};
-const mailboxOf = (event: Event): string => {
-  const email = event.requestContext.authorizer.jwt.claims['email'];
-  if (typeof email !== 'string' || email.length > 254) throw new NoteSecurityError('invalidInput');
-  return email;
 };

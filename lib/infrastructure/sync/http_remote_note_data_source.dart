@@ -24,6 +24,7 @@ import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
 import '../../application/sync/sync_snapshot.dart';
 import 'sync_http_mapper.dart';
+import '../../application/notes/note_access.dart';
 
 /// Supplies the bearer token for one sync call.
 ///
@@ -55,6 +56,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     http.Client? client,
     Duration timeout = const Duration(seconds: 30),
     String? expectedAccountUserId,
+    Future<String?> Function(SyncMutation)? mutationGrant,
+    void Function()? requireSession,
   }) {
     return HttpRemoteNoteDataSource._(
       baseUri: baseUri,
@@ -63,6 +66,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       ownsClient: client == null,
       timeout: timeout,
       expectedAccountUserId: expectedAccountUserId,
+      mutationGrant: mutationGrant,
+      requireSession: requireSession,
     );
   }
 
@@ -75,6 +80,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required this._ownsClient,
     required this._timeout,
     required this._expectedAccountUserId,
+    required this.mutationGrant,
+    required this.requireSession,
   });
 
   /// Async mutation route.
@@ -92,6 +99,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
   final bool _ownsClient;
   final Duration _timeout;
   final String? _expectedAccountUserId;
+  final Future<String?> Function(SyncMutation)? mutationGrant;
+  final void Function()? requireSession;
 
   @override
   Future<SyncMutationResult> push(SyncMutation mutation) {
@@ -100,11 +109,16 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
         method: 'POST',
         uri: _endpoint(_mutationsPath),
         body: encodeSyncMutation(mutation),
+        mutation: mutation,
       );
       // A stale `baseRevision` is a result, not a failure: the mapper turns the
       // 409 envelope into `SyncMutationResult.conflict`, which the caller
       // reconciles against the remote snapshot it carries.
-      if (_isSuccess(response.statusCode) || response.statusCode == 409) {
+      final securityConflict =
+          response.statusCode == 409 &&
+          _decodeError(response).code == SyncErrorCode.forbidden;
+      if (_isSuccess(response.statusCode) ||
+          (response.statusCode == 409 && !securityConflict)) {
         return decodeSyncMutationResponse(
           statusCode: response.statusCode,
           body: _readBody(response),
@@ -160,8 +174,12 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required String method,
     required Uri uri,
     Map<String, Object?>? body,
+    SyncMutation? mutation,
   }) async {
-    final String? token = await _tokenProvider(forceRefresh: false);
+    requireSession?.call();
+    final String? token = await _tokenProvider(forceRefresh: false)
+        .timeout(_timeout);
+    requireSession?.call();
     if (token == null) {
       throw const SyncFailure(code: SyncErrorCode.unauthorized);
     }
@@ -172,12 +190,15 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       uri: uri,
       body: body,
       accessToken: token,
+      mutation: mutation,
     );
     if (response.statusCode != 401) {
       return response;
     }
 
-    final String? refreshed = await _tokenProvider(forceRefresh: true);
+    final String? refreshed = await _tokenProvider(forceRefresh: true)
+        .timeout(_timeout);
+    requireSession?.call();
     if (refreshed == null) {
       throw const SyncFailure(code: SyncErrorCode.unauthorized);
     }
@@ -187,6 +208,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       uri: uri,
       body: body,
       accessToken: refreshed,
+      mutation: mutation,
     );
     return response;
   }
@@ -207,21 +229,32 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required Uri uri,
     required String accessToken,
     Map<String, Object?>? body,
-  }) {
+    SyncMutation? mutation,
+  }) async {
+    requireSession?.call();
+    final grant = mutation == null ? null : await mutationGrant?.call(mutation);
+    requireSession?.call();
     final http.Request request = http.Request(method, uri);
+    request.followRedirects = false;
+    request.maxRedirects = 0;
     request.headers['Authorization'] = 'Bearer $accessToken';
     request.headers['Content-Type'] = _jsonContentType;
     request.headers['Accept'] = _jsonContentType;
+    if (grant != null) request.headers['X-Note-Unlock-Grant'] = grant;
     if (body != null) {
       // `bodyBytes` instead of `body` keeps the content type exactly
       // `application/json`; the string setter appends a charset parameter.
       request.bodyBytes = utf8.encode(jsonEncode(body));
     }
     // The timeout covers reading the response body as well as the headers.
-    return _client
+    final response = await _client
         .send(request)
         .then(http.Response.fromStream)
         .timeout(_timeout);
+    requireSession?.call();
+    if (mutation != null) await mutationGrant?.call(mutation);
+    requireSession?.call();
+    return response;
   }
 
   /// Runs one sync call and classifies every failure it can produce.
@@ -236,6 +269,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       return await call();
     } on SyncFailure {
       rethrow;
+    } on NoteSecurityFailure {
+      throw const SyncFailure(code: SyncErrorCode.forbidden);
     } on TimeoutException {
       throw const SyncFailure(code: SyncErrorCode.timeout);
     } on http.ClientException {

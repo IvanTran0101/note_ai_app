@@ -31,6 +31,7 @@ const syncHttpApi = createSyncHttpApi({
 
 const summaryInfrastructure = createSummaryInfrastructure({
   handler: backend.summary.resources.lambda,
+  notesTable,
   issuerUrl: `https://cognito-idp.${syncStack.region}.amazonaws.com/${backend.auth.resources.userPool.userPoolId}`,
   audience: [backend.auth.resources.userPoolClient.userPoolClientId],
 });

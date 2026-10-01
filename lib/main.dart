@@ -1,3 +1,5 @@
+import 'infrastructure/security/note_security_runtime.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -375,6 +377,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
   AccountSyncRuntime? _syncRuntime;
+  late final NoteSecurityRuntime _noteSecurityRuntime = NoteSecurityRuntime(
+    session: _currentUserSession,
+    storeForAccount: _localSyncStoreForAccount,
+    baseUri: _noteFlowAuthMode == 'cognito' ? _syncApiBaseUri() : null,
+    cancelSummaries: () =>
+        _summaryRuntime?.cancelActive(reason: SummaryRunFailureCode.noteLocked),
+    syncNow: (account) async {
+      await _accountSyncRuntime()?.syncNow(account);
+    },
+  );
   SyncPresentationController? _syncPresentationController;
   String? _syncPresentationAccountUserId;
   String? _lastSyncAccountUserId;
@@ -399,6 +411,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         cloudConsent: _summaryRunRuntime.consent,
         sessionGeneration: () => _currentUserSession.sessionGeneration,
         requestSync: _requestSyncForAccount,
+        security: _noteSecurityRuntime,
       );
   late final NotesApplicationController _notesController =
       NoteApplicationServiceController(
@@ -431,6 +444,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         localSyncStoreForAccount: _localSyncStoreForAccount,
         amplifyOutputsJson: amplifyConfig,
         cognitoMode: _noteFlowAuthMode == 'cognito',
+        accessGuardForAccount: (_) => _noteSecurityRuntime,
+        grantHeaderForRun: _noteSecurityRuntime.summaryGrant,
       );
   late final DashboardController _dashboardController = DashboardController(
     query: GetDashboardOverview(
@@ -542,6 +557,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       baseUri: baseUri,
       localSyncStoreFactory: _localSyncStoreForAccount,
       clock: _nowUtc,
+      mutationGrant: _noteSecurityRuntime.mutationGrant,
+      observeSnapshot: _noteSecurityRuntime.observe,
+      hydrateSnapshot: _noteSecurityRuntime.hydrate,
+      requireSession: _noteSecurityRuntime.requireSession,
+      sessionGeneration: () => _currentUserSession.sessionGeneration,
     );
   }
 
@@ -550,6 +570,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final int? previous = _lastSummarySessionGeneration;
     if (previous != null && previous != generation) {
       _invalidateSummaryRuns();
+      _noteSecurityRuntime.invalidateSession();
+      final previousSync = _syncRuntime;
+      _syncRuntime = null;
+      if (previousSync != null) unawaited(previousSync.dispose());
+      _lastSyncAccountUserId = null;
       for (final store in _localSyncStores.values) {
         if (store is ILocalNoteVault) {
           (store as ILocalNoteVault).lock(null);
@@ -606,12 +631,17 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         generateNoteId: _generateNoteId,
         generateMutationId: _generateMutationId,
         now: _nowUtc,
+        accessGuard: _noteSecurityRuntime,
       ),
     );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _noteSecurityRuntime.lockAll();
+    }
     if (state == AppLifecycleState.resumed) {
       final String? accountUserId = _currentUserSession.userId;
       if (accountUserId != null) {
@@ -1136,6 +1166,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _noteSecurityRuntime.dispose();
     _disposed = true;
     for (final store in _localSyncStores.values) {
       if (store is ILocalNoteVault) {

@@ -1,3 +1,9 @@
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
+import { ProtectionAuthorizer } from '../protection/authorizer';
+import { OwnerNoteAcl } from '../protection/protection_store';
+import { DynamoSummaryNoteAuthority } from './summary_note_authority';
 import type { APIGatewayProxyHandlerV2WithJWTAuthorizer } from 'aws-lambda';
 import { createDeepSeekProvider } from './deepseek_client';
 import { DynamoSummaryQuota } from './quota';
@@ -20,7 +26,8 @@ const unconfiguredResponse = () => ({
 export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) => {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   const tableName = process.env.SUMMARY_QUOTA_TABLE_NAME?.trim();
-  if (!apiKey || apiKey === UNRESOLVED_SECRET || !tableName) {
+  const notesTable = process.env.NOTES_TABLE_NAME?.trim();
+  if (!notesTable || !apiKey || apiKey === UNRESOLVED_SECRET || !tableName) {
     console.error('summary function misconfigured', { code: 'unexpected' });
     return unconfiguredResponse();
   }
@@ -30,8 +37,14 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
       quotaTable = tableName;
     }
     const currentQuota = quota;
+    const db = DynamoDBDocumentClient.from(new DynamoDBClient({ maxAttempts: 1 }),
+      { marshallOptions: { removeUndefinedValues: true } });
+    const store = new DynamoProtectionStore(notesTable, db);
+    const authority = new DynamoSummaryNoteAuthority(notesTable, db, store,
+      new ProtectionAuthorizer(store, new OwnerNoteAcl()));
     const inner = createSummaryHandler({
-      generate: createDeepSeekProvider({ apiKey }),
+      generate: createDeepSeekProvider({ apiKey, timeoutMs: 15_000 }),
+      security: authority,
       consumeQuota: (accountId, nowMs) => currentQuota.consume(accountId, nowMs),
     });
     return await inner(event);

@@ -59,6 +59,7 @@ extension EncryptedStateKeys on EncryptedStateCodec {
           _opened[id]!.key,
           _noteAad(id, p.revision),
         ),
+        requireCurrentRevision: true,
       );
       return LocalSyncStateCodec.decode(data);
     }

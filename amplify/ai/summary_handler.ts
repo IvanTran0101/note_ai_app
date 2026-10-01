@@ -1,3 +1,6 @@
+import { STATUS_BY_CODE, defaultRequestId, toResponse, logOutcome, type Outcome } from './summary_response';
+import type { SummaryNoteAuthority, SummaryStageAuthority } from './summary_note_authority';
+import { unlockGrantOf } from '../protection/handler';
 /**
  * Summary Cloud HTTP handler: `POST /ai/summary`.
  *
@@ -51,23 +54,12 @@ const MAX_RETRY_AFTER_SECONDS = 3600;
 const BASE64_CHARS_PER_GROUP = 4;
 const BASE64_BYTES_PER_GROUP = 3;
 
-const STATUS_BY_CODE: Readonly<Record<SummaryErrorCode, number>> = {
-  invalidInput: 400,
-  inputTooLong: 413,
-  unauthorized: 401,
-  consentRequired: 403,
-  rateLimited: 429,
-  providerUnavailable: 502,
-  invalidOutput: 502,
-  timeout: 504,
-  unexpected: 500,
-};
-
 export type SummaryHandlerDeps = Readonly<{
   /** One generation call; `deepseek_client.ts` in production. */
   generate: (request: SummaryRequest) => Promise<SummaryResult>;
   /** Atomic per-account minute quota; `quota.ts` in production. */
   consumeQuota: (accountId: string, nowMs: number) => Promise<QuotaDecision>;
+  security?: SummaryNoteAuthority;
   /** Injectable clock for tests. @default Date.now */
   now?: () => number;
   /** Injectable server request-id factory for tests. @default crypto.randomUUID */
@@ -77,15 +69,6 @@ export type SummaryHandlerDeps = Readonly<{
 }>;
 
 /** What one request produced; `code` is set exactly when the request failed. */
-type Outcome = Readonly<{
-  statusCode: number;
-  code?: SummaryErrorCode;
-  stage?: SummaryStage;
-  summary?: string;
-  usage?: Readonly<{ inputTokens: number; outputTokens: number; }>;
-  retryAfterSeconds?: number;
-}>;
-
 type BodyRead =
   | Readonly<{ ok: true; text: string; }>
   | Readonly<{ ok: false; code: SummaryErrorCode; }>;
@@ -260,6 +243,7 @@ const readGeneratedResult = (value: unknown, stage: SummaryStage): SummaryResult
 /** Quota, generation, and result mapping for an already-validated request. */
 const generateWithinPolicy = async (
   prepared: Readonly<{ request: SummaryRequest; accountId: string; }>,
+  stageAuthority: SummaryStageAuthority,
   deps: Readonly<{
     generate: SummaryHandlerDeps['generate'];
     consumeQuota: SummaryHandlerDeps['consumeQuota'];
@@ -272,6 +256,7 @@ const generateWithinPolicy = async (
 
   let decision: QuotaDecision;
   try {
+    await stageAuthority.revalidate();
     decision = await consumeQuotaWithinDeadline(deps.consumeQuota, accountId, deps.now(), deps.quotaTimeoutMs);
   } catch (error) {
     // A quota failure or timeout is never a silent allow, and never reaches
@@ -289,6 +274,7 @@ const generateWithinPolicy = async (
 
   let generated: unknown;
   try {
+    await stageAuthority.revalidate();
     generated = await deps.generate(request);
   } catch (error) {
     return outcomeForError(error, stage);
@@ -297,47 +283,9 @@ const generateWithinPolicy = async (
   if (result === undefined) {
     return { statusCode: STATUS_BY_CODE.invalidOutput, code: 'invalidOutput', stage };
   }
+  try { await stageAuthority.complete(result.summary); }
+  catch (error) { return outcomeForError(error, stage); }
   return { statusCode: 200, stage, summary: result.summary, usage: result.usage };
-};
-
-const defaultRequestId = (): string => {
-  const cryptoApi = globalThis.crypto;
-  if (cryptoApi !== undefined && typeof cryptoApi.randomUUID === 'function') {
-    return cryptoApi.randomUUID();
-  }
-  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
-/** One request's response: a success envelope or the contract's error envelope. */
-const toResponse = (outcome: Outcome, requestId: string): APIGatewayProxyStructuredResultV2 => {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (outcome.retryAfterSeconds !== undefined) {
-    headers['retry-after'] = String(outcome.retryAfterSeconds);
-  }
-  const body =
-    outcome.code === undefined
-      ? { summary: outcome.summary, requestId, usage: outcome.usage }
-      : { error: { code: outcome.code }, requestId };
-  return { statusCode: outcome.statusCode, headers, body: JSON.stringify(body) };
-};
-
-const logOutcome = (outcome: Outcome, requestId: string, latencyMs: number): void => {
-  if (outcome.code === undefined) {
-    console.info('summary request', {
-      requestId,
-      stage: outcome.stage,
-      latencyMs,
-      inputTokens: outcome.usage?.inputTokens,
-      outputTokens: outcome.usage?.outputTokens,
-    });
-    return;
-  }
-  console.warn('summary request failed', {
-    requestId,
-    stage: outcome.stage,
-    latencyMs,
-    code: outcome.code,
-  });
 };
 
 /**
@@ -349,6 +297,7 @@ const logOutcome = (outcome: Outcome, requestId: string, latencyMs: number): voi
 export const createSummaryHandler = ({
   generate,
   consumeQuota,
+  security,
   now = Date.now,
   requestId,
   quotaTimeoutMs = DEFAULT_QUOTA_TIMEOUT_MS,
@@ -368,15 +317,16 @@ export const createSummaryHandler = ({
     try {
       id = nextRequestId();
       const prepared = prepareRequest(event);
-      const outcome = prepared.ok
-        ? await generateWithinPolicy(
-          { request: prepared.request, accountId: prepared.accountId },
-          deps,
-        )
-        : {
-          statusCode: prepared.status ?? STATUS_BY_CODE[prepared.code],
-          code: prepared.code,
-        };
+      let outcome: Outcome;
+      if (!prepared.ok) {
+        outcome = { statusCode: prepared.status ?? STATUS_BY_CODE[prepared.code], code: prepared.code };
+      } else {
+        try {
+          if (!security) throw new SummaryFailure('unexpected', 'Note authority unavailable');
+          const authority = await security.begin(prepared.request, prepared.accountId, unlockGrantOf(event));
+          outcome = await generateWithinPolicy(prepared, authority, deps);
+        } catch (error) { outcome = outcomeForError(error, prepared.request.stage); }
+      }
       logOutcome(outcome, id, Math.max(0, now() - startedAt));
       return toResponse(outcome, id);
     } catch (error) {

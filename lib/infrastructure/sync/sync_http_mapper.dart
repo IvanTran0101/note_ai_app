@@ -20,6 +20,7 @@ import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
 
 /// The `status` value of an applied mutation response.
 const String _appliedStatus = 'applied';
@@ -31,6 +32,7 @@ const String _appliedStatus = 'applied';
 const Map<int, SyncErrorCode> _statusErrorCodes = <int, SyncErrorCode>{
   401: SyncErrorCode.unauthorized,
   403: SyncErrorCode.forbidden,
+  423: SyncErrorCode.forbidden,
   422: SyncErrorCode.invalidMutation,
   429: SyncErrorCode.throttled,
   500: SyncErrorCode.serverUnavailable,
@@ -51,6 +53,10 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
   'SERVER_UNAVAILABLE': SyncErrorCode.serverUnavailable,
   'NETWORK_UNAVAILABLE': SyncErrorCode.networkUnavailable,
   'TIMEOUT': SyncErrorCode.timeout,
+  'NOTE_SECURITY_STALE': SyncErrorCode.forbidden,
+  'NOTE_LOCKED': SyncErrorCode.forbidden,
+  'NOTE_GRANT_EXPIRED': SyncErrorCode.forbidden,
+  'NOTE_ACCESS_DENIED': SyncErrorCode.forbidden,
 };
 
 /// Encodes one client mutation as a `POST /sync/mutations` request body.
@@ -180,15 +186,39 @@ SyncFailure decodeError({int? statusCode, Object? body}) {
 /// Unknown fields are ignored on purpose: the response is a wire payload and
 /// may grow additive fields, and an `ownerId` the server chose to include is
 /// dropped here rather than becoming client state.
-SyncNoteSnapshot _decodeNote(Map<String, Object?> json) {
+SyncNoteSnapshot decodeSyncNoteSnapshot(
+  Object? data, {
+  bool authorizedContent = false,
+}) => _decodeNote(
+  _asJsonObject(data, 'note snapshot'),
+  authorizedContent: authorizedContent,
+);
+
+SyncNoteSnapshot _decodeNote(
+  Map<String, Object?> json, {
+  bool authorizedContent = false,
+}) {
   final Object? id = json['id'];
   if (id is! String || id.trim().isEmpty) {
     throw const FormatException('Note "id" must be a non-blank string.');
   }
+  final enabled = json['protected'] ?? false;
+  final epoch = json['protectionRevision'] ?? 0;
+  final available = json['contentAvailable'] ?? (enabled == false);
+  if (enabled is! bool ||
+      epoch is! int ||
+      epoch < 0 ||
+      (enabled && epoch == 0) ||
+      available is! bool) {
+    throw const FormatException('Invalid note protection metadata.');
+  }
+  final hasContent = available && (!enabled || authorizedContent);
   return SyncNoteSnapshot(
     id: id,
-    title: _readString(json, 'title'),
-    content: _readString(json, 'content'),
+    title: hasContent ? _readString(json, 'title') : '',
+    content: hasContent ? _readString(json, 'content') : '',
+    protection: NoteProtection(enabled: enabled, revision: epoch),
+    contentAvailable: hasContent,
     createdAt: _readTimestamp(json, 'createdAt'),
     serverUpdatedAt: _readTimestamp(json, 'serverUpdatedAt'),
     revision: _readPositiveRevision(json),

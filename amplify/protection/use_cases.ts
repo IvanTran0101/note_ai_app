@@ -1,12 +1,12 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import type { PasswordHasher } from './password_hasher';
 import type { RecoveryMailer } from './recovery_mailer';
 import { NOTE_OPERATIONS, NoteSecurityError, identifier } from './protection_store';
 import type { GrantRecord, NoteAcl, NoteOperation, NoteSecurityAuthority,
   ProtectionMetadata, ProtectionRecord, ProtectionStore, SecurityAuthorization } from './protection_store';
 
-export const securityDigest = (value: string): string =>
-  createHash('sha256').update(value, 'utf8').digest('hex');
+import { ProtectionAuthorizer, securityDigest } from './authorizer';
+export { securityDigest } from './authorizer';
 const equalDigest = (a: string, b: string): boolean => {
   if (!/^[a-f0-9]{64}$/.test(a) || !/^[a-f0-9]{64}$/.test(b)) return false;
   return timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
@@ -18,40 +18,21 @@ export type UnlockResult = ProtectionMetadata & Readonly<{
 
 export class ProtectionUseCases implements NoteSecurityAuthority {
   private readonly ttlMs: number;
+  private readonly authority: ProtectionAuthorizer;
   constructor(readonly store: ProtectionStore, private readonly hasher: PasswordHasher,
     private readonly acl: NoteAcl, private readonly mailer: RecoveryMailer,
     private readonly now: () => number = Date.now, ttlMs = 15 * 60_000) {
     if (!Number.isFinite(ttlMs) || ttlMs < 60_000 || ttlMs > 3_600_000) throw new NoteSecurityError('unavailable');
     this.ttlMs = ttlMs;
+    this.authority = new ProtectionAuthorizer(store, acl, now);
   }
 
   async metadata(actor: string, owner: string, noteId: string): Promise<ProtectionMetadata> {
-    await this.acl.require(actor, owner, identifier(noteId), 'read');
-    const note = await this.store.readNote(owner, noteId);
-    if (!note) throw new NoteSecurityError('denied');
-    const { enabled, revision } = await this.store.readProtection(owner, noteId);
-    if (note.protected && (!enabled || revision < (note.protectionRevision ?? 0))) {
-      throw new NoteSecurityError('unavailable');
-    }
-    return { enabled, revision };
+    return this.authority.metadata(actor, owner, noteId);
   }
-
-  async authorize(actorId: string, ownerId: string, noteId: string,
+  async authorize(actor: string, owner: string, noteId: string,
     operation: NoteOperation, token?: string): Promise<SecurityAuthorization> {
-    await this.acl.require(actorId, ownerId, identifier(noteId), operation);
-    if ((operation === 'manage' || operation === 'delete') && actorId !== ownerId) throw new NoteSecurityError('denied');
-    const protection = await this.store.readProtection(ownerId, noteId);
-    const base = { actorId, ownerId, noteId, operation,
-      enabled: protection.enabled, revision: protection.revision };
-    if (!protection.enabled) return base;
-    if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new NoteSecurityError('locked');
-    const hash = securityDigest(token);
-    const grant = await this.store.readGrant(ownerId, hash);
-    if (!grant || grant.actorId !== actorId || grant.ownerId !== ownerId ||
-        grant.noteId !== noteId || grant.revision !== protection.revision ||
-        !grant.operations.includes(operation)) throw new NoteSecurityError('denied');
-    if (grant.expiresAt <= this.now()) throw new NoteSecurityError('expired');
-    return { ...base, grantHash: hash, expiresAt: grant.expiresAt };
+    return this.authority.authorize(actor, owner, noteId, operation, token);
   }
 
   async enable(actor: string, owner: string, noteId: string, password: string,

@@ -50,10 +50,13 @@ final class SyncStateReconciliation {
             ..[index] = copyEntry(
               entry,
               lastError: failure.code,
-              blocked: failure.code == SyncErrorCode.invalidMutation,
+              blocked:
+                  failure.code == SyncErrorCode.invalidMutation ||
+                  failure.code == SyncErrorCode.forbidden,
             );
       final List<LocalNoteState> notes =
-          failure.code == SyncErrorCode.invalidMutation
+          (failure.code == SyncErrorCode.invalidMutation ||
+              failure.code == SyncErrorCode.forbidden)
           ? current.notes
                 .map(
                   (LocalNoteState note) => note.id == entry.noteId
@@ -149,7 +152,11 @@ final class SyncStateReconciliation {
           .toList();
       final List<LocalNoteState> notes = List<LocalNoteState>.of(current.notes);
       final LocalNoteState local = notes[noteIndex];
-      notes[noteIndex] = later
+      notes[noteIndex] =
+          later ||
+              (snapshot.protection.enabled &&
+                  local.protection == snapshot.protection &&
+                  local.contentAvailable)
           ? LocalNoteState(
               id: local.id,
               ownerId: local.ownerId,
@@ -159,7 +166,9 @@ final class SyncStateReconciliation {
               updatedAt: local.updatedAt,
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
-              status: local.status,
+              status: later ? local.status : NoteSyncStatus.synced,
+              protection: snapshot.protection,
+              contentAvailable: local.contentAvailable,
             )
           : fromRemote(snapshot, NoteSyncStatus.synced);
       acknowledged = true;
@@ -207,7 +216,8 @@ final class SyncStateReconciliation {
           (LocalNoteState item) => item.id == snapshot.id,
         );
         if (noteIndex >= 0 &&
-            snapshot.revision <= notes[noteIndex].serverRevision) {
+            snapshot.revision <= notes[noteIndex].serverRevision &&
+            snapshot.protection == notes[noteIndex].protection) {
           continue;
         }
         final LocalNoteState incoming = fromRemote(
@@ -286,6 +296,8 @@ final class SyncStateReconciliation {
         serverRevision: note.serverRevision,
         deletedAt: note.deletedAt,
         status: status,
+        protection: note.protection,
+        contentAvailable: note.contentAvailable,
       );
 
   LocalNoteState fromRemote(SyncNoteSnapshot snapshot, NoteSyncStatus status) =>
@@ -299,6 +311,8 @@ final class SyncStateReconciliation {
         serverRevision: snapshot.revision,
         deletedAt: snapshot.deletedAt,
         status: status,
+        protection: snapshot.protection,
+        contentAvailable: snapshot.contentAvailable,
       );
 }
 

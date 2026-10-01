@@ -18,6 +18,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1145.0",
     "@aws-sdk/client-dynamodb": "^3.1139.0",
     "@aws-sdk/client-sesv2": "^3.1144.0",
     "@aws-sdk/lib-dynamodb": "^3.1139.0",

@@ -1,9 +1,10 @@
+import { parseSummaryNoteContext, type SummaryNoteContext } from './summary_note_context';
 import summaryPolicy from '../../assets/summary_policy.json';
 
 /**
  * Shared Summary Cloud request/response contract (Phase 2 backend, worker-1 port).
  *
- * This module is the one owner of the frozen v0.3 vocabulary
+ * This module is the one owner of the v0.4 vocabulary
  * (`docs/summary_api_contract.md`, sections 2-5): the stages, the per-stage
  * input cardinality, the request body schema (including the per-request consent
  * declaration), and the server-owned prompts. It is pure: no AWS SDK, no I/O,
@@ -36,6 +37,7 @@ export type SummaryStage = 'direct' | 'section' | 'merge';
 /** A validated request for exactly one provider generation. */
 export type SummaryRequest = Readonly<{
   stage: SummaryStage;
+  note?: SummaryNoteContext;
   /** Trimmed non-empty inputs; `direct`/`section` have 1, `merge` has 2-4. */
   inputs: string[];
 }>;
@@ -57,6 +59,8 @@ export type SummaryErrorCode =
   | 'inputTooLong'
   | 'unauthorized'
   | 'consentRequired'
+  | 'noteLocked'
+  | 'noteChanged'
   | 'rateLimited'
   | 'providerUnavailable'
   | 'invalidOutput'
@@ -127,7 +131,7 @@ for (const data of Object.values(summaryPolicy.stages)) {
 const STAGES: readonly SummaryStage[] = ['direct', 'section', 'merge'];
 
 /** The contract allows exactly these top-level request fields. */
-const REQUEST_FIELDS: readonly string[] = ['stage', 'inputs', 'consent'];
+const REQUEST_FIELDS: readonly string[] = ['stage', 'inputs', 'consent', 'note'];
 
 /** Extra fields inside `consent` are a schema defect, not a consent defect. */
 const CONSENT_FIELDS: readonly string[] = ['accepted', 'version'];
@@ -235,7 +239,8 @@ export const parseSummaryBody = (body: string): SummaryRequest => {
   }
 
   readConsent(decoded.consent);
-  return { stage: decoded.stage, inputs: readInputs(decoded.inputs, decoded.stage) };
+  return { stage: decoded.stage, inputs: readInputs(decoded.inputs, decoded.stage),
+    note: parseSummaryNoteContext(decoded.note) };
 };
 
 /**

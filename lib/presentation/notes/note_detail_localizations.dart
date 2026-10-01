@@ -224,6 +224,10 @@ final class NoteDetailCopy {
         _isVietnamese
             ? 'Ghi chú đã thay đổi. Hãy thử lại.'
             : 'The note changed. Please try again.',
+      SummaryRunFailureCode.noteLocked =>
+        _isVietnamese
+            ? 'Hãy mở khóa ghi chú trước khi tóm tắt.'
+            : 'Unlock this note before summarizing.',
       SummaryRunFailureCode.conflict => summaryConflictBlocked,
       SummaryRunFailureCode.deadlineExceeded =>
         _isVietnamese

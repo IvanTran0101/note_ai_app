@@ -121,6 +121,7 @@ final class EncryptedStateCodec {
               opened.key,
               _noteAad(noteId, opened.epoch),
             ),
+            requireCurrentRevision: true,
           );
         }
       }

@@ -1,3 +1,6 @@
+import '../../application/notes/note_access.dart';
+import 'summary_note_lineage.dart';
+
 import 'package:http/http.dart' as http;
 
 import '../../application/auth/current_user.dart';
@@ -29,9 +32,12 @@ final class SummaryRunRuntime {
     required this.localSyncStoreForAccount,
     required this.loadPolicy,
     required this.tokenProvider,
+    this.accessGuardForAccount,
+    this.grantHeaderForRun,
     this.cognitoMode = true,
     this.client,
   }) : _guard = SummaryRunGuard(
+         accessGuardForAccount: accessGuardForAccount,
          currentUser: currentUser,
          session: session,
          consent: consent,
@@ -43,6 +49,8 @@ final class SummaryRunRuntime {
     required ILocalSyncStore Function({required String accountUserId})
     localSyncStoreForAccount,
     required String amplifyOutputsJson,
+    INoteAccessGuard Function(String accountId)? accessGuardForAccount,
+    String? Function(SummaryRunContext context)? grantHeaderForRun,
     bool cognitoMode = true,
     http.Client? client,
   }) => SummaryRunRuntime(
@@ -55,6 +63,8 @@ final class SummaryRunRuntime {
     localSyncStoreForAccount: localSyncStoreForAccount,
     loadPolicy: SummaryRequestPolicy.load,
     tokenProvider: const CognitoAccessTokenProvider().call,
+    accessGuardForAccount: accessGuardForAccount,
+    grantHeaderForRun: grantHeaderForRun,
     cognitoMode: cognitoMode,
     client: client,
   );
@@ -68,6 +78,8 @@ final class SummaryRunRuntime {
   final SummaryPolicyLoader loadPolicy;
   final Future<String?> Function({required bool forceRefresh}) tokenProvider;
   final bool cognitoMode;
+  final INoteAccessGuard Function(String accountId)? accessGuardForAccount;
+  final String? Function(SummaryRunContext context)? grantHeaderForRun;
 
   /// A borrowed HTTP client remains owned by the caller.
   final http.Client? client;
@@ -134,6 +146,8 @@ final class SummaryRunRuntime {
           tokenProvider: tokenProvider,
           expectedAccountUserId: context.accountUserId,
           runScope: context.scope,
+          noteLineage: SummaryNoteLineage(context),
+          grantHeader: () => grantHeaderForRun?.call(context),
           beforeDispatch: () =>
               _guard.revalidate(context, requireConsent: true),
           currentRunFailure: () =>

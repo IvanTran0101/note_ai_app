@@ -9,6 +9,8 @@ import 'pending_mutation.dart';
 import 'sync_conflict.dart';
 import 'sync_mutation.dart';
 import 'sync_snapshot.dart';
+import '../notes/note_access.dart';
+import '../../domain/notes/note_protection.dart';
 
 enum SyncConflictChoice { useLocal, useRemote, later }
 
@@ -18,12 +20,14 @@ final class SyncConflictResolver {
     required this.generateNoteId,
     required this.generateMutationId,
     required this.now,
+    this.accessGuard,
   });
 
   final ILocalSyncStore localSyncStore;
   final String Function() generateNoteId;
   final String Function() generateMutationId;
   final DateTime Function() now;
+  final INoteAccessGuard? accessGuard;
 
   Future<void> resolve({
     required String accountUserId,
@@ -56,6 +60,34 @@ final class SyncConflictResolver {
           .toList();
       final DateTime timestamp = now();
       final SyncNoteSnapshot? remote = conflict.remote;
+      if (local.protection.enabled) {
+        final guard = accessGuard;
+        if (guard == null ||
+            !local.contentAvailable ||
+            (choice == SyncConflictChoice.useRemote &&
+                remote != null &&
+                !remote.contentAvailable)) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+        }
+        guard.requireAccess(
+          ownerId: accountUserId,
+          noteId: local.id,
+          protection: local.protection,
+          operation: local.isDeleted
+              ? NoteOperation.delete
+              : NoteOperation.edit,
+        );
+        // Copying a protected deleted note into another identity is export.
+        if (choice == SyncConflictChoice.useLocal &&
+            (remote == null || remote.isDeleted)) {
+          guard.requireAccess(
+            ownerId: accountUserId,
+            noteId: local.id,
+            protection: local.protection,
+            operation: NoteOperation.export,
+          );
+        }
+      }
 
       if (choice == SyncConflictChoice.useRemote) {
         if (remote != null) notes.add(_fromRemote(remote, accountUserId));
@@ -172,6 +204,8 @@ LocalNoteState _pendingNote(
   serverRevision: serverRevision,
   deletedAt: note.deletedAt,
   status: NoteSyncStatus.pending,
+  protection: note.protection,
+  contentAvailable: note.contentAvailable,
 );
 
 LocalNoteState _fromRemote(SyncNoteSnapshot note, String accountUserId) =>
@@ -185,4 +219,6 @@ LocalNoteState _fromRemote(SyncNoteSnapshot note, String accountUserId) =>
       serverRevision: note.revision,
       deletedAt: note.deletedAt,
       status: NoteSyncStatus.synced,
+      protection: note.protection,
+      contentAvailable: note.contentAvailable,
     );

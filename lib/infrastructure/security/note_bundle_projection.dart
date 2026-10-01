@@ -52,9 +52,22 @@ abstract final class NoteBundleProjection {
     'payload': m['payload'] == null ? null : {'title': '', 'content': ''},
   };
 
-  static void restore(Map<String, Object?> state, Map<String, Object?> bundle) {
+  static void restore(
+    Map<String, Object?> state,
+    Map<String, Object?> bundle, {
+    bool requireCurrentRevision = false,
+  }) {
     final note = Map<String, Object?>.from(bundle['note'] as Map);
     final id = note['id'];
+    final currentNote = notes(state).where((n) => n['id'] == id).firstOrNull;
+    final hasPending = entries(state, 'outbox').any((m) => m['noteId'] == id);
+    if (requireCurrentRevision &&
+        !hasPending &&
+        currentNote != null &&
+        (currentNote['serverRevision'] as int) >
+            (note['serverRevision'] as int)) {
+      return;
+    }
     state['notes'] = notes(state).map((n) => n['id'] == id ? note : n).toList();
     for (final field in ['outbox', 'conflicts']) {
       final originals = entries(bundle, field);
@@ -63,7 +76,29 @@ abstract final class NoteBundleProjection {
         final matching = originals.where(
           (e) => e[identity] == current[identity],
         );
-        return matching.isEmpty ? current : matching.first;
+        if (matching.isEmpty) return current;
+        final original = matching.first;
+        if (field == 'outbox') {
+          return {
+            ...original,
+            'retryCount': current['retryCount'],
+            'lastError': current['lastError'] ?? original['lastError'],
+            'blocked':
+                original['blocked'] == true ||
+                current['lastError'] == 'forbidden',
+          };
+        }
+        final oldRemote = original['remote'] as Map?;
+        final newRemote = current['remote'] as Map?;
+        return {
+          ...original,
+          'remote':
+              newRemote != null &&
+                  (newRemote['revision'] as int) >
+                      ((oldRemote?['revision'] as int?) ?? 0)
+              ? newRemote
+              : oldRemote,
+        };
       }).toList();
     }
   }

@@ -1,3 +1,7 @@
+import '../../application/sync/sync_mutation.dart';
+import '../../application/sync/sync_snapshot.dart';
+import '../../application/sync/sync_failure.dart';
+
 import 'dart:async';
 
 import '../../application/sync/local_sync_store.dart';
@@ -16,9 +20,22 @@ final class AccountSyncRuntime {
     required this.baseUri,
     required this.localSyncStoreFactory,
     DateTime Function()? clock,
+    this.mutationGrant,
+    this.observeSnapshot,
+    this.hydrateSnapshot,
+    this.requireSession,
+    this.sessionGeneration,
   }) : _clock = clock ?? DateTime.now;
 
   final Uri baseUri;
+  final Future<String?> Function(String account, SyncMutation mutation)?
+  mutationGrant;
+  final Future<void> Function(String account, SyncNoteSnapshot snapshot)?
+  observeSnapshot;
+  final Future<void> Function(String account, SyncNoteSnapshot snapshot)?
+  hydrateSnapshot;
+  final void Function(String account)? requireSession;
+  final int Function()? sessionGeneration;
   final ILocalSyncStore Function({required String accountUserId})
   localSyncStoreFactory;
   final DateTime Function() _clock;
@@ -33,10 +50,21 @@ final class AccountSyncRuntime {
       throw ArgumentError.value(accountUserId, 'accountUserId');
     }
     return _coordinators.putIfAbsent(accountUserId, () {
+      final captured = sessionGeneration?.call();
+      void requireLive() {
+        requireSession?.call(accountUserId);
+        if (captured != sessionGeneration?.call()) {
+          throw const SyncFailure(code: SyncErrorCode.forbidden);
+        }
+      }
+
       final HttpRemoteNoteDataSource remote = HttpRemoteNoteDataSource(
         baseUri: baseUri,
         tokenProvider: const CognitoAccessTokenProvider().call,
         expectedAccountUserId: accountUserId,
+        requireSession: requireLive,
+        mutationGrant: (mutation) async =>
+            mutationGrant?.call(accountUserId, mutation),
       );
       _remoteDataSources[accountUserId] = remote;
       return SyncCoordinatorService(
@@ -44,6 +72,13 @@ final class AccountSyncRuntime {
         localStore: localSyncStoreFactory(accountUserId: accountUserId),
         remote: remote,
         clock: _clock,
+        requireSession: requireLive,
+        observeSnapshot: (snapshot) async {
+          await observeSnapshot?.call(accountUserId, snapshot);
+        },
+        hydrateSnapshot: (snapshot) async {
+          await hydrateSnapshot?.call(accountUserId, snapshot);
+        },
       );
     });
   }

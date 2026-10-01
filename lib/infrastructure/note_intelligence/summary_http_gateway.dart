@@ -1,3 +1,5 @@
+import 'summary_note_lineage.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -9,6 +11,8 @@ import 'summary_api_failure.dart';
 import 'summary_http_call.dart';
 import 'summary_http_mapper.dart';
 import 'summary_request_policy.dart';
+
+part 'summary_http_response.dart';
 
 /// One Summary stage generation: validated final text for exactly one stage.
 typedef SummaryStageGenerator = Future<String> Function({
@@ -28,6 +32,8 @@ final class SummaryHttpGateway {
     tokenProvider,
     required String expectedAccountUserId,
     SummaryRunScope? runScope,
+    SummaryNoteLineage? noteLineage,
+    String? Function()? grantHeader,
     Future<void> Function()? beforeDispatch,
     SummaryRunFailureCode? Function()? currentRunFailure,
     http.Client? client,
@@ -39,6 +45,8 @@ final class SummaryHttpGateway {
       tokenProvider: tokenProvider,
       expectedAccountUserId: _validateAccountUserId(expectedAccountUserId),
       runScope: runScope,
+      noteLineage: noteLineage,
+      grantHeader: grantHeader,
       beforeDispatch: beforeDispatch,
       currentRunFailure: currentRunFailure,
       client: client ?? http.Client(),
@@ -53,6 +61,8 @@ final class SummaryHttpGateway {
     required this._tokenProvider,
     required this._expectedAccountUserId,
     required this._runScope,
+    required this.noteLineage,
+    required this.grantHeader,
     required this._beforeDispatch,
     required this._currentRunFailure,
     required this._client,
@@ -74,6 +84,8 @@ final class SummaryHttpGateway {
   final Future<String?> Function({required bool forceRefresh}) _tokenProvider;
   final String _expectedAccountUserId;
   final SummaryRunScope? _runScope;
+  final SummaryNoteLineage? noteLineage;
+  final String? Function()? grantHeader;
   final Future<void> Function()? _beforeDispatch;
   final SummaryRunFailureCode? Function()? _currentRunFailure;
   final http.Client _client;
@@ -179,7 +191,13 @@ final class SummaryHttpGateway {
       throw const SummaryApiFailure(code: SummaryApiErrorCode.inputTooLong);
     }
 
-    final Uint8List encoded = utf8.encode(_policy.requestJson(stage, copied));
+    final Uint8List encoded = utf8.encode(
+      _policy.requestJson(
+        stage,
+        copied,
+        note: noteLineage?.forStage(stage, copied),
+      ),
+    );
     if (encoded.length > _policy.maxBodyBytesUtf8) {
       throw const SummaryApiFailure(code: SummaryApiErrorCode.inputTooLong);
     }
@@ -234,6 +252,8 @@ final class SummaryHttpGateway {
     if (invalid != null) {
       throw SummaryRunFailure(invalid);
     }
+    final grant = grantHeader?.call();
+    if (grant != null) request.headers['X-Note-Unlock-Grant'] = grant;
     return _client.send(request);
   }
 
@@ -243,113 +263,17 @@ final class SummaryHttpGateway {
     http.StreamedResponse response,
   ) async {
     final Uint8List body = await _readBounded(call, response);
+    final guard = _beforeDispatch;
+    if (guard != null) await call.raceScope(guard());
+    call.throwIfExpired();
+    final invalid = _currentRunFailure?.call();
+    if (invalid != null) throw SummaryRunFailure(invalid);
     return _mapper.mapResponse(
       stage: stage,
       statusCode: response.statusCode,
       bodyBytes: body,
       headers: response.headers,
     );
-  }
-
-  /// Reads the response body under [maxResponseBytes], cancelling the stream as
-  Future<Uint8List> _readBounded(
-    SummaryHttpCall call,
-    http.StreamedResponse response,
-  ) async {
-    final int? declared = response.contentLength;
-    if (declared != null && declared > maxResponseBytes) {
-      // Release the advertised body without buffering any of it.
-      call.abortForOversize();
-      await _discard(response);
-      throw const SummaryApiFailure(code: SummaryApiErrorCode.invalidOutput);
-    }
-
-    final BytesBuilder builder = BytesBuilder(copy: false);
-    final Completer<Uint8List> done = Completer<Uint8List>();
-    void fail(Object error, [StackTrace? stackTrace]) {
-      if (!done.isCompleted) {
-        done.completeError(error, stackTrace);
-      }
-    }
-
-    final StreamSubscription<List<int>> subscription = response.stream.listen(
-      (List<int> chunk) {
-        builder.add(chunk);
-        if (builder.length > maxResponseBytes) {
-          call.abortForOversize();
-          fail(
-            const SummaryApiFailure(code: SummaryApiErrorCode.invalidOutput),
-          );
-        }
-      },
-      onError: fail,
-      onDone: () {
-        if (!done.isCompleted) {
-          done.complete(builder.takeBytes());
-        }
-      },
-      cancelOnError: true,
-    );
-    // The deadline must also stop a body read that the client cannot abort by
-    // itself; the trigger completes without error by contract.
-    unawaited(
-      call.abortTrigger.then((void _) {
-        if (call.cancelled) {
-          fail(call.cancellationFailure());
-        } else {
-          fail(const SummaryApiFailure(code: SummaryApiErrorCode.timeout));
-        }
-      }),
-    );
-    try {
-      return await done.future;
-    } finally {
-      await subscription.cancel();
-    }
-  }
-
-  /// Releases a response this call will not read, without buffering it.
-  Future<void> _discard(http.StreamedResponse response) async {
-    try {
-      await response.stream.listen(null).cancel();
-    } on Object {
-      // Releasing a response that was already refused must not fail the refresh
-      // path; the connection is dropped either way.
-    }
-  }
-
-  Future<T> _classify<T>(
-    SummaryHttpCall call,
-    Future<T> Function() operation,
-  ) async {
-    try {
-      return await operation();
-    } on SummaryRunFailure {
-      rethrow;
-    } on SummaryApiFailure {
-      rethrow;
-    } on TimeoutException {
-      throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
-    } on http.ClientException {
-      if (call.cancelled) {
-        throw call.cancellationFailure();
-      }
-      // `package:http` wraps socket-level failures in this type on IO platforms
-      // and raises it directly on Web, and the abort trigger injects it as a
-      // `RequestAbortedException`. The call's own state tells the two aborts
-      // apart from a real transport failure.
-      if (call.timedOut) {
-        throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
-      }
-      if (call.aborted) {
-        throw const SummaryApiFailure(code: SummaryApiErrorCode.invalidOutput);
-      }
-      throw const SummaryApiFailure(
-        code: SummaryApiErrorCode.networkUnavailable,
-      );
-    } catch (_) {
-      throw const SummaryApiFailure(code: SummaryApiErrorCode.unexpected);
-    }
   }
 
   Duration? _budgetFor(DateTime? deadline) {

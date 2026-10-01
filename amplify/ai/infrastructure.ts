@@ -8,7 +8,7 @@ import {
 } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, Table, type ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import type { IFunction } from 'aws-cdk-lib/aws-lambda';
 
@@ -53,7 +53,7 @@ const QUOTA_TABLE_ENV = 'SUMMARY_QUOTA_TABLE_NAME';
 const QUOTA_TABLE_TTL_ATTRIBUTE = 'expiresAt';
 
 /** Headers the contract's client sends: bearer token plus a JSON body. */
-const SUMMARY_REQUEST_HEADERS = ['authorization', 'content-type'];
+const SUMMARY_REQUEST_HEADERS = ['authorization', 'content-type', 'x-note-unlock-grant'];
 
 /** `Retry-After` is the only response header the browser client must read. */
 const SUMMARY_EXPOSED_HEADERS = ['retry-after'];
@@ -79,6 +79,7 @@ type EnvironmentExtendableFunction = Readonly<{
 export type SummaryInfrastructureProps = Readonly<{
   /** The managed Summary Lambda, e.g. `summary.resources.lambda`. */
   handler: IFunction;
+  notesTable: ITable;
   /** User pool issuer, e.g. `backend.auth.resources.userPool.userPoolProviderUrl`. */
   issuerUrl: string;
   /** App client id(s) whose tokens are accepted. */
@@ -104,6 +105,7 @@ const addQuotaTableEnvironment = (handler: IFunction, table: Table): void => {
 
 export const createSummaryInfrastructure = ({
   handler,
+  notesTable,
   issuerUrl,
   audience,
   allowedOrigins = ['*'],
@@ -122,6 +124,11 @@ export const createSummaryInfrastructure = ({
   });
 
   addQuotaTableEnvironment(handler, table);
+  (handler as IFunction & EnvironmentExtendableFunction).addEnvironment('NOTES_TABLE_NAME', notesTable.tableName);
+  handler.addToRolePolicy(new PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:ConditionCheckItem'],
+    resources: [notesTable.tableArn],
+  }));
   // One atomic conditional update is the whole quota, so `UpdateItem` on this
   // table is the entire DynamoDB surface. No notes-table access is granted.
   handler.addToRolePolicy(

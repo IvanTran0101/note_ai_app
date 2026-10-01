@@ -7,6 +7,7 @@ import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../../application/sync/sync_conflict.dart';
 import '../../domain/notes/note_protection.dart';
 import '../sync/local_sync_store_account_namespace.dart';
 import 'encoded_account_store.dart';
@@ -166,7 +167,19 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
         accountUserId: state.accountUserId,
         notes: [...state.notes.where((n) => n.id != snapshot.id), hydrated],
         outbox: state.outbox,
-        conflicts: state.conflicts,
+        conflicts: state.conflicts.map(
+          (c) =>
+              c.noteId == snapshot.id &&
+                  (c.remote?.revision ?? 0) <= snapshot.revision
+              ? SyncConflict(
+                  noteId: c.noteId,
+                  local: c.local,
+                  pending: c.pending,
+                  detectedAt: c.detectedAt,
+                  remote: snapshot,
+                )
+              : c,
+        ),
         cursor: state.cursor,
       );
     });

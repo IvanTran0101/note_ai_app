@@ -1,10 +1,10 @@
-# Contract Phase 1 — Summary Cloud qua DeepSeek
+# Summary Cloud contract — canonical note lineage
 
-Phiên bản: **0.3 — Phase 1: contract + fixtures + checks**
+Phiên bản: **0.4 — M05: note identity, revisions, scoped authorization và run lineage**
 
-Cập nhật: **2026-09-30**
-Phạm vi đã được user xác nhận: hoàn thành Phase 1 bằng contract, fixtures và
-checks offline. Endpoint, adapter, consent UI và deployment thuộc phase sau.
+Cập nhật: **2026-10-02**
+Contract hiện hành cho M05. Artifacts/checkers Phase 1 bên dưới là lịch sử v0.3;
+chưa dùng làm bằng chứng runtime v0.4. Không deploy trong đợt này.
 
 ## 1. Quyết định và thay đổi so với đề xuất trước
 
@@ -36,14 +36,14 @@ DeepSeek. Đây là mặc định tiết kiệm để review, không phải bằ
 | Trạng thái | Hành vi |
 | --- | --- |
 | Account Cognito đang đăng nhập; note của account, đã lưu, không conflict | Cho phép sau consent |
-| Note đã lưu local nhưng chưa sync | Cho phép gửi snapshot sau consent; không tạo bản note trên server hoặc index |
+| Note đã lưu local nhưng chưa sync | Chặn cloud đến khi sync đúng revision; local AI theo local access guard |
 | Note có thay đổi chưa lưu hoặc conflict | Chặn đến khi lưu hoặc giải quyết conflict |
-| Note đã xóa, thuộc account khác, hoặc được bảo vệ | Chặn; protected notes chỉ được mở rộng sau khi có quy tắc riêng |
+| Note đã xóa hoặc thuộc account khác | Chặn |
+| Protected note | Yêu cầu unlock local và grant server có scope Summary |
 | Chưa consent, hết phiên, hoặc không có mạng | Không gửi generation request |
 
-Hiện chưa có protected-note model. Contract này không tuyên bố đã có khóa/unlock
-hoặc hỗ trợ sharing. Nếu thêm cờ cấm gửi cloud sau này, phải kiểm tra cờ đó trước
-mọi stage. "Chưa sync" không đồng nghĩa "cấm gửi cloud".
+Metadata protected không chứa title/body; offline unlock không tạo grant server.
+M05 chưa triển khai sharing; owner ACL hiện hành chặn actor khác owner.
 
 Consent mặc định tắt. Thông báo đề xuất:
 
@@ -60,12 +60,14 @@ Backend từ chối khai báo thiếu, sai kiểu, false hoặc sai version. Đ�
 được khai báo theo request, không phải bản ghi consent bền vững hoặc bằng chứng
 kiểm toán server-side.
 
-Flutter kiểm tra ownership trên note local. Backend xác thực caller và validate
-dữ liệu gửi lên; không thể chứng minh ownership của một chuỗi văn bản tùy ý.
-Endpoint không đọc note bằng identifier do client gửi và không cần quyền đọc
-DynamoDB notes. Chỉ dùng note giả lập cho spike; rà soát provider/data disclosure
-trước khi sử dụng note thật. NoteFlow không lưu input/section summaries vào
-database hoặc logs; điều này không hứa rằng DeepSeek không lưu dữ liệu.
+Flutter giữ consent/session/snapshot/cancellation guards. Backend đọc canonical note,
+kiểm tra ACL và grant trước quota/provider, rồi kiểm tra lại trước phát output.
+Direct input phải khớp canonical body. Section offsets UTF-16 phải liên tiếp, chỉ
+được bỏ whitespace ở rìa. Merge chỉ nhận đúng outputs đã duyệt, đúng thứ tự.
+Run server có TTL 180 giây, reservation CAS, tối đa 4 sections + 1 merge;
+TTL cleanup không quyết định thời hạn. Run lỗi phải bắt đầu lại với runId mới.
+Server lưu intermediate outputs trong run row có TTL; client giữ chúng trong bộ nhớ.
+Không log nội dung, password/grant hoặc output. Đây không phải end-to-end encryption.
 
 ## 3. API request và response
 
@@ -75,12 +77,19 @@ database hoặc logs; điều này không hứa rằng DeepSeek không lưu dữ
 POST /ai/summary
 Authorization: Bearer <Cognito access token>
 Content-Type: application/json
+X-Note-Unlock-Grant: <opaque scoped grant; protected notes only>
 ```
 
 ```json
 {
-  "stage": "section",
-  "inputs": ["Nội dung một đoạn đã chia"],
+  "stage": "direct",
+  "inputs": ["Nội dung toàn ghi chú đã sync"],
+  "note": {
+    "ownerId": "verified-owner-sub", "noteId": "canonical-note-id",
+    "contentRevision": 3, "protectionRevision": 1,
+    "runId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "sectionIndex": 0, "sourceStart": null, "sourceEnd": null
+  },
   "consent": {
     "accepted": true,
     "version": "summary-cloud-v1"
@@ -99,7 +108,7 @@ chỉ trim whitespace ở rìa; không tự bỏ đoạn hoặc rút gọn nội
 budget. Chặn request body vượt **256 KiB UTF-8** trước khi xử lý generation.
 Đây là guard transport bổ sung, không phải cách chuyển byte thành token.
 
-Không nhận `ownerId`, provider key, `model`, `max_tokens`, system prompt, URL
+Identity chỉ nằm trong `note`; JWT actor vẫn là nguồn xác thực. Không nhận provider key, `model`, `max_tokens`, system prompt, URL
 provider hoặc các trường tùy ý. Backend xây prompt từ stage và inputs đã validate.
 Client không gửi generation prompt hoàn chỉnh.
 
@@ -134,7 +143,8 @@ do server tạo cho mỗi HTTP request, không dùng để suy ra quyền hoặc
 | HTTP | Code / điều kiện |
 | --- | --- |
 | 400 / 413 | `invalidInput` / `inputTooLong`: schema, stage, cardinality, token hoặc body budget |
-| 401 / 403 | `unauthorized` / `consentRequired` |
+| 401 / 403 | `unauthorized` / `consentRequired` / `noteLocked` |
+| 409 | `noteChanged`: canonical revision, protection epoch hoặc run lineage không hợp lệ |
 | 429 | `rateLimited`; thêm `Retry-After` khi có thời gian chờ hợp lệ |
 | 502 | `providerUnavailable` / `invalidOutput` |
 | 504 / 500 | `timeout` / `unexpected`: lỗi deadline hoặc backend không phân loại được |
@@ -176,13 +186,14 @@ vượt trần 5 calls. Không chấp nhận một phần kết quả làm summa
 
 Trước mỗi stage kiểm tra account/consent; trước hiển thị kiểm tra account,
 note id và snapshot còn hợp lệ. Nếu một section lỗi, dừng pipeline, giữ note
-và summary cũ. Intermediate summaries chỉ ở bộ nhớ; không persist khi app đóng.
+và summary cũ. Client không persist intermediate summaries khi app đóng;
+server giữ approved outputs trong run row có TTL để xác minh merge.
 
-Đây là yêu cầu dành cho phase runtime: orchestrator Dart phải enforce trần 5
-generation calls cho một thao tác UI.
-Backend stateless theo stage không thể xác minh client đã dùng bao nhiêu calls
-cho toàn note; quota theo account phải enforce riêng ở server. Không coi trần
-client hoặc requestId là cơ chế chống lạm dụng server-side.
+Client enforce trần 5 calls; server enforce reservation/index/contiguous source và
+approved outputs. requestId chỉ là log correlation; runId không thay ACL/grant.
+Section dùng index 0..3 và offsets trên canonical body đã trim; merge dùng index
+bằng số sections, offsets null. Direct dùng index 0, offsets null. RunId là CSPRNG
+24 byte encode base64url (32 ký tự), không tái dùng. Không có raw grant trong body.
 
 ## 5. Prompt, thời gian và quota
 
@@ -258,7 +269,7 @@ Khi triển khai vẫn phải có kiểm thử correctness với mock:
 | Tính đầy đủ | Bảo toàn thứ tự/chữ Unicode; không mất đầu/cuối; section lỗi hoặc output `length` không trả summary thành công |
 | Quyền / consent | Không gửi khi consent tắt; đổi account hoặc snapshot thì dừng các stage tiếp theo/bỏ kết quả sai |
 | API / lỗi | Schema/cardinality/transport cap đúng; 401 refresh tối đa một lần; không tự retry provider; xử lý cả gateway body ngoài envelope |
-| UI / dữ liệu | Copy/Regenerate/Retry giữ hành vi; lỗi giữ note/summary cũ; không download GGUF trong remote mode; không lưu input hoặc log nội dung |
+| UI / dữ liệu | Copy/Regenerate/Retry giữ hành vi; lỗi giữ note/summary cũ; không download GGUF trong remote mode; không persist client input/log nội dung; server giữ approved outputs có TTL |
 
 ### Artifacts Phase 1
 

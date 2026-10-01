@@ -6,7 +6,7 @@ Updated: 2026-10-02. Scope: **only M05 — Note Security**.
 - [M05 source plan](https://app.notion.com/p/3e8f9c7a1aa0819bbbded3ee8ff44f32)
 - [Planning before code](https://app.notion.com/p/3e6f9c7a1aa080978256eb9e02768c3a)
 - [GitHub target](https://github.com/IvanTran0101/note_ai_app/tree/final-tuankiet)
-- [Protected-layer review request](COLLAB_REVIEW.md)
+- [Scope and contract record](COLLAB_REVIEW.md)
 
 ## Update rule
 
@@ -29,7 +29,7 @@ implementation and evidence, not repeated permission requests.
 | M05.1 | Implemented: protection/metadata contracts, safe DTOs/capabilities and access guard | Runtime wiring continues in backend/storage/UI milestones |
 | M05.2 | Backend implemented and pushed: 5edd28d | UI and Summary integration, deployed/runtime acceptance |
 | M05.3 | Implemented: encrypted envelope, per-note wrapping and native/Web cutover | Crash/pending/runtime acceptance; UI wiring follows |
-| M05.4 | Not implemented | Metadata feed/content split, mutation/replay/conflict, Summary lineage and stale result rejection |
+| M05.4 | Implemented: scoped sync and authoritative Summary v0.4 lineage | UI and deployed/runtime acceptance in M05.5 |
 | M05.5 | Not implemented | Security UI flows and Web/Android verification matrix |
 
 ## Rubric status
@@ -194,3 +194,23 @@ and push after each checkpoint; do not stop at an intermediate milestone.
 | `docs/m05/PROGRESS.md` | Updated milestone evidence and next step |
 | Notion progress page | Created; updated with delivery receipt after push |
 | `_agent_ops/` records | Not applicable: directory/tools/closure template absent; no records fabricated |
+
+## M05.4 checkpoint — 2026-10-02
+
+- Added provider-neutral security actions and transient private HTTP grants;
+  online/offline unlock remain separate. Session/expiry invalidation clears keys,
+  grants and Summary scopes without deleting encrypted pending mutations.
+- Each sync attempt/retry/response checks session and operation scope; security
+  denial blocks only its note and lets other notes/pull continue. Authorized
+  hydration has no save/outbox side effect. Reconciliation preserves protection
+  fields and pending bookkeeping, rejects stale cache and guards conflict cloning.
+- Summary v0.4 binds canonical owner/note/content+protection revision, random run
+  and contiguous UTF-16 sections. Conditional stage reservation and approved
+  outputs enforce merge lineage. Authorization runs before quota/provider/output;
+  output commit conditions canonical revision/epoch/live grant.
+- Recovery resolves mailbox using Cognito GetUser for access tokens and checks
+  returned subject. Root wires guard, sync observers, private proofs and Summary.
+- Dart analysis, backend typecheck and whitespace check are source/static evidence.
+  No tests, app runtime, provider invocation or deployment performed.
+
+Next: M05.5 security forms, locked views, live capabilities and UI lifecycle clearing.

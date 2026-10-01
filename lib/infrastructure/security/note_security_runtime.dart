@@ -1,0 +1,203 @@
+import 'dart:async';
+
+import '../../application/auth/current_user_session.dart';
+import '../../application/notes/local_note_vault.dart';
+import '../../application/notes/note_access.dart';
+import '../../application/notes/note_application.dart';
+import '../../application/notes/note_security_service.dart';
+import '../../application/sync/local_sync_store.dart';
+import '../../application/sync/sync_mutation.dart';
+import '../../application/sync/sync_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
+import '../sync/cognito_access_token_provider.dart';
+import 'http_note_security_gateway.dart';
+import 'unavailable_note_security_gateway.dart';
+
+/// Composition/lifecycle of one isolated security service per signed-in account.
+final class NoteSecurityRuntime implements INoteAccessGuard {
+  NoteSecurityRuntime({
+    required this.session,
+    required this.storeForAccount,
+    required this.baseUri,
+    required this.cancelSummaries,
+    required this.syncNow,
+  });
+  final CurrentUserSession session;
+  final ILocalSyncStore Function({required String accountUserId})
+  storeForAccount;
+  final Uri? baseUri;
+  final void Function() cancelSummaries;
+  final Future<void> Function(String accountId) syncNow;
+  final _services = <String, NoteSecurityService>{};
+  final _gateways = <String, HttpNoteSecurityGateway>{};
+  final _subscriptions = <StreamSubscription<void>>[];
+  final _changes = StreamController<void>.broadcast(sync: true);
+  int _generation = 0;
+  Stream<void> get changes => _changes.stream;
+  bool get serverAvailable => baseUri != null;
+  @override
+  int get accessGeneration => _generation;
+
+  void requireSession(String account) {
+    if (_changes.isClosed || session.userId != account) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+  }
+
+  NoteSecurityService forAccount(String account) {
+    requireSession(account);
+    return _services.putIfAbsent(account, () {
+      final store = storeForAccount(accountUserId: account);
+      if (store is! ILocalNoteVault) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+      }
+      final generation = session.sessionGeneration;
+      final uri = baseUri;
+      final gateway = uri == null
+          ? null
+          : HttpNoteSecurityGateway(
+              baseUri: uri,
+              accountId: account,
+              tokenProvider: const CognitoAccessTokenProvider().call,
+              isCurrentSession: () =>
+                  !_changes.isClosed &&
+                  session.userId == account &&
+                  session.sessionGeneration == generation,
+            );
+      if (gateway != null) _gateways[account] = gateway;
+      final service = NoteSecurityService(
+        accountId: account,
+        currentUser: session,
+        session: session,
+        store: store,
+        vault: store as ILocalNoteVault,
+        gateway: gateway ?? const UnavailableNoteSecurityGateway(),
+        syncNow: () => syncNow(account),
+        cancelSummaries: cancelSummaries,
+      );
+      _subscriptions.add(
+        service.changes.listen((_) {
+          _generation++;
+          if (!_changes.isClosed) _changes.add(null);
+        }),
+      );
+      return service;
+    });
+  }
+
+  @override
+  bool allows({
+    required String ownerId,
+    required String noteId,
+    required NoteProtection protection,
+    required NoteOperation operation,
+  }) {
+    if (_changes.isClosed || session.userId != ownerId) return false;
+    if (!protection.enabled) return true;
+    return _services[ownerId]?.allows(
+          ownerId: ownerId,
+          noteId: noteId,
+          protection: protection,
+          operation: operation,
+        ) ??
+        false;
+  }
+
+  @override
+  void requireAccess({
+    required String ownerId,
+    required String noteId,
+    required NoteProtection protection,
+    required NoteOperation operation,
+  }) {
+    if (!allows(
+      ownerId: ownerId,
+      noteId: noteId,
+      protection: protection,
+      operation: operation,
+    )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+  }
+
+  Future<String?> mutationGrant(String account, SyncMutation mutation) async {
+    requireSession(account);
+    final generation = session.sessionGeneration;
+    final state = await storeForAccount(accountUserId: account).read();
+    requireSession(account);
+    if (generation != session.sessionGeneration) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    final note = state.notes.where((n) => n.id == mutation.noteId).firstOrNull;
+    if (note == null || !note.contentAvailable) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+    final op = mutation.operation == SyncMutationOperation.delete
+        ? NoteOperation.delete
+        : NoteOperation.edit;
+    requireAccess(
+      ownerId: account,
+      noteId: note.id,
+      protection: note.protection,
+      operation: op,
+    );
+    if (!note.protection.enabled) return null;
+    forAccount(account).requireRemote(note.id, note.protection, op);
+    return _gateways[account]!.grantHeader(note.id, note.protection, op);
+  }
+
+  String? summaryGrant(SummaryRunContext context) {
+    requireSession(context.accountUserId);
+    final note = context.noteSnapshot;
+    final p = NoteProtection(
+      enabled: note.isProtected,
+      revision: note.protectionRevision,
+    );
+    requireAccess(
+      ownerId: note.ownerId,
+      noteId: note.id,
+      protection: p,
+      operation: NoteOperation.summary,
+    );
+    if (!p.enabled) return null;
+    forAccount(note.ownerId).requireRemote(note.id, p, NoteOperation.summary);
+    return _gateways[note.ownerId]!.grantHeader(
+      note.id,
+      p,
+      NoteOperation.summary,
+    );
+  }
+
+  Future<void> observe(String account, SyncNoteSnapshot snapshot) =>
+      forAccount(account).observeSnapshot(snapshot);
+  Future<void> hydrate(String account, SyncNoteSnapshot snapshot) =>
+      forAccount(account).hydrateSnapshot(snapshot);
+
+  void invalidateSession() {
+    _generation++;
+    for (final service in _services.values) {
+      service.dispose();
+    }
+    for (final gateway in _gateways.values) {
+      gateway.close();
+    }
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _services.clear();
+    _gateways.clear();
+    _subscriptions.clear();
+    if (!_changes.isClosed) _changes.add(null);
+  }
+
+  void lockAll() {
+    for (final service in _services.values) {
+      service.lock(null);
+    }
+  }
+
+  void dispose() {
+    invalidateSession();
+    unawaited(_changes.close());
+  }
+}

@@ -118,13 +118,16 @@ final class SummaryRequestPolicy {
     ];
   }
 
-  String requestJson(SummaryStage stage, List<String> inputs) => jsonEncode(
-    <String, Object?>{
-      'stage': stage.name,
-      'inputs': inputs,
-      'consent': <String, Object?>{'accepted': true, 'version': consentVersion},
-    },
-  );
+  String requestJson(
+    SummaryStage stage,
+    List<String> inputs, {
+    Map<String, Object?>? note,
+  }) => jsonEncode(<String, Object?>{
+    'stage': stage.name,
+    'inputs': inputs,
+    'note': ?note,
+    'consent': <String, Object?>{'accepted': true, 'version': consentVersion},
+  });
 
   String messagesJson(SummaryStage stage, List<String> inputs) =>
       jsonEncode(buildMessages(stage, inputs));

@@ -20,6 +20,9 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     required this.accountUserId,
     required ILocalSyncStore localStore,
     required this.remote,
+    this.observeSnapshot,
+    this.hydrateSnapshot,
+    this.requireSession,
     DateTime Function()? clock,
     Future<void> Function(Duration)? delay,
   }) : _reconciliation = SyncStateReconciliation(
@@ -31,6 +34,9 @@ final class SyncCoordinatorService implements ISyncCoordinator {
 
   final String accountUserId;
   final IRemoteNoteDataSource remote;
+  final Future<void> Function(SyncNoteSnapshot)? observeSnapshot;
+  final Future<void> Function(SyncNoteSnapshot)? hydrateSnapshot;
+  final void Function()? requireSession;
   final SyncStateReconciliation _reconciliation;
   final Future<void> Function(Duration) _delay;
   final StreamController<SyncStatusSnapshot> _statuses =
@@ -98,6 +104,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   }
 
   Future<SyncReport> _syncPass() async {
+    requireSession?.call();
     LocalSyncState state = await _reconciliation.read();
     final SyncCursor? initialCursor = state.cursor;
     int applied = 0;
@@ -171,11 +178,16 @@ final class SyncCoordinatorService implements ISyncCoordinator {
         final PendingMutation prepared = state.outbox[sendingIndex];
         try {
           result = await remote.push(prepared.toMutation());
+          requireSession?.call();
           break;
         } on SyncFailure catch (failure) {
           tries++;
           if (!failure.retryable || tries >= 2) {
             await _reconciliation.recordPushFailure(entry.mutationId, failure);
+            if (failure.code == SyncErrorCode.forbidden) {
+              stoppedNotes.add(entry.noteId);
+              continue pushQueue;
+            }
             rethrow;
           }
           await _delay(const Duration(milliseconds: 100));
@@ -186,6 +198,9 @@ final class SyncCoordinatorService implements ISyncCoordinator {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       if (result.isConflict) {
+        if (result.conflictRemote case final snapshot?) {
+          await observeSnapshot?.call(snapshot);
+        }
         if (await _reconciliation.recordConflict(entry, result)) {
           stoppedNotes.add(entry.noteId);
           conflicts++;
@@ -196,6 +211,8 @@ final class SyncCoordinatorService implements ISyncCoordinator {
       if (snapshot == null || snapshot.id != entry.noteId) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
+      await observeSnapshot?.call(snapshot);
+      requireSession?.call();
       if (await _reconciliation.acknowledge(entry, snapshot)) applied++;
     }
 
@@ -203,19 +220,36 @@ final class SyncCoordinatorService implements ISyncCoordinator {
       state = await _reconciliation.read();
       final String? requestCursor = state.cursor?.value;
       final SyncChangesPage page = await remote.pull(cursor: requestCursor);
+      requireSession?.call();
       if (page.hasMore && page.nextCursor == requestCursor) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
+      }
+      for (final snapshot in page.snapshots) {
+        await observeSnapshot?.call(snapshot);
+        requireSession?.call();
       }
       final SyncPageApply appliedPage = await _reconciliation.applyPage(
         page,
         expectedCursor: requestCursor,
       );
       if (!appliedPage.cursorMatched) continue;
+      for (final snapshot in page.snapshots) {
+        await hydrateSnapshot?.call(snapshot);
+        requireSession?.call();
+      }
       pulled += appliedPage.pulled;
       if (!page.hasMore) break;
     }
 
     state = await _reconciliation.read();
+    if (state.outbox.any(
+      (m) =>
+          !m.blocked &&
+          !attempted.contains(m.mutationId) &&
+          !state.conflicts.any((c) => c.noteId == m.noteId),
+    )) {
+      _rerun = true;
+    }
     return SyncReport(
       applied: applied,
       pulled: pulled,

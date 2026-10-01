@@ -23,6 +23,8 @@ enum SummaryApiErrorCode {
   pipelineTooLarge,
   unauthorized,
   consentRequired,
+  noteLocked,
+  noteChanged,
   rateLimited,
   providerUnavailable,
   invalidOutput,

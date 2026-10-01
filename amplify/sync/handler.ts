@@ -15,6 +15,7 @@ import { ProtectionUseCases } from '../protection/use_cases';
 import { NoteSecurityError, OwnerNoteAcl } from '../protection/protection_store';
 import { SesRecoveryMailer } from '../protection/ses_recovery_mailer';
 import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
+import { CognitoRecoveryMailbox } from '../protection/cognito_recovery_mailbox';
 import {
   appliedMutationResponse,
   changesResponse,
@@ -93,6 +94,7 @@ const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NA
   new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
   Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
 const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security });
+const recoveryMailbox = new CognitoRecoveryMailbox();
 
 const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
   event.requestContext?.http?.method?.toUpperCase() ?? '';
@@ -212,7 +214,7 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
     route = routeOf(methodOf(event), event.rawPath);
     if (event.rawPath.startsWith('/notes/')) {
       const actor = ownerSubOf(event);
-      return actor ? await handleProtection(event, actor, security) : unauthorizedResponse();
+      return actor ? await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub)) : unauthorizedResponse();
     }
 
     // M1.1 behaviour, unchanged: health answers without an identity so the
