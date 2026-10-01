@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_controller.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_localizations.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_note_card.dart';
@@ -1452,7 +1453,11 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) {
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) {
     throw UnimplementedError();
   }
 }

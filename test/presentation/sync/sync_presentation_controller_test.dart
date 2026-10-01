@@ -17,6 +17,7 @@ import 'package:note_ai_app/application/sync/sync_report.dart';
 import 'package:note_ai_app/application/sync/sync_snapshot.dart';
 import 'package:note_ai_app/application/sync/sync_status.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
@@ -570,5 +571,9 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async => 'summary';
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async => 'summary';
 }

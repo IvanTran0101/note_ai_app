@@ -1,4 +1,5 @@
 import '../../application/notes/note_application.dart';
+import '../../application/note_intelligence/summary_run_context.dart';
 
 /// A narrow Presentation seam around the Note application use cases.
 ///
@@ -21,7 +22,11 @@ abstract interface class NotesApplicationController {
 
   /// Returns summary text instead of exposing the Domain [Summary] type to
   /// the widget.
-  Future<String> summarizeNote(String noteId);
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  });
 }
 
 /// Presentation adapter for the Application service.
@@ -60,8 +65,16 @@ final class NoteApplicationServiceController
   Future<void> deleteNote(String noteId) => _service.deleteNote(noteId);
 
   @override
-  Future<String> summarizeNote(String noteId) async {
-    final summary = await _service.summarizeNote(noteId);
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
+    final summary = await _service.summarizeNote(
+      noteId,
+      selectedSnapshot: selectedSnapshot,
+      scope: scope,
+    );
     return summary.text;
   }
 }

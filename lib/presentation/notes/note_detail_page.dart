@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
+import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_conflict_resolver.dart';
 import 'note_detail_back_confirmation.dart';
@@ -85,6 +86,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _didPersist = false;
   bool _lastReportedDirty = false;
   bool _summaryError = false;
+  SummaryRunScope? _summaryRunScope;
   bool _backConfirmationVisible = false;
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
@@ -113,11 +115,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       widget.syncController?.addListener(_syncStateChanged);
       _syncStateChanged();
     }
+    if (oldWidget.note != widget.note) {
+      _summaryRunScope?.cancel(reason: SummaryRunFailureCode.noteChanged);
+    }
   }
 
   void _syncStateChanged() {
     if (!mounted) return;
     if (_currentConflict != null) {
+      _summaryRunScope?.cancel(reason: SummaryRunFailureCode.conflict);
       _autosaveTimer?.cancel();
       _autosaveTimer = null;
     } else if (_isDirty) {
@@ -141,10 +147,12 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool get _canSave =>
       !_actionBusy && _currentConflict == null && (_note == null || _isDirty);
 
-  bool get _canSummarize => !_actionBusy && _note != null && !_isDirty;
+  bool get _canSummarize =>
+      !_actionBusy && _currentConflict == null && _note != null && !_isDirty;
 
   void _editorChanged() {
     if (mounted) {
+      _summaryRunScope?.cancel(reason: SummaryRunFailureCode.noteChanged);
       _ignoreNextEditorFocusLoss = false;
       setState(() {
         if (_summary != null && _isDirty) {
@@ -299,6 +307,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (current == null || !_canSummarize) {
       return;
     }
+    final SummaryRunScope runScope = SummaryRunScope();
+    _summaryRunScope?.cancel();
+    _summaryRunScope = runScope;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
     setState(() {
@@ -311,8 +322,10 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     try {
       final String summary = await widget.notesController.summarizeNote(
         current.id,
+        selectedSnapshot: current,
+        scope: runScope,
       );
-      if (!mounted) {
+      if (!_canAcceptSummaryRun(current, runScope)) {
         return;
       }
       setState(() {
@@ -321,8 +334,22 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         _statusMessage = copy.summarized;
         _summaryError = false;
       });
+    } on SummaryRunFailure catch (failure) {
+      if (!mounted ||
+          failure.code == SummaryRunFailureCode.cancelled ||
+          failure.code == SummaryRunFailureCode.sessionChanged ||
+          failure.code == SummaryRunFailureCode.noteChanged ||
+          failure.code == SummaryRunFailureCode.noteNotFound ||
+          failure.code == SummaryRunFailureCode.conflict ||
+          runScope.isCancelled) {
+        return;
+      }
+      setState(() {
+        _error = copy.summarizeError;
+        _summaryError = true;
+      });
     } on Object {
-      if (!mounted) {
+      if (!mounted || runScope.isCancelled) {
         return;
       }
       final ModelProvisioningState? provisioningState =
@@ -337,11 +364,23 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         });
       }
     } finally {
+      runScope.release();
+      if (identical(_summaryRunScope, runScope)) {
+        _summaryRunScope = null;
+      }
       if (mounted) {
         setState(() => _summarizing = false);
       }
     }
   }
+
+  bool _canAcceptSummaryRun(NoteDto snapshot, SummaryRunScope scope) =>
+      mounted &&
+      !scope.isCancelled &&
+      identical(_summaryRunScope, scope) &&
+      !_isDirty &&
+      _currentConflict == null &&
+      _note == snapshot;
 
   Future<void> _handleBack() async {
     if (_actionBusy) {
@@ -791,6 +830,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    _summaryRunScope?.cancel();
     _autosaveTimer?.cancel();
     widget.syncController?.removeListener(_syncStateChanged);
     _titleController.removeListener(_editorChanged);

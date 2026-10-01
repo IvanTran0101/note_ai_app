@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../../application/note_intelligence/summary_run_context.dart';
 import 'summary_api_failure.dart';
 import 'summary_http_call.dart';
 import 'summary_http_mapper.dart';
@@ -26,6 +27,9 @@ final class SummaryHttpGateway {
     required Future<String?> Function({required bool forceRefresh})
     tokenProvider,
     required String expectedAccountUserId,
+    SummaryRunScope? runScope,
+    Future<void> Function()? beforeDispatch,
+    SummaryRunFailureCode? Function()? currentRunFailure,
     http.Client? client,
     Duration timeout = maxTimeout,
   }) {
@@ -34,6 +38,9 @@ final class SummaryHttpGateway {
       policy: policy,
       tokenProvider: tokenProvider,
       expectedAccountUserId: _validateAccountUserId(expectedAccountUserId),
+      runScope: runScope,
+      beforeDispatch: beforeDispatch,
+      currentRunFailure: currentRunFailure,
       client: client ?? http.Client(),
       ownsClient: client == null,
       timeout: _validateTimeout(timeout),
@@ -45,6 +52,9 @@ final class SummaryHttpGateway {
     required this._policy,
     required this._tokenProvider,
     required this._expectedAccountUserId,
+    required this._runScope,
+    required this._beforeDispatch,
+    required this._currentRunFailure,
     required this._client,
     required this._ownsClient,
     required this._timeout,
@@ -63,6 +73,9 @@ final class SummaryHttpGateway {
   final SummaryRequestPolicy _policy;
   final Future<String?> Function({required bool forceRefresh}) _tokenProvider;
   final String _expectedAccountUserId;
+  final SummaryRunScope? _runScope;
+  final Future<void> Function()? _beforeDispatch;
+  final SummaryRunFailureCode? Function()? _currentRunFailure;
   final http.Client _client;
   final bool _ownsClient;
   final Duration _timeout;
@@ -82,7 +95,13 @@ final class SummaryHttpGateway {
       // read and without a request.
       throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
     }
-    final SummaryHttpCall call = SummaryHttpCall(budget);
+    final SummaryRunScope? runScope = _runScope;
+    if (runScope?.isCancelled ?? false) {
+      throw SummaryRunFailure(
+        runScope?.cancelReason ?? SummaryRunFailureCode.cancelled,
+      );
+    }
+    final SummaryHttpCall call = SummaryHttpCall(budget, scope: runScope);
     try {
       return await _run(
         call,
@@ -171,7 +190,10 @@ final class SummaryHttpGateway {
     SummaryHttpCall call, {
     required bool forceRefresh,
   }) async {
-    final String? token = await _tokenProvider(forceRefresh: forceRefresh);
+    final String? token = await call.raceScope(
+      _tokenProvider(forceRefresh: forceRefresh),
+    );
+    call.throwIfExpired();
     if (token == null || token.trim().isEmpty) {
       throw const SummaryApiFailure(code: SummaryApiErrorCode.unauthorized);
     }
@@ -181,9 +203,6 @@ final class SummaryHttpGateway {
     // The read may have finished after the deadline (a refresh that took too
     // long, or a session call that never answers): a late token must never
     // start a request that nothing is waiting for any more.
-    if (call.expired) {
-      throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
-    }
     return token;
   }
 
@@ -191,10 +210,8 @@ final class SummaryHttpGateway {
     SummaryHttpCall call,
     Uint8List body,
     String token,
-  ) {
-    if (call.expired) {
-      throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
-    }
+  ) async {
+    call.throwIfExpired();
     final http.AbortableRequest request = http.AbortableRequest(
       'POST',
       _endpoint(),
@@ -208,6 +225,15 @@ final class SummaryHttpGateway {
     // `bodyBytes` keeps the content type exactly `application/json`; the string
     // setter appends a charset parameter the backend does not expect.
     request.bodyBytes = body;
+    final Future<void> Function()? guard = _beforeDispatch;
+    if (guard != null) {
+      await call.raceScope(guard());
+    }
+    call.throwIfExpired();
+    final SummaryRunFailureCode? invalid = _currentRunFailure?.call();
+    if (invalid != null) {
+      throw SummaryRunFailure(invalid);
+    }
     return _client.send(request);
   }
 
@@ -268,7 +294,11 @@ final class SummaryHttpGateway {
     // itself; the trigger completes without error by contract.
     unawaited(
       call.abortTrigger.then((void _) {
-        fail(const SummaryApiFailure(code: SummaryApiErrorCode.timeout));
+        if (call.cancelled) {
+          fail(call.cancellationFailure());
+        } else {
+          fail(const SummaryApiFailure(code: SummaryApiErrorCode.timeout));
+        }
       }),
     );
     try {
@@ -294,11 +324,16 @@ final class SummaryHttpGateway {
   ) async {
     try {
       return await operation();
+    } on SummaryRunFailure {
+      rethrow;
     } on SummaryApiFailure {
       rethrow;
     } on TimeoutException {
       throw const SummaryApiFailure(code: SummaryApiErrorCode.timeout);
     } on http.ClientException {
+      if (call.cancelled) {
+        throw call.cancellationFailure();
+      }
       // `package:http` wraps socket-level failures in this type on IO platforms
       // and raises it directly on Web, and the abort trigger injects it as a
       // `RequestAbortedException`. The call's own state tells the two aborts

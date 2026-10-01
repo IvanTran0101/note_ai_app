@@ -7,6 +7,7 @@ import 'package:note_ai_app/application/note_intelligence/model_provisioning/mod
 import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/presentation/notes/notes_page.dart';
 
 void main() {
@@ -327,7 +328,11 @@ final class _FakeNotesApplicationController
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async {
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
     final NoteDto current = _find(noteId);
     summarizedNoteId = noteId;
     return 'Summary of ${current.content}';

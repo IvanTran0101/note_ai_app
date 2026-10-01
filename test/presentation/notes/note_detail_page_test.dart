@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
@@ -278,6 +281,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(NoteDetailPage.summaryKey), findsOneWidget);
     expect(controller.summarizeCalls, 2);
+  });
+
+  testWidgets('editing and reverting the draft cancels its summary run', (
+    WidgetTester tester,
+  ) async {
+    final NoteDto note = buildNote();
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[note],
+    )..pendingSummary = Completer<String>();
+    await pumpPage(tester, controller, note: note);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pump();
+    final SummaryRunScope scope = controller.lastSummaryScope!;
+    expect(scope.isCancelled, isFalse);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Edited while running',
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      note.content,
+    );
+    await tester.pump();
+    expect(scope.isCancelled, isTrue);
+    expect(scope.cancelReason, SummaryRunFailureCode.noteChanged);
+
+    controller.pendingSummary!.complete('Stale result');
+    await tester.pump();
+    expect(find.byKey(NoteDetailPage.summaryKey), findsNothing);
+    expect(find.text('Stale result'), findsNothing);
+  });
+
+  testWidgets('disposing the detail page cancels its summary request', (
+    WidgetTester tester,
+  ) async {
+    final NoteDto note = buildNote();
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[note],
+    )..pendingSummary = Completer<String>();
+    await pumpPage(tester, controller, note: note);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pump();
+    final SummaryRunScope scope = controller.lastSummaryScope!;
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(scope.isCancelled, isTrue);
+
+    controller.pendingSummary!.complete('Late result');
+    await tester.pump();
+    expect(find.text('Late result'), findsNothing);
   });
 
   testWidgets('autosaves when both editor fields lose focus', (
@@ -556,6 +616,8 @@ final class _FakeNotesController implements NotesApplicationController {
   String? summarizedNoteId;
   int summarizeCalls = 0;
   int summarizeFailuresRemaining = 0;
+  Completer<String>? pendingSummary;
+  SummaryRunScope? lastSummaryScope;
   Object? createNoteError;
   int _nextId = 1;
 
@@ -608,10 +670,19 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async {
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
     final NoteDto note = _find(noteId);
     summarizeCalls++;
     summarizedNoteId = noteId;
+    lastSummaryScope = scope;
+    final Completer<String>? pending = pendingSummary;
+    if (pending != null) {
+      return pending.future;
+    }
     if (summarizeFailuresRemaining > 0) {
       summarizeFailuresRemaining--;
       throw StateError('summary unavailable');

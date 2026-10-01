@@ -69,6 +69,119 @@ void main() {
     });
   });
 
+  group('CurrentUserSession generation', () {
+    test('starts at 0 and is exposed through the source contract', () {
+      final CurrentUserSession session = CurrentUserSession();
+      final SessionGenerationSource source = session;
+
+      expect(session.sessionGeneration, 0);
+      expect(source.sessionGeneration, 0);
+    });
+
+    test('advances on null to user', () {
+      final CurrentUserSession session = CurrentUserSession();
+
+      session.setIdentity(identity);
+
+      expect(session.sessionGeneration, 1);
+    });
+
+    test('stays put for a same-user restore, observe, or refresh', () {
+      final CurrentUserSession session = CurrentUserSession()
+        ..setIdentity(identity);
+      final int afterLogin = session.sessionGeneration;
+
+      session.setIdentity(identity);
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'user-1',
+          email: 'refreshed@example.com',
+          isEmailVerified: false,
+        ),
+      );
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'user-1',
+          email: 'user@example.com',
+          isEmailVerified: true,
+        ),
+      );
+
+      expect(session.sessionGeneration, afterLogin);
+      expect(session.identity?.email, 'user@example.com');
+    });
+
+    test('advances on a user ID change', () {
+      final CurrentUserSession session = CurrentUserSession()
+        ..setIdentity(identity);
+      final int afterLogin = session.sessionGeneration;
+
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'user-2',
+          email: 'second@example.com',
+          isEmailVerified: true,
+        ),
+      );
+
+      expect(session.sessionGeneration, afterLogin + 1);
+    });
+
+    test('advances on active to clear', () {
+      final CurrentUserSession session = CurrentUserSession()
+        ..setIdentity(identity);
+      final int afterLogin = session.sessionGeneration;
+
+      session.clear();
+
+      expect(session.sessionGeneration, afterLogin + 1);
+    });
+
+    test('does not advance when an empty session is cleared', () {
+      final CurrentUserSession session = CurrentUserSession();
+
+      session.clear();
+      session.clear();
+
+      expect(session.sessionGeneration, 0);
+    });
+
+    test('never repeats a generation when a user signs back in', () {
+      final CurrentUserSession session = CurrentUserSession()
+        ..setIdentity(identity);
+      final int firstLogin = session.sessionGeneration;
+
+      session.clear();
+      session.setIdentity(identity);
+
+      expect(session.sessionGeneration, greaterThan(firstLogin + 1));
+      expect(session.sessionGeneration, isNot(firstLogin));
+      expect(session.userId, 'user-1');
+    });
+
+    test('advances once for a direct switch to another user', () {
+      final CurrentUserSession session = CurrentUserSession()
+        ..setIdentity(identity);
+
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'user-2',
+          email: 'second@example.com',
+          isEmailVerified: true,
+        ),
+      );
+      session.setIdentity(
+        AuthIdentity(
+          userId: 'user-2',
+          email: 'second@example.com',
+          isEmailVerified: false,
+        ),
+      );
+
+      expect(session.sessionGeneration, 2);
+    });
+  });
+
   group('auth inputs', () {
     test('RegisterInput holds immutable primitive request fields', () {
       const RegisterInput input = RegisterInput(

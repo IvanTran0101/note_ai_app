@@ -5,6 +5,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
@@ -756,8 +757,11 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async =>
-      'Summary of ${_find(noteId).content}';
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async => 'Summary of ${_find(noteId).content}';
 
   NoteDto _find(String id) => notes.firstWhere((NoteDto note) => note.id == id);
 
