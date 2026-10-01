@@ -39,8 +39,11 @@ export type SyncErrorBody = Readonly<{
 /** The wire form of one note snapshot; see the module comment. */
 export type NoteBody = Readonly<{
   id: string;
-  title: string;
-  content: string;
+  title?: string;
+  content?: string;
+  protected?: boolean;
+  protectionRevision?: number;
+  contentAvailable?: boolean;
   revision: number;
   createdAt: string;
   serverUpdatedAt: string;
@@ -104,10 +107,12 @@ const errorResponse = (statusCode: number, body: SyncErrorBody): APIGatewayProxy
   jsonResponse(statusCode, body);
 
 /** Projects a stored snapshot onto the wire shape, so storage fields cannot leak. */
-export const noteBodyOf = (note: NoteSnapshot): NoteBody => ({
+export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false): NoteBody => ({
   id: note.id,
-  title: note.title,
-  content: note.content,
+  ...(!note.protected || authorizedContent ? { title: note.title, content: note.content } : {}),
+  ...(note.protected || note.protectionRevision ? { protected: note.protected ?? false,
+    protectionRevision: note.protectionRevision ?? 0,
+    contentAvailable: !note.protected || authorizedContent } : {}),
   revision: note.revision,
   createdAt: note.createdAt,
   serverUpdatedAt: note.serverUpdatedAt,
@@ -139,7 +144,7 @@ export const conflictBody = ({ mutationId, remoteNote }: ConflictedMutation): Co
  */
 export const changesPageBody = ({ items, nextCursor, hasMore }: ChangesPage): ChangesPageBody => {
   const body: { items: NoteBody[]; hasMore: boolean; nextCursor?: string } = {
-    items: items.map(noteBodyOf),
+  items: items.map(note => noteBodyOf(note)),
     hasMore,
   };
   if (typeof nextCursor === 'string' && nextCursor.length > 0) {

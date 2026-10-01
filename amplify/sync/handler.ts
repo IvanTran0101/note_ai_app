@@ -9,6 +9,12 @@ import { SyncInvalidCursorError } from './cursor';
 import { DynamoSyncStore, SyncInvalidMutationError, SyncStorageError } from './dynamo_sync_store';
 import type { SyncStore } from './dynamo_sync_store';
 import { parseChangesQuery, parseMutationBody } from './request_parser';
+import { Argon2idPasswordHasher } from '../protection/argon2id_password_hasher';
+import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
+import { ProtectionUseCases } from '../protection/use_cases';
+import { NoteSecurityError, OwnerNoteAcl } from '../protection/protection_store';
+import { SesRecoveryMailer } from '../protection/ses_recovery_mailer';
+import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
 import {
   appliedMutationResponse,
   changesResponse,
@@ -82,7 +88,11 @@ const documentClient = DynamoDBDocumentClient.from(
   { marshallOptions: { removeUndefinedValues: true } },
 );
 
-const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient });
+const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NAME, documentClient),
+  new Argon2idPasswordHasher(), new OwnerNoteAcl(),
+  new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
+  Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
+const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security });
 
 const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
   event.requestContext?.http?.method?.toUpperCase() ?? '';
@@ -137,6 +147,7 @@ const responseForStoreError = (
   route: SyncRoute,
   error: unknown,
 ): APIGatewayProxyStructuredResultV2 | undefined => {
+  if (error instanceof NoteSecurityError) return securityErrorResponse(error);
   if (error instanceof SyncInvalidMutationError) {
     logRejected(route, error.reason);
     return invalidMutationResponse(error.reason);
@@ -163,7 +174,7 @@ const handleMutation = async (
   }
 
   try {
-    const result = await store.applyMutation(ownerId, parsed.mutation);
+    const result = await store.applyMutation(ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event) });
     return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
     const mapped = responseForStoreError('mutations', error);
@@ -199,6 +210,10 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
   let route: SyncRoute = 'unknown';
   try {
     route = routeOf(methodOf(event), event.rawPath);
+    if (event.rawPath.startsWith('/notes/')) {
+      const actor = ownerSubOf(event);
+      return actor ? await handleProtection(event, actor, security) : unauthorizedResponse();
+    }
 
     // M1.1 behaviour, unchanged: health answers without an identity so the
     // deployment can be probed. The deployed API still puts it behind the JWT
@@ -218,6 +233,7 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
 
     return route === 'mutations' ? await handleMutation(event, ownerId) : await handleChanges(event, ownerId);
   } catch (error) {
+    if (error instanceof NoteSecurityError) return securityErrorResponse(error);
     // Nothing about the failure crosses the contract: no message, stack, cause,
     // token, or request data is logged or returned.
     console.error('sync request failed', { route, errorName: errorNameOf(error) });

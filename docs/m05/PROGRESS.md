@@ -103,8 +103,11 @@ M05.1 files touched: Note/NoteProtection/NoteMetadata and metadata repository
 boundary; safe NoteDto, NoteAccessCapabilities/access guard, Application operation
 checks; LocalNoteState projection and repository mappings. DTOs and outbox
 coalescing were split by responsibility to keep the modified files readable.
-Next: static checks and M05.1 checkpoint, then backend, encrypted storage,
-sync/Summary authorization and UI.
+M05.1 checkpoint pushed as 987e440. M05.2 implemented in source: amplify/protection/
+verifier, grant, recovery, DynamoDB transaction adapters and HTTP routes;
+sync response masking and current authorization for mutation/replay/conflict/feed.
+Next: M05.3 encrypted storage and key lifecycle, then
+sync/Summary lineage and UI integration.
 Complete each milestone/criterion gate before marking Done. Record evidence
 and push after each checkpoint; do not stop at an intermediate milestone.
 
@@ -145,10 +148,26 @@ and push after each checkpoint; do not stop at an intermediate milestone.
 
 ## Continuity receipt (latest)
 
+## M05.2 checkpoint — 2026-10-02
+
+- Added server-side Argon2id verifier, random hashed scoped grants, bounded
+  password attempts and one-note mailbox OTP recovery with atomic consumption.
+- JWT-protected content/protection routes; owner-only initial ACL, stable safe
+  failures, grant header and CORS. Missing SES sender fails closed. Configure
+  verified `noteSecuritySender` CDK context before deployment; no deployment made.
+- Epoch cutovers write canonical note and change feed atomically. Sync write,
+  delete, replay/conflict and historical feed projection use current authority;
+  protected writes condition epoch and live grant in the same transaction.
+- Split sync models/serialization from the DynamoDB adapter; added TTL only to
+  transient security rows, never as the authority for expiry.
+- `npm run typecheck` and `git diff --check` passed. No tests/runtime performed.
+  Flutter UI, encrypted storage and Summary lineage are the following milestones;
+  full rubric acceptance remains pending their integration/runtime evidence.
+
 | Record | Resolution |
 | --- | --- |
 | `MUST_REMEMBER.md` | Updated with user scope, permission and checkpoint rules |
-| `docs/m05/COLLAB_REVIEW.md` | Created with paths/contracts and pending approvals |
-| `docs/m05/PROGRESS.md` | Created with honest partial status and next step |
+| `docs/m05/COLLAB_REVIEW.md` | Updated scope and contracts record |
+| `docs/m05/PROGRESS.md` | Updated milestone evidence and next step |
 | Notion progress page | Created; updated with delivery receipt after push |
 | `_agent_ops/` records | Not applicable: directory/tools/closure template absent; no records fabricated |

@@ -33,7 +33,7 @@ const MUTATIONS_PATH = '/sync/mutations';
 const CHANGES_PATH = '/sync/changes';
 
 /** Headers the contract's client sends: `Authorization` plus a JSON body. */
-const SYNC_REQUEST_HEADERS = ['authorization', 'content-type'];
+const SYNC_REQUEST_HEADERS = ['authorization', 'content-type', 'x-note-unlock-grant'];
 
 export type SyncHttpApiProps = Readonly<{
   /** Scope the API is created in, e.g. `backend.createStack('SyncStack')`. */
@@ -99,6 +99,7 @@ export const createSyncHttpApi = ({
   api.addRoutes({ path: HEALTH_PATH, methods: [HttpMethod.GET], integration, authorizer });
   api.addRoutes({ path: MUTATIONS_PATH, methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: CHANGES_PATH, methods: [HttpMethod.GET], integration, authorizer });
+  api.addRoutes({ path: '/notes/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
 
   return { api, authorizer };
 };
