@@ -22,20 +22,21 @@ extension NoteSummaryUseCases on NoteApplicationService {
   }) async {
     final String userId = currentUser.requiredUserId;
     final int generation = _sessionGeneration();
+    final int accessGeneration = security?.accessGeneration ?? 0;
     final SummaryRunScope runScope = scope ?? SummaryRunScope();
     final bool dispatchesRun = summarizeRun != null;
     final bool typedFailure =
         dispatchesRun || scope != null || selectedSnapshot != null;
     final SummaryCloudConsentSnapshot consent = _consentFor(userId, generation);
 
-    _requireLiveRun(runScope, userId, generation);
+    _requireLiveRun(runScope, userId, generation, accessGeneration);
     if (selectedSnapshot != null &&
         (selectedSnapshot.id != noteId || selectedSnapshot.ownerId != userId)) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
     }
 
     final Note? note = await noteRepository.findById(noteId);
-    _requireLiveRun(runScope, userId, generation);
+    _requireLiveRun(runScope, userId, generation, accessGeneration);
     if (note == null || note.ownerId != userId) {
       // A note owned by another account is reported as missing on the run path.
       if (typedFailure) {
@@ -71,14 +72,14 @@ extension NoteSummaryUseCases on NoteApplicationService {
           )
         : await summarizeContent(note.content);
 
-    _requireLiveRun(runScope, userId, generation);
+    _requireLiveRun(runScope, userId, generation, accessGeneration);
     _requireAccess(note, NoteOperation.summary);
     if (dispatchesRun) {
       _requireCurrentConsent(consent);
     }
     if (typedFailure) {
       await _requireSavedRevision(noteId, selectedSnapshot ?? revision);
-      _requireLiveRun(runScope, userId, generation);
+      _requireLiveRun(runScope, userId, generation, accessGeneration);
     }
     if (dispatchesRun) {
       _requireCurrentConsent(consent);
@@ -89,10 +90,18 @@ extension NoteSummaryUseCases on NoteApplicationService {
   /// Rejects the run when the scope is cancelled or the session moved on.
   ///
   /// Cancellation is checked first and keeps its original reason.
-  void _requireLiveRun(SummaryRunScope scope, String userId, int generation) {
+  void _requireLiveRun(
+    SummaryRunScope scope,
+    String userId,
+    int generation,
+    int accessGeneration,
+  ) {
     final SummaryRunFailureCode? cancelled = scope.cancelReason;
     if (cancelled != null || scope.isReleased) {
       throw SummaryRunFailure(cancelled ?? SummaryRunFailureCode.cancelled);
+    }
+    if ((security?.accessGeneration ?? 0) != accessGeneration) {
+      throw const SummaryRunFailure(SummaryRunFailureCode.noteLocked);
     }
     if (currentUser.userId != userId || _sessionGeneration() != generation) {
       throw const SummaryRunFailure(SummaryRunFailureCode.sessionChanged);

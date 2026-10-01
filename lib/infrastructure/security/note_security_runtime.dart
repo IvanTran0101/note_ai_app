@@ -93,14 +93,13 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     required NoteOperation operation,
   }) {
     if (_changes.isClosed || session.userId != ownerId) return false;
-    if (!protection.enabled) return true;
     return _services[ownerId]?.allows(
           ownerId: ownerId,
           noteId: noteId,
           protection: protection,
           operation: operation,
         ) ??
-        false;
+        !protection.enabled;
   }
 
   @override

@@ -7,7 +7,7 @@ implementation only within the scope the user has approved below.
 
 ## Approved direction
 
-- Work on **only Module M05 — Note Security**, using the reviewed baseline
+- Finish **M05 — Note Security** first, using the reviewed baseline
   `Final-here-do-not-merge-main@6ce2afeec8351c224a1c7b1923630336b7b7b3c4`.
 - The user selected the plan's recommended Option A for all three open M05
   decisions:
@@ -33,8 +33,13 @@ implementation only within the scope the user has approved below.
   adapters and M05 integration prerequisites. Do not ask again or stop for the
   superseded ownership gate. Continue until M05 is implemented. Keep ordinary
   DDD boundaries, scoped progress/pushes and data-preservation rules.
-- Keep every push limited to M05. Do not merge, force-push, or deploy without
-  separate authorization. Do not implement M06/M09/M07 business features.
+- Keep each push limited to the active Notion module (M05 first; M06 only
+  after M05 acceptance). Do not merge, force-push, or deploy without
+  separate authorization. New user instruction on 2026-10-02 authorizes full
+  M05 testing/fixes on Chrome and Android, marking verified Notion checkboxes,
+  then implementing/testing M06 with the same checkpoint workflow after M05
+  passes. Do not start M06 source changes while M05 failures remain. Other
+  modules remain outside scope.
 
 ## Security contract
 
@@ -96,17 +101,19 @@ implementation only within the scope the user has approved below.
   graph project remains rooted in the baseline workspace.
 - `_agent_ops/` and its `session_start.py` are absent in this checkout, despite
   references from `AGENTS.md`; do not assume those tools or records exist.
-- Do not add or run tests unless the user explicitly asks for testing or
-  verification. Do not remove, overwrite, or stage unrelated/untracked files.
+- Testing is now explicitly authorized (2026-10-02): run the suites and Chrome/
+  Android flows, add scoped regression coverage and fix confirmed failures.
+  Do not remove, overwrite, or stage unrelated/untracked files.
 
 ## Progress and approval checkpoint
 
 - [M05 progress page](https://app.notion.com/p/3ecf9c7a1aa081d5bd92f68f2aa9698f)
 - Read `docs/m05/PROGRESS.md` and `docs/m05/COLLAB_REVIEW.md` in the
   implementation checkout before continuing M05. Keep both current.
-- Initial batch: Application DTO redaction plus review/progress documents.
-  Continue M05.0–M05.5 with the standing authorization above. Read current
-  progress for implemented milestones and remaining technical work.
+- M05.0–M05.5 are now implemented in source, including backend, encrypted
+  storage/migration, scoped sync/Summary and security UI. Read current progress
+  and IMPLEMENTATION.md for delivery evidence and separate runtime acceptance.
+  Keep reading this file before future coding turns; do not reopen settled choices.
 - `_agent_ops/` records and the closure receipt template are unavailable. Use
   the actual M05 progress files for continuity; do not fabricate absent records.
 

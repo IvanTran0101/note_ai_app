@@ -40,6 +40,7 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.error,
     required this.statusMessage,
     required this.actionBusy,
+    this.readOnly = false,
     required this.provisioningReader,
     required this.onProvisioningRetry,
     required this.onProvisioningCancel,
@@ -88,6 +89,7 @@ final class NoteDetailSurface extends StatelessWidget {
   final String? error;
   final String? statusMessage;
   final bool actionBusy;
+  final bool readOnly;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
   final VoidCallback? onProvisioningCancel;
@@ -223,6 +225,7 @@ final class NoteDetailSurface extends StatelessWidget {
                   statusMessage: statusMessage,
                   showSaveState: !showPageHeader,
                   actionBusy: actionBusy,
+                  readOnly: readOnly,
                   isSummarizing: isSummarizing,
                   showBusyIndicator: showBusyIndicator,
                   provisioningReader: provisioningReader,

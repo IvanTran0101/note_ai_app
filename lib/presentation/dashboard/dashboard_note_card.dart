@@ -1,3 +1,5 @@
+import '../notes/note_security_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
@@ -54,8 +56,13 @@ final class DashboardNoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
-    final String title = note.title.trim().isEmpty ? copy.untitled : note.title;
-    final String preview = _preview(note.content);
+    final securityCopy = NoteSecurityCopy(context);
+    final String title = note.isProtected
+        ? securityCopy.protectedNote
+        : (note.title.trim().isEmpty ? copy.untitled : note.title);
+    final String preview = note.isProtected
+        ? securityCopy.locked
+        : _preview(note.content);
     final String updatedDate = MaterialLocalizations.of(context)
         .formatCompactDate(note.updatedAt);
     final Color foreground = tokens.textPrimary;
@@ -145,7 +152,7 @@ final class DashboardNoteCard extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: Icon(
-            Icons.description_outlined,
+            note.isProtected ? Icons.lock_outline : Icons.description_outlined,
             size: 18,
             color: selected ? foreground : tokens.textMuted,
           ),
@@ -194,7 +201,7 @@ final class DashboardNoteCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Icon(
-          Icons.description_outlined,
+          note.isProtected ? Icons.lock_outline : Icons.description_outlined,
           size: 20,
           color: selected ? foreground : tokens.textMuted,
         ),

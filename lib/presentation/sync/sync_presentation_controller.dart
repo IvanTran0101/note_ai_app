@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../application/sync/local_note_state.dart';
 import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
+import '../../application/sync/sync_metadata_projection.dart';
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_conflict_resolver.dart';
@@ -19,6 +20,8 @@ final class SyncPresentationController extends ChangeNotifier {
     required this.localStore,
     required this.coordinator,
     required this.conflictResolver,
+    Stream<void> securityEvents = const Stream<void>.empty(),
+    this.isCurrentSession,
   }) : _status = coordinator.status {
     if (accountUserId.trim().isEmpty) {
       throw ArgumentError.value(accountUserId, 'accountUserId');
@@ -26,10 +29,18 @@ final class SyncPresentationController extends ChangeNotifier {
     _statusSubscription = coordinator.statusChanges.listen((
       SyncStatusSnapshot value,
     ) {
-      if (_disposed) return;
+      if (!_live) return;
       _status = value;
       notifyListeners();
       unawaited(refresh());
+    });
+    _securitySubscription = securityEvents.listen((_) {
+      if (_disposed) return;
+      _readSequence++;
+      _localState = null;
+      _loadError = null;
+      notifyListeners();
+      if (_live) unawaited(refresh());
     });
     unawaited(refresh());
   }
@@ -38,6 +49,9 @@ final class SyncPresentationController extends ChangeNotifier {
   final ILocalSyncStore localStore;
   final ISyncCoordinator coordinator;
   final SyncConflictResolver conflictResolver;
+  final bool Function()? isCurrentSession;
+  bool get _live => !_disposed && (isCurrentSession?.call() ?? true);
+  late final StreamSubscription<void> _securitySubscription;
 
   late final StreamSubscription<SyncStatusSnapshot> _statusSubscription;
   SyncStatusSnapshot _status;
@@ -96,22 +110,24 @@ final class SyncPresentationController extends ChangeNotifier {
   /// Rereads this account's state. A read error is exposed separately from
   /// network status so storage failures are not mislabeled as offline.
   Future<void> refresh() async {
+    if (!_live) return;
     final int sequence = ++_readSequence;
     try {
       final LocalSyncState state = await localStore.read();
       _validateAccount(state);
-      if (_disposed || sequence != _readSequence) return;
-      _localState = state;
+      if (!_live || sequence != _readSequence) return;
+      _localState = SyncMetadataProjection.state(state);
       _loadError = null;
     } on Object catch (error) {
-      if (_disposed || sequence != _readSequence) return;
+      if (!_live || sequence != _readSequence) return;
       _loadError = error;
     }
-    if (!_disposed) notifyListeners();
+    if (_live) notifyListeners();
   }
 
   /// Runs a best-effort foreground sync; the coordinator retains its status.
   Future<void> syncNow() async {
+    if (!_live) return;
     try {
       await coordinator.syncNow();
     } on Object {
@@ -127,21 +143,22 @@ final class SyncPresentationController extends ChangeNotifier {
     required SyncConflict displayedConflict,
     required SyncConflictChoice choice,
   }) async {
+    if (!_live) return false;
     final int sequence = ++_readSequence;
     final LocalSyncState latest;
     try {
       latest = await localStore.read();
       _validateAccount(latest);
     } on Object catch (error) {
-      if (!_disposed) {
+      if (_live) {
         _loadError = error;
         notifyListeners();
       }
       return false;
     }
-    if (_disposed) return false;
-    if (_disposed || sequence != _readSequence) return false;
-    _localState = latest;
+    if (!_live) return false;
+    if (!_live || sequence != _readSequence) return false;
+    _localState = SyncMetadataProjection.state(latest);
     _loadError = null;
     notifyListeners();
 
@@ -153,7 +170,11 @@ final class SyncPresentationController extends ChangeNotifier {
       }
     }
     if (choice == SyncConflictChoice.later) return current != null;
-    if (current == null || current != displayedConflict) return false;
+    if (current == null ||
+        SyncMetadataProjection.conflict(current) !=
+            SyncMetadataProjection.conflict(displayedConflict)) {
+      return false;
+    }
 
     try {
       await conflictResolver.resolve(
@@ -167,7 +188,7 @@ final class SyncPresentationController extends ChangeNotifier {
     }
     await refresh();
     if (choice == SyncConflictChoice.useLocal) unawaited(syncNow());
-    return true;
+    return _live;
   }
 
   void _validateAccount(LocalSyncState state) {
@@ -179,6 +200,9 @@ final class SyncPresentationController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _readSequence++;
+    _localState = null;
+    unawaited(_securitySubscription.cancel());
     unawaited(_statusSubscription.cancel());
     super.dispose();
   }

@@ -45,6 +45,7 @@ final class NoteSecurityService implements INoteAccessGuard {
   final Future<void> Function()? syncNow;
   final void Function()? cancelSummaries;
   final DateTime Function() _now;
+  final _knownProtection = <String, NoteProtection>{};
   final _access = <String, _LocalAccess>{};
   final _timers = <String, Timer>{};
   final _changes = StreamController<void>.broadcast(sync: true);
@@ -85,6 +86,10 @@ final class NoteSecurityService implements INoteAccessGuard {
     required NoteOperation operation,
   }) {
     if (_disposed || currentUser.userId != accountId || ownerId != accountId) {
+      return false;
+    }
+    if (_knownProtection[noteId] != null &&
+        _knownProtection[noteId] != protection) {
       return false;
     }
     if (!protection.enabled) return true;
@@ -130,9 +135,11 @@ final class NoteSecurityService implements INoteAccessGuard {
     _live(captured, generation);
     final previous = (await _note(id)).protection;
     _live(captured, generation);
+    _knownProtection[id] = p;
     if (previous != p) lock(id);
+    final observedGeneration = _generation;
     await vault.observeProtection(id, p);
-    _capture();
+    _live(captured, observedGeneration);
     return p;
   }
 
@@ -155,6 +162,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     if (_capture() != captured) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
+    _knownProtection[snapshot.id] = snapshot.protection;
     if (note.protection != snapshot.protection) lock(snapshot.id);
     await vault.observeProtection(snapshot.id, snapshot.protection);
   }
@@ -205,6 +213,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     if (!lease.expiresAt.isAfter(_now())) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.expired);
     }
+    _knownProtection[id] = lease.protection;
     _access[id] = (
       protection: lease.protection,
       operations: lease.operations,

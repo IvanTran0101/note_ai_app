@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../application/notes/note_access.dart';
+
 import '../../application/sync/local_note_state.dart';
 import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
@@ -14,6 +16,8 @@ import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
 
 part 'note_repository_mutations.dart';
+part 'note_repository_access.dart';
+part 'note_repository_delete.dart';
 
 /// Infrastructure implementation of the domain's [domain.INoteRepository].
 ///
@@ -38,6 +42,8 @@ final class NoteRepository
     required this.localSyncStoreFactory,
     required this.generateMutationId,
     required this.now,
+    this.accessGuard,
+    this.sessionGeneration,
   });
 
   /// Resolves the account the next operation acts on.
@@ -52,6 +58,8 @@ final class NoteRepository
 
   /// Supplies the local timestamp recorded on notes and mutations.
   final DateTime Function() now;
+  final INoteAccessGuard? accessGuard;
+  final int Function()? sessionGeneration;
 
   /// One store instance per account, created on first use and reused after.
   final Map<String, ILocalSyncStore> _storesByAccount =
@@ -106,6 +114,7 @@ final class NoteRepository
 
   @override
   Future<void> save(Note note) {
+    final context = _captureWrite();
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();
       if (note.ownerId != accountUserId) {
@@ -117,6 +126,7 @@ final class NoteRepository
       }
       final ILocalSyncStore store = _storeFor(accountUserId);
       await store.update((LocalSyncState current) {
+        _requireWrite(context);
         if (current.conflicts.any(
           (SyncConflict conflict) => conflict.noteId == note.id,
         )) {
@@ -125,6 +135,12 @@ final class NoteRepository
           );
         }
         final LocalNoteState? existing = _findNote(current, note.id);
+        _requireNoteAccess(
+          note.id,
+          note.ownerId,
+          note.protection,
+          NoteOperation.edit,
+        );
         if (!note.contentAvailable ||
             (existing != null && !existing.contentAvailable)) {
           throw const NoteContentUnavailable();
@@ -143,84 +159,7 @@ final class NoteRepository
   }
 
   @override
-  Future<void> deleteById(String id) {
-    return _enqueue<void>(() async {
-      final String accountUserId = _requireActiveAccountUserId();
-      final ILocalSyncStore store = _storeFor(accountUserId);
-      await store.update((LocalSyncState current) {
-        if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.noteId == id,
-        )) {
-          throw StateError(
-            'Resolve the sync conflict before deleting this note.',
-          );
-        }
-        final LocalNoteState? existing = _findNote(current, id);
-        if (existing == null || existing.isDeleted) {
-          // An absent or already tombstoned note is already deleted.
-          return current;
-        }
-        if (!existing.contentAvailable) throw const NoteContentUnavailable();
-        final int pendingIndex = _lastPendingIndexFor(current, id);
-        final PendingMutation? pending = pendingIndex == -1
-            ? null
-            : current.outbox[pendingIndex];
-        if (existing.serverRevision == 0 && pending == null) {
-          // No server version and no queued create means this note is only a
-          // local draft. Removing it locally cannot lose a remote delete.
-          return _stateWith(
-            current,
-            notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
-                .toList(growable: false),
-            outbox: current.outbox,
-          );
-        }
-        if (pending != null &&
-            pending.operation == SyncMutationOperation.create &&
-            existing.serverRevision == 0 &&
-            _isUnsent(pending)) {
-          // The create never reached the server, so dropping the note and its
-          // mutation is the whole delete: no remote tombstone is needed.
-          return _stateWith(
-            current,
-            notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
-                .toList(growable: false),
-            outbox: current.outbox
-                .where(
-                  (PendingMutation entry) =>
-                      entry.mutationId != pending.mutationId,
-                )
-                .toList(growable: false),
-          );
-        }
-        final DateTime timestamp = now();
-        final LocalNoteState tombstone = LocalNoteState(
-          id: existing.id,
-          ownerId: existing.ownerId,
-          title: '',
-          content: '',
-          createdAt: existing.createdAt,
-          updatedAt: timestamp,
-          serverRevision: existing.serverRevision,
-          deletedAt: timestamp,
-          status: NoteSyncStatus.pending,
-          protection: existing.protection,
-        );
-        return _stateWith(
-          current,
-          notes: _notesWith(current.notes, tombstone),
-          outbox: _outboxAfterDelete(
-            current,
-            existing,
-            pendingIndex,
-            timestamp,
-          ),
-        );
-      });
-    });
-  }
+  Future<void> deleteById(String id) => _deleteById(id);
 
   Future<LocalSyncState> _readActiveState() {
     return _readStateFor(_requireActiveAccountUserId());
@@ -377,11 +316,15 @@ domain.INoteRepository createNoteRepository({
   localSyncStoreFactory,
   required String Function() generateMutationId,
   required DateTime Function() now,
+  INoteAccessGuard? accessGuard,
+  int Function()? sessionGeneration,
 }) {
   return NoteRepository(
     currentAccountUserId: currentAccountUserId,
     localSyncStoreFactory: localSyncStoreFactory,
     generateMutationId: generateMutationId,
     now: now,
+    accessGuard: accessGuard,
+    sessionGeneration: sessionGeneration,
   );
 }

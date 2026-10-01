@@ -30,6 +30,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     required this.statusMessage,
     this.showSaveState = true,
     required this.actionBusy,
+    this.readOnly = false,
     this.isSummarizing = false,
     this.showBusyIndicator = true,
     required this.provisioningReader,
@@ -62,6 +63,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final String? statusMessage;
   final bool showSaveState;
   final bool actionBusy;
+  final bool readOnly;
   final bool isSummarizing;
   final bool showBusyIndicator;
   final IModelProvisioningReader? provisioningReader;
@@ -110,6 +112,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
         TextField(
           key: const ValueKey<String>('note-detail-title-field'),
           controller: titleController,
+          readOnly: readOnly,
           focusNode: titleFocusNode,
           minLines: 1,
           maxLines: null,
@@ -184,6 +187,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
                 child: TextField(
                   key: const ValueKey<String>('note-detail-content-field'),
                   controller: contentController,
+                  readOnly: readOnly,
                   focusNode: contentFocusNode,
                   minLines: 1,
                   maxLines: null,

@@ -86,3 +86,10 @@ is maintained there and on the Notion progress page.
 - https://app.notion.com/p/3e8f9c7a1aa0819bbbded3ee8ff44f32: M05 plan.
 - https://app.notion.com/p/3e6f9c7a1aa080978256eb9e02768c3a: planning context.
 - https://app.notion.com/p/3ecf9c7a1aa081d5bd92f68f2aa9698f: progress page.
+
+## Source delivery — M05.0 through M05.5
+
+Backend, local encryption/migration, scoped sync/Summary and security UI are now
+implemented. Criterion/path mapping and deployment prerequisites are recorded in
+IMPLEMENTATION.md. Static/build evidence and remote checkpoints live in PROGRESS.md
+and the Notion progress page. Deployed/runtime acceptance is still outstanding.

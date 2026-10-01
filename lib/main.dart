@@ -396,6 +396,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         localSyncStoreFactory: _localSyncStoreForAccount,
         generateMutationId: _generateMutationId,
         now: _nowUtc,
+        accessGuard: _noteSecurityRuntime,
+        sessionGeneration: () => _currentUserSession.sessionGeneration,
       );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
@@ -417,6 +419,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       NoteApplicationServiceController(
         _noteApplicationService,
         summaryConsent: _summaryConsentService,
+        securityForCurrentAccount: () =>
+            _noteSecurityRuntime.forAccount(_currentUserSession.requiredUserId),
+        securityEvents: _noteSecurityRuntime.changes,
+        readAccessGeneration: () => _noteSecurityRuntime.accessGeneration,
+        readSessionGeneration: () => _currentUserSession.sessionGeneration,
+        serverAvailable: _noteSecurityRuntime.serverAvailable,
       );
 
   late final SummaryConsentAppService _summaryConsentService =
@@ -448,6 +456,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         grantHeaderForRun: _noteSecurityRuntime.summaryGrant,
       );
   late final DashboardController _dashboardController = DashboardController(
+    securityEvents: _noteSecurityRuntime.changes,
     query: GetDashboardOverview(
       noteRepository: _noteRepository,
       currentUser: _currentUserSession,
@@ -622,10 +631,14 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       accountUserId: accountUserId,
     );
     _syncPresentationAccountUserId = accountUserId;
+    final int generation = _currentUserSession.sessionGeneration;
     return _syncPresentationController = SyncPresentationController(
       accountUserId: accountUserId,
       localStore: localStore,
       coordinator: runtime.coordinatorFor(accountUserId),
+      securityEvents: _noteSecurityRuntime.changes,
+      isCurrentSession: () => _currentUserSession.userId == accountUserId &&
+          _currentUserSession.sessionGeneration == generation,
       conflictResolver: SyncConflictResolver(
         localSyncStore: localStore,
         generateNoteId: _generateNoteId,

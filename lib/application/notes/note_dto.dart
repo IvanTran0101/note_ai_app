@@ -46,6 +46,19 @@ final class NoteDto {
   final int contentRevision;
   bool get isLocked => isProtected && !contentAvailable;
 
+  NoteDto metadataOnly() => NoteDto(
+    id: id,
+    ownerId: ownerId,
+    title: '',
+    content: '',
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    isProtected: isProtected,
+    protectionRevision: protectionRevision,
+    contentRevision: contentRevision,
+    contentAvailable: false,
+  );
+
   @override
   bool operator ==(Object other) {
     return other is NoteDto &&

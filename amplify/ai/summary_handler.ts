@@ -1,3 +1,4 @@
+import { SummaryRequestDeadline } from './summary_deadline';
 import { STATUS_BY_CODE, defaultRequestId, toResponse, logOutcome, type Outcome } from './summary_response';
 import type { SummaryNoteAuthority, SummaryStageAuthority } from './summary_note_authority';
 import { unlockGrantOf } from '../protection/handler';
@@ -56,7 +57,7 @@ const BASE64_BYTES_PER_GROUP = 3;
 
 export type SummaryHandlerDeps = Readonly<{
   /** One generation call; `deepseek_client.ts` in production. */
-  generate: (request: SummaryRequest) => Promise<SummaryResult>;
+  generate: (request: SummaryRequest, timeoutMs?: number) => Promise<SummaryResult>;
   /** Atomic per-account minute quota; `quota.ts` in production. */
   consumeQuota: (accountId: string, nowMs: number) => Promise<QuotaDecision>;
   security?: SummaryNoteAuthority;
@@ -66,6 +67,8 @@ export type SummaryHandlerDeps = Readonly<{
   requestId?: () => string;
   /** Bound for `consumeQuota`; on expiry the request fails closed. @default 5000 */
   quotaTimeoutMs?: number;
+  /** Whole request bound, below the Lambda timeout. */
+  requestTimeoutMs?: number;
 }>;
 
 /** What one request produced; `code` is set exactly when the request failed. */
@@ -244,6 +247,7 @@ const readGeneratedResult = (value: unknown, stage: SummaryStage): SummaryResult
 const generateWithinPolicy = async (
   prepared: Readonly<{ request: SummaryRequest; accountId: string; }>,
   stageAuthority: SummaryStageAuthority,
+  deadline: SummaryRequestDeadline,
   deps: Readonly<{
     generate: SummaryHandlerDeps['generate'];
     consumeQuota: SummaryHandlerDeps['consumeQuota'];
@@ -256,8 +260,8 @@ const generateWithinPolicy = async (
 
   let decision: QuotaDecision;
   try {
-    await stageAuthority.revalidate();
-    decision = await consumeQuotaWithinDeadline(deps.consumeQuota, accountId, deps.now(), deps.quotaTimeoutMs);
+    await deadline.within(() => stageAuthority.revalidate());
+    decision = await deadline.within(() => consumeQuotaWithinDeadline(deps.consumeQuota, accountId, deps.now(), deps.quotaTimeoutMs));
   } catch (error) {
     // A quota failure or timeout is never a silent allow, and never reaches
     // the provider.
@@ -274,8 +278,9 @@ const generateWithinPolicy = async (
 
   let generated: unknown;
   try {
-    await stageAuthority.revalidate();
-    generated = await deps.generate(request);
+    await deadline.within(() => stageAuthority.revalidate());
+    const providerBudget = deadline.providerBudget();
+    generated = await deadline.within(() => deps.generate(request, providerBudget));
   } catch (error) {
     return outcomeForError(error, stage);
   }
@@ -283,7 +288,7 @@ const generateWithinPolicy = async (
   if (result === undefined) {
     return { statusCode: STATUS_BY_CODE.invalidOutput, code: 'invalidOutput', stage };
   }
-  try { await stageAuthority.complete(result.summary); }
+  try { await deadline.within(() => stageAuthority.complete(result.summary)); }
   catch (error) { return outcomeForError(error, stage); }
   return { statusCode: 200, stage, summary: result.summary, usage: result.usage };
 };
@@ -301,6 +306,7 @@ export const createSummaryHandler = ({
   now = Date.now,
   requestId,
   quotaTimeoutMs = DEFAULT_QUOTA_TIMEOUT_MS,
+  requestTimeoutMs = 26_000,
 }: SummaryHandlerDeps): ((event: APIGatewayProxyEventV2WithJWTAuthorizer) => Promise<APIGatewayProxyStructuredResultV2>) => {
   if (!isPositiveWholeNumber(quotaTimeoutMs)) {
     throw new SummaryFailure('unexpected', 'quota timeout is invalid');
@@ -323,8 +329,9 @@ export const createSummaryHandler = ({
       } else {
         try {
           if (!security) throw new SummaryFailure('unexpected', 'Note authority unavailable');
-          const authority = await security.begin(prepared.request, prepared.accountId, unlockGrantOf(event));
-          outcome = await generateWithinPolicy(prepared, authority, deps);
+          const deadline = new SummaryRequestDeadline(requestTimeoutMs, now);
+          const authority = await deadline.within(() => security.begin(prepared.request, prepared.accountId, unlockGrantOf(event)));
+          outcome = await generateWithinPolicy(prepared, authority, deadline, deps);
         } catch (error) { outcome = outcomeForError(error, prepared.request.stage); }
       }
       logOutcome(outcome, id, Math.max(0, now() - startedAt));

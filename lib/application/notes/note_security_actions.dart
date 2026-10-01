@@ -38,6 +38,7 @@ extension NoteSecurityActions on NoteSecurityService {
       }
       final p = await gateway.metadata(id);
       _live(captured, generation);
+      _knownProtection[id] = p;
       await vault.observeProtection(id, p);
       _live(captured, generation);
       final lease = await gateway.unlock(id, password, {
@@ -66,6 +67,7 @@ extension NoteSecurityActions on NoteSecurityService {
     await syncNow?.call();
     _live(captured, generation);
     final p = await gateway.metadata(id);
+    _knownProtection[id] = p;
     await vault.observeProtection(id, p);
     final note = await _note(id);
     final state = await store.read();
@@ -132,6 +134,7 @@ extension NoteSecurityActions on NoteSecurityService {
         note.protection.revision,
       );
       _live(captured, generation);
+      _knownProtection[id] = next;
       await vault.disable(id, currentPassword, next);
       _live(captured, generation);
     } finally {

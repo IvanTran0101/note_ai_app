@@ -27,7 +27,7 @@ export class DynamoProtectionStore implements ProtectionStore {
   private async get(owner: string, sort: string): Promise<Record<string, unknown> | null> {
     try {
       return (await this.db.send(new GetCommand({ TableName: this.table,
-        Key: key(owner, sort), ConsistentRead: true }))).Item ?? null;
+        Key: key(owner, sort), ConsistentRead: true }), { abortSignal: AbortSignal.timeout(2000) })).Item ?? null;
     } catch { throw new NoteSecurityError('unavailable'); }
   }
 

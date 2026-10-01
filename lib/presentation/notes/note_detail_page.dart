@@ -1,3 +1,8 @@
+import '../../application/notes/note_access.dart';
+import 'note_security_dialog.dart';
+import 'note_security_localizations.dart';
+import 'note_security_panel.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,6 +31,11 @@ import '../sync/sync_conflict_prompt.dart';
 import '../sync/sync_localizations.dart';
 import '../sync/sync_presentation_controller.dart';
 import '../sync/sync_widgets.dart';
+
+part 'note_detail_actions.dart';
+part 'note_detail_conflicts.dart';
+part 'note_detail_view.dart';
+part 'note_detail_security.dart';
 
 /// Focused mobile-first editor for one note.
 ///
@@ -76,6 +86,14 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   final FocusNode _contentFocusNode = FocusNode();
   final GlobalKey _contentFieldContextKey = GlobalKey();
   Timer? _autosaveTimer;
+  StreamSubscription<void>? _securitySubscription;
+  bool _securityBusy = false;
+  bool _securityLoading = false;
+  int _securityRead = 0;
+  int? _securitySession;
+  void _update(VoidCallback action) => setState(action);
+  @override
+  Widget build(BuildContext context) => _buildDetail(context);
 
   late NoteDto? _note;
   NoteDto? _pendingSavedNote;
@@ -118,6 +136,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _contentFocusNode.addListener(_contentFocusChanged);
     _summaryController.addListener(_summaryChanged);
     widget.syncController?.addListener(_syncStateChanged);
+    _listenSecurity();
   }
 
   @override
@@ -129,6 +148,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _syncStateChanged();
     }
     if (oldWidget.note != widget.note) {
+      _securityRead++;
       _summaryController.cancelActive(
         reason: SummaryRunFailureCode.noteChanged,
       );
@@ -138,12 +158,19 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
           incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
       if (!sameIdentity) _summaryController.clearResult();
       if (!_isDirty || !sameIdentity) {
-        _adoptSavedNote(incoming);
+        if (incoming?.isProtected == true) {
+          _adoptSavedNote(_masked(incoming!));
+          unawaited(_readSecuredNote());
+        } else {
+          _adoptSavedNote(incoming);
+        }
       } else {
         _pendingSavedNote = incoming;
       }
     }
     if (oldWidget.notesController != widget.notesController) {
+      unawaited(_securitySubscription?.cancel());
+      _listenSecurity();
       _summaryController.cancelActive(
         reason: SummaryRunFailureCode.sessionChanged,
       );
@@ -202,10 +229,18 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _contentController.text != _savedContent;
 
   bool get _actionBusy =>
-      _saving || _deleting || _resolvingConflict || _summaryController.isBusy;
+      _saving ||
+      _deleting ||
+      _resolvingConflict ||
+      _summaryController.isBusy ||
+      _securityBusy ||
+      _securityLoading;
 
   bool get _canSave =>
-      !_actionBusy && _currentConflict == null && (_note == null || _isDirty);
+      !_actionBusy &&
+      _canEdit &&
+      _currentConflict == null &&
+      (_note == null || _isDirty);
 
   /// Availability of the Summary action for the facts the editor shows now.
   NoteSummaryAvailability get _summaryAvailability =>
@@ -219,6 +254,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   /// share: the editor is ready (or needs consent), and no run or hint is live.
   bool get _canSummarize =>
       !_actionBusy &&
+      _canRead &&
+      (_note == null || _capabilities.canSummarize) &&
       _summaryController.canStart &&
       _summaryAvailability.canStart;
 
@@ -276,6 +313,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _autosaveTimer = null;
     if (!mounted ||
         !_isDirty ||
+        !_canEdit ||
         _conflictFlowActive ||
         _currentConflict != null) {
       return;
@@ -288,368 +326,6 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _autosaveTimer = null;
       unawaited(_save(automatic: true));
     });
-  }
-
-  Future<bool> _save({bool automatic = false}) async {
-    _autosaveTimer?.cancel();
-    _autosaveTimer = null;
-    if (_actionBusy) {
-      if (automatic) {
-        _scheduleAutosave();
-      }
-      return false;
-    }
-    if (!_canSave && _note != null) {
-      return false;
-    }
-    if (_currentConflict != null) return false;
-
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    bool persisted = false;
-    setState(() {
-      _saving = true;
-      _error = null;
-      _statusMessage = null;
-    });
-
-    try {
-      final String title = _titleController.text;
-      final String content = _contentController.text;
-      final NoteDto? current = _note;
-      final NoteDto saved;
-      if (current == null) {
-        saved = await widget.notesController.createNote(
-          title: title,
-          content: content,
-        );
-      } else {
-        NoteDto updated = current;
-        if (title != _savedTitle) {
-          updated = await widget.notesController.renameNote(
-            noteId: current.id,
-            title: title,
-          );
-        }
-        if (content != _savedContent) {
-          updated = await widget.notesController.replaceContent(
-            noteId: current.id,
-            content: content,
-          );
-        }
-        saved = updated;
-      }
-
-      if (!mounted) {
-        return true;
-      }
-      _summaryController.markStaleIfResult();
-      setState(() {
-        _note = saved;
-        _pendingSavedNote = null;
-        _savedTitle = saved.title;
-        _savedContent = saved.content;
-        _summaryController.clearFailure();
-        _statusMessage = copy.saved;
-        _didPersist = true;
-      });
-      _notifyDirtyChanged();
-      persisted = true;
-      return true;
-    } on Object catch (error) {
-      if (!mounted) {
-        return false;
-      }
-      setState(() {
-        _error = error is UnsupportedError
-            ? copy.persistenceUnavailable
-            : copy.saveError;
-      });
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-        if (persisted && _isDirty) {
-          _scheduleAutosave();
-        }
-      }
-    }
-  }
-
-  Future<void> _summarize() async {
-    if (!_canSummarize) {
-      return;
-    }
-    final int accepted = _summaryController.acceptedResultCount;
-    setState(() {
-      _error = null;
-      _statusMessage = null;
-    });
-    await _summaryController.run();
-    if (!mounted || _summaryController.acceptedResultCount == accepted) {
-      return;
-    }
-    setState(() => _statusMessage = NoteDetailCopy.of(context).summarized);
-  }
-
-  /// Stops the in-flight generation; cancelling never retracts what a cloud run
-  /// may already have sent, and the last accepted summary stays displayed.
-  void _cancelSummary() {
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final bool cloud = _summaryController.isCloudRun;
-    _summaryController.cancelActive();
-    setState(() => _statusMessage = copy.summaryCancelExplanation(cloud));
-  }
-
-  bool get _provisioningFailed {
-    final ModelProvisioningPhase? phase =
-        widget.provisioningReader?.current.phase;
-    return phase == ModelProvisioningPhase.failed ||
-        phase == ModelProvisioningPhase.cancelled;
-  }
-
-  Future<void> _handleBack() async {
-    if (_actionBusy) {
-      return;
-    }
-    if (_currentConflict != null && _isDirty) {
-      _autosaveTimer?.cancel();
-      _autosaveTimer = null;
-      _conflictFlowActive = true;
-      _backConfirmationVisible = true;
-      final SyncDirtyDraftChoice? draftChoice = await showSyncDirtyDraftChoices(
-        context: context,
-      );
-      _backConfirmationVisible = false;
-      if (!mounted ||
-          draftChoice == null ||
-          draftChoice == SyncDirtyDraftChoice.cancel) {
-        _conflictFlowActive = false;
-        return;
-      }
-      if (draftChoice == SyncDirtyDraftChoice.discard) {
-        _pop(
-          reason: _didPersist
-              ? NoteDetailExitReason.saved
-              : NoteDetailExitReason.cancelled,
-        );
-        return;
-      }
-      setState(() => _saving = true);
-      try {
-        final NoteDto copy = await widget.notesController.createNote(
-          title: _titleController.text,
-          content: _contentController.text,
-        );
-        if (mounted) {
-          _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);
-        }
-      } on Object {
-        if (mounted) {
-          setState(() {
-            _saving = false;
-            _conflictFlowActive = false;
-            _error = NoteDetailCopy.of(context).saveError;
-          });
-        }
-      }
-      return;
-    }
-    if (!_isDirty) {
-      _pop();
-      return;
-    }
-
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    _autosaveTimer?.cancel();
-    _autosaveTimer = null;
-    _backConfirmationVisible = true;
-    final NoteDetailBackDecision? action = await showNoteDetailBackConfirmation(
-      context: context,
-      copy: copy,
-      canSave: true,
-    );
-    _backConfirmationVisible = false;
-    _ignoreNextEditorFocusLoss = true;
-
-    if (!mounted || action == null || action == NoteDetailBackDecision.cancel) {
-      if (mounted && _isDirty) {
-        _scheduleAutosave();
-      }
-      return;
-    }
-    if (action == NoteDetailBackDecision.discard) {
-      _pop(
-        reason: _didPersist
-            ? NoteDetailExitReason.saved
-            : NoteDetailExitReason.discarded,
-      );
-      return;
-    }
-    if (await _save() && mounted) {
-      _pop(reason: NoteDetailExitReason.saved);
-    }
-  }
-
-  Future<void> _delete() async {
-    final NoteDto? current = _note;
-    if (current == null || _actionBusy || _currentConflict != null) {
-      return;
-    }
-
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final bool? confirmed = await showNoteDetailDeleteConfirmation(
-      context: context,
-      copy: copy,
-      confirmKey: NoteDetailPage.deleteKey,
-    );
-    if (confirmed != true || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _deleting = true;
-      _error = null;
-      _statusMessage = null;
-    });
-    try {
-      await widget.notesController.deleteNote(current.id);
-      if (mounted) {
-        _pop(reason: NoteDetailExitReason.deleted);
-      }
-    } on Object {
-      if (mounted) {
-        setState(() => _error = copy.deleteError);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _deleting = false);
-      }
-    }
-  }
-
-  Future<void> _copySummary() async {
-    final String? summary = _summaryController.summary;
-    if (summary == null) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    final String copiedMessage = NoteDetailCopy.of(context).copied;
-    setState(() {
-      _statusMessage = copiedMessage;
-      _error = null;
-    });
-    ScaffoldMessenger.maybeOf(context)
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(
-        buildNoteFlowSnackBar(context: context, message: copiedMessage),
-      );
-    try {
-      await Clipboard.setData(ClipboardData(text: summary));
-    } on Object {
-      // Keep the in-app feedback usable in widget tests and hosts without a
-      // clipboard channel. The native clipboard remains best effort.
-    }
-  }
-
-  Future<void> _resolveConflict() async {
-    final SyncPresentationController? sync = widget.syncController;
-    final SyncConflict? conflict = _currentConflict;
-    if (sync == null || conflict == null || _actionBusy) return;
-
-    _autosaveTimer?.cancel();
-    _autosaveTimer = null;
-    _conflictFlowActive = true;
-    if (_isDirty) {
-      _backConfirmationVisible = true;
-      final SyncDirtyDraftChoice? draftChoice = await showSyncDirtyDraftChoices(
-        context: context,
-      );
-      _backConfirmationVisible = false;
-      if (!mounted ||
-          draftChoice == null ||
-          draftChoice == SyncDirtyDraftChoice.cancel) {
-        _conflictFlowActive = false;
-        return;
-      }
-      if (draftChoice == SyncDirtyDraftChoice.discard) {
-        _titleController.text = conflict.local.title;
-        _contentController.text = conflict.local.content;
-        _savedTitle = conflict.local.title;
-        _savedContent = conflict.local.content;
-        _notifyDirtyChanged();
-      } else {
-        await _saveDraftAsNewAndResolve(conflict, sync);
-        return;
-      }
-    }
-
-    final SyncConflictChoice? choice = await showSyncConflictChoices(
-      context: context,
-      conflict: conflict,
-    );
-    if (!mounted || choice == null) {
-      _conflictFlowActive = false;
-      return;
-    }
-    if (choice == SyncConflictChoice.later) {
-      await sync.resolveConflict(displayedConflict: conflict, choice: choice);
-      _conflictFlowActive = false;
-      return;
-    }
-    setState(() => _resolvingConflict = true);
-    final bool resolved = await sync.resolveConflict(
-      displayedConflict: conflict,
-      choice: choice,
-    );
-    if (!mounted) return;
-    setState(() {
-      _resolvingConflict = false;
-      _conflictFlowActive = false;
-      _statusMessage = resolved ? null : SyncCopy.of(context).conflictChanged;
-    });
-    if (resolved) _pop(reason: NoteDetailExitReason.saved);
-  }
-
-  Future<void> _saveDraftAsNewAndResolve(
-    SyncConflict conflict,
-    SyncPresentationController sync,
-  ) async {
-    NoteDto? copy;
-    setState(() {
-      _saving = true;
-      _resolvingConflict = true;
-      _error = null;
-    });
-    try {
-      copy = await widget.notesController.createNote(
-        title: _titleController.text,
-        content: _contentController.text,
-      );
-      if (!mounted) return;
-      setState(() => _saving = false);
-      final SyncConflictChoice? choice = await showSyncConflictChoices(
-        context: context,
-        conflict: conflict,
-      );
-      if (choice != null) {
-        await sync.resolveConflict(displayedConflict: conflict, choice: choice);
-      }
-    } on Object {
-      if (copy == null && mounted) {
-        setState(() {
-          _saving = false;
-          _resolvingConflict = false;
-          _conflictFlowActive = false;
-          _error = NoteDetailCopy.of(context).saveError;
-        });
-        return;
-      }
-    }
-    if (mounted && copy != null) {
-      _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);
-    }
   }
 
   void _pop({NoteDetailExitReason? reason, NoteDto? noteOverride}) {
@@ -678,199 +354,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final String currentTitle = _titleController.text.trim();
-    final String pageTitle = currentTitle.isNotEmpty
-        ? currentTitle
-        : (_note == null ? copy.newNote : copy.editNote);
-    final Widget surface = _buildSurface(copy, pageTitle);
-    final Widget content = widget.onEmbeddedExit != null
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              if (widget.showAppBar) _buildAppBar(copy, pageTitle),
-              Expanded(child: surface),
-            ],
-          )
-        : Scaffold(
-            resizeToAvoidBottomInset: true,
-            appBar: widget.showAppBar ? _buildAppBar(copy, pageTitle) : null,
-            body: surface,
-          );
-    return PopScope<NoteDetailRouteResult>(
-      canPop:
-          widget.onEmbeddedExit == null &&
-          !_isDirty &&
-          !_actionBusy &&
-          !_didPersist,
-      onPopInvokedWithResult: (bool didPop, NoteDetailRouteResult? result) {
-        if (!didPop) {
-          unawaited(_handleBack());
-        }
-      },
-      child: content,
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(NoteDetailCopy copy, String pageTitle) {
-    final VoidCallback? moreAction = _moreAction(copy);
-    return AppBar(
-      leading: IconButton(
-        key: NoteDetailPage.backKey,
-        tooltip: copy.back,
-        onPressed: _actionBusy ? null : () => unawaited(_handleBack()),
-        icon: const Icon(Icons.arrow_back),
-      ),
-      title: Text(pageTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      actions: moreAction == null
-          ? null
-          : <Widget>[
-              Builder(
-                builder: (BuildContext buttonContext) => IconButton(
-                  key: const ValueKey<String>('note-detail-more'),
-                  tooltip: copy.more,
-                  onPressed: () => unawaited(
-                    _showMoreActions(copy, anchorContext: buttonContext),
-                  ),
-                  icon: const Icon(Icons.more_horiz),
-                ),
-              ),
-            ],
-    );
-  }
-
-  VoidCallback? _moreAction(NoteDetailCopy copy) {
-    if (_note == null || _actionBusy || _currentConflict != null) {
-      return null;
-    }
-    return () => unawaited(_showMoreActions(copy));
-  }
-
-  ValueChanged<BuildContext>? _moreActionWithContext(NoteDetailCopy copy) {
-    if (_note == null || _actionBusy || _currentConflict != null) {
-      return null;
-    }
-    return (BuildContext anchorContext) =>
-        unawaited(_showMoreActions(copy, anchorContext: anchorContext));
-  }
-
-  Future<void> _showMoreActions(
-    NoteDetailCopy copy, {
-    BuildContext? anchorContext,
-  }) {
-    return runNoteDetailMoreActions(
-      context: context,
-      copy: copy,
-      anchorContext: anchorContext,
-      onDelete: _delete,
-    );
-  }
-
-  Widget _buildSurface(NoteDetailCopy copy, String pageTitle) {
-    final NoteSummaryFailureCopy? summaryFailure = noteSummaryFailureCopy(
-      copy: copy,
-      controller: _summaryController,
-      suppressed: _provisioningFailed,
-      retryEnabled: _canSummarize,
-    );
-    final Widget editor = NoteDetailSurface(
-      titleController: _titleController,
-      contentController: _contentController,
-      titleFocusNode: _titleFocusNode,
-      contentFocusNode: _contentFocusNode,
-      contentFieldContextKey: _contentFieldContextKey,
-      copy: copy,
-      pageTitle: pageTitle,
-      showPageHeader: !widget.showAppBar,
-      statusUnavailable: false,
-      onBack: widget.showAppBar ? null : () => unawaited(_handleBack()),
-      backTooltip: copy.back,
-      backKey: NoteDetailPage.backKey,
-      hasSavedNote: _note != null,
-      isDirty: _isDirty,
-      error: _error ?? summaryFailure?.message,
-      statusMessage: _statusMessage,
-      actionBusy: _actionBusy,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningRetry: _note == null ? null : _summarize,
-      onProvisioningCancel: widget.onProvisioningCancel,
-      summary: _summaryController.summary,
-      summaryStale: _summaryController.isStale,
-      onCopySummary: _summaryController.summary == null
-          ? null
-          : () => unawaited(_copySummary()),
-      onRegenerateSummary: _canSummarize ? () => unawaited(_summarize()) : null,
-      copySummaryLabel: copy.copySummary,
-      regenerateSummaryLabel: copy.regenerate,
-      onErrorRetry: summaryFailure == null
-          ? null
-          : () => unawaited(_summarize()),
-      errorRetryLabel: summaryFailure?.retryLabel,
-      errorRetryEnabled: summaryFailure?.retryEnabled ?? false,
-      summaryAvailability: _summaryAvailability,
-      summaryCloud:
-          widget.notesController.summaryConsent?.requiresCloudConsent ?? false,
-      onCancelSummary: _summaryController.isRunning ? _cancelSummary : null,
-      isSaving: _saving,
-      isSummarizing: _summaryController.isRunning,
-      showBusyIndicator: !_summaryController.isAwaitingConsent,
-      canSave: false,
-      canSummarize: _canSummarize,
-      onSave: null,
-      onSummarize: _canSummarize ? () => unawaited(_summarize()) : null,
-      onMore: widget.showAppBar ? null : _moreAction(copy),
-      onMoreWithContext: widget.showAppBar
-          ? null
-          : _moreActionWithContext(copy),
-      saveLabel: copy.save,
-      summarizeLabel: copy.summarize,
-      moreLabel: copy.more,
-      savingLabel: copy.saving,
-      summarizingLabel: copy.summarizing,
-    );
-    final SyncConflict? conflict = _currentConflict;
-    final SyncPresentationController? sync = widget.syncController;
-    if (conflict == null && (sync == null || widget.onEmbeddedExit != null)) {
-      return editor;
-    }
-    return Column(
-      children: <Widget>[
-        if (sync != null && widget.onEmbeddedExit == null)
-          SyncStatusPanel(controller: sync),
-        if (conflict != null) _buildConflictNotice(),
-        Expanded(child: editor),
-      ],
-    );
-  }
-
-  Widget _buildConflictNotice() {
-    final SyncCopy copy = SyncCopy.of(context);
-    return Card(
-      key: const ValueKey<String>('note-sync-conflict'),
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: <Widget>[
-            const Icon(Icons.compare_arrows),
-            const SizedBox(width: 10),
-            Expanded(child: Text(copy.conflictTitle)),
-            FilledButton.tonal(
-              key: const ValueKey<String>('note-sync-resolve-conflict'),
-              onPressed: _actionBusy
-                  ? null
-                  : () => unawaited(_resolveConflict()),
-              child: Text(copy.resolveConflict),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
   void dispose() {
+    _securityRead++;
+    unawaited(_securitySubscription?.cancel());
     _summaryController.removeListener(_summaryChanged);
     _summaryController.dispose();
     _autosaveTimer?.cancel();

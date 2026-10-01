@@ -1,0 +1,152 @@
+part of 'note_detail_page.dart';
+
+extension _NoteDetailSecurity on _NoteDetailPageState {
+  SecuredNotesController? get _securityController =>
+      widget.notesController is SecuredNotesController
+      ? widget.notesController as SecuredNotesController
+      : null;
+  NoteAccessCapabilities get _capabilities {
+    final note = _note;
+    if (note == null) {
+      return const NoteAccessCapabilities(canRead: true, canEdit: true);
+    }
+    return _securityController?.capabilitiesFor(note) ??
+        (note.isProtected || !note.contentAvailable
+            ? const NoteAccessCapabilities()
+            : const NoteAccessCapabilities(
+                canRead: true,
+                canEdit: true,
+                canDelete: true,
+                canManage: true,
+                canSummarize: true,
+                canExport: true,
+              ));
+  }
+
+  bool get _canRead => _capabilities.canRead;
+  bool get _canEdit => _capabilities.canEdit;
+  bool get _canExport => _capabilities.canExport;
+
+  NoteDto _masked(NoteDto note) => note.metadataOnly();
+
+  void _listenSecurity() {
+    _securitySession = _securityController?.sessionGeneration;
+    _securitySubscription = _securityController?.securityChanges.listen(
+      (_) => _securityChanged(),
+    );
+    final note = _note;
+    if (note != null && (note.isProtected || !_canRead)) {
+      _adoptSavedNote(_masked(note));
+      unawaited(_readSecuredNote());
+    }
+  }
+
+  void _securityChanged() {
+    if (!mounted) return;
+    final note = _note;
+    final changedSession =
+        _securitySession != _securityController?.sessionGeneration;
+    _securitySession = _securityController?.sessionGeneration;
+    if (changedSession || (note != null && !_canRead)) {
+      _securityRead++;
+      _summaryController.cancelActive(reason: SummaryRunFailureCode.noteLocked);
+      _summaryController.clearResult();
+      _titleFocusNode.unfocus();
+      _contentFocusNode.unfocus();
+      _update(() {
+        _adoptSavedNote(note == null ? null : _masked(note));
+        _securityLoading = false;
+        _error = null;
+        _statusMessage = null;
+      });
+      _notifyDirtyChanged();
+    }
+    if (note != null && (note.isProtected || changedSession)) {
+      unawaited(_readSecuredNote());
+    } else {
+      _update(() {});
+    }
+  }
+
+  Future<void> _readSecuredNote() async {
+    final controller = _securityController, note = _note;
+    if (controller == null || note == null || !mounted) return;
+    final request = ++_securityRead, generation = controller.accessGeneration;
+    _update(() => _securityLoading = true);
+    try {
+      final fresh = await controller.readNote(note.id);
+      if (!mounted ||
+          request != _securityRead ||
+          _note?.id != note.id ||
+          generation != controller.accessGeneration) {
+        return;
+      }
+      if (!controller.capabilitiesFor(fresh).canRead) return;
+      _update(() {
+        if (!_isDirty) {
+          _adoptSavedNote(fresh);
+        } else {
+          _pendingSavedNote = fresh;
+        }
+      });
+    } on NoteSecurityFailure {
+      /* Locked view remains safe and available for unlock. */
+    } on Object {
+      if (mounted && request == _securityRead) {
+        _update(() => _error = NoteSecurityCopy(context).unavailable);
+      }
+    } finally {
+      if (mounted && request == _securityRead) {
+        _update(() => _securityLoading = false);
+      }
+    }
+  }
+
+  Future<void> _runSecurity(NoteSecurityAction action) async {
+    final note = _note, controller = _securityController;
+    final service = controller?.noteSecurity;
+    if (note == null || service == null || controller == null || _actionBusy) {
+      return;
+    }
+    if (_isDirty && !await _save()) return;
+    if (!mounted) return;
+    if (action == NoteSecurityAction.lock) {
+      service.lock(note.id);
+      return;
+    }
+    _autosaveTimer?.cancel();
+    _summaryController.cancelActive(reason: SummaryRunFailureCode.noteLocked);
+    _summaryController.clearResult();
+    _update(() => _securityBusy = true);
+    try {
+      await showNoteSecurityDialog(
+        context: context,
+        service: service,
+        noteId: note.id,
+        action: action,
+        serverAvailable: controller.securityServerAvailable,
+        sessionEvents: controller.securityChanges,
+        isCurrent: () => identical(controller.noteSecurity, service),
+      );
+      if (mounted) await _readSecuredNote();
+    } finally {
+      if (mounted) _update(() => _securityBusy = false);
+    }
+  }
+
+  Widget _securityPanel() {
+    final controller = _securityController;
+    return NoteSecurityPanel(
+      note: _note!,
+      locked: !_canRead,
+      busy: _actionBusy,
+      serverAvailable: controller?.securityServerAvailable ?? false,
+      canManage: _capabilities.canManage,
+      retained: controller?.noteSecurity?.retainedPending(_note!.id) ?? false,
+      onBack: !widget.showAppBar && !_canRead
+          ? () => unawaited(_handleBack())
+          : null,
+      onAction: (action) => unawaited(_runSecurity(action)),
+    );
+  }
+}

@@ -1,6 +1,19 @@
 import '../../application/notes/note_application.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
+import '../../application/notes/note_access.dart';
+import '../../application/notes/note_security_service.dart';
+
+/// Optional security seam preserves simple non-security controller consumers.
+abstract interface class SecuredNotesController {
+  NoteSecurityService? get noteSecurity;
+  Stream<void> get securityChanges;
+  int get accessGeneration;
+  int get sessionGeneration;
+  bool get securityServerAvailable;
+  Future<NoteDto> readNote(String id);
+  NoteAccessCapabilities capabilitiesFor(NoteDto note);
+}
 
 /// A narrow Presentation seam around the Note application use cases.
 ///
@@ -39,8 +52,44 @@ abstract interface class NotesApplicationController {
 /// [NoteApplicationService] directly to [NotesPage], while tests can inject a
 /// [NotesApplicationController] fake.
 final class NoteApplicationServiceController
-    implements NotesApplicationController {
-  const NoteApplicationServiceController(this._service, {this.summaryConsent});
+    implements NotesApplicationController, SecuredNotesController {
+  const NoteApplicationServiceController(
+    this._service, {
+    this.summaryConsent,
+    this.securityForCurrentAccount,
+    this.securityEvents = const Stream<void>.empty(),
+    this.readAccessGeneration,
+    this.readSessionGeneration,
+    this.serverAvailable = false,
+  });
+
+  final NoteSecurityService Function()? securityForCurrentAccount;
+  final Stream<void> securityEvents;
+  final int Function()? readAccessGeneration;
+  final int Function()? readSessionGeneration;
+  final bool serverAvailable;
+  @override
+  Stream<void> get securityChanges => securityEvents;
+  @override
+  int get accessGeneration => readAccessGeneration?.call() ?? 0;
+  @override
+  int get sessionGeneration => readSessionGeneration?.call() ?? 0;
+  @override
+  bool get securityServerAvailable => serverAvailable;
+  @override
+  NoteSecurityService? get noteSecurity {
+    try {
+      return securityForCurrentAccount?.call();
+    } on NoteSecurityFailure {
+      return null;
+    }
+  }
+
+  @override
+  Future<NoteDto> readNote(String id) => _service.readNote(id);
+  @override
+  NoteAccessCapabilities capabilitiesFor(NoteDto note) =>
+      _service.capabilitiesFor(note);
 
   final NoteApplicationService _service;
 
@@ -86,6 +135,8 @@ final class NoteApplicationServiceController
       return summary.text;
     } on SummaryRunFailure {
       rethrow;
+    } on NoteSecurityFailure {
+      throw const SummaryRunFailure(SummaryRunFailureCode.noteLocked);
     } on Object {
       throw const SummaryRunFailure(SummaryRunFailureCode.unexpected);
     }

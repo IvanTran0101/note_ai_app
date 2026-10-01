@@ -1,4 +1,6 @@
 import '../auth/current_user.dart';
+import '../auth/current_user_session.dart';
+import '../notes/note_access.dart';
 import '../../domain/notes/note_repository.dart';
 import '../notes/note_application.dart';
 import 'dashboard_overview.dart';
@@ -37,9 +39,18 @@ final class GetDashboardOverview implements IDashboardOverviewQuery {
     }
 
     final String userId = currentUser.requiredUserId;
+    final Object user = currentUser;
+    final generation = user is SessionGenerationSource
+        ? user.sessionGeneration
+        : 0;
     final List<NoteDto> notes = (await noteRepository.findByOwnerId(userId))
         .map(NoteDto.fromDomain)
         .toList();
+    if (currentUser.userId != userId ||
+        (user is SessionGenerationSource &&
+            user.sessionGeneration != generation)) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
     notes.sort(_compareByUpdatedAtDescending);
 
     final int recentCount = notes.length < recentLimit

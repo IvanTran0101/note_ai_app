@@ -23,7 +23,7 @@ const unconfiguredResponse = () => ({
 });
 
 /** Read the current key each invocation: Amplify refreshes secrets in warm containers. */
-export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) => {
+export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event, context) => {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   const tableName = process.env.SUMMARY_QUOTA_TABLE_NAME?.trim();
   const notesTable = process.env.NOTES_TABLE_NAME?.trim();
@@ -43,7 +43,8 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
     const authority = new DynamoSummaryNoteAuthority(notesTable, db, store,
       new ProtectionAuthorizer(store, new OwnerNoteAcl()));
     const inner = createSummaryHandler({
-      generate: createDeepSeekProvider({ apiKey, timeoutMs: 15_000 }),
+      generate: (request, timeoutMs) => createDeepSeekProvider({ apiKey, timeoutMs: timeoutMs ?? 15_000 })(request),
+      requestTimeoutMs: Math.min(26_000, context.getRemainingTimeInMillis() - 1000),
       security: authority,
       consumeQuota: (accountId, nowMs) => currentQuota.consume(accountId, nowMs),
     });

@@ -1,3 +1,5 @@
+import 'note_security_localizations.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
@@ -252,13 +254,23 @@ final class NotesListPanel extends StatelessWidget {
                                     const SizedBox(height: NoteFlowSpacing.md),
                                 itemBuilder: (BuildContext context, int index) {
                                   final NoteDto note = notes[index];
+                                  final securityCopy = NoteSecurityCopy(
+                                    context,
+                                  );
+                                  final title = note.isProtected
+                                      ? securityCopy.protectedNote
+                                      : (note.title.trim().isEmpty
+                                            ? copy.untitled
+                                            : note.title);
+                                  final preview = note.isProtected
+                                      ? securityCopy.locked
+                                      : _preview(note.content, copy);
                                   final bool selected =
                                       note.id == selectedNoteId;
                                   return Semantics(
                                     selected: selected,
                                     button: true,
-                                    label:
-                                        '${note.title.trim().isEmpty ? copy.untitled : note.title}. ${_preview(note.content, copy)}',
+                                    label: '$title. $preview',
                                     child: ListTile(
                                       key: ValueKey<String>('note-${note.id}'),
                                       selected: selected,
@@ -274,16 +286,16 @@ final class NotesListPanel extends StatelessWidget {
                                             vertical: 2,
                                           ),
                                       leading: Icon(
-                                        Icons.description_outlined,
+                                        note.isProtected
+                                            ? Icons.lock_outline
+                                            : Icons.description_outlined,
                                         size: 20,
                                         color: selected
                                             ? tokens.textPrimary
                                             : tokens.textMuted,
                                       ),
                                       title: Text(
-                                        note.title.trim().isEmpty
-                                            ? copy.untitled
-                                            : note.title,
+                                        title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)
@@ -295,7 +307,7 @@ final class NotesListPanel extends StatelessWidget {
                                             ),
                                       ),
                                       subtitle: Text(
-                                        _preview(note.content, copy),
+                                        preview,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)

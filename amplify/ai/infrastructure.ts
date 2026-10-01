@@ -28,10 +28,9 @@ import type { IFunction } from 'aws-cdk-lib/aws-lambda';
  * on `expiresAt`. TTL is cleanup only - the limiter is the conditional update,
  * never the deletion. Sandbox settings destroy the table with the stack.
  *
- * The role gets exactly `dynamodb:UpdateItem` on this table: the quota is one
- * atomic conditional update, so no read, query, scan, or write on the notes
- * table is granted or needed. `SUMMARY_QUOTA_TABLE_NAME` is the only variable
- * added here; the provider key is the managed function's secret.
+ * The quota role gets only UpdateItem on its own table. M05 canonical authority
+ * separately permits GetItem, run-row PutItem and ConditionCheckItem on notes;
+ * it has no Scan or Query permission. The provider key is the managed secret.
  *
  * The API serves exactly one route, `POST /ai/summary`, behind the Cognito JWT
  * authorizer: there is no default route and no unauthenticated route. The
@@ -130,7 +129,7 @@ export const createSummaryInfrastructure = ({
     resources: [notesTable.tableArn],
   }));
   // One atomic conditional update is the whole quota, so `UpdateItem` on this
-  // table is the entire DynamoDB surface. No notes-table access is granted.
+  // table is the quota surface. Canonical note/run authority is scoped separately.
   handler.addToRolePolicy(
     new PolicyStatement({
       actions: ['dynamodb:UpdateItem'],

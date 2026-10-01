@@ -30,30 +30,31 @@ implementation and evidence, not repeated permission requests.
 | M05.2 | Backend implemented and pushed: 5edd28d | UI and Summary integration, deployed/runtime acceptance |
 | M05.3 | Implemented: encrypted envelope, per-note wrapping and native/Web cutover | Crash/pending/runtime acceptance; UI wiring follows |
 | M05.4 | Implemented: scoped sync and authoritative Summary v0.4 lineage | UI and deployed/runtime acceptance in M05.5 |
-| M05.5 | In progress: security UI and capability/lifecycle integration | Security UI flows and Web/Android verification matrix |
+| M05.5 | Implemented in source: security forms, locked views and lifecycle/capability wiring | Static/build evidence below; deployed/runtime acceptance pending |
 
 ## Rubric status
 
-The labels/milestone mapping follow the M05 Notion plan. The DTO patch is a
-logging improvement only; it does not finish SEC-NFR-01 or note protection.
+All 15 criteria now have integrated source implementation. Details and concrete
+paths are mapped in [IMPLEMENTATION.md](IMPLEMENTATION.md). Static/build evidence
+is recorded below; deployed/runtime acceptance has not been performed.
 
 | Criterion | Level | Milestone | Status |
 | --- | --- | --- | --- |
-| SEC-FR-01 Enable protection | M | M05.2 | Not complete |
-| SEC-FR-02 Per-note password | M | M05.2 | Not complete |
-| SEC-FR-03 Unlock before protected operations | M | M05.2 | Not complete |
-| SEC-FR-04 Unlock with correct password | M | M05.2 | Not complete |
-| SEC-FR-05 Change password | M | M05.2 | Not complete |
-| SEC-FR-06 Disable protection | M | M05.2 | Not complete |
-| SEC-FR-07 No plaintext password storage | M | M05.2 | Not complete |
-| SEC-FR-08 Backend access enforcement | M | M05.2 | Not complete |
-| SEC-FR-09 Password confirmation | P | M05.2 | Not complete |
-| SEC-FR-10 Current password before change/disable | P | M05.2 | Not complete |
-| SEC-NFR-01 Safe representation/no password logs | M | M05.2 | Not complete |
-| SEC-NFR-02 API cannot bypass unlock | M | M05.2 | Not complete |
-| SEC-NFR-03 Encrypted local cache | P | M05.3 | Not complete |
-| SEC-NFR-04 Locked AI | P | M05.4 | Not complete |
-| SEC-NFR-05 Session/timeout scope | P | M05.5 | Not complete |
+| SEC-FR-01 Enable protection | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-02 Per-note password | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-03 Unlock before protected operations | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-04 Unlock with correct password | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-05 Change password | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-06 Disable protection | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-07 No plaintext password storage | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-08 Backend access enforcement | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-09 Password confirmation | P | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-FR-10 Current password before change/disable | P | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-NFR-01 Safe representation/no password logs | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-NFR-02 API cannot bypass unlock | M | M05.2 | Source implemented; runtime acceptance pending |
+| SEC-NFR-03 Encrypted local cache | P | M05.3 | Source implemented; runtime acceptance pending |
+| SEC-NFR-04 Locked AI | P | M05.4 | Source implemented; runtime acceptance pending |
+| SEC-NFR-05 Session/timeout scope | P | M05.5 | Source implemented; runtime acceptance pending |
 
 ## Preparation batch 01 — M05.0 / Application portion of M05.1
 
@@ -218,3 +219,77 @@ Next: M05.5 security forms, locked views, live capabilities and UI lifecycle cle
 M05.4 source checkpoint: `9dd2f65`. A trailing blank line reported during staging
 was normalized immediately in the documentation delivery follow-up. No source
 behavior changed; final whitespace check is clean.
+
+## M05.5 current work — 2026-10-02
+
+Security forms and locked views are implemented locally. Current changes include
+NoteDetail responsibility splits, transient password/OTP forms, generic protected
+list/dashboard projections, read-only capability wiring and root session signals.
+Next: reject late Application reads/saves, remove private sync presentation caches,
+mask protected conflict dialogs, run static checks/builds, record criterion evidence,
+and deliver the M05.5 checkpoint. Runtime acceptance is not yet claimed.
+
+## M05.5 checkpoint — 2026-10-02
+
+- Added transient password/confirmation/current-password/OTP forms, explicit
+  online/offline unlock, recovery limitation, locked detail and live read-only
+  capabilities. List/dashboard/conflict projections and semantics stay generic.
+- Clear private editor/Summary/presentation state on lock, expiry and session
+  changes. Captured context rejects late reads/saves/output, including same-account
+  reauthentication or lock/reunlock. Repository callbacks fence writes too.
+- Sync presentation caches metadata only, resolves against a fresh authorized
+  snapshot and clears on lifecycle changes. Protection transitions invalidate
+  stale unprotected UI DTOs; Dashboard reloads on security notifications.
+- Split detail actions/conflicts/security/view, workspace view and repository
+  delete/access responsibilities. Root changes only compose these boundaries.
+- Added a whole-request Summary deadline with a reduced provider budget and
+  reserved final-authority time; bounded canonical authority reads, aligned IAM
+  and timeout documentation. No unrelated business module was implemented.
+- Analyzer/typecheck succeeded. Web release build succeeded. Android all-ABI
+  attempt hit Windows command-length limits in the existing local LLM bridge;
+  retry through a temporary short drive path succeeded for Android ARM64 debug
+  (448.8 s); final warmed-cache rebuild also passed (28.1 s).
+- No tests/runtime/provider/mailbox/deployment acceptance performed. See
+  IMPLEMENTATION.md for each M/P implementation and the remaining evidence limit.
+
+Current coding work and static/build checks are complete. Deliver the M05.5
+checkpoint and verify final-tuankiet; deployed/runtime acceptance remains an
+explicit future step rather than a fabricated Done status.
+
+### M05.5 static/build evidence
+
+- Final `dart analyze lib`: no issues; backend `npm run typecheck`: success.
+- Final Web release build: success (83.9 s, Wasm dry-run also succeeded).
+- Android ARM64 debug build through `R:` mapped to the same worktree: success.
+  Final warmed-cache rebuild after the last Dart responsibility split passed
+  (28.1 s); no source edits followed the final build.
+- Scope coverage: graph generation `2026-10-01T21:17:51Z`, 4108 nodes/17695 edges.
+  Coverage queried for all 36 changed/new source paths; no recorded parse gap in
+  these paths, but metadata freshness changed. Source was read/authored directly;
+  earlier partial library ranges were read. This is not an exhaustive caller or
+  security-audit claim. No graph artifact or generated local build log is staged.
+- Original checkout, unrelated user files, model assets and datasets are preserved.
+  `_agent_ops/` remains absent; the actual M05 records serve as continuity/closure.
+
+### Closure receipt
+
+| Record | Resolution |
+| --- | --- |
+| MUST_REMEMBER.md | Updated current implementation status; persistent read-before-code/scope/checkpoint instructions retained |
+| docs/m05/COLLAB_REVIEW.md | Updated source delivery and evidence references |
+| docs/m05/PROGRESS.md | Updated M05.5, all 15 rubric rows, static/build evidence and delivery continuity |
+| docs/m05/IMPLEMENTATION.md | Added criterion mapping, UI behavior, configuration and evidence limits |
+| Notion progress page | Updated M05.5 and all M/P rows; remote delivery receipt follows the push |
+| _agent_ops records | Not applicable: directory/tools/protocol absent; no fabricated records |
+
+## New instruction — platform acceptance, then M06 (2026-10-02)
+
+The user explicitly authorized all M05 tests/fixes on Chrome and Android and
+asked for verified Notion checkboxes. After M05 passes the scoped suites/platform
+flows with observed defects fixed, continue M06 according to its Notion plan,
+with the same per-milestone/criterion progress/commit/push and test workflow.
+Earlier no-test statements are historical receipts, not a current restriction.
+No Android device is connected at this checkpoint; use the available emulator
+with separate synthetic test data and preserve existing application data.
+Current step: deliver source checkpoint, run existing suites and scoped security
+regressions, exercise Chrome and Android, and fix each confirmed failure.

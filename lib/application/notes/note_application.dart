@@ -106,19 +106,18 @@ final class NoteApplicationService {
 
   /// Lists the notes owned by the authenticated user.
   Future<List<NoteDto>> listNotes() async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
+    final String userId = context.userId;
     final List<Note> notes = await noteRepository.findByOwnerId(userId);
-    if (currentUser.userId != userId) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
-    }
+    _requireContext(context);
     return notes.map(NoteDto.fromDomain).toList(growable: false);
   }
 
   Future<NoteDto> readNote(String noteId) async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
     final Note note = await _requireOwnedNote(
       noteId,
-      userId,
+      context,
       NoteOperation.read,
     );
     return NoteDto.fromDomain(note);
@@ -129,17 +128,16 @@ final class NoteApplicationService {
       return const NoteAccessCapabilities();
     }
     bool allowed(NoteOperation operation) =>
-        !note.isProtected ||
-        (security?.allows(
-              ownerId: note.ownerId,
-              noteId: note.id,
-              protection: NoteProtection(
-                enabled: note.isProtected,
-                revision: note.protectionRevision,
-              ),
-              operation: operation,
-            ) ??
-            false);
+        security?.allows(
+          ownerId: note.ownerId,
+          noteId: note.id,
+          protection: NoteProtection(
+            enabled: note.isProtected,
+            revision: note.protectionRevision,
+          ),
+          operation: operation,
+        ) ??
+        !note.isProtected;
     return NoteAccessCapabilities(
       canRead: allowed(NoteOperation.read),
       canEdit: allowed(NoteOperation.edit),
@@ -155,7 +153,8 @@ final class NoteApplicationService {
     required String title,
     required String content,
   }) async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
+    final String userId = context.userId;
     final Note note = Note.create(
       id: generateId(),
       ownerId: userId,
@@ -164,6 +163,7 @@ final class NoteApplicationService {
       now: now().toUtc(),
     );
     await noteRepository.save(note);
+    _requireContext(context);
     _requireAccess(note, NoteOperation.edit);
     requestSync?.call(userId);
     return NoteDto.fromDomain(note);
@@ -174,14 +174,16 @@ final class NoteApplicationService {
     required String noteId,
     required String title,
   }) async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
+    final String userId = context.userId;
     final Note note = await _requireOwnedNote(
       noteId,
-      userId,
+      context,
       NoteOperation.edit,
     );
     note.rename(title, now().toUtc());
     await noteRepository.save(note);
+    _requireContext(context);
     _requireAccess(note, NoteOperation.edit);
     requestSync?.call(userId);
     return NoteDto.fromDomain(note);
@@ -193,14 +195,16 @@ final class NoteApplicationService {
     required String noteId,
     required String content,
   }) async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
+    final String userId = context.userId;
     final Note note = await _requireOwnedNote(
       noteId,
-      userId,
+      context,
       NoteOperation.edit,
     );
     note.replaceContent(content, now().toUtc());
     await noteRepository.save(note);
+    _requireContext(context);
     _requireAccess(note, NoteOperation.edit);
     requestSync?.call(userId);
     return NoteDto.fromDomain(note);
@@ -208,10 +212,28 @@ final class NoteApplicationService {
 
   /// Deletes an owned note.
   Future<void> deleteNote(String noteId) async {
-    final String userId = currentUser.requiredUserId;
-    await _requireOwnedNote(noteId, userId, NoteOperation.delete);
+    final context = _captureContext();
+    final String userId = context.userId;
+    await _requireOwnedNote(noteId, context, NoteOperation.delete);
     await noteRepository.deleteById(noteId);
+    _requireContext(context);
     requestSync?.call(userId);
+  }
+
+  ({String userId, int session, int access}) _captureContext() => (
+    userId: currentUser.requiredUserId,
+    session: _sessionGeneration(),
+    access: security?.accessGeneration ?? 0,
+  );
+
+  void _requireContext(({String userId, int session, int access}) context) {
+    if (currentUser.userId != context.userId ||
+        _sessionGeneration() != context.session) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    if ((security?.accessGeneration ?? 0) != context.access) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
   }
 
   int _sessionGeneration() {
@@ -226,10 +248,12 @@ final class NoteApplicationService {
 
   Future<Note> _requireOwnedNote(
     String noteId,
-    String expectedOwnerId,
+    ({String userId, int session, int access}) context,
     NoteOperation operation,
   ) async {
     final Note? note = await noteRepository.findById(noteId);
+    _requireContext(context);
+    final String expectedOwnerId = context.userId;
     if (note == null) {
       throw NoteNotFoundException(noteId);
     }
@@ -254,8 +278,8 @@ final class NoteApplicationService {
     if (!note.contentAvailable) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
     }
-    if (!note.protection.enabled) return;
     final INoteAccessGuard? guard = security;
+    if (!note.protection.enabled && guard == null) return;
     if (guard == null) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
     }
