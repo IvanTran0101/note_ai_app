@@ -5,7 +5,7 @@ import 'package:note_ai_app/application/note_intelligence/summary_run_context.da
 
 void main() {
   group('SummaryRunFailureCode', () {
-    test('exposes exactly the Phase 3 run failure codes', () {
+    test('exposes the run codes plus the mapped API codes', () {
       expect(SummaryRunFailureCode.values, <SummaryRunFailureCode>[
         SummaryRunFailureCode.cancelled,
         SummaryRunFailureCode.alreadyRunning,
@@ -16,6 +16,15 @@ void main() {
         SummaryRunFailureCode.noteChanged,
         SummaryRunFailureCode.conflict,
         SummaryRunFailureCode.deadlineExceeded,
+        SummaryRunFailureCode.invalidInput,
+        SummaryRunFailureCode.inputTooLong,
+        SummaryRunFailureCode.pipelineTooLarge,
+        SummaryRunFailureCode.unauthorized,
+        SummaryRunFailureCode.rateLimited,
+        SummaryRunFailureCode.serviceUnavailable,
+        SummaryRunFailureCode.invalidOutput,
+        SummaryRunFailureCode.networkUnavailable,
+        SummaryRunFailureCode.unexpected,
       ]);
     });
   });
@@ -60,6 +69,93 @@ void main() {
         cancelled.hashCode,
         const SummaryRunFailure(SummaryRunFailureCode.cancelled).hashCode,
       );
+    });
+
+    test('keeps a bounded retry hint only for rateLimited', () {
+      expect(
+        const SummaryRunFailure(
+          SummaryRunFailureCode.rateLimited,
+          retryAfterSeconds: 1,
+        ).retryAfterSeconds,
+        1,
+      );
+      expect(
+        const SummaryRunFailure(
+          SummaryRunFailureCode.rateLimited,
+          retryAfterSeconds: 3600,
+        ).retryAfterSeconds,
+        3600,
+      );
+      expect(
+        const SummaryRunFailure(SummaryRunFailureCode.rateLimited)
+            .retryAfterSeconds,
+        isNull,
+      );
+      expect(
+        const SummaryRunFailure(
+          SummaryRunFailureCode.serviceUnavailable,
+          retryAfterSeconds: 120,
+        ).retryAfterSeconds,
+        isNull,
+      );
+    });
+
+    test('drops an out-of-range hint instead of clamping it', () {
+      for (final int invalid in <int>[0, -1, 3601, 86400]) {
+        expect(
+          SummaryRunFailure(
+            SummaryRunFailureCode.rateLimited,
+            retryAfterSeconds: invalid,
+          ).retryAfterSeconds,
+          isNull,
+          reason: 'hint $invalid must be dropped, not clamped',
+        );
+      }
+    });
+
+    test('equality and hashCode include the retry hint', () {
+      const SummaryRunFailure withoutHint = SummaryRunFailure(
+        SummaryRunFailureCode.rateLimited,
+      );
+      const SummaryRunFailure withHint = SummaryRunFailure(
+        SummaryRunFailureCode.rateLimited,
+        retryAfterSeconds: 30,
+      );
+
+      expect(
+        withHint,
+        const SummaryRunFailure(
+          SummaryRunFailureCode.rateLimited,
+          retryAfterSeconds: 30,
+        ),
+      );
+      expect(
+        withHint.hashCode,
+        const SummaryRunFailure(
+          SummaryRunFailureCode.rateLimited,
+          retryAfterSeconds: 30,
+        ).hashCode,
+      );
+      expect(<SummaryRunFailure>{withoutHint, withHint}, hasLength(2));
+      // A hint that was dropped must not make two failures look different.
+      expect(
+        const SummaryRunFailure(
+          SummaryRunFailureCode.rateLimited,
+          retryAfterSeconds: 0,
+        ),
+        withoutHint,
+      );
+    });
+
+    test('a hint never leaks into toString', () {
+      const SummaryRunFailure failure = SummaryRunFailure(
+        SummaryRunFailureCode.rateLimited,
+        retryAfterSeconds: 429,
+      );
+
+      expect(failure.retryAfterSeconds, 429);
+      expect(failure.toString(), 'SummaryRunFailure(rateLimited)');
+      expect(failure.toString(), isNot(contains('429')));
     });
   });
 

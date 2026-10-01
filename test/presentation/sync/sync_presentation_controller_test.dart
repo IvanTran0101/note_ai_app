@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_store.dart';
@@ -518,6 +519,9 @@ final class _FakeCoordinator implements ISyncCoordinator {
 }
 
 final class _FakeNotesController implements NotesApplicationController {
+  @override
+  SummaryConsentAppService? get summaryConsent => null;
+
   _FakeNotesController(Iterable<NoteDto> initialNotes)
     : notes = List<NoteDto>.of(initialNotes);
 

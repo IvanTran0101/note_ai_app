@@ -11,6 +11,7 @@ import '../../domain/note_intelligence/summary.dart';
 import '../sync/cognito_access_token_provider.dart';
 import '../configuration/summary_runtime_configuration.dart';
 import 'remote_summarization_service.dart';
+import 'summary_failure_mapper.dart';
 import 'summary_http_gateway.dart';
 import 'summary_request_policy.dart';
 
@@ -108,39 +109,48 @@ final class SummaryRunRuntime {
     }
   }
 
-  Future<Summary> _run(SummaryRunContext context) async {
-    await _guard.revalidate(context, requireConsent: true);
-    final SummaryRequestPolicy policy;
-    try {
-      policy = await (_policy ??= loadPolicy());
-    } catch (_) {
-      _policy = null;
-      rethrow;
-    }
-    await _guard.revalidate(context, requireConsent: true);
+  /// Runs the remote pipeline behind [withSummaryFailureBoundary].
+  ///
+  /// Known failures keep their code and instance; a policy load, local store
+  /// read, transport, or service failure that is not classified becomes
+  /// [SummaryRunFailureCode.unexpected], so no Infrastructure exception ever
+  /// reaches the caller. Cancellation stays outside this boundary: the scope
+  /// race in [summarize] and the scope cleanup in its `finally` are unchanged.
+  Future<Summary> _run(SummaryRunContext context) =>
+      withSummaryFailureBoundary<Summary>(() async {
+        await _guard.revalidate(context, requireConsent: true);
+        final SummaryRequestPolicy policy;
+        try {
+          policy = await (_policy ??= loadPolicy());
+        } catch (_) {
+          _policy = null;
+          rethrow;
+        }
+        await _guard.revalidate(context, requireConsent: true);
 
-    final SummaryHttpGateway gateway = SummaryHttpGateway(
-      baseUri: configuration.endpoint!,
-      policy: policy,
-      tokenProvider: tokenProvider,
-      expectedAccountUserId: context.accountUserId,
-      runScope: context.scope,
-      beforeDispatch: () => _guard.revalidate(context, requireConsent: true),
-      currentRunFailure: () =>
-          _guard.currentFailure(context, requireConsent: true),
-      client: _httpClient,
-    );
-    final RemoteSummarizationService service = RemoteSummarizationService(
-      policy: policy,
-      generate: gateway.generate,
-      hasConsent: () => consent.isCurrent(context.consent),
-    );
-    final Summary result = await service.summarize(
-      context.noteSnapshot.content,
-    );
-    await _guard.revalidate(context, requireConsent: true);
-    return result;
-  }
+        final SummaryHttpGateway gateway = SummaryHttpGateway(
+          baseUri: configuration.endpoint!,
+          policy: policy,
+          tokenProvider: tokenProvider,
+          expectedAccountUserId: context.accountUserId,
+          runScope: context.scope,
+          beforeDispatch: () =>
+              _guard.revalidate(context, requireConsent: true),
+          currentRunFailure: () =>
+              _guard.currentFailure(context, requireConsent: true),
+          client: _httpClient,
+        );
+        final RemoteSummarizationService service = RemoteSummarizationService(
+          policy: policy,
+          generate: gateway.generate,
+          hasConsent: () => consent.isCurrent(context.consent),
+        );
+        final Summary result = await service.summarize(
+          context.noteSnapshot.content,
+        );
+        await _guard.revalidate(context, requireConsent: true);
+        return result;
+      });
 
   /// Cancels all active runs on sign-out, account change, or app shutdown.
   void cancelActive({

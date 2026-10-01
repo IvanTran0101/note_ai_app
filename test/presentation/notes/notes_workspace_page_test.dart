@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
@@ -689,6 +690,9 @@ void main() {
 }
 
 final class _FakeNotesController implements NotesApplicationController {
+  @override
+  SummaryConsentAppService? get summaryConsent => null;
+
   _FakeNotesController({List<NoteDto>? notes})
     : notes = List<NoteDto>.of(notes ?? <NoteDto>[]);
 

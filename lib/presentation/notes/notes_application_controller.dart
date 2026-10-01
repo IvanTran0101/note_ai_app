@@ -1,5 +1,6 @@
 import '../../application/notes/note_application.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
+import '../../application/note_intelligence/summary_consent_app_service.dart';
 
 /// A narrow Presentation seam around the Note application use cases.
 ///
@@ -7,6 +8,9 @@ import '../../application/note_intelligence/summary_run_context.dart';
 /// This seam keeps widget tests independent from repositories, file storage,
 /// and the local-LLM implementation.
 abstract interface class NotesApplicationController {
+  /// Optional session consent actions; unavailable for unwired/local test seams.
+  SummaryConsentAppService? get summaryConsent;
+
   Future<List<NoteDto>> listNotes();
 
   Future<NoteDto> createNote({required String title, required String content});
@@ -36,9 +40,12 @@ abstract interface class NotesApplicationController {
 /// [NotesApplicationController] fake.
 final class NoteApplicationServiceController
     implements NotesApplicationController {
-  const NoteApplicationServiceController(this._service);
+  const NoteApplicationServiceController(this._service, {this.summaryConsent});
 
   final NoteApplicationService _service;
+
+  @override
+  final SummaryConsentAppService? summaryConsent;
 
   @override
   Future<List<NoteDto>> listNotes() => _service.listNotes();
@@ -70,11 +77,17 @@ final class NoteApplicationServiceController
     NoteDto? selectedSnapshot,
     SummaryRunScope? scope,
   }) async {
-    final summary = await _service.summarizeNote(
-      noteId,
-      selectedSnapshot: selectedSnapshot,
-      scope: scope,
-    );
-    return summary.text;
+    try {
+      final summary = await _service.summarizeNote(
+        noteId,
+        selectedSnapshot: selectedSnapshot,
+        scope: scope,
+      );
+      return summary.text;
+    } on SummaryRunFailure {
+      rethrow;
+    } on Object {
+      throw const SummaryRunFailure(SummaryRunFailureCode.unexpected);
+    }
   }
 }

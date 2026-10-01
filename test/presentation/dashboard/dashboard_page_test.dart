@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 
 import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
@@ -1402,6 +1403,9 @@ final class _FakeDashboardQuery implements IDashboardOverviewQuery {
 }
 
 final class _FakeNotesController implements NotesApplicationController {
+  @override
+  SummaryConsentAppService? get summaryConsent => null;
+
   _FakeNotesController({List<NoteDto>? notes, this.listNotesError})
     : notes = List<NoteDto>.of(notes ?? const <NoteDto>[]);
 

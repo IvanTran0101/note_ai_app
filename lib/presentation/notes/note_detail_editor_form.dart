@@ -5,6 +5,8 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import 'model_provisioning_status_panel.dart';
 import 'note_detail_localizations.dart';
 import 'note_detail_summary.dart';
+import 'note_summary_availability.dart';
+import 'note_summary_feedback.dart';
 import 'notes_theme_tokens.dart';
 
 /// Scrollable editor content for [NoteDetailPage].
@@ -29,6 +31,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.showSaveState = true,
     required this.actionBusy,
     this.isSummarizing = false,
+    this.showBusyIndicator = true,
     required this.provisioningReader,
     required this.onProvisioningRetry,
     required this.onProvisioningCancel,
@@ -40,6 +43,10 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.regenerateSummaryLabel,
     this.onErrorRetry,
     this.errorRetryLabel,
+    this.errorRetryEnabled = true,
+    this.summaryAvailability,
+    this.summaryCloud = false,
+    this.onCancelSummary,
   });
 
   final TextEditingController titleController;
@@ -56,6 +63,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool showSaveState;
   final bool actionBusy;
   final bool isSummarizing;
+  final bool showBusyIndicator;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
   final VoidCallback? onProvisioningCancel;
@@ -67,6 +75,19 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final String? regenerateSummaryLabel;
   final VoidCallback? onErrorRetry;
   final String? errorRetryLabel;
+
+  /// Whether the error retry action may run; false renders it disabled while a
+  /// rate-limit hint still has to elapse.
+  final bool errorRetryEnabled;
+
+  /// Availability of the Summary action, or null when the host shows none.
+  final NoteSummaryAvailability? summaryAvailability;
+
+  /// Whether the active runtime is the cloud one, for unavailable copy.
+  final bool summaryCloud;
+
+  /// Cancels the in-flight generation; visible for the whole run.
+  final VoidCallback? onCancelSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +143,14 @@ final class NoteDetailEditorForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
+        if (summaryAvailability != null)
+          NoteSummaryFeedback(
+            copy: copy,
+            availability: summaryAvailability!,
+            cloud: summaryCloud,
+            isRunning: isSummarizing,
+            onCancel: onCancelSummary,
+          ),
         NoteDetailSummary(
           copy: copy,
           hasSavedNote: hasSavedNote,
@@ -250,7 +279,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton(
                 key: const ValueKey<String>('note-detail-error-retry'),
-                onPressed: onErrorRetry,
+                onPressed: errorRetryEnabled ? onErrorRetry : null,
                 child: Text(errorRetryLabel!),
               ),
             ),
@@ -276,7 +305,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         ],
-        if (actionBusy && !isSummarizing) ...<Widget>[
+        if (actionBusy && !isSummarizing && showBusyIndicator) ...<Widget>[
           const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:note_ai_app/application/auth/current_user_session.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_cloud_consent.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
@@ -270,39 +271,57 @@ void main() {
     },
   );
 
-  test('revoking consent while reading the token aborts before HTTP', () async {
-    consent.grant(
-      accountUserId: 'account-a',
-      sessionGeneration: session.sessionGeneration,
-    );
-    final Completer<String?> token = Completer<String?>();
-    final Completer<void> enteredTokenRead = Completer<void>();
-    int sends = 0;
-    final MockClient client = MockClient((http.Request request) async {
-      sends++;
-      return http.Response('', 500);
-    });
-    addTearDown(client.close);
-    final SummaryRunScope scope = SummaryRunScope();
-    final SummaryRunRuntime runTime = runtime(
-      client: client,
-      tokenProvider: ({required bool forceRefresh}) {
-        enteredTokenRead.complete();
-        return token.future;
-      },
-    );
-    final Future<Summary> pending = runTime.summarize(runContext(scope: scope));
-    await enteredTokenRead.future;
-    runTime.revokeConsent(accountUserId: 'account-a');
+  test(
+    'Application revoke during token lookup aborts the runtime before HTTP',
+    () async {
+      consent.grant(
+        accountUserId: 'account-a',
+        sessionGeneration: session.sessionGeneration,
+      );
+      final Completer<String?> token = Completer<String?>();
+      final Completer<void> enteredTokenRead = Completer<void>();
+      int sends = 0;
+      final MockClient client = MockClient((http.Request request) async {
+        sends++;
+        return http.Response('', 500);
+      });
+      addTearDown(client.close);
+      final SummaryRunScope scope = SummaryRunScope();
+      final SummaryRunRuntime runTime = runtime(
+        client: client,
+        tokenProvider: ({required bool forceRefresh}) {
+          enteredTokenRead.complete();
+          return token.future;
+        },
+      );
+      final Future<Summary> pending = runTime.summarize(
+        runContext(scope: scope),
+      );
+      await enteredTokenRead.future;
+      final SummaryConsentAppService app = SummaryConsentAppService(
+        currentUser: session,
+        session: session,
+        consent: consent,
+        isAvailable: () =>
+            runTime.configuration.isRemote &&
+            runTime.configuration.canSummarize &&
+            runTime.cognitoMode,
+        cancelActiveRuns: () =>
+            runTime.cancelActive(reason: SummaryRunFailureCode.consentRequired),
+      );
+      app.revokeConsent();
+      expect(app.state, SummaryConsentStatus.consentRequired);
+      expect(scope.cancelReason, SummaryRunFailureCode.consentRequired);
 
-    await expectLater(
-      pending,
-      throwsA(const SummaryRunFailure(SummaryRunFailureCode.consentRequired)),
-    );
-    token.complete(jwt('account-a'));
-    await Future<void>.delayed(Duration.zero);
-    expect(sends, 0);
-  });
+      await expectLater(
+        pending,
+        throwsA(const SummaryRunFailure(SummaryRunFailureCode.consentRequired)),
+      );
+      token.complete(jwt('account-a'));
+      await Future<void>.delayed(Duration.zero);
+      expect(sends, 0);
+    },
+  );
 
   test('one scope cannot start a second concurrent invocation', () async {
     consent.grant(
@@ -417,7 +436,10 @@ void main() {
       client: client,
     );
 
-    await expectLater(instance.summarize(runContext()), throwsStateError);
+    await expectLater(
+      instance.summarize(runContext()),
+      throwsA(const SummaryRunFailure(SummaryRunFailureCode.unexpected)),
+    );
     expect(
       await instance.summarize(runContext()),
       const Summary('Retry worked'),

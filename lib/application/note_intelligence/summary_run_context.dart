@@ -32,29 +32,88 @@ enum SummaryRunFailureCode {
   /// A sync conflict blocks the run.
   conflict,
 
-  /// The run outlived its deadline.
+  /// The run outlived its deadline, including an API-side timeout.
   deadlineExceeded,
+
+  /// The API refused the request because its content or shape was invalid.
+  invalidInput,
+
+  /// One stage's input, or its encoded body, exceeds the policy budget.
+  inputTooLong,
+
+  /// The snapshot would need more generation calls than the policy allows.
+  pipelineTooLarge,
+
+  /// The account is not authorized for the Summary API (missing or foreign
+  /// token, refused by the authorizer).
+  unauthorized,
+
+  /// The API asked the caller to wait before trying again.
+  ///
+  /// A usable hint travels in [SummaryRunFailure.retryAfterSeconds]; nothing
+  /// retries on its own.
+  rateLimited,
+
+  /// The provider or the API gateway is temporarily unavailable.
+  serviceUnavailable,
+
+  /// The API answered with something that is not a valid summary.
+  invalidOutput,
+
+  /// The request never reached the API (transport-level failure).
+  networkUnavailable,
+
+  /// Anything not classified; the fail-closed default.
+  unexpected,
 }
 
 /// Safe, typed failure for one summary run.
 ///
-/// The exception carries a [code] and nothing else: note text, titles, provider
-/// payloads, and token material must never travel through an exception, so
-/// [toString] reports the code only.
+/// The exception carries a [code] and, at most, a bounded retry hint: note
+/// text, titles, provider payloads, and token material must never travel
+/// through an exception, so [toString] reports the code only.
 final class SummaryRunFailure implements Exception {
   /// Creates a failure for [code].
-  const SummaryRunFailure(this.code);
+  ///
+  /// [retryAfterSeconds] is stored as given and sanitized on read: it is
+  /// non-null only for [SummaryRunFailureCode.rateLimited] and only inside
+  /// `1..3600`, so an invalid hint is dropped rather than clamped or rounded.
+  const SummaryRunFailure(this.code, {this._retryAfterSeconds});
+
+  /// The only hint range a caller may act on, mirroring the API contract.
+  static const int _maxRetryAfterSeconds = 3600;
 
   /// The application-level reason the run did not produce an accepted result.
   final SummaryRunFailureCode code;
 
-  @override
-  bool operator ==(Object other) {
-    return other is SummaryRunFailure && other.code == code;
+  /// The hint exactly as constructed; [retryAfterSeconds] applies the rule.
+  final int? _retryAfterSeconds;
+
+  /// Whole seconds the API asked the caller to wait, or null when there is no
+  /// usable hint.
+  ///
+  /// It is a hint, never an instruction: this layer never retries on its own.
+  /// The raw value is kept in a private field so the constructor stays `const`.
+  int? get retryAfterSeconds {
+    final int? hint = _retryAfterSeconds;
+    if (code != SummaryRunFailureCode.rateLimited ||
+        hint == null ||
+        hint < 1 ||
+        hint > _maxRetryAfterSeconds) {
+      return null;
+    }
+    return hint;
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, code);
+  bool operator ==(Object other) {
+    return other is SummaryRunFailure &&
+        other.code == code &&
+        other.retryAfterSeconds == retryAfterSeconds;
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, code, retryAfterSeconds);
 
   @override
   String toString() => 'SummaryRunFailure(${code.name})';

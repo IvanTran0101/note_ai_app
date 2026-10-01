@@ -929,33 +929,36 @@ void main() {
   });
 
   group('NoteApplicationService.summarizeNote local path', () {
-    test('keeps the local callback and never re-reads the revision', () async {
-      final Note saved = _note(content: 'Local body');
-      final _FakeNoteRepository repository = _FakeNoteRepository(
-        initial: <Note>[saved],
-      );
-      final SummaryRunScope scope = SummaryRunScope();
-      String? receivedContent;
+    test(
+      'keeps the local callback and rechecks the selected revision',
+      () async {
+        final Note saved = _note(content: 'Local body');
+        final _FakeNoteRepository repository = _FakeNoteRepository(
+          initial: <Note>[saved],
+        );
+        final SummaryRunScope scope = SummaryRunScope();
+        String? receivedContent;
 
-      final Summary result =
-          await _service(
-            repository,
-            summarizeContent: (String content) async {
-              receivedContent = content;
-              return const Summary('Local summary');
-            },
-          ).summarizeNote(
-            saved.id,
-            selectedSnapshot: NoteDto.fromDomain(saved),
-            scope: scope,
-          );
+        final Summary result =
+            await _service(
+              repository,
+              summarizeContent: (String content) async {
+                receivedContent = content;
+                return const Summary('Local summary');
+              },
+            ).summarizeNote(
+              saved.id,
+              selectedSnapshot: NoteDto.fromDomain(saved),
+              scope: scope,
+            );
 
-      expect(result, const Summary('Local summary'));
-      expect(receivedContent, 'Local body');
-      expect(repository.findByIdCalls, 1);
-      expect(repository.savedNotes, isEmpty);
-      expect(scope.isCancelled, isFalse);
-    });
+        expect(result, const Summary('Local summary'));
+        expect(receivedContent, 'Local body');
+        expect(repository.findByIdCalls, 2);
+        expect(repository.savedNotes, isEmpty);
+        expect(scope.isCancelled, isFalse);
+      },
+    );
 
     test('still dispatches a run when a dispatcher is wired', () async {
       final Note saved = _note(content: 'Local body');

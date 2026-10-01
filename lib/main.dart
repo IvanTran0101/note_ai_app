@@ -15,6 +15,7 @@ import 'application/sync/sync_conflict_resolver.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/summary_run_context.dart';
+import 'application/note_intelligence/summary_consent_app_service.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
@@ -36,6 +37,7 @@ import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/note_intelligence/summary_run_runtime.dart';
+import 'infrastructure/note_intelligence/summary_failure_mapper.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/sync/account_sync_runtime.dart';
 import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
@@ -53,6 +55,7 @@ import 'presentation/notes/note_detail_page.dart';
 import 'presentation/notes/note_detail_route_result.dart';
 import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
+import 'presentation/notes/summary_cloud_settings_tile.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
 import 'presentation/sync/sync_localizations.dart';
@@ -332,10 +335,23 @@ class NoteFlowApp extends StatefulWidget {
     super.key,
     required this.authController,
     required this.currentUserSession,
+    this.summaryRuntime,
+    this.localSyncStoreFactory,
+    this.localSummarizer,
+    this.enableSync = true,
   });
 
   final AuthController authController;
   final CurrentUserSession currentUserSession;
+
+  /// Optional composition collaborators for offline acceptance runs.
+  final SummaryRunRuntime? summaryRuntime;
+  final ILocalSyncStore Function({required String accountUserId})?
+  localSyncStoreFactory;
+  final SummarizeNoteContent? localSummarizer;
+
+  /// Offline acceptance roots disable unrelated background synchronization.
+  final bool enableSync;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
@@ -374,7 +390,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,
-        summarizeContent: _summarize,
+        summarizeContent: (String content) =>
+            withSummaryFailureBoundary(() => _summarize(content)),
         summarizeRun: _summaryRunRuntime.dispatchesSummary
             ? _summaryRunRuntime.summarize
             : null,
@@ -383,10 +400,32 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         requestSync: _requestSyncForAccount,
       );
   late final NotesApplicationController _notesController =
-      NoteApplicationServiceController(_noteApplicationService);
+      NoteApplicationServiceController(
+        _noteApplicationService,
+        summaryConsent: _summaryConsentService,
+      );
 
-  SummaryRunRuntime get _summaryRunRuntime =>
-      _summaryRuntime ??= SummaryRunRuntime.fromEnvironment(
+  late final SummaryConsentAppService _summaryConsentService =
+      SummaryConsentAppService(
+        currentUser: _currentUserSession,
+        session: _currentUserSession,
+        consent: _summaryRunRuntime.consent,
+        requiresCloudConsent: _summaryRunRuntime.dispatchesSummary,
+        isAvailable: () =>
+            !_disposed &&
+            (_summaryRunRuntime.configuration.isLocal
+                ? !kIsWeb
+                : _summaryRunRuntime.configuration.isRemote &&
+                      _summaryRunRuntime.configuration.canSummarize &&
+                      _noteFlowAuthMode == 'cognito'),
+        cancelActiveRuns: () => _summaryRunRuntime.cancelActive(
+          reason: SummaryRunFailureCode.consentRequired,
+        ),
+      );
+
+  SummaryRunRuntime get _summaryRunRuntime => _summaryRuntime ??=
+      widget.summaryRuntime ??
+      SummaryRunRuntime.fromEnvironment(
         session: _currentUserSession,
         localSyncStoreForAccount: _localSyncStoreForAccount,
         amplifyOutputsJson: amplifyConfig,
@@ -428,6 +467,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   );
   late final GoRouter _router;
   bool _disposed = false;
+  // ponytail: one local model worker; per-model latches if multiple runtimes exist.
+  bool _localSummaryRunning = false;
 
   @override
   void initState() {
@@ -489,7 +530,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   AccountSyncRuntime? _accountSyncRuntime() {
-    if (_noteFlowAuthMode != 'cognito') {
+    if (!widget.enableSync || _noteFlowAuthMode != 'cognito') {
       return null;
     }
     final Uri? baseUri = _syncApiBaseUri();
@@ -576,15 +617,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
     return _localSyncStores.putIfAbsent(
       accountUserId,
-      () => local_sync_infrastructure.createLocalSyncStore(
-        accountUserId: accountUserId,
-      ),
+      () =>
+          widget.localSyncStoreFactory?.call(accountUserId: accountUserId) ??
+          local_sync_infrastructure.createLocalSyncStore(
+            accountUserId: accountUserId,
+          ),
     );
   }
 
   Future<Summary> _summarize(String content) async {
-    final NoteSummaryAppService service = await _ensureService();
-    return service.summarize(content);
+    if (_localSummaryRunning) {
+      throw const SummaryRunFailure(SummaryRunFailureCode.alreadyRunning);
+    }
+    _localSummaryRunning = true;
+    try {
+      final SummarizeNoteContent? supplied = widget.localSummarizer;
+      if (supplied != null) return await supplied(content);
+      final NoteSummaryAppService service = await _ensureService();
+      return await service.summarize(content);
+    } finally {
+      _localSummaryRunning = false;
+    }
   }
 
   void _cancelModelProvisioning() {
@@ -954,6 +1007,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                       },
                     ),
                     const SizedBox(height: 24),
+                    if (_summaryConsentService
+                        .requiresCloudConsent) ...<Widget>[
+                      SummaryCloudSettingsTile(service: _summaryConsentService),
+                      const SizedBox(height: 24),
+                    ],
                     OutlinedButton.icon(
                       icon: const Icon(Icons.lock_outline),
                       label: Text(authCopy.changePassword),
@@ -1051,7 +1109,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             notes: NotesWorkspacePage(
               key: _notesPageKey,
               embeddedInWorkspace: true,
-              applicationService: _noteApplicationService,
+              controller: _notesController,
               provisioningReader: _summaryRunRuntime.configuration.isLocal
                   ? _modelProvisioningStatus
                   : null,

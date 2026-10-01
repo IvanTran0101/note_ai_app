@@ -6,6 +6,7 @@ import '../common/note_flow_primitives.dart';
 import 'note_detail_action_bar.dart';
 import 'note_detail_editor_form.dart';
 import 'note_detail_localizations.dart';
+import 'note_summary_availability.dart';
 import 'notes_theme_tokens.dart';
 
 /// Pure layout surface for the Note Detail editor.
@@ -50,8 +51,13 @@ final class NoteDetailSurface extends StatelessWidget {
     this.regenerateSummaryLabel,
     this.onErrorRetry,
     this.errorRetryLabel,
+    this.errorRetryEnabled = true,
+    this.summaryAvailability,
+    this.summaryCloud = false,
+    this.onCancelSummary,
     required this.isSaving,
     required this.isSummarizing,
+    this.showBusyIndicator = true,
     required this.canSave,
     required this.canSummarize,
     required this.onSave,
@@ -94,8 +100,21 @@ final class NoteDetailSurface extends StatelessWidget {
   final VoidCallback? onErrorRetry;
   final String? errorRetryLabel;
 
+  /// Whether the error retry action may run right now.
+  final bool errorRetryEnabled;
+
+  /// Availability of the Summary action, or null when the host shows none.
+  final NoteSummaryAvailability? summaryAvailability;
+
+  /// Whether the active runtime is the cloud one, for unavailable copy.
+  final bool summaryCloud;
+
+  /// Cancels the in-flight generation; visible for the whole run.
+  final VoidCallback? onCancelSummary;
+
   final bool isSaving;
   final bool isSummarizing;
+  final bool showBusyIndicator;
   final bool canSave;
   final bool canSummarize;
   final VoidCallback? onSave;
@@ -205,6 +224,7 @@ final class NoteDetailSurface extends StatelessWidget {
                   showSaveState: !showPageHeader,
                   actionBusy: actionBusy,
                   isSummarizing: isSummarizing,
+                  showBusyIndicator: showBusyIndicator,
                   provisioningReader: provisioningReader,
                   onProvisioningRetry: onProvisioningRetry,
                   onProvisioningCancel: onProvisioningCancel,
@@ -216,6 +236,10 @@ final class NoteDetailSurface extends StatelessWidget {
                   regenerateSummaryLabel: regenerateSummaryLabel,
                   onErrorRetry: onErrorRetry,
                   errorRetryLabel: errorRetryLabel,
+                  errorRetryEnabled: errorRetryEnabled,
+                  summaryAvailability: summaryAvailability,
+                  summaryCloud: summaryCloud,
+                  onCancelSummary: onCancelSummary,
                 ),
               ),
             ),

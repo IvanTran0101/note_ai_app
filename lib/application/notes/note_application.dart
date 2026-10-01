@@ -249,8 +249,8 @@ final class NoteApplicationService {
   /// The account and session generation are captured before the asynchronous
   /// note read and rechecked after every await and before the result is
   /// accepted. With [summarizeRun] wired a failure is a typed code-only
-  /// [SummaryRunFailure]; the local path keeps its note-not-found and ownership
-  /// exception contract and only adds the session-change gate.
+  /// [SummaryRunFailure]. Scoped/selected local calls also recheck the revision;
+  /// legacy unscoped local calls retain their original exception/read contract.
   Future<Summary> summarizeNote(
     String noteId, {
     NoteDto? selectedSnapshot,
@@ -309,8 +309,12 @@ final class NoteApplicationService {
     _requireLiveRun(runScope, userId, generation);
     if (dispatchesRun) {
       _requireCurrentConsent(consent);
+    }
+    if (typedFailure) {
       await _requireSavedRevision(noteId, selectedSnapshot ?? revision);
       _requireLiveRun(runScope, userId, generation);
+    }
+    if (dispatchesRun) {
       _requireCurrentConsent(consent);
     }
     return summary;
