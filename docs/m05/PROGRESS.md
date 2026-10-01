@@ -30,7 +30,7 @@ implementation and evidence, not repeated permission requests.
 | M05.2 | Backend implemented and pushed: 5edd28d | UI and Summary integration, deployed/runtime acceptance |
 | M05.3 | Implemented: encrypted envelope, per-note wrapping and native/Web cutover | Crash/pending/runtime acceptance; UI wiring follows |
 | M05.4 | Implemented: scoped sync and authoritative Summary v0.4 lineage | UI and deployed/runtime acceptance in M05.5 |
-| M05.5 | Not implemented | Security UI flows and Web/Android verification matrix |
+| M05.5 | In progress: security UI and capability/lifecycle integration | Security UI flows and Web/Android verification matrix |
 
 ## Rubric status
 
@@ -214,3 +214,7 @@ and push after each checkpoint; do not stop at an intermediate milestone.
   No tests, app runtime, provider invocation or deployment performed.
 
 Next: M05.5 security forms, locked views, live capabilities and UI lifecycle clearing.
+
+M05.4 source checkpoint: `9dd2f65`. A trailing blank line reported during staging
+was normalized immediately in the documentation delivery follow-up. No source
+behavior changed; final whitespace check is clean.

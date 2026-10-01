@@ -64,4 +64,3 @@ export const logOutcome = (outcome: Outcome, requestId: string, latencyMs: numbe
     code: outcome.code,
   });
 };
-
