@@ -26,7 +26,7 @@ implementation and evidence, not repeated permission requests.
 | Milestone | Status | Remaining acceptance |
 | --- | --- | --- |
 | M05.0 | Implemented: contracts and baseline dependency alignment recorded | Runtime acceptance remains tracked in later milestones |
-| M05.1 | Partial: Application DTO redaction implemented | Domain NoteProtection/safe metadata/capabilities, Domain log redaction, mapping/wiring and acceptance |
+| M05.1 | Implemented: protection/metadata contracts, safe DTOs/capabilities and access guard | Runtime wiring continues in backend/storage/UI milestones |
 | M05.2 | Not implemented | Verifier/grant/OTP and every protected operation authorized |
 | M05.3 | Not implemented | Full encrypted envelope, atomic v2→v3 migration, Web/native key lifecycle and crash/pending evidence |
 | M05.4 | Not implemented | Metadata feed/content split, mutation/replay/conflict, Summary lineage and stale result rejection |
@@ -99,8 +99,12 @@ Notion keeps the final pushed checkpoint SHA and delivery verification.
 
 ### Next step
 
-Align the required baseline Summary dependencies, implement M05.1 contracts,
-then continue backend, encrypted storage, sync/Summary authorization and UI.
+M05.1 files touched: Note/NoteProtection/NoteMetadata and metadata repository
+boundary; safe NoteDto, NoteAccessCapabilities/access guard, Application operation
+checks; LocalNoteState projection and repository mappings. DTOs and outbox
+coalescing were split by responsibility to keep the modified files readable.
+Next: static checks and M05.1 checkpoint, then backend, encrypted storage,
+sync/Summary authorization and UI.
 Complete each milestone/criterion gate before marking Done. Record evidence
 and push after each checkpoint; do not stop at an intermediate milestone.
 
@@ -122,6 +126,24 @@ and push after each checkpoint; do not stop at an intermediate milestone.
   and capabilities; then continue the remaining milestones.
 
 ## Continuity receipt (current)
+
+## M05.1 checkpoint — 2026-10-02
+
+- Added pure Domain NoteProtection/NoteMetadata with revision/availability
+  invariants and a separate metadata query boundary. Note diagnostics redact
+  title; unavailable content cannot be read or changed via the aggregate.
+- Mapped protection/content revisions and availability through LocalNoteState,
+  repository and NoteDto. Protected list projections omit private content.
+- Added provider-neutral access/capability contracts. Application edit/delete
+  and Summary fail closed for protected notes without a live access guard;
+  Summary rechecks authority before accepting output.
+- Split DTO/error projections and repository outbox coalescing into their own
+  files; existing retry/idempotency bookkeeping remains in one owner.
+- Dart analysis for Domain notes, Application notes and Infrastructure notes
+  passed with no issues. Patch whitespace check passed; tests were not run.
+- Next: M05.2 backend verifier, scoped grants, recovery and direct API enforcement.
+
+## Continuity receipt (latest)
 
 | Record | Resolution |
 | --- | --- |

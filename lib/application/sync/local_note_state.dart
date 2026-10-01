@@ -2,6 +2,7 @@
 library;
 
 import 'note_sync_status.dart';
+import '../../domain/notes/note_protection.dart';
 
 /// Immutable local projection of one note plus its sync bookkeeping.
 ///
@@ -21,6 +22,8 @@ final class LocalNoteState {
     int serverRevision = 0,
     this.deletedAt,
     this.status = NoteSyncStatus.synced,
+    this.protection = const NoteProtection.unprotected(),
+    this.contentAvailable = true,
   }) : id = _requireNonBlank(id, 'id'),
        ownerId = _requireNonBlank(ownerId, 'ownerId'),
        serverRevision = _requireNonNegative(serverRevision, 'serverRevision');
@@ -37,6 +40,8 @@ final class LocalNoteState {
 
   /// The current content.
   final String content;
+  final NoteProtection protection;
+  final bool contentAvailable;
 
   /// When the note was created locally or remotely.
   final DateTime createdAt;
@@ -67,7 +72,9 @@ final class LocalNoteState {
         other.updatedAt == updatedAt &&
         other.serverRevision == serverRevision &&
         other.deletedAt == deletedAt &&
-        other.status == status;
+        other.status == status &&
+        other.protection == protection &&
+        other.contentAvailable == contentAvailable;
   }
 
   @override
@@ -81,6 +88,8 @@ final class LocalNoteState {
     serverRevision,
     deletedAt,
     status,
+    protection,
+    contentAvailable,
   );
 
   @override

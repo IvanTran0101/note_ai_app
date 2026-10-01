@@ -1,4 +1,5 @@
 import 'note.dart';
+import 'note_metadata.dart';
 
 /// Persistence contract for the Note aggregate.
 ///
@@ -17,4 +18,10 @@ abstract interface class INoteRepository {
 
   /// Deletes the note with [id]. Succeeds without error when it is absent.
   Future<void> deleteById(String id);
+}
+
+/// Metadata-only query boundary, independent of content authorization.
+abstract interface class INoteMetadataRepository {
+  Future<NoteMetadata?> findMetadataById(String id);
+  Future<List<NoteMetadata>> findMetadataByOwnerId(String ownerId);
 }

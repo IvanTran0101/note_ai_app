@@ -1,3 +1,6 @@
+import 'note_metadata.dart';
+import 'note_protection.dart';
+
 /// The Note aggregate root for the notes domain.
 ///
 /// Owns its state and invariants. It does not save itself, run AI, or map
@@ -15,6 +18,9 @@ class Note {
     this._content,
     this._createdAt,
     this._updatedAt,
+    this._protection,
+    this._contentAvailable,
+    this._contentRevision,
   );
 
   /// Creates a new note. Both [createdAt] and [updatedAt] are initialized from
@@ -26,7 +32,17 @@ class Note {
     required String content,
     required DateTime now,
   }) {
-    return Note._(id, ownerId, title, content, now, now);
+    return Note._(
+      id,
+      ownerId,
+      title,
+      content,
+      now,
+      now,
+      const NoteProtection.unprotected(),
+      true,
+      0,
+    );
   }
 
   /// Reconstitutes an existing note from persistence data.
@@ -41,8 +57,25 @@ class Note {
     required String content,
     required DateTime createdAt,
     required DateTime updatedAt,
+    NoteProtection protection = const NoteProtection.unprotected(),
+    bool contentAvailable = true,
+    int contentRevision = 0,
   }) {
-    return Note._(id, ownerId, title, content, createdAt, updatedAt);
+    if (contentRevision < 0 ||
+        (!contentAvailable && (title.isNotEmpty || content.isNotEmpty))) {
+      throw ArgumentError('Invalid note content availability.');
+    }
+    return Note._(
+      id,
+      ownerId,
+      title,
+      content,
+      createdAt,
+      updatedAt,
+      protection,
+      contentAvailable,
+      contentRevision,
+    );
   }
 
   final String _id;
@@ -51,6 +84,32 @@ class Note {
   String _title;
   String _content;
   DateTime _updatedAt;
+  NoteProtection _protection;
+  final bool _contentAvailable;
+  final int _contentRevision;
+
+  NoteProtection get protection => _protection;
+  bool get contentAvailable => _contentAvailable;
+  int get contentRevision => _contentRevision;
+
+  NoteMetadata get metadata => NoteMetadata(
+    id: id,
+    ownerId: ownerId,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    contentRevision: contentRevision,
+    protection: protection,
+    previewTitle: protection.enabled || !contentAvailable ? null : _title,
+  );
+
+  void applyProtection(NoteProtection next) {
+    _protection.requireSuccessor(next);
+    _protection = next;
+  }
+
+  void _requireContent() {
+    if (!contentAvailable) throw const NoteContentUnavailable();
+  }
 
   /// The identity of this note.
   String get id => _id;
@@ -59,10 +118,16 @@ class Note {
   String get ownerId => _ownerId;
 
   /// The current title.
-  String get title => _title;
+  String get title {
+    _requireContent();
+    return _title;
+  }
 
   /// The current content.
-  String get content => _content;
+  String get content {
+    _requireContent();
+    return _content;
+  }
 
   /// When this note was created. Never changes after creation.
   DateTime get createdAt => _createdAt;
@@ -72,6 +137,7 @@ class Note {
 
   /// Renames the note and records [now] as the last modification time.
   void rename(String title, DateTime now) {
+    _requireContent();
     _title = title;
     _updatedAt = now;
   }
@@ -79,13 +145,14 @@ class Note {
   /// Replaces the note content and records [now] as the last modification
   /// time.
   void replaceContent(String content, DateTime now) {
+    _requireContent();
     _content = content;
     _updatedAt = now;
   }
 
   @override
   String toString() {
-    return 'Note(id: $_id, ownerId: $_ownerId, title: $_title, '
+    return 'Note(id: $_id, ownerId: $_ownerId, title: <redacted>, '
         'createdAt: $_createdAt, updatedAt: $_updatedAt)';
   }
 }

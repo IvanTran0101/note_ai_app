@@ -9,7 +9,11 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_metadata.dart';
+import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
+
+part 'note_repository_mutations.dart';
 
 /// Infrastructure implementation of the domain's [domain.INoteRepository].
 ///
@@ -25,7 +29,8 @@ import '../../domain/notes/note_repository.dart' as domain;
 ///
 /// The repository never calls the remote data source: it only queues outbox
 /// mutations that a later sync coordinator pushes.
-final class NoteRepository implements domain.INoteRepository {
+final class NoteRepository
+    implements domain.INoteRepository, domain.INoteMetadataRepository {
   /// Creates a repository from the injected account resolver, store factory,
   /// mutation-id generator, and clock.
   NoteRepository({
@@ -80,10 +85,24 @@ final class NoteRepository implements domain.INoteRepository {
       return List<Note>.unmodifiable(
         state.notes
             .where((LocalNoteState note) => !note.isDeleted)
-            .map(_toDomain),
+            .map(
+              (note) => _toDomain(note, metadataOnly: note.protection.enabled),
+            ),
       );
     });
   }
+
+  @override
+  Future<NoteMetadata?> findMetadataById(String id) async {
+    final Note? note = await findById(id);
+    return note?.metadata;
+  }
+
+  @override
+  Future<List<NoteMetadata>> findMetadataByOwnerId(String ownerId) async =>
+      (await findByOwnerId(ownerId))
+          .map((note) => note.metadata)
+          .toList(growable: false);
 
   @override
   Future<void> save(Note note) {
@@ -106,6 +125,13 @@ final class NoteRepository implements domain.INoteRepository {
           );
         }
         final LocalNoteState? existing = _findNote(current, note.id);
+        if (!note.contentAvailable ||
+            (existing != null && !existing.contentAvailable)) {
+          throw const NoteContentUnavailable();
+        }
+        if (existing != null && existing.protection != note.protection) {
+          throw StateError('Refresh note protection before saving.');
+        }
         if (existing?.isDeleted ?? false) {
           throw StateError(
             'A deleted note cannot be restored with the same id.',
@@ -134,6 +160,7 @@ final class NoteRepository implements domain.INoteRepository {
           // An absent or already tombstoned note is already deleted.
           return current;
         }
+        if (!existing.contentAvailable) throw const NoteContentUnavailable();
         final int pendingIndex = _lastPendingIndexFor(current, id);
         final PendingMutation? pending = pendingIndex == -1
             ? null
@@ -179,6 +206,7 @@ final class NoteRepository implements domain.INoteRepository {
           serverRevision: existing.serverRevision,
           deletedAt: timestamp,
           status: NoteSyncStatus.pending,
+          protection: existing.protection,
         );
         return _stateWith(
           current,
@@ -220,190 +248,6 @@ final class NoteRepository implements domain.INoteRepository {
     return _storesByAccount.putIfAbsent(
       accountUserId,
       () => localSyncStoreFactory(accountUserId: accountUserId),
-    );
-  }
-
-  LocalSyncState _stateAfterSave(
-    LocalSyncState current,
-    Note note,
-    DateTime timestamp,
-  ) {
-    final LocalNoteState? existing = _findNote(current, note.id);
-    if (existing == null) {
-      // A new local note starts unacknowledged and queues one create.
-      return _stateWith(
-        current,
-        notes: <LocalNoteState>[
-          ...current.notes,
-          _toLocalNote(note, serverRevision: 0, status: NoteSyncStatus.pending),
-        ],
-        outbox: <PendingMutation>[
-          ...current.outbox,
-          _pendingMutation(
-            noteId: note.id,
-            operation: SyncMutationOperation.create,
-            baseRevision: 0,
-            payload: _payloadOf(note),
-            timestamp: timestamp,
-          ),
-        ],
-      );
-    }
-    return _stateWith(
-      current,
-      notes: _notesWith(
-        current.notes,
-        _toLocalNote(
-          note,
-          serverRevision: existing.serverRevision,
-          status: NoteSyncStatus.pending,
-        ),
-      ),
-      outbox: _outboxAfterSave(current, note, existing, timestamp),
-    );
-  }
-
-  List<PendingMutation> _outboxAfterSave(
-    LocalSyncState current,
-    Note note,
-    LocalNoteState existing,
-    DateTime timestamp,
-  ) {
-    final SyncNotePayload payload = _payloadOf(note);
-    if (current.outbox.any(
-      (PendingMutation entry) =>
-          entry.noteId == note.id &&
-          entry.blocked &&
-          entry.lastError == SyncErrorCode.invalidMutation,
-    )) {
-      // An explicit edit repairs a rejected request with a fresh id and the
-      // last acknowledged revision; successors of that request cannot run.
-      return <PendingMutation>[
-        ...current.outbox.where(
-          (PendingMutation entry) => entry.noteId != note.id,
-        ),
-        _pendingMutation(
-          noteId: note.id,
-          operation: existing.serverRevision == 0
-              ? SyncMutationOperation.create
-              : SyncMutationOperation.update,
-          baseRevision: existing.serverRevision,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final int index = _lastPendingIndexFor(current, note.id);
-    if (index == -1) {
-      // Nothing is queued yet: base the update on the acknowledged revision.
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.update,
-          baseRevision: existing.serverRevision,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final PendingMutation last = current.outbox[index];
-    if (last.operation == SyncMutationOperation.delete) {
-      throw StateError('A queued delete cannot be undone with the same id.');
-    }
-    if (!_isUnsent(last)) {
-      // The entry may already have been seen by the server, so it stays
-      // byte-for-byte identical and the edit becomes the next queued mutation
-      // at the next predicted revision. Its id remains stable for retries.
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.update,
-          baseRevision: last.baseRevision + 1,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    // Unsent coalescing keeps the queue position, the base revision, and the
-    // mutation id, while the payload always reflects the latest edit.
-    final PendingMutation coalesced = PendingMutation(
-      mutationId: last.mutationId,
-      noteId: note.id,
-      operation: last.operation,
-      baseRevision: last.baseRevision,
-      payload: payload,
-      createdAt: last.createdAt,
-    );
-    return _outboxWithReplacement(current.outbox, index, coalesced);
-  }
-
-  List<PendingMutation> _outboxAfterDelete(
-    LocalSyncState current,
-    LocalNoteState note,
-    int pendingIndex,
-    DateTime timestamp,
-  ) {
-    if (pendingIndex == -1) {
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.delete,
-          baseRevision: note.serverRevision,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final PendingMutation last = current.outbox[pendingIndex];
-    if (last.operation == SyncMutationOperation.delete) {
-      // The delete is already queued; a second one would be redundant.
-      return current.outbox;
-    }
-    if (!_isUnsent(last)) {
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.delete,
-          baseRevision: last.baseRevision + 1,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    // Unsent coalescing: an update followed by a delete is just the delete,
-    // reusing the mutation id and base revision the server has never seen.
-    final int baseRevision = last.operation == SyncMutationOperation.create
-        ? note.serverRevision
-        : last.baseRevision;
-    return _outboxWithReplacement(
-      current.outbox,
-      pendingIndex,
-      PendingMutation(
-        mutationId: last.mutationId,
-        noteId: note.id,
-        operation: SyncMutationOperation.delete,
-        baseRevision: baseRevision,
-        createdAt: last.createdAt,
-      ),
-    );
-  }
-
-  PendingMutation _pendingMutation({
-    required String noteId,
-    required SyncMutationOperation operation,
-    required int baseRevision,
-    SyncNotePayload? payload,
-    required DateTime timestamp,
-  }) {
-    return PendingMutation(
-      mutationId: generateMutationId(),
-      noteId: noteId,
-      operation: operation,
-      baseRevision: baseRevision,
-      payload: payload,
-      createdAt: timestamp,
     );
   }
 
@@ -493,17 +337,23 @@ final class NoteRepository implements domain.INoteRepository {
       updatedAt: note.updatedAt,
       serverRevision: serverRevision,
       status: status,
+      protection: note.protection,
+      contentAvailable: note.contentAvailable,
     );
   }
 
-  static Note _toDomain(LocalNoteState note) {
+  static Note _toDomain(LocalNoteState note, {bool metadataOnly = false}) {
+    final bool available = note.contentAvailable && !metadataOnly;
     return Note.reconstitute(
       id: note.id,
       ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
+      title: available ? note.title : '',
+      content: available ? note.content : '',
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
+      protection: note.protection,
+      contentAvailable: available,
+      contentRevision: note.serverRevision,
     );
   }
 

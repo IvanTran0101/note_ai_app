@@ -1,3 +1,9 @@
+import 'note_access.dart';
+import 'note_dto.dart';
+import '../../domain/notes/note_protection.dart';
+
+export 'note_dto.dart';
+
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_repository.dart';
@@ -15,90 +21,6 @@ typedef NoteClock = DateTime Function();
 /// Summarizes note content without exposing a concrete provider to the
 /// application layer.
 typedef SummarizeNoteContent = Future<Summary> Function(String content);
-
-/// A read-only application projection of the Note aggregate.
-///
-/// The DTO keeps presentation code independent from the domain aggregate's
-/// mutation methods while preserving the fields needed by the Notes UI.
-final class NoteDto {
-  const NoteDto({
-    required this.id,
-    required this.ownerId,
-    required this.title,
-    required this.content,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  /// Creates a presentation-safe projection from a domain Note.
-  factory NoteDto.fromDomain(Note note) {
-    return NoteDto(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-    );
-  }
-
-  final String id;
-  final String ownerId;
-  final String title;
-  final String content;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  @override
-  bool operator ==(Object other) {
-    return other is NoteDto &&
-        other.id == id &&
-        other.ownerId == ownerId &&
-        other.title == title &&
-        other.content == content &&
-        other.createdAt == createdAt &&
-        other.updatedAt == updatedAt;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(id, ownerId, title, content, createdAt, updatedAt);
-
-  @override
-  String toString() {
-    return 'NoteDto(id: $id, ownerId: $ownerId, title: <redacted>, '
-        'content: <redacted>, createdAt: $createdAt, updatedAt: $updatedAt)';
-  }
-}
-
-/// Raised when an application operation targets a note that does not exist.
-final class NoteNotFoundException implements Exception {
-  const NoteNotFoundException(this.noteId);
-
-  final String noteId;
-
-  @override
-  String toString() => 'NoteNotFoundException: note "$noteId" was not found';
-}
-
-/// Raised when the current user attempts to access another owner's note.
-final class NoteOwnershipException implements Exception {
-  const NoteOwnershipException({
-    required this.noteId,
-    required this.expectedOwnerId,
-    required this.actualOwnerId,
-  });
-
-  final String noteId;
-  final String expectedOwnerId;
-  final String actualOwnerId;
-
-  @override
-  String toString() {
-    return 'NoteOwnershipException: note "$noteId" belongs to '
-        '"$actualOwnerId", not "$expectedOwnerId"';
-  }
-}
 
 /// Requests a non-blocking sync after one local note mutation has persisted.
 typedef RequestNoteSync = void Function(String accountUserId);
@@ -151,6 +73,7 @@ final class NoteApplicationService {
     this.summarizeRun,
     this.cloudConsent,
     this.sessionGeneration,
+    this.security,
   });
 
   final INoteRepository noteRepository;
@@ -159,6 +82,7 @@ final class NoteApplicationService {
   final NoteClock now;
   final SummarizeNoteContent summarizeContent;
   final RequestNoteSync? requestSync;
+  final INoteAccessGuard? security;
 
   /// Optional note-snapshot-aware dispatcher supplied by the composition root.
   ///
@@ -185,6 +109,42 @@ final class NoteApplicationService {
     return notes.map(NoteDto.fromDomain).toList(growable: false);
   }
 
+  Future<NoteDto> readNote(String noteId) async {
+    final String userId = currentUser.requiredUserId;
+    final Note note = await _requireOwnedNote(
+      noteId,
+      userId,
+      NoteOperation.read,
+    );
+    return NoteDto.fromDomain(note);
+  }
+
+  NoteAccessCapabilities capabilitiesFor(NoteDto note) {
+    if (currentUser.userId != note.ownerId || !note.contentAvailable) {
+      return const NoteAccessCapabilities();
+    }
+    bool allowed(NoteOperation operation) =>
+        !note.isProtected ||
+        (security?.allows(
+              ownerId: note.ownerId,
+              noteId: note.id,
+              protection: NoteProtection(
+                enabled: note.isProtected,
+                revision: note.protectionRevision,
+              ),
+              operation: operation,
+            ) ??
+            false);
+    return NoteAccessCapabilities(
+      canRead: allowed(NoteOperation.read),
+      canEdit: allowed(NoteOperation.edit),
+      canDelete: allowed(NoteOperation.delete),
+      canManage: allowed(NoteOperation.manage),
+      canSummarize: allowed(NoteOperation.summary),
+      canExport: allowed(NoteOperation.export),
+    );
+  }
+
   /// Creates and persists a new Note aggregate.
   Future<NoteDto> createNote({
     required String title,
@@ -209,7 +169,11 @@ final class NoteApplicationService {
     required String title,
   }) async {
     final String userId = currentUser.requiredUserId;
-    final Note note = await _requireOwnedNote(noteId, userId);
+    final Note note = await _requireOwnedNote(
+      noteId,
+      userId,
+      NoteOperation.edit,
+    );
     note.rename(title, now().toUtc());
     await noteRepository.save(note);
     requestSync?.call(userId);
@@ -223,7 +187,11 @@ final class NoteApplicationService {
     required String content,
   }) async {
     final String userId = currentUser.requiredUserId;
-    final Note note = await _requireOwnedNote(noteId, userId);
+    final Note note = await _requireOwnedNote(
+      noteId,
+      userId,
+      NoteOperation.edit,
+    );
     note.replaceContent(content, now().toUtc());
     await noteRepository.save(note);
     requestSync?.call(userId);
@@ -233,7 +201,7 @@ final class NoteApplicationService {
   /// Deletes an owned note.
   Future<void> deleteNote(String noteId) async {
     final String userId = currentUser.requiredUserId;
-    await _requireOwnedNote(noteId, userId);
+    await _requireOwnedNote(noteId, userId, NoteOperation.delete);
     await noteRepository.deleteById(noteId);
     requestSync?.call(userId);
   }
@@ -286,6 +254,7 @@ final class NoteApplicationService {
         actualOwnerId: note.ownerId,
       );
     }
+    _requireAccess(note, NoteOperation.summary);
     final NoteDto revision = NoteDto.fromDomain(note);
     if (selectedSnapshot != null && selectedSnapshot != revision) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
@@ -307,6 +276,7 @@ final class NoteApplicationService {
         : await summarizeContent(note.content);
 
     _requireLiveRun(runScope, userId, generation);
+    _requireAccess(note, NoteOperation.summary);
     if (dispatchesRun) {
       _requireCurrentConsent(consent);
     }
@@ -351,6 +321,7 @@ final class NoteApplicationService {
     if (current == null) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
     }
+    _requireAccess(current, NoteOperation.summary);
     if (NoteDto.fromDomain(current) != expected) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
     }
@@ -377,7 +348,11 @@ final class NoteApplicationService {
     return user is SessionGenerationSource ? user.sessionGeneration : 0;
   }
 
-  Future<Note> _requireOwnedNote(String noteId, String expectedOwnerId) async {
+  Future<Note> _requireOwnedNote(
+    String noteId,
+    String expectedOwnerId,
+    NoteOperation operation,
+  ) async {
     final Note? note = await noteRepository.findById(noteId);
     if (note == null) {
       throw NoteNotFoundException(noteId);
@@ -389,6 +364,27 @@ final class NoteApplicationService {
         actualOwnerId: note.ownerId,
       );
     }
+    if (currentUser.userId != expectedOwnerId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    _requireAccess(note, operation);
     return note;
+  }
+
+  void _requireAccess(Note note, NoteOperation operation) {
+    if (!note.contentAvailable) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+    if (!note.protection.enabled) return;
+    final INoteAccessGuard? guard = security;
+    if (guard == null) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+    guard.requireAccess(
+      ownerId: note.ownerId,
+      noteId: note.id,
+      protection: note.protection,
+      operation: operation,
+    );
   }
 }
