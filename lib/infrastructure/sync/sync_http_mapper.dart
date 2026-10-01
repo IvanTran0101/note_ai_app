@@ -23,6 +23,9 @@ import '../../application/sync/sync_snapshot.dart';
 
 /// The `status` value of an applied mutation response.
 const String _appliedStatus = 'applied';
+final RegExp _utcTimestampPattern = RegExp(
+  r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$',
+);
 
 /// Maps an HTTP status to the failure it means, per the frozen status table.
 ///
@@ -70,6 +73,8 @@ Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
     body['payload'] = <String, Object?>{
       'title': payload.title,
       'content': payload.content,
+      if (payload.includesPinnedAt)
+        'pinnedAt': payload.pinnedAt?.toIso8601String(),
     };
   }
   return body;
@@ -192,6 +197,7 @@ SyncNoteSnapshot _decodeNote(Map<String, Object?> json) {
     createdAt: _readTimestamp(json, 'createdAt'),
     serverUpdatedAt: _readTimestamp(json, 'serverUpdatedAt'),
     revision: _readPositiveRevision(json),
+    pinnedAt: _readOptionalUtcTimestamp(json, 'pinnedAt'),
     deletedAt: _readOptionalTimestamp(json, 'deletedAt'),
   );
 }
@@ -233,6 +239,35 @@ DateTime? _readOptionalTimestamp(Map<String, Object?> json, String fieldName) {
   if (timestamp == null) {
     throw FormatException(
       'Note field "$fieldName" must be null or a valid ISO-8601 timestamp.',
+    );
+  }
+  return timestamp;
+}
+
+DateTime? _readOptionalUtcTimestamp(
+  Map<String, Object?> json,
+  String fieldName,
+) {
+  final Object? value = json[fieldName];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException(
+      'Note field "$fieldName" must be null or a valid UTC timestamp.',
+    );
+  }
+  final Match? parts = _utcTimestampPattern.firstMatch(value);
+  final DateTime? timestamp = DateTime.tryParse(value);
+  if (parts == null ||
+      timestamp == null ||
+      !timestamp.isUtc ||
+      timestamp.year != int.parse(parts[1]!) ||
+      timestamp.month != int.parse(parts[2]!) ||
+      timestamp.day != int.parse(parts[3]!) ||
+      timestamp.hour != int.parse(parts[4]!) ||
+      timestamp.minute != int.parse(parts[5]!) ||
+      timestamp.second != int.parse(parts[6]!)) {
+    throw FormatException(
+      'Note field "$fieldName" must be null or a valid UTC timestamp.',
     );
   }
   return timestamp;

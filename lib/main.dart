@@ -22,6 +22,7 @@ import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/auth/auth_identity.dart';
 import 'domain/note_intelligence/summary.dart';
 import 'domain/notes/note_repository.dart';
+import 'domain/users/user_preferences_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
 import 'infrastructure/ai/model_catalog.dart';
 import 'infrastructure/ai/model_downloader.dart';
@@ -43,6 +44,8 @@ import 'infrastructure/sync/account_sync_runtime.dart';
 import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
+import 'infrastructure/users/local_user_preferences_repository.dart'
+    as user_preferences_infrastructure;
 import 'presentation/debug/local_llm_debug_page.dart';
 import 'presentation/auth/auth_localizations.dart';
 import 'presentation/auth/auth_pages.dart';
@@ -384,9 +387,15 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         generateMutationId: _generateMutationId,
         now: _nowUtc,
       );
+  late final IUserPreferencesRepository _userPreferencesRepository =
+      user_preferences_infrastructure.createLocalUserPreferencesRepository(
+        currentAccountUserId: () => _currentUserSession.userId ?? '',
+        localSyncStoreFactory: _localSyncStoreForAccount,
+      );
   late final NoteApplicationService _noteApplicationService =
       NoteApplicationService(
         noteRepository: _noteRepository,
+        userPreferencesRepository: _userPreferencesRepository,
         currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,

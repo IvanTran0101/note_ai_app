@@ -117,6 +117,50 @@ final class NoteRepository implements domain.INoteRepository {
   }
 
   @override
+  Future<Note?> updateById(
+    String id, {
+    required String expectedAccountUserId,
+    required void Function(Note note) change,
+  }) {
+    return _enqueue<Note?>(() async {
+      final String accountUserId = _requireActiveAccountUserId();
+      if (accountUserId != expectedAccountUserId) {
+        throw StateError('The active account changed before the note update.');
+      }
+      final ILocalSyncStore store = _storeFor(accountUserId);
+      Note? updated;
+      await store.update((LocalSyncState current) {
+        if (current.accountUserId != expectedAccountUserId ||
+            currentAccountUserId() != expectedAccountUserId) {
+          throw StateError(
+            'The active account changed before the note update.',
+          );
+        }
+        if (current.conflicts.any(
+          (SyncConflict conflict) => conflict.noteId == id,
+        )) {
+          throw StateError(
+            'Resolve the sync conflict before editing this note.',
+          );
+        }
+        final LocalNoteState? existing = _findNote(current, id);
+        if (existing == null || existing.isDeleted) return current;
+        final Note fresh = _toDomain(existing);
+        change(fresh);
+        updated = fresh;
+        if (fresh.title == existing.title &&
+            fresh.content == existing.content &&
+            fresh.pinnedAt == existing.pinnedAt &&
+            fresh.updatedAt == existing.updatedAt) {
+          return current;
+        }
+        return _stateAfterSave(current, fresh, now());
+      });
+      return updated;
+    });
+  }
+
+  @override
   Future<void> deleteById(String id) {
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();
@@ -176,6 +220,7 @@ final class NoteRepository implements domain.INoteRepository {
           content: '',
           createdAt: existing.createdAt,
           updatedAt: timestamp,
+          pinnedAt: existing.pinnedAt,
           serverRevision: existing.serverRevision,
           deletedAt: timestamp,
           status: NoteSyncStatus.pending,
@@ -472,11 +517,17 @@ final class NoteRepository implements domain.INoteRepository {
       outbox: outbox,
       conflicts: current.conflicts,
       cursor: current.cursor,
+      userPreferences: current.userPreferences,
     );
   }
 
   static SyncNotePayload _payloadOf(Note note) {
-    return SyncNotePayload(title: note.title, content: note.content);
+    return SyncNotePayload(
+      title: note.title,
+      content: note.content,
+      pinnedAt: note.pinnedAt,
+      includesPinnedAt: true,
+    );
   }
 
   static LocalNoteState _toLocalNote(
@@ -491,6 +542,7 @@ final class NoteRepository implements domain.INoteRepository {
       content: note.content,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
+      pinnedAt: note.pinnedAt,
       serverRevision: serverRevision,
       status: status,
     );
@@ -504,6 +556,7 @@ final class NoteRepository implements domain.INoteRepository {
       content: note.content,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
+      pinnedAt: note.pinnedAt,
     );
   }
 

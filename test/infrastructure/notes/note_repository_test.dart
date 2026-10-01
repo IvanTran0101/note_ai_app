@@ -398,6 +398,15 @@ void main() {
         repository.save(testNote(id: 'note-b', title: 'Overwrite conflict')),
         throwsStateError,
       );
+      await expectLater(
+        repository.updateById(
+          'note-b',
+          expectedAccountUserId: 'user-1',
+          change: (Note note) =>
+              note.replaceText('Overwrite', 'Body', clock.now()),
+        ),
+        throwsStateError,
+      );
       await expectLater(repository.deleteById('note-b'), throwsStateError);
 
       await repository.save(
@@ -826,6 +835,93 @@ void main() {
   });
 
   group('NoteRepository atomic writes and serialization', () {
+    test(
+      'updates text and its immutable outbox payload in one write',
+      () async {
+        final FakeLocalSyncStoreFactory factory = statefulFactory(
+          LocalSyncState(
+            accountUserId: 'user-1',
+            notes: <LocalNoteState>[
+              testLocalNote(id: 'note-1', serverRevision: 3),
+            ],
+          ),
+        );
+        final NoteRepository repository = buildRepository(factory);
+
+        final Note updated = (await repository.updateById(
+          'note-1',
+          expectedAccountUserId: 'user-1',
+          change: (Note note) {
+            note.replaceText(
+              '  Edited title  ',
+              '\nEdited body\n',
+              clock.now(),
+            );
+            note.pin(clock.now());
+          },
+        ))!;
+
+        final FakeLocalSyncStore store = factory.store('user-1');
+        expect(store.replaceCount, 1);
+        expect(updated.title, '  Edited title  ');
+        expect(updated.content, '\nEdited body\n');
+        expect(updated.pinnedAt, clock.value);
+        expect(store.state.notes.single.title, updated.title);
+        expect(store.state.notes.single.content, updated.content);
+        expect(store.state.outbox.single.payload, isNotNull);
+        expect(store.state.outbox.single.payload!.title, updated.title);
+        expect(store.state.outbox.single.payload!.content, updated.content);
+        expect(store.state.outbox.single.payload!.pinnedAt, clock.value);
+        expect(store.state.outbox.single.payload!.includesPinnedAt, isTrue);
+      },
+    );
+
+    test(
+      'account mismatch and storage failure cannot partially edit',
+      () async {
+        final FakeLocalSyncStoreFactory factory = statefulFactory(
+          LocalSyncState(
+            accountUserId: 'user-1',
+            notes: <LocalNoteState>[
+              testLocalNote(
+                id: 'note-1',
+                title: 'Original',
+                content: 'Original body',
+                serverRevision: 2,
+              ),
+            ],
+          ),
+        );
+        final NoteRepository repository = buildRepository(factory);
+        final FakeLocalSyncStore store = factory.store('user-1');
+
+        await expectLater(
+          repository.updateById(
+            'note-1',
+            expectedAccountUserId: 'user-2',
+            change: (Note note) =>
+                note.replaceText('Foreign', 'Body', clock.now()),
+          ),
+          throwsStateError,
+        );
+        expect(store.replaceCount, 0);
+
+        store.failure = StateError('disk unavailable');
+        await expectLater(
+          repository.updateById(
+            'note-1',
+            expectedAccountUserId: 'user-1',
+            change: (Note note) =>
+                note.replaceText('Edited', 'Edited body', clock.now()),
+          ),
+          throwsStateError,
+        );
+        expect(store.state.notes.single.title, 'Original');
+        expect(store.state.notes.single.content, 'Original body');
+        expect(store.state.outbox, isEmpty);
+      },
+    );
+
     test(
       'a failed save replace neither persists nor reports success',
       () async {

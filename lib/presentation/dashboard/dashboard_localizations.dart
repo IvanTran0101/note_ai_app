@@ -71,12 +71,27 @@ final class DashboardCopy {
   String get updatedAt => _isVietnamese ? 'Cập nhật' : 'Updated';
   String get untitled => _isVietnamese ? '(Chưa đặt tên)' : '(Untitled)';
   String get noContent => _isVietnamese ? 'Không có nội dung' : 'No content';
+  String get pinNote => _isVietnamese ? 'Ghim ghi chú' : 'Pin note';
+  String get unpinNote => _isVietnamese ? 'Bỏ ghim ghi chú' : 'Unpin note';
+  String get pinned => _isVietnamese ? 'Đã ghim' : 'Pinned';
+  String get layoutSaveError => _isVietnamese
+      ? 'Không thể lưu bố cục ghi chú.'
+      : 'Couldn’t save the note layout.';
+  String get pinSaveError => _isVietnamese
+      ? 'Không thể cập nhật ghim ghi chú.'
+      : 'Couldn’t update the note pin.';
 
   String updatedOn(String date) =>
       _isVietnamese ? '$updatedAt $date' : '$updatedAt $date';
 
-  String noteSemantics({required String title, required String preview}) {
-    return _isVietnamese ? 'Ghi chú $title. $preview' : 'Note $title. $preview';
+  String noteSemantics({
+    required String title,
+    required String preview,
+    bool pinned = false,
+  }) {
+    return _isVietnamese
+        ? 'Ghi chú $title. $preview${pinned ? ' Đã ghim.' : ''}'
+        : 'Note $title. $preview${pinned ? ' Pinned.' : ''}';
   }
 }
 

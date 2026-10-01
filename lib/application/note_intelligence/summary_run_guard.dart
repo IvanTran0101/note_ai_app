@@ -56,8 +56,9 @@ final class SummaryRunGuard {
         content: note.content,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
+        pinnedAt: note.pinnedAt,
       );
-      if (persisted != context.noteSnapshot) {
+      if (!persisted.hasSameTextAs(context.noteSnapshot)) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
       }
       return;

@@ -7,9 +7,9 @@
  * canned message table: a provider error message, exception text, stack, token,
  * or request body can never reach a client through this module.
  *
- * Note snapshots travel as the seven fields `SyncNoteSnapshot` in
+ * Note snapshots travel as the eight fields `SyncNoteSnapshot` in
  * `lib/application/sync/sync_contract.dart` requires - `id`, `title`, `content`,
- * `revision`, `createdAt`, `serverUpdatedAt`, `deletedAt` - which is exactly the
+ * `revision`, `createdAt`, `serverUpdatedAt`, `pinnedAt`, `deletedAt` - which is the
  * store's `NoteSnapshot`. The M1.0 example abbreviates that object; the
  * Application port is what the client can actually construct.
  */
@@ -44,6 +44,7 @@ export type NoteBody = Readonly<{
   revision: number;
   createdAt: string;
   serverUpdatedAt: string;
+  pinnedAt: string | null;
   deletedAt: string | null;
 }>;
 
@@ -111,6 +112,7 @@ export const noteBodyOf = (note: NoteSnapshot): NoteBody => ({
   revision: note.revision,
   createdAt: note.createdAt,
   serverUpdatedAt: note.serverUpdatedAt,
+  pinnedAt: note.pinnedAt ?? null,
   deletedAt: note.deletedAt,
 });
 

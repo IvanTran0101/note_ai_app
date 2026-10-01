@@ -31,13 +31,18 @@ Request body:
   "baseRevision": 0,
   "payload": {
     "title": "Title",
-    "content": "Content"
+    "content": "Content",
+    "pinnedAt": null
   }
 }
 ```
 
 `create` and `update` require `payload`. `delete` may omit it. The client
 supplies `baseRevision`; the server assigns the next revision and timestamps.
+New clients send `pinnedAt` as `null` or a UTC ISO-8601 timestamp. Older
+clients may omit it; an omitted value preserves the server's current pin state.
+Titles and content must contain non-whitespace text, but the server preserves
+their original formatting.
 
 Applied response:
 
@@ -49,6 +54,7 @@ Applied response:
     "id": "note-123",
     "title": "Title",
     "content": "Content",
+    "pinnedAt": null,
     "revision": 1,
     "deletedAt": null
   }
@@ -67,7 +73,20 @@ Conflict response (`409`):
 ```
 
 The same `mutationId` is idempotent. A retry returns the original result and
-does not apply the mutation twice.
+does not apply the mutation twice. The fingerprint for an old payload that
+omits `pinnedAt` keeps the old shape, so retrying an already-attempted
+mutation remains idempotent.
+
+## Module 02 pin and layout semantics
+
+Pin state belongs to the note owner. A recipient can read the status but cannot
+change it. Shared-note access, pin status, and cache behavior follow the
+Modules 05–06 contract; this API does not add a separate shared-note pin path.
+Pinning an already-pinned note is a no-op. Unpinning then pinning records a new
+UTC `pinnedAt`; unpinning sends `null`.
+
+The dashboard's grid/list choice is a per-account local preference and is not
+included in the sync API.
 
 ### GET /sync/changes?cursor=&limit=50
 

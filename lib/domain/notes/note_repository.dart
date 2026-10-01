@@ -15,6 +15,15 @@ abstract interface class INoteRepository {
   /// Creates or replaces a note using [Note.id] as its identity.
   Future<void> save(Note note);
 
+  /// Atomically changes the fresh note inside its account store transaction.
+  /// Returns null when the note is absent or deleted. The update fails if the
+  /// active account changed before the transaction commits.
+  Future<Note?> updateById(
+    String id, {
+    required String expectedAccountUserId,
+    required void Function(Note note) change,
+  });
+
   /// Deletes the note with [id]. Succeeds without error when it is absent.
   Future<void> deleteById(String id);
 }

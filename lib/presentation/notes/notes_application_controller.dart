@@ -1,6 +1,7 @@
 import '../../application/notes/note_application.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
+import '../../domain/users/user_preferences.dart';
 
 /// A narrow Presentation seam around the Note application use cases.
 ///
@@ -33,13 +34,29 @@ abstract interface class NotesApplicationController {
   });
 }
 
+/// Optional Module 02 operations used by the production editor and dashboard.
+/// The older test seam remains usable without implementing the new flows.
+abstract interface class NotesModule02Controller {
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  });
+
+  Future<NoteDto> setPinned({required String noteId, required bool pinned});
+
+  Future<NoteLayoutPreference> getNoteLayout();
+
+  Future<void> setNoteLayout(NoteLayoutPreference layout);
+}
+
 /// Presentation adapter for the Application service.
 ///
 /// It intentionally contains no Infrastructure knowledge. The root can pass
 /// [NoteApplicationService] directly to [NotesPage], while tests can inject a
 /// [NotesApplicationController] fake.
 final class NoteApplicationServiceController
-    implements NotesApplicationController {
+    implements NotesApplicationController, NotesModule02Controller {
   const NoteApplicationServiceController(this._service, {this.summaryConsent});
 
   final NoteApplicationService _service;
@@ -67,6 +84,24 @@ final class NoteApplicationServiceController
   }) {
     return _service.replaceContent(noteId: noteId, content: content);
   }
+
+  @override
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) => _service.updateNote(noteId: noteId, title: title, content: content);
+
+  @override
+  Future<NoteDto> setPinned({required String noteId, required bool pinned}) =>
+      _service.setPinned(noteId: noteId, pinned: pinned);
+
+  @override
+  Future<NoteLayoutPreference> getNoteLayout() => _service.getNoteLayout();
+
+  @override
+  Future<void> setNoteLayout(NoteLayoutPreference layout) =>
+      _service.setNoteLayout(layout);
 
   @override
   Future<void> deleteNote(String noteId) => _service.deleteNote(noteId);

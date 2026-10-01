@@ -157,6 +157,7 @@ final class SyncStateReconciliation {
               content: local.content,
               createdAt: local.createdAt,
               updatedAt: local.updatedAt,
+              pinnedAt: local.pinnedAt,
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
               status: local.status,
@@ -256,6 +257,7 @@ final class SyncStateReconciliation {
     outbox: outbox ?? current.outbox,
     conflicts: conflicts ?? current.conflicts,
     cursor: cursor ?? current.cursor,
+    userPreferences: current.userPreferences,
   );
 
   PendingMutation copyEntry(
@@ -283,6 +285,7 @@ final class SyncStateReconciliation {
         content: note.content,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
+        pinnedAt: note.pinnedAt,
         serverRevision: note.serverRevision,
         deletedAt: note.deletedAt,
         status: status,
@@ -296,6 +299,7 @@ final class SyncStateReconciliation {
         content: snapshot.content,
         createdAt: snapshot.createdAt,
         updatedAt: snapshot.serverUpdatedAt,
+        pinnedAt: snapshot.pinnedAt,
         serverRevision: snapshot.revision,
         deletedAt: snapshot.deletedAt,
         status: status,

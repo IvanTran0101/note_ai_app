@@ -95,6 +95,7 @@ final class SyncConflictResolver {
           content: local.content,
           createdAt: local.createdAt,
           updatedAt: timestamp,
+          pinnedAt: local.pinnedAt,
           status: NoteSyncStatus.pending,
         );
         notes
@@ -130,6 +131,7 @@ final class SyncConflictResolver {
         outbox: outbox,
         conflicts: conflicts,
         cursor: current.cursor,
+        userPreferences: current.userPreferences,
       );
     });
   }
@@ -147,7 +149,12 @@ final class SyncConflictResolver {
     baseRevision: baseRevision,
     payload: operation == SyncMutationOperation.delete
         ? null
-        : SyncNotePayload(title: local.title, content: local.content),
+        : SyncNotePayload(
+            title: local.title,
+            content: local.content,
+            pinnedAt: local.pinnedAt,
+            includesPinnedAt: true,
+          ),
     createdAt: timestamp,
   );
 }
@@ -169,6 +176,7 @@ LocalNoteState _pendingNote(
   content: note.content,
   createdAt: note.createdAt,
   updatedAt: note.updatedAt,
+  pinnedAt: note.pinnedAt,
   serverRevision: serverRevision,
   deletedAt: note.deletedAt,
   status: NoteSyncStatus.pending,
@@ -182,6 +190,7 @@ LocalNoteState _fromRemote(SyncNoteSnapshot note, String accountUserId) =>
       content: note.content,
       createdAt: note.createdAt,
       updatedAt: note.serverUpdatedAt,
+      pinnedAt: note.pinnedAt,
       serverRevision: note.revision,
       deletedAt: note.deletedAt,
       status: NoteSyncStatus.synced,

@@ -23,6 +23,7 @@ abstract final class SyncNoteSnapshotCodec {
       LocalSyncSchema.serverUpdatedAt: snapshot.serverUpdatedAt
           .toIso8601String(),
       LocalSyncSchema.revision: snapshot.revision,
+      LocalSyncSchema.pinnedAt: snapshot.pinnedAt?.toIso8601String(),
       LocalSyncSchema.deletedAt: snapshot.deletedAt?.toIso8601String(),
     };
   }
@@ -50,6 +51,9 @@ abstract final class SyncNoteSnapshotCodec {
       LocalSyncSchema.serverUpdatedAt,
     );
     final int revision = record.requirePositiveInt(LocalSyncSchema.revision);
+    final DateTime? pinnedAt = record.requireNullableTimestamp(
+      LocalSyncSchema.pinnedAt,
+    );
     final DateTime? deletedAt = record.requireNullableTimestamp(
       LocalSyncSchema.deletedAt,
     );
@@ -61,6 +65,7 @@ abstract final class SyncNoteSnapshotCodec {
         createdAt: createdAt,
         serverUpdatedAt: serverUpdatedAt,
         revision: revision,
+        pinnedAt: pinnedAt,
         deletedAt: deletedAt,
       ),
       path: record.path,

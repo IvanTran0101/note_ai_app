@@ -75,6 +75,19 @@ final class _FakeNoteRepository implements INoteRepository {
   }
 
   @override
+  Future<Note?> updateById(
+    String id, {
+    required String expectedAccountUserId,
+    required void Function(Note note) change,
+  }) async {
+    final Note? note = notes[id];
+    if (note == null || note.ownerId != expectedAccountUserId) return null;
+    change(note);
+    await save(note);
+    return note;
+  }
+
+  @override
   Future<void> save(Note note) async {
     final Object? error = saveError;
     if (error != null) {
@@ -102,6 +115,7 @@ Note _note({
   String content = 'Content',
   DateTime? createdAt,
   DateTime? updatedAt,
+  DateTime? pinnedAt,
 }) {
   final DateTime created = createdAt ?? _createdAt;
   return Note.reconstitute(
@@ -111,6 +125,7 @@ Note _note({
     content: content,
     createdAt: created,
     updatedAt: updatedAt ?? created,
+    pinnedAt: pinnedAt,
   );
 }
 
@@ -169,11 +184,34 @@ void main() {
       expect(dto.content, note.content);
       expect(dto.createdAt, note.createdAt);
       expect(dto.updatedAt, note.updatedAt);
+      expect(dto.pinnedAt, note.pinnedAt);
       expect(dto.hashCode, NoteDto.fromDomain(note).hashCode);
+      expect(dto.toString(), isNot(contains(note.title)));
+      expect(dto.toString(), isNot(contains(note.content)));
     });
   });
 
   group('NoteApplicationService.listNotes', () {
+    test('puts pinned notes first in deterministic pin-time order', () async {
+      final DateTime olderPin = _createdAt.add(const Duration(hours: 1));
+      final DateTime newerPin = _createdAt.add(const Duration(hours: 2));
+      final _FakeNoteRepository repository = _FakeNoteRepository(
+        initial: <Note>[
+          _note(id: 'regular', updatedAt: newerPin),
+          _note(id: 'pinned-old', pinnedAt: olderPin),
+          _note(id: 'pinned-new', pinnedAt: newerPin),
+        ],
+      );
+
+      final List<NoteDto> notes = await _service(repository).listNotes();
+
+      expect(notes.map((NoteDto note) => note.id), <String>[
+        'pinned-new',
+        'pinned-old',
+        'regular',
+      ]);
+    });
+
     test(
       'returns immutable DTO projections for the configured owner',
       () async {
@@ -633,6 +671,27 @@ void main() {
         throwsA(const SummaryRunFailure(SummaryRunFailureCode.noteChanged)),
       );
       expect(dispatched, isFalse);
+    });
+
+    test('does not treat a pin-only change as a new text revision', () async {
+      final Note saved = _note(title: 'Saved title', content: 'Saved body');
+      final _FakeNoteRepository repository = _FakeNoteRepository(
+        initial: <Note>[saved],
+      );
+
+      final Summary result = await _service(
+        repository,
+        summarizeRun: (SummaryRunContext context) async {
+          repository.notes[saved.id] = _note(
+            title: saved.title,
+            content: saved.content,
+            pinnedAt: _createdAt.add(const Duration(minutes: 1)),
+          );
+          return const Summary('Generated summary');
+        },
+      ).summarizeNote(saved.id, selectedSnapshot: NoteDto.fromDomain(saved));
+
+      expect(result, const Summary('Generated summary'));
     });
 
     test('rejects a mismatched or foreign snapshot before reading', () async {

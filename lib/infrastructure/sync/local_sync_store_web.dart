@@ -2,7 +2,7 @@
 ///
 /// Stores one account's whole local sync state in that account's own IndexedDB
 /// database: one object store (`local_sync_state`) holds one record (key
-/// `state`) whose value is the JSON-encoded schemaVersion 2 envelope. The database name
+/// `state`) whose value is the JSON-encoded schemaVersion 3 envelope. The database name
 /// is the SHA-256 digest of the account id, never the raw id, and the same
 /// digest names the native account directory, so an account identifier never
 /// appears in a browser-visible database name.

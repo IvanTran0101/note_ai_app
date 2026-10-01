@@ -31,6 +31,13 @@ final class _Repo implements INoteRepository {
   @override
   Future<List<Note>> findByOwnerId(String ownerId) async =>
       note == null ? <Note>[] : <Note>[note!];
+
+  @override
+  Future<Note?> updateById(
+    String id, {
+    required String expectedAccountUserId,
+    required void Function(Note note) change,
+  }) async => throw StateError('must not edit');
   @override
   Future<void> save(Note note) async => throw StateError('must not write');
   @override

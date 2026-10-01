@@ -49,6 +49,13 @@ final class _Repository implements INoteRepository {
       ownerId == note.ownerId ? <Note>[note] : <Note>[];
 
   @override
+  Future<Note?> updateById(
+    String id, {
+    required String expectedAccountUserId,
+    required void Function(Note note) change,
+  }) async => throw StateError('must not edit');
+
+  @override
   Future<void> save(Note note) async => throw StateError('must not write');
 
   @override

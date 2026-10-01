@@ -24,12 +24,7 @@ abstract final class PendingMutationCodec {
       LocalSyncSchema.noteId: entry.noteId,
       LocalSyncSchema.operation: entry.operation.name,
       LocalSyncSchema.baseRevision: entry.baseRevision,
-      LocalSyncSchema.payload: payload == null
-          ? null
-          : <String, Object?>{
-              LocalSyncSchema.title: payload.title,
-              LocalSyncSchema.content: payload.content,
-            },
+      LocalSyncSchema.payload: payload == null ? null : _encodePayload(payload),
       LocalSyncSchema.createdAt: entry.createdAt.toIso8601String(),
       LocalSyncSchema.retryCount: entry.retryCount,
       LocalSyncSchema.lastError: entry.lastError?.name,
@@ -99,6 +94,7 @@ abstract final class PendingMutationCodec {
     final SyncCodecObject? payload = record.requireNullableObject(
       LocalSyncSchema.payload,
       LocalSyncSchema.payloadFields,
+      optionalFields: <String>{LocalSyncSchema.pinnedAt},
     );
     if (payload == null) {
       return null;
@@ -106,6 +102,16 @@ abstract final class PendingMutationCodec {
     return SyncNotePayload(
       title: payload.requireString(LocalSyncSchema.title),
       content: payload.requireString(LocalSyncSchema.content),
+      pinnedAt: payload.requireNullableTimestamp(LocalSyncSchema.pinnedAt),
+      includesPinnedAt: payload.contains(LocalSyncSchema.pinnedAt),
     );
   }
+
+  static Map<String, Object?> _encodePayload(SyncNotePayload payload) =>
+      <String, Object?>{
+        LocalSyncSchema.title: payload.title,
+        LocalSyncSchema.content: payload.content,
+        if (payload.includesPinnedAt)
+          LocalSyncSchema.pinnedAt: payload.pinnedAt?.toIso8601String(),
+      };
 }

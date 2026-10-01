@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
+import '../../domain/users/user_preferences.dart';
 import '../notes/notes_application_controller.dart';
 import '../notes/note_detail_route_result.dart';
 import '../notes/notes_theme_tokens.dart';
@@ -117,7 +118,7 @@ final class DashboardPageState extends State<DashboardPage> {
   bool _searchOpen = false;
   bool _desktopSearchDialogOpen = false;
   String _searchText = '';
-  DashboardLayout? _layoutOverride;
+  DashboardLayout _layout = DashboardLayout.grid;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
   Future<void>? _loadInFlight;
@@ -173,6 +174,7 @@ final class DashboardPageState extends State<DashboardPage> {
         <Future<dynamic>>[
           widget.notesController.listNotes(),
           widget.dashboardController.load(),
+          _readSavedLayout(),
         ],
       );
       if (!mounted) {
@@ -182,6 +184,7 @@ final class DashboardPageState extends State<DashboardPage> {
         _notes = List<NoteDto>.unmodifiable(results.first as List<NoteDto>);
         _loadingNotes = false;
         _notesError = null;
+        _layout = results[2] as DashboardLayout;
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -191,6 +194,64 @@ final class DashboardPageState extends State<DashboardPage> {
         _loadingNotes = false;
         _notesError = error;
       });
+    }
+  }
+
+  Future<DashboardLayout> _readSavedLayout() async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return DashboardLayout.grid;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      return await module02Controller.getNoteLayout() ==
+              NoteLayoutPreference.list
+          ? DashboardLayout.list
+          : DashboardLayout.grid;
+    } on Object {
+      return _layout;
+    }
+  }
+
+  Future<void> _saveLayout(DashboardLayout layout) async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      await module02Controller.setNoteLayout(
+        layout == DashboardLayout.list
+            ? NoteLayoutPreference.list
+            : NoteLayoutPreference.grid,
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DashboardCopy.of(context).layoutSaveError)),
+      );
+    }
+  }
+
+  Future<void> _togglePin(NoteDto note) async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      final NoteDto updated = await module02Controller.setPinned(
+        noteId: note.id,
+        pinned: note.pinnedAt == null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _notes = List<NoteDto>.unmodifiable(
+          _notes.map((NoteDto item) => item.id == updated.id ? updated : item),
+        );
+      });
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DashboardCopy.of(context).pinSaveError)),
+      );
     }
   }
 
@@ -437,11 +498,7 @@ final class DashboardPageState extends State<DashboardPage> {
       searchOpen: searchOpen,
       searchText: searchText,
       onCloseSearch: _toggleSearch,
-      layout:
-          _layoutOverride ??
-          (constraints.maxWidth >= NoteFlowLayout.expandedBreakpoint
-              ? DashboardLayout.grid
-              : DashboardLayout.list),
+      layout: _layout,
       sort: _sort,
       selectedNoteId: _selectedNoteId,
       hasError: _hasError,
@@ -458,10 +515,12 @@ final class DashboardPageState extends State<DashboardPage> {
         dialogSetState?.call(() {});
       },
       onLayoutChanged: (DashboardLayout value) {
-        setState(() => _layoutOverride = value);
+        setState(() => _layout = value);
+        unawaited(_saveLayout(value));
         dialogSetState?.call(() {});
       },
       onOpenNote: (NoteDto note) => unawaited(_openNote(note)),
+      onTogglePin: (NoteDto note) => unawaited(_togglePin(note)),
       onCreateNote: _createNote,
       onRetry: reload,
       onRefresh: reload,

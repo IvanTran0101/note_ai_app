@@ -28,6 +28,7 @@ final class DashboardContent extends StatelessWidget {
     required this.onSortChanged,
     required this.onLayoutChanged,
     required this.onOpenNote,
+    this.onTogglePin,
     required this.onCreateNote,
     required this.onRetry,
     required this.onRefresh,
@@ -52,6 +53,7 @@ final class DashboardContent extends StatelessWidget {
   final ValueChanged<DashboardSort> onSortChanged;
   final ValueChanged<DashboardLayout> onLayoutChanged;
   final ValueChanged<NoteDto> onOpenNote;
+  final ValueChanged<NoteDto>? onTogglePin;
   final VoidCallback onCreateNote;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
@@ -62,24 +64,14 @@ final class DashboardContent extends StatelessWidget {
 
   List<NoteDto> get visibleNotes {
     final String query = searchText.trim().toLowerCase();
-    final List<NoteDto> result = notes.where((NoteDto note) {
+    final Iterable<NoteDto> result = notes.where((NoteDto note) {
       if (query.isEmpty) {
         return true;
       }
       return note.title.toLowerCase().contains(query) ||
           note.content.toLowerCase().contains(query);
-    }).toList();
-    result.sort((NoteDto a, NoteDto b) {
-      final DateTime aDate = sort == DashboardSort.updated
-          ? a.updatedAt
-          : a.createdAt;
-      final DateTime bDate = sort == DashboardSort.updated
-          ? b.updatedAt
-          : b.createdAt;
-      final int byDate = bDate.compareTo(aDate);
-      return byDate == 0 ? a.id.compareTo(b.id) : byDate;
     });
-    return result;
+    return sortNotes(result, byCreatedAt: sort == DashboardSort.created);
   }
 
   @override
@@ -703,6 +695,7 @@ final class DashboardContent extends StatelessWidget {
               layout: DashboardNoteCardLayout.list,
               selected: items[index].id == selectedNoteId,
               onTap: onOpenNote,
+              onTogglePin: onTogglePin,
               showPreview: false,
             ),
             if (index < items.length - 1)
@@ -732,6 +725,7 @@ final class DashboardContent extends StatelessWidget {
                   layout: DashboardNoteCardLayout.grid,
                   selected: note.id == selectedNoteId,
                   onTap: onOpenNote,
+                  onTogglePin: onTogglePin,
                   showPreview: false,
                 ),
               ),
@@ -806,6 +800,7 @@ final class DashboardContent extends StatelessWidget {
               layout: DashboardNoteCardLayout.list,
               selected: section.value[index].id == selectedNoteId,
               onTap: onOpenNote,
+              onTogglePin: onTogglePin,
               showPreview: true,
               listHorizontalInset: compact ? 2 : NoteFlowSpacing.md,
               listIconGap: compact ? NoteFlowSpacing.lg : NoteFlowSpacing.md,

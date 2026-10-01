@@ -1,6 +1,8 @@
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_repository.dart';
+import '../../domain/users/user_preferences.dart';
+import '../../domain/users/user_preferences_repository.dart';
 import '../auth/current_user.dart';
 import '../auth/current_user_session.dart';
 import '../note_intelligence/summary_cloud_consent.dart';
@@ -28,6 +30,7 @@ final class NoteDto {
     required this.content,
     required this.createdAt,
     required this.updatedAt,
+    this.pinnedAt,
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -39,6 +42,7 @@ final class NoteDto {
       content: note.content,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
+      pinnedAt: note.pinnedAt,
     );
   }
 
@@ -48,6 +52,15 @@ final class NoteDto {
   final String content;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? pinnedAt;
+
+  /// Compares the note identity and editable text used by summary requests.
+  /// Pin and sync metadata do not change the summarized text revision.
+  bool hasSameTextAs(NoteDto other) =>
+      id == other.id &&
+      ownerId == other.ownerId &&
+      title == other.title &&
+      content == other.content;
 
   @override
   bool operator ==(Object other) {
@@ -57,18 +70,39 @@ final class NoteDto {
         other.title == title &&
         other.content == content &&
         other.createdAt == createdAt &&
-        other.updatedAt == updatedAt;
+        other.updatedAt == updatedAt &&
+        other.pinnedAt == pinnedAt;
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, ownerId, title, content, createdAt, updatedAt);
+      Object.hash(id, ownerId, title, content, createdAt, updatedAt, pinnedAt);
 
   @override
   String toString() {
-    return 'NoteDto(id: $id, ownerId: $ownerId, title: $title, '
-        'content: $content, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'NoteDto(id: $id, ownerId: $ownerId, createdAt: $createdAt, '
+        'updatedAt: $updatedAt, pinnedAt: $pinnedAt)';
   }
+}
+
+/// Stable pin-first ordering shared by note list surfaces.
+List<NoteDto> sortNotes(Iterable<NoteDto> notes, {bool byCreatedAt = false}) {
+  final List<NoteDto> sorted = List<NoteDto>.of(notes);
+  sorted.sort((NoteDto a, NoteDto b) {
+    final DateTime? aPinnedAt = a.pinnedAt;
+    final DateTime? bPinnedAt = b.pinnedAt;
+    if (aPinnedAt != null || bPinnedAt != null) {
+      if (aPinnedAt == null) return 1;
+      if (bPinnedAt == null) return -1;
+      final int byPinTime = bPinnedAt.compareTo(aPinnedAt);
+      if (byPinTime != 0) return byPinTime;
+    }
+    final DateTime aDate = byCreatedAt ? a.createdAt : a.updatedAt;
+    final DateTime bDate = byCreatedAt ? b.createdAt : b.updatedAt;
+    final int byDate = bDate.compareTo(aDate);
+    return byDate == 0 ? a.id.compareTo(b.id) : byDate;
+  });
+  return sorted;
 }
 
 /// Raised when an application operation targets a note that does not exist.
@@ -148,6 +182,7 @@ final class NoteApplicationService {
     required this.now,
     required this.summarizeContent,
     this.requestSync,
+    this.userPreferencesRepository,
     this.summarizeRun,
     this.cloudConsent,
     this.sessionGeneration,
@@ -159,6 +194,7 @@ final class NoteApplicationService {
   final NoteClock now;
   final SummarizeNoteContent summarizeContent;
   final RequestNoteSync? requestSync;
+  final IUserPreferencesRepository? userPreferencesRepository;
 
   /// Optional note-snapshot-aware dispatcher supplied by the composition root.
   ///
@@ -182,7 +218,31 @@ final class NoteApplicationService {
   Future<List<NoteDto>> listNotes() async {
     final String userId = currentUser.requiredUserId;
     final List<Note> notes = await noteRepository.findByOwnerId(userId);
-    return notes.map(NoteDto.fromDomain).toList(growable: false);
+    return sortNotes(notes.map(NoteDto.fromDomain));
+  }
+
+  /// Returns the saved layout for the current account, defaulting to grid.
+  Future<NoteLayoutPreference> getNoteLayout() async {
+    final String userId = currentUser.requiredUserId;
+    final UserPreferences? preferences = await userPreferencesRepository
+        ?.findByUserId(userId);
+    return preferences?.noteLayout ?? NoteLayoutPreference.grid;
+  }
+
+  /// Persists the selected layout for the current account.
+  Future<void> setNoteLayout(NoteLayoutPreference layout) async {
+    final IUserPreferencesRepository? repository = userPreferencesRepository;
+    if (repository == null) return;
+    final String userId = currentUser.requiredUserId;
+    final UserPreferences preferences =
+        await repository.findByUserId(userId) ??
+        UserPreferences.create(
+          userId: userId,
+          theme: AppThemePreference.system,
+          noteFontSize: NoteFontSizePreference.medium,
+        );
+    preferences.changeNoteLayout(layout);
+    await repository.save(preferences);
   }
 
   /// Creates and persists a new Note aggregate.
@@ -228,6 +288,45 @@ final class NoteApplicationService {
     await noteRepository.save(note);
     requestSync?.call(userId);
     return NoteDto.fromDomain(note);
+  }
+
+  /// Saves title and content in one atomic note/outbox update.
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) async {
+    final String userId = currentUser.requiredUserId;
+    final Note? updated = await noteRepository.updateById(
+      noteId,
+      expectedAccountUserId: userId,
+      change: (Note note) => note.replaceText(title, content, now().toUtc()),
+    );
+    if (updated == null) throw NoteNotFoundException(noteId);
+    requestSync?.call(userId);
+    return NoteDto.fromDomain(updated);
+  }
+
+  /// Changes the owner-only pin state through the atomic repository update.
+  Future<NoteDto> setPinned({
+    required String noteId,
+    required bool pinned,
+  }) async {
+    final String userId = currentUser.requiredUserId;
+    final Note? updated = await noteRepository.updateById(
+      noteId,
+      expectedAccountUserId: userId,
+      change: (Note note) {
+        if (pinned) {
+          note.pin(now().toUtc());
+        } else {
+          note.unpin(now().toUtc());
+        }
+      },
+    );
+    if (updated == null) throw NoteNotFoundException(noteId);
+    requestSync?.call(userId);
+    return NoteDto.fromDomain(updated);
   }
 
   /// Deletes an owned note.
@@ -287,7 +386,7 @@ final class NoteApplicationService {
       );
     }
     final NoteDto revision = NoteDto.fromDomain(note);
-    if (selectedSnapshot != null && selectedSnapshot != revision) {
+    if (selectedSnapshot != null && !selectedSnapshot.hasSameTextAs(revision)) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
     }
 
@@ -351,7 +450,7 @@ final class NoteApplicationService {
     if (current == null) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
     }
-    if (NoteDto.fromDomain(current) != expected) {
+    if (!NoteDto.fromDomain(current).hasSameTextAs(expected)) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
     }
   }

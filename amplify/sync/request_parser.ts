@@ -31,7 +31,22 @@ export const MAX_CHANGE_LIMIT = 100;
  */
 const MAX_IDENTIFIER_LENGTH = 128;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+const UTC_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/;
 const UNSIGNED_INTEGER = /^\d+$/;
+
+const isUtcTimestamp = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const parts = UTC_TIMESTAMP.exec(value);
+  if (parts === null) return false;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) &&
+    parsed.getUTCFullYear() === Number(parts[1]) &&
+    parsed.getUTCMonth() + 1 === Number(parts[2]) &&
+    parsed.getUTCDate() === Number(parts[3]) &&
+    parsed.getUTCHours() === Number(parts[4]) &&
+    parsed.getUTCMinutes() === Number(parts[5]) &&
+    parsed.getUTCSeconds() === Number(parts[6]);
+};
 
 /** The body was absent, unreadable, or not a JSON object; no single field to blame. */
 export type BodyProblem = 'BODY_MALFORMED';
@@ -71,7 +86,9 @@ const readBaseRevision = (value: unknown): number | null =>
 /**
  * Parses a `POST /sync/mutations` body.
  *
- * `create` and `update` need a `{title, content}` payload. A `delete` is
+ * `create` and `update` need a `{title, content}` payload. `pinnedAt` is
+ * optional for old clients; when omitted on update, the stored value survives.
+ * A `delete` is
  * payload-free by contract: one sent alongside it is ignored rather than
  * refused, and the store writes a payload-free tombstone either way.
  *
@@ -123,13 +140,38 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
   }
 
   const { title, content } = payload;
-  if (typeof title !== 'string' || typeof content !== 'string') {
+  if (
+    typeof title !== 'string' ||
+    typeof content !== 'string' ||
+    title.trim().length === 0 ||
+    content.trim().length === 0
+  ) {
+    return { ok: false, problem: 'PAYLOAD_INVALID' };
+  }
+
+  const hasPinnedAt = Object.prototype.hasOwnProperty.call(payload, 'pinnedAt');
+  const pinnedAt = payload.pinnedAt;
+  if (
+    hasPinnedAt &&
+    pinnedAt !== null &&
+    !isUtcTimestamp(pinnedAt)
+  ) {
     return { ok: false, problem: 'PAYLOAD_INVALID' };
   }
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content } },
+    mutation: {
+      mutationId,
+      noteId,
+      operation,
+      baseRevision,
+      payload: {
+        title,
+        content,
+        ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}),
+      },
+    },
   };
 };
 

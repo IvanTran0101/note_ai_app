@@ -1,13 +1,8 @@
 /// The Note aggregate root for the notes domain.
 ///
-/// Owns its state and invariants. It does not save itself, run AI, or map
-/// itself to UI data (see the README architecture section). All fields are
-/// exposed read-only; [title], [content], and [updatedAt] change only through
-/// [rename] and [replaceContent], and [id], [ownerId], and [createdAt] never
-/// change after creation.
+/// It owns note text, pin state, and their invariants. It does not save itself,
+/// run AI, or map itself to UI data.
 class Note {
-  /// Internal construction used by [Note.create]. The final two arguments are
-  /// [createdAt] and [updatedAt], both seeded from the factory's [now].
   Note._(
     this._id,
     this._ownerId,
@@ -15,10 +10,10 @@ class Note {
     this._content,
     this._createdAt,
     this._updatedAt,
+    this._pinnedAt,
   );
 
-  /// Creates a new note. Both [createdAt] and [updatedAt] are initialized from
-  /// the supplied [now].
+  /// Creates a new note with valid text and identical creation/update times.
   factory Note.create({
     required String id,
     required String ownerId,
@@ -26,14 +21,12 @@ class Note {
     required String content,
     required DateTime now,
   }) {
-    return Note._(id, ownerId, title, content, now, now);
+    _requireText(title, 'title');
+    _requireText(content, 'content');
+    return Note._(id, ownerId, title, content, now, now, null);
   }
 
-  /// Reconstitutes an existing note from persistence data.
-  ///
-  /// This factory intentionally does not apply creation-time validation or
-  /// mutation semantics. It restores both persisted timestamps exactly as
-  /// supplied; in particular, [updatedAt] may differ from [createdAt].
+  /// Restores persisted values without applying current write validation.
   factory Note.reconstitute({
     required String id,
     required String ownerId,
@@ -41,9 +34,8 @@ class Note {
     required String content,
     required DateTime createdAt,
     required DateTime updatedAt,
-  }) {
-    return Note._(id, ownerId, title, content, createdAt, updatedAt);
-  }
+    DateTime? pinnedAt,
+  }) => Note._(id, ownerId, title, content, createdAt, updatedAt, pinnedAt);
 
   final String _id;
   final String _ownerId;
@@ -51,41 +43,61 @@ class Note {
   String _title;
   String _content;
   DateTime _updatedAt;
+  DateTime? _pinnedAt;
 
-  /// The identity of this note.
   String get id => _id;
-
-  /// The identity of the user who owns this note.
   String get ownerId => _ownerId;
-
-  /// The current title.
   String get title => _title;
-
-  /// The current content.
   String get content => _content;
-
-  /// When this note was created. Never changes after creation.
   DateTime get createdAt => _createdAt;
-
-  /// When this note was last modified.
   DateTime get updatedAt => _updatedAt;
+  DateTime? get pinnedAt => _pinnedAt;
 
-  /// Renames the note and records [now] as the last modification time.
+  /// Renames the note while preserving the entered text exactly.
   void rename(String title, DateTime now) {
+    _requireText(title, 'title');
     _title = title;
     _updatedAt = now;
   }
 
-  /// Replaces the note content and records [now] as the last modification
-  /// time.
+  /// Replaces note content while preserving its formatting.
   void replaceContent(String content, DateTime now) {
+    _requireText(content, 'content');
     _content = content;
     _updatedAt = now;
   }
 
+  /// Atomically changes both fields used by the editor.
+  void replaceText(String title, String content, DateTime now) {
+    _requireText(title, 'title');
+    _requireText(content, 'content');
+    _title = title;
+    _content = content;
+    _updatedAt = now;
+  }
+
+  /// Pins once; repeated requests do not move a note to the top again.
+  void pin(DateTime now) {
+    if (_pinnedAt != null) return;
+    _pinnedAt = now;
+    _updatedAt = now;
+  }
+
+  /// Unpins the note. Repeated requests are a no-op.
+  void unpin(DateTime now) {
+    if (_pinnedAt == null) return;
+    _pinnedAt = null;
+    _updatedAt = now;
+  }
+
   @override
-  String toString() {
-    return 'Note(id: $_id, ownerId: $_ownerId, title: $_title, '
-        'createdAt: $_createdAt, updatedAt: $_updatedAt)';
+  String toString() =>
+      'Note(id: $_id, ownerId: $_ownerId, createdAt: $_createdAt, '
+      'updatedAt: $_updatedAt, pinnedAt: $_pinnedAt)';
+}
+
+void _requireText(String value, String field) {
+  if (value.trim().isEmpty) {
+    throw ArgumentError.value(value, field, 'must not be blank');
   }
 }

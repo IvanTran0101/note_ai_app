@@ -67,7 +67,8 @@ final class NoteDetailPage extends StatefulWidget {
   State<NoteDetailPage> createState() => _NoteDetailPageState();
 }
 
-final class _NoteDetailPageState extends State<NoteDetailPage> {
+final class _NoteDetailPageState extends State<NoteDetailPage>
+    with WidgetsBindingObserver {
   static const Duration _autosaveDelay = Duration(seconds: 3);
 
   final TextEditingController _titleController = TextEditingController();
@@ -91,6 +92,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
+  int _draftRevision = 0;
 
   /// Owns the whole Summary lifecycle for this page: scope, consent capture,
   /// revalidation, result, typed failure, and the rate-limit countdown.
@@ -107,6 +109,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _note = widget.note;
     _savedTitle = widget.note?.title ?? '';
     _savedContent = widget.note?.content ?? '';
@@ -121,6 +124,19 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached) &&
+        _isDirty &&
+        _currentConflict == null) {
+      _autosaveTimer?.cancel();
+      _autosaveTimer = null;
+      unawaited(_save(automatic: true));
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant NoteDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.syncController != widget.syncController) {
@@ -129,13 +145,20 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _syncStateChanged();
     }
     if (oldWidget.note != widget.note) {
-      _summaryController.cancelActive(
-        reason: SummaryRunFailureCode.noteChanged,
-      );
-      _summaryController.markStaleIfResult();
       final NoteDto? incoming = widget.note;
       final bool sameIdentity =
           incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
+      final NoteDto? previous = oldWidget.note;
+      final bool sameText =
+          previous != null &&
+          incoming != null &&
+          previous.hasSameTextAs(incoming);
+      if (!sameText) {
+        _summaryController.cancelActive(
+          reason: SummaryRunFailureCode.noteChanged,
+        );
+        _summaryController.markStaleIfResult();
+      }
       if (!sameIdentity) _summaryController.clearResult();
       if (!_isDirty || !sameIdentity) {
         _adoptSavedNote(incoming);
@@ -224,6 +247,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   void _editorChanged() {
     if (!mounted) return;
+    _draftRevision++;
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
       _summaryController.markStaleIfResult();
@@ -305,6 +329,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (_currentConflict != null) return false;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    final int savingDraftRevision = _draftRevision;
     bool persisted = false;
     setState(() {
       _saving = true;
@@ -323,20 +348,29 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
           content: content,
         );
       } else {
-        NoteDto updated = current;
-        if (title != _savedTitle) {
-          updated = await widget.notesController.renameNote(
+        final NotesApplicationController controller = widget.notesController;
+        if (controller is NotesModule02Controller) {
+          saved = await (controller as NotesModule02Controller).updateNote(
             noteId: current.id,
             title: title,
-          );
-        }
-        if (content != _savedContent) {
-          updated = await widget.notesController.replaceContent(
-            noteId: current.id,
             content: content,
           );
+        } else {
+          NoteDto updated = current;
+          if (title != _savedTitle) {
+            updated = await controller.renameNote(
+              noteId: current.id,
+              title: title,
+            );
+          }
+          if (content != _savedContent) {
+            updated = await controller.replaceContent(
+              noteId: current.id,
+              content: content,
+            );
+          }
+          saved = updated;
         }
-        saved = updated;
       }
 
       if (!mounted) {
@@ -349,7 +383,9 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         _savedTitle = saved.title;
         _savedContent = saved.content;
         _summaryController.clearFailure();
-        _statusMessage = copy.saved;
+        _statusMessage = _draftRevision == savingDraftRevision
+            ? copy.saved
+            : copy.autoSavePending;
         _didPersist = true;
       });
       _notifyDirtyChanged();
@@ -831,13 +867,21 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     );
     final SyncConflict? conflict = _currentConflict;
     final SyncPresentationController? sync = widget.syncController;
-    if (conflict == null && (sync == null || widget.onEmbeddedExit != null)) {
+    if (conflict == null && sync == null) {
       return editor;
     }
     return Column(
       children: <Widget>[
         if (sync != null && widget.onEmbeddedExit == null)
           SyncStatusPanel(controller: sync),
+        if (sync != null && _note != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SyncNoteStatusBadge(controller: sync, noteId: _note!.id),
+            ),
+          ),
         if (conflict != null) _buildConflictNotice(),
         Expanded(child: editor),
       ],
@@ -871,6 +915,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _summaryController.removeListener(_summaryChanged);
     _summaryController.dispose();
     _autosaveTimer?.cancel();

@@ -5,6 +5,7 @@ import 'local_note_state.dart';
 import 'pending_mutation.dart';
 import 'sync_conflict.dart';
 import 'sync_cursor.dart';
+import '../../domain/users/user_preferences.dart';
 
 /// Immutable snapshot of everything the local store holds for one account.
 ///
@@ -23,7 +24,16 @@ final class LocalSyncState {
     Iterable<PendingMutation> outbox = const <PendingMutation>[],
     Iterable<SyncConflict> conflicts = const <SyncConflict>[],
     this.cursor,
+    UserPreferences? userPreferences,
   }) : accountUserId = _requireNonBlank(accountUserId, 'accountUserId'),
+       _userPreferences =
+           (userPreferences ??
+                   UserPreferences.create(
+                     userId: accountUserId,
+                     theme: AppThemePreference.system,
+                     noteFontSize: NoteFontSizePreference.medium,
+                   ))
+               .copy(),
        notes = List<LocalNoteState>.unmodifiable(notes),
        outbox = List<PendingMutation>.unmodifiable(outbox),
        conflicts = List<SyncConflict>.unmodifiable(conflicts) {
@@ -46,10 +56,23 @@ final class LocalSyncState {
         );
       }
     }
+    if (_userPreferences.userId != this.accountUserId) {
+      throw ArgumentError.value(
+        _userPreferences.userId,
+        'userPreferences',
+        'must belong to the state account',
+      );
+    }
   }
 
   /// The account this state belongs to.
   final String accountUserId;
+
+  final UserPreferences _userPreferences;
+
+  /// Detached account preference values, so callers cannot mutate a stored
+  /// snapshot without going through its transaction.
+  UserPreferences get userPreferences => _userPreferences.copy();
 
   /// Every stored note of the account, including local tombstones.
   final List<LocalNoteState> notes;
@@ -70,6 +93,7 @@ final class LocalSyncState {
   bool operator ==(Object other) {
     return other is LocalSyncState &&
         other.accountUserId == accountUserId &&
+        other._userPreferences == _userPreferences &&
         _listEquals(other.notes, notes) &&
         _listEquals(other.outbox, outbox) &&
         _listEquals(other.conflicts, conflicts) &&
@@ -79,6 +103,7 @@ final class LocalSyncState {
   @override
   int get hashCode => Object.hash(
     accountUserId,
+    _userPreferences,
     Object.hashAll(notes),
     Object.hashAll(outbox),
     Object.hashAll(conflicts),

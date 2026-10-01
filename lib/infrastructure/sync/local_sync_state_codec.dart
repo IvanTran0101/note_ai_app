@@ -1,18 +1,4 @@
-/// The M2.0 local sync state envelope codec.
-///
-/// [LocalSyncStateCodec] is the single entrypoint for the frozen local sync
-/// document: [encode] turns a validated [LocalSyncState] into a
-/// `Map<String, Object?>` and [decode] turns such a map back into a state,
-/// rejecting anything that is not exactly the M2 schema. The map is the
-/// boundary -- a caller serializes it later with `jsonEncode` for native JSON or
-/// stores it as-is in IndexedDB -- so this library has no JSON, file, browser,
-/// or provider dependency, and no I/O of any kind.
-///
-/// Every record codec writes each declared field, nullable ones as explicit
-/// nulls, so the document shape is fixed. An unknown field, a missing field, a
-/// wrong type, an unknown enum name, an unparsable timestamp, a duplicate note
-/// or mutation id, and a note owned by another account are all rejected with a
-/// [LocalSyncCodecException] whose message never contains a stored value.
+/// Codec and schema-2 migration for one account's local sync document.
 library;
 
 import '../../application/sync/local_note_state.dart';
@@ -20,58 +6,73 @@ import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/pending_mutation.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_cursor.dart';
+import '../../domain/users/user_preferences.dart';
 import 'local_note_state_codec.dart';
+import 'local_sync_codec_exception.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 import 'pending_mutation_codec.dart';
 import 'sync_conflict_codec.dart';
 import 'sync_cursor_codec.dart';
 
-/// Maps the whole account-scoped local sync document.
 abstract final class LocalSyncStateCodec {
-  /// The schema version this codec writes and the only one it reads.
   static const int schemaVersion = LocalSyncSchema.version;
-
-  /// Root path used in failure messages, for example
-  /// `localSyncState.notes[1].status`.
   static const String _rootPath = 'localSyncState';
 
-  /// Encodes [state] as a JSON-compatible envelope.
-  ///
-  /// The result carries exactly `schemaVersion`, `accountUserId`, `notes`,
-  /// `outbox`, `cursor`, and `conflicts`. The cursor is the raw value or null.
-  static Map<String, Object?> encode(LocalSyncState state) {
-    return <String, Object?>{
-      LocalSyncSchema.schemaVersion: schemaVersion,
-      LocalSyncSchema.accountUserId: state.accountUserId,
-      LocalSyncSchema.notes: <Object?>[
-        for (final LocalNoteState note in state.notes)
-          LocalNoteStateCodec.encode(note),
-      ],
-      LocalSyncSchema.outbox: <Object?>[
-        for (final PendingMutation entry in state.outbox)
-          PendingMutationCodec.encode(entry),
-      ],
-      LocalSyncSchema.cursor: SyncCursorCodec.encode(state.cursor),
-      LocalSyncSchema.conflicts: <Object?>[
-        for (final SyncConflict conflict in state.conflicts)
-          SyncConflictCodec.encode(conflict),
-      ],
-    };
+  /// Encodes the complete account state using the current strict schema.
+  static Map<String, Object?> encode(LocalSyncState state) => <String, Object?>{
+    LocalSyncSchema.schemaVersion: schemaVersion,
+    LocalSyncSchema.accountUserId: state.accountUserId,
+    LocalSyncSchema.notes: <Object?>[
+      for (final LocalNoteState note in state.notes)
+        LocalNoteStateCodec.encode(note),
+    ],
+    LocalSyncSchema.outbox: <Object?>[
+      for (final PendingMutation entry in state.outbox)
+        PendingMutationCodec.encode(entry),
+    ],
+    LocalSyncSchema.cursor: SyncCursorCodec.encode(state.cursor),
+    LocalSyncSchema.conflicts: <Object?>[
+      for (final SyncConflict conflict in state.conflicts)
+        SyncConflictCodec.encode(conflict),
+    ],
+    LocalSyncSchema.userPreferences: _encodePreferences(state.userPreferences),
+  };
+
+  /// Decodes schema 3, migrating the frozen schema 2 envelope in memory.
+  /// Existing attempted mutations retain their old payload shape and ID.
+  static LocalSyncState decode(Object? data) {
+    final Map<String, Object?> raw = _asObject(data, _rootPath);
+    final Object? version = raw[LocalSyncSchema.schemaVersion];
+    if (version == 2) {
+      final SyncCodecObject legacy = SyncCodecObject.from(
+        raw,
+        path: _rootPath,
+        allowedFields: LocalSyncSchema.envelopeFieldsV2,
+      );
+      _validateV2(legacy);
+      return _decodeV3(
+        _migrateV2(
+          raw,
+          legacy.requireNonBlankString(LocalSyncSchema.accountUserId),
+        ),
+      );
+    }
+    if (version != schemaVersion) {
+      throw LocalSyncCodecException(
+        'must be schemaVersion $schemaVersion or a supported older version.',
+        path: '$_rootPath.${LocalSyncSchema.schemaVersion}',
+      );
+    }
+    return _decodeV3(raw);
   }
 
-  /// Decodes a stored envelope back into a validated [LocalSyncState].
-  ///
-  /// [data] is the already-decoded object: a `Map<String, Object?>` from
-  /// `jsonDecode`, from IndexedDB, or from a test. Raw JSON text is not accepted
-  /// here, because JSON parsing is the caller's boundary and not this codec's.
-  static LocalSyncState decode(Object? data) {
+  static LocalSyncState _decodeV3(Map<String, Object?> data) {
     final SyncCodecObject envelope = SyncCodecObject.from(
       data,
       path: _rootPath,
       allowedFields: LocalSyncSchema.envelopeFields,
     );
-
     final int version = envelope.requireInt(LocalSyncSchema.schemaVersion);
     if (version != schemaVersion) {
       envelope.fail(
@@ -122,7 +123,6 @@ abstract final class LocalSyncStateCodec {
       envelope.rawValue(LocalSyncSchema.cursor),
       path: envelope.fieldPath(LocalSyncSchema.cursor),
     );
-
     final List<SyncConflict> conflicts = <SyncConflict>[
       for (final SyncCodecObject record in envelope.requireObjectList(
         LocalSyncSchema.conflicts,
@@ -130,6 +130,12 @@ abstract final class LocalSyncStateCodec {
       ))
         SyncConflictCodec.decodeRecord(record),
     ];
+    final UserPreferences preferences = _decodePreferences(
+      envelope.requireObject(
+        LocalSyncSchema.userPreferences,
+        LocalSyncSchema.userPreferencesFields,
+      ),
+    );
 
     return buildCodecModel(
       () => LocalSyncState(
@@ -138,8 +144,149 @@ abstract final class LocalSyncStateCodec {
         outbox: outbox,
         conflicts: conflicts,
         cursor: cursor,
+        userPreferences: preferences,
       ),
       path: _rootPath,
     );
   }
+
+  static Map<String, Object?> _migrateV2(
+    Map<String, Object?> old,
+    String accountUserId,
+  ) {
+    final List<Object?> notes = _objectList(
+      old,
+      LocalSyncSchema.notes,
+    ).map(_addNullPin).toList(growable: false);
+    final List<Object?> conflicts = _objectList(old, LocalSyncSchema.conflicts)
+        .map((Object? value) {
+          final Map<String, Object?> conflict = _asObject(value, 'conflict');
+          final Object? remote = conflict[LocalSyncSchema.remote];
+          return <String, Object?>{
+            ...conflict,
+            LocalSyncSchema.local: _addNullPin(conflict[LocalSyncSchema.local]),
+            if (remote != null) LocalSyncSchema.remote: _addNullPin(remote),
+          };
+        })
+        .toList(growable: false);
+    return <String, Object?>{
+      ...old,
+      LocalSyncSchema.schemaVersion: schemaVersion,
+      LocalSyncSchema.notes: notes,
+      LocalSyncSchema.conflicts: conflicts,
+      LocalSyncSchema.userPreferences: <String, Object?>{
+        LocalSyncSchema.userId: accountUserId,
+        LocalSyncSchema.theme: AppThemePreference.system.name,
+        LocalSyncSchema.noteFontSize: NoteFontSizePreference.medium.name,
+        LocalSyncSchema.noteColorKey: null,
+        LocalSyncSchema.noteLayout: NoteLayoutPreference.grid.name,
+      },
+    };
+  }
+
+  static void _validateV2(SyncCodecObject envelope) {
+    envelope.requireObjectList(
+      LocalSyncSchema.notes,
+      LocalSyncSchema.noteFieldsV2,
+    );
+    for (final SyncCodecObject mutation in envelope.requireObjectList(
+      LocalSyncSchema.outbox,
+      LocalSyncSchema.mutationFieldsV2,
+    )) {
+      if (mutation.rawValue(LocalSyncSchema.payload) != null) {
+        mutation.requireObject(
+          LocalSyncSchema.payload,
+          LocalSyncSchema.payloadFieldsV2,
+        );
+      }
+    }
+    for (final SyncCodecObject conflict in envelope.requireObjectList(
+      LocalSyncSchema.conflicts,
+      LocalSyncSchema.conflictFieldsV2,
+    )) {
+      conflict.requireObject(
+        LocalSyncSchema.local,
+        LocalSyncSchema.noteFieldsV2,
+      );
+      conflict.requireNullableObject(
+        LocalSyncSchema.remote,
+        LocalSyncSchema.snapshotFieldsV2,
+      );
+      final SyncCodecObject pending = conflict.requireObject(
+        LocalSyncSchema.pending,
+        LocalSyncSchema.mutationFieldsV2,
+      );
+      if (pending.rawValue(LocalSyncSchema.payload) != null) {
+        pending.requireObject(
+          LocalSyncSchema.payload,
+          LocalSyncSchema.payloadFieldsV2,
+        );
+      }
+    }
+  }
+
+  static Map<String, Object?> _addNullPin(Object? value) => <String, Object?>{
+    ..._asObject(value, 'note'),
+    LocalSyncSchema.pinnedAt: null,
+  };
+
+  static List<Object?> _objectList(Map<String, Object?> data, String field) {
+    final Object? value = data[field];
+    if (value is! List) {
+      throw LocalSyncCodecException(
+        'must be an array.',
+        path: '$_rootPath.$field',
+      );
+    }
+    return List<Object?>.of(value);
+  }
+
+  static Map<String, Object?> _asObject(Object? value, String path) {
+    if (value is! Map) {
+      throw LocalSyncCodecException('must be an object.', path: path);
+    }
+    final Map<String, Object?> result = <String, Object?>{};
+    for (final MapEntry<Object?, Object?> entry in value.entries) {
+      if (entry.key is! String) {
+        throw LocalSyncCodecException(
+          'must use string field names.',
+          path: path,
+        );
+      }
+      result[entry.key! as String] = entry.value;
+    }
+    return result;
+  }
+
+  static Map<String, Object?> _encodePreferences(UserPreferences preferences) =>
+      <String, Object?>{
+        LocalSyncSchema.userId: preferences.userId,
+        LocalSyncSchema.theme: preferences.theme.name,
+        LocalSyncSchema.noteFontSize: preferences.noteFontSize.name,
+        LocalSyncSchema.noteColorKey: preferences.noteColorKey,
+        LocalSyncSchema.noteLayout: preferences.noteLayout.name,
+      };
+
+  static UserPreferences _decodePreferences(SyncCodecObject record) =>
+      buildCodecModel(
+        () => UserPreferences.reconstitute(
+          userId: record.requireNonBlankString(LocalSyncSchema.userId),
+          theme: record.requireEnum(
+            LocalSyncSchema.theme,
+            AppThemePreference.values,
+          ),
+          noteFontSize: record.requireEnum(
+            LocalSyncSchema.noteFontSize,
+            NoteFontSizePreference.values,
+          ),
+          noteColorKey: record.requireNullableString(
+            LocalSyncSchema.noteColorKey,
+          ),
+          noteLayout: record.requireEnum(
+            LocalSyncSchema.noteLayout,
+            NoteLayoutPreference.values,
+          ),
+        ),
+        path: record.path,
+      );
 }

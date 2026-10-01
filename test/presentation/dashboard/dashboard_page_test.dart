@@ -9,6 +9,7 @@ import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/domain/users/user_preferences.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_controller.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_localizations.dart';
 import 'package:note_ai_app/presentation/dashboard/dashboard_note_card.dart';
@@ -97,11 +98,14 @@ void main() {
       final DashboardController controller = DashboardController(
         query: _FakeDashboardQuery(_overview(notes: notes)),
       );
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: notes,
+      );
 
       await _pumpDashboard(
         tester,
         dashboardController: controller,
-        notesController: _FakeNotesController(notes: notes),
+        notesController: notesController,
         size: const Size(1440, 900),
       );
       await tester.pumpAndSettle();
@@ -136,12 +140,14 @@ void main() {
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+      expect(notesController.savedLayout, NoteLayoutPreference.list);
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.grid);
+      expect(notesController.savedLayout, NoteLayoutPreference.grid);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey<String>('dashboard-note-card-a')),
@@ -155,6 +161,44 @@ void main() {
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+      expect(notesController.savedLayout, NoteLayoutPreference.list);
+    });
+
+    testWidgets('loads a saved list layout and persists owner pin changes', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(id: 'a', title: 'Alpha'),
+        _buildNote(id: 'b', title: 'Beta'),
+      ];
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: notes,
+        savedLayout: NoteLayoutPreference.list,
+      );
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: notesController,
+        size: const Size(1440, 900),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-note-pin-b')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(notesController.pinWrites, 1);
+      expect(
+        notesController.notes.singleWhere((note) => note.id == 'b').pinnedAt,
+        isNotNull,
+      );
+      expect(find.byTooltip('Unpin note'), findsOneWidget);
     });
 
     testWidgets('wide Home matches the Notion page column and title anchor', (
@@ -1356,6 +1400,7 @@ NoteDto _buildNote({
   String content = 'First note body.',
   DateTime? updatedAt,
   DateTime? createdAt,
+  DateTime? pinnedAt,
 }) {
   return NoteDto(
     id: id,
@@ -1364,6 +1409,7 @@ NoteDto _buildNote({
     content: content,
     createdAt: createdAt ?? _baseTime,
     updatedAt: updatedAt ?? _baseTime,
+    pinnedAt: pinnedAt,
   );
 }
 
@@ -1402,15 +1448,21 @@ final class _FakeDashboardQuery implements IDashboardOverviewQuery {
   }
 }
 
-final class _FakeNotesController implements NotesApplicationController {
+final class _FakeNotesController
+    implements NotesApplicationController, NotesModule02Controller {
   @override
   SummaryConsentAppService? get summaryConsent => null;
 
-  _FakeNotesController({List<NoteDto>? notes, this.listNotesError})
-    : notes = List<NoteDto>.of(notes ?? const <NoteDto>[]);
+  _FakeNotesController({
+    List<NoteDto>? notes,
+    this.listNotesError,
+    this.savedLayout = NoteLayoutPreference.grid,
+  }) : notes = List<NoteDto>.of(notes ?? const <NoteDto>[]);
 
   final List<NoteDto> notes;
   final Object? listNotesError;
+  NoteLayoutPreference savedLayout;
+  int pinWrites = 0;
 
   /// When set, [listNotes] stays pending until the completer completes so a
   /// test can observe the page while a reload request is in flight.
@@ -1431,6 +1483,43 @@ final class _FakeNotesController implements NotesApplicationController {
       throw error;
     }
     return List<NoteDto>.of(notes);
+  }
+
+  @override
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<NoteDto> setPinned({
+    required String noteId,
+    required bool pinned,
+  }) async {
+    pinWrites++;
+    final int index = notes.indexWhere((NoteDto note) => note.id == noteId);
+    if (index < 0) throw StateError('missing note');
+    final NoteDto current = notes[index];
+    final NoteDto updated = NoteDto(
+      id: current.id,
+      ownerId: current.ownerId,
+      title: current.title,
+      content: current.content,
+      createdAt: current.createdAt,
+      updatedAt: _baseTime,
+      pinnedAt: pinned ? _baseTime : null,
+    );
+    notes[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<NoteLayoutPreference> getNoteLayout() async => savedLayout;
+
+  @override
+  Future<void> setNoteLayout(NoteLayoutPreference layout) async {
+    savedLayout = layout;
   }
 
   @override

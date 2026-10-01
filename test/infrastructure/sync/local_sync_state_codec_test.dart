@@ -26,13 +26,13 @@ void main() {
       expect(decoded.cursor, const SyncCursor('opaque-cursor-1'));
     });
 
-    test('writes exactly the frozen envelope fields at schema version 2', () {
+    test('writes exactly the frozen envelope fields at schema version 3', () {
       final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
         richStateFixture(),
       );
 
-      expect(LocalSyncStateCodec.schemaVersion, 2);
-      expect(LocalSyncSchema.version, 2);
+      expect(LocalSyncStateCodec.schemaVersion, 3);
+      expect(LocalSyncSchema.version, 3);
       expect(envelope.keys.toSet(), <String>{
         'schemaVersion',
         'accountUserId',
@@ -40,13 +40,15 @@ void main() {
         'outbox',
         'cursor',
         'conflicts',
+        'userPreferences',
       });
-      expect(envelope['schemaVersion'], 2);
+      expect(envelope['schemaVersion'], 3);
       expect(envelope['accountUserId'], 'user-1');
       expect(envelope['cursor'], 'opaque-cursor-1');
       expect(envelope['notes'], isA<List<Object?>>());
       expect(envelope['outbox'], isA<List<Object?>>());
       expect(envelope['conflicts'], isA<List<Object?>>());
+      expect(envelope['userPreferences'], isA<Map<String, Object?>>());
     });
 
     test('round-trips an empty account with an explicit null cursor', () {
@@ -115,6 +117,63 @@ void main() {
       );
       expect(tombstoneRemote['deletedAt'], fixtureUpdatedAt.toIso8601String());
     });
+
+    test('migrates schema 2 without changing attempted mutations', () {
+      final LocalSyncState state = richStateFixture();
+      final Map<String, Object?> legacy = LocalSyncStateCodec.encode(state)
+        ..['schemaVersion'] = 2
+        ..remove('userPreferences');
+
+      final List<Object?> oldConflicts = legacy['conflicts']! as List<Object?>;
+      for (int i = 0; i < oldConflicts.length; i++) {
+        final Map<String, Object?> conflict = copyRecord(oldConflicts[i]);
+        final Map<String, Object?> local = copyRecord(conflict['local'])
+          ..remove('pinnedAt');
+        final Object? remoteValue = conflict['remote'];
+        Map<String, Object?>? remote;
+        if (remoteValue != null) {
+          remote = copyRecord(remoteValue)..remove('pinnedAt');
+        }
+        oldConflicts[i] = <String, Object?>{
+          ...conflict,
+          'local': local,
+          'remote': remote,
+        };
+      }
+      final List<Object?> notes = legacy['notes']! as List<Object?>;
+      for (int i = 0; i < notes.length; i++) {
+        notes[i] = copyRecord(notes[i])..remove('pinnedAt');
+      }
+
+      final LocalSyncState migrated = LocalSyncStateCodec.decode(legacy);
+
+      expect(migrated.outbox, state.outbox);
+      expect(migrated.conflicts, state.conflicts);
+      expect(
+        migrated.notes.every((LocalNoteState note) => note.pinnedAt == null),
+        isTrue,
+      );
+      expect(migrated.userPreferences.noteLayout.name, 'grid');
+      expect(migrated.userPreferences.userId, state.accountUserId);
+    });
+
+    test(
+      'rejects schema 2 records that contain fields from a newer schema',
+      () {
+        final Map<String, Object?> legacy =
+            LocalSyncStateCodec.encode(simpleStateFixture())
+              ..['schemaVersion'] = 2
+              ..remove('userPreferences');
+        final List<Object?> notes = legacy['notes']! as List<Object?>;
+        notes[0] = copyRecord(notes[0])..['unexpected'] = true;
+        notes[0] = copyRecord(notes[0])..remove('pinnedAt');
+
+        expect(
+          () => LocalSyncStateCodec.decode(legacy),
+          throwsA(isA<LocalSyncCodecException>()),
+        );
+      },
+    );
   });
 
   group('cursor opacity', () {
@@ -211,6 +270,7 @@ void main() {
         'outbox',
         'cursor',
         'conflicts',
+        'userPreferences',
       ]) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           simpleStateFixture(),
@@ -225,8 +285,8 @@ void main() {
       }
     });
 
-    test('rejects any schema version but 2', () {
-      final List<Object?> versions = <Object?>[0, 1, 3, '2', 2.0, null, true];
+    test('rejects any unsupported schema version', () {
+      final List<Object?> versions = <Object?>[0, 1, 4, '3', 3.0, null, true];
 
       for (final Object? version in versions) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(

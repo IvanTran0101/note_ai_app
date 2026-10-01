@@ -25,7 +25,7 @@ enum LocalSyncStoreFailure {
   /// Stored state exists but could not be read from the backing store.
   unreadable,
 
-  /// Stored state does not match the frozen schemaVersion 2 envelope, so it
+  /// Stored state does not match the frozen schemaVersion 3 envelope, so it
   /// cannot be decoded without losing local note state.
   malformed,
 

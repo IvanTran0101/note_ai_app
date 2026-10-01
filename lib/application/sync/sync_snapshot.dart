@@ -9,6 +9,7 @@ final class SyncNoteSnapshot {
     required this.createdAt,
     required this.serverUpdatedAt,
     required int revision,
+    this.pinnedAt,
     this.deletedAt,
   }) : id = _requireNonBlank(id, 'id'),
        revision = _requirePositive(revision, 'revision');
@@ -19,6 +20,7 @@ final class SyncNoteSnapshot {
   final DateTime createdAt;
   final DateTime serverUpdatedAt;
   final int revision;
+  final DateTime? pinnedAt;
   final DateTime? deletedAt;
 
   bool get isDeleted => deletedAt != null;
@@ -32,6 +34,7 @@ final class SyncNoteSnapshot {
         other.createdAt == createdAt &&
         other.serverUpdatedAt == serverUpdatedAt &&
         other.revision == revision &&
+        other.pinnedAt == pinnedAt &&
         other.deletedAt == deletedAt;
   }
 
@@ -43,6 +46,7 @@ final class SyncNoteSnapshot {
     createdAt,
     serverUpdatedAt,
     revision,
+    pinnedAt,
     deletedAt,
   );
 }

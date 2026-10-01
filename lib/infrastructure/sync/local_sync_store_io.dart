@@ -1,6 +1,6 @@
 /// [ILocalSyncStore] implementation for `dart:io` platforms.
 ///
-/// Persists one account's whole local sync state as a schemaVersion 2 JSON
+/// Persists one account's whole local sync state as a schemaVersion 3 JSON
 /// envelope at
 /// `<app support>/accounts/<sha256 of the account id>/local_sync_state.json`,
 /// resolved with `path_provider`'s [getApplicationSupportDirectory] by default.
@@ -59,7 +59,7 @@ ILocalSyncStore createLocalSyncStore({
 /// The file is private to the application and holds exactly one envelope:
 ///
 /// ```json
-/// {"schemaVersion": 2, "accountUserId": "...", "notes": [], ...}
+/// {"schemaVersion": 3, "accountUserId": "...", "notes": [], ...}
 /// ```
 final class FileLocalSyncStore implements ILocalSyncStore {
   /// Binds the store to [accountUserId].
