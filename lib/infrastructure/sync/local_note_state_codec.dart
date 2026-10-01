@@ -3,6 +3,7 @@ library;
 
 import '../../application/sync/local_note_state.dart';
 import '../../application/sync/note_sync_status.dart';
+import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 
@@ -15,6 +16,9 @@ abstract final class LocalNoteStateCodec {
   /// Encodes [note] as a JSON-compatible object.
   static Map<String, Object?> encode(LocalNoteState note) {
     return <String, Object?>{
+      LocalSyncSchema.protected: note.protection.enabled,
+      LocalSyncSchema.protectionRevision: note.protection.revision,
+      LocalSyncSchema.contentAvailable: note.contentAvailable,
       LocalSyncSchema.id: note.id,
       LocalSyncSchema.ownerId: note.ownerId,
       LocalSyncSchema.title: note.title,
@@ -73,6 +77,13 @@ abstract final class LocalNoteStateCodec {
         serverRevision: serverRevision,
         deletedAt: deletedAt,
         status: status,
+        protection: NoteProtection(
+          enabled: record.requireBool(LocalSyncSchema.protected),
+          revision: record.requireNonNegativeInt(
+            LocalSyncSchema.protectionRevision,
+          ),
+        ),
+        contentAvailable: record.requireBool(LocalSyncSchema.contentAvailable),
       ),
       path: record.path,
     );

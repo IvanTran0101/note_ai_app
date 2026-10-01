@@ -1,6 +1,8 @@
 /// Server snapshots and pages from the remote note change feed.
 library;
 
+import '../../domain/notes/note_protection.dart';
+
 final class SyncNoteSnapshot {
   SyncNoteSnapshot({
     required String id,
@@ -10,6 +12,8 @@ final class SyncNoteSnapshot {
     required this.serverUpdatedAt,
     required int revision,
     this.deletedAt,
+    this.protection = const NoteProtection.unprotected(),
+    this.contentAvailable = true,
   }) : id = _requireNonBlank(id, 'id'),
        revision = _requirePositive(revision, 'revision');
 
@@ -20,6 +24,8 @@ final class SyncNoteSnapshot {
   final DateTime serverUpdatedAt;
   final int revision;
   final DateTime? deletedAt;
+  final NoteProtection protection;
+  final bool contentAvailable;
 
   bool get isDeleted => deletedAt != null;
 
@@ -32,7 +38,9 @@ final class SyncNoteSnapshot {
         other.createdAt == createdAt &&
         other.serverUpdatedAt == serverUpdatedAt &&
         other.revision == revision &&
-        other.deletedAt == deletedAt;
+        other.deletedAt == deletedAt &&
+        other.protection == protection &&
+        other.contentAvailable == contentAvailable;
   }
 
   @override
@@ -44,6 +52,8 @@ final class SyncNoteSnapshot {
     serverUpdatedAt,
     revision,
     deletedAt,
+    protection,
+    contentAvailable,
   );
 }
 

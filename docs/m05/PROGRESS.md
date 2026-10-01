@@ -27,8 +27,8 @@ implementation and evidence, not repeated permission requests.
 | --- | --- | --- |
 | M05.0 | Implemented: contracts and baseline dependency alignment recorded | Runtime acceptance remains tracked in later milestones |
 | M05.1 | Implemented: protection/metadata contracts, safe DTOs/capabilities and access guard | Runtime wiring continues in backend/storage/UI milestones |
-| M05.2 | Not implemented | Verifier/grant/OTP and every protected operation authorized |
-| M05.3 | Not implemented | Full encrypted envelope, atomic v2→v3 migration, Web/native key lifecycle and crash/pending evidence |
+| M05.2 | Backend implemented and pushed: 5edd28d | UI and Summary integration, deployed/runtime acceptance |
+| M05.3 | Implemented: encrypted envelope, per-note wrapping and native/Web cutover | Crash/pending/runtime acceptance; UI wiring follows |
 | M05.4 | Not implemented | Metadata feed/content split, mutation/replay/conflict, Summary lineage and stale result rejection |
 | M05.5 | Not implemented | Security UI flows and Web/Android verification matrix |
 
@@ -106,7 +106,10 @@ coalescing were split by responsibility to keep the modified files readable.
 M05.1 checkpoint pushed as 987e440. M05.2 implemented in source: amplify/protection/
 verifier, grant, recovery, DynamoDB transaction adapters and HTTP routes;
 sync response masking and current authorization for mutation/replay/conflict/feed.
-Next: M05.3 encrypted storage and key lifecycle, then
+M05.3 touched: security crypto/device-key/envelope/bundle adapters, vault port,
+local/snapshot schema fields, native atomic store and Web CAS. Legacy notes are
+quarantined until authoritative online protection metadata; reads/updates serialize
+with cutover. Next: M05.3 checkpoint, then
 sync/Summary lineage and UI integration.
 Complete each milestone/criterion gate before marking Done. Record evidence
 and push after each checkpoint; do not stop at an intermediate milestone.
@@ -147,6 +150,26 @@ and push after each checkpoint; do not stop at an intermediate milestone.
 - Next: M05.2 backend verifier, scoped grants, recovery and direct API enforcement.
 
 ## Continuity receipt (latest)
+
+## M05.3 checkpoint — 2026-10-02
+
+- Added AES-256-GCM account envelopes and password-wrapped random per-note
+  keys using vetted cryptography/FSS adapters. Native key reset-on-error is
+  disabled; no missing-key regeneration or plaintext fallback for v3 records.
+- Sealed complete note/outbox/conflict bundles; locked reads use blank metadata
+  and blocked queue placeholders while preserving the original ciphertext and
+  mutation identities. Old-epoch ciphertext remains retained after reset.
+- Bounded v2 cutover preserves cursor, IDs, queue order and bookkeeping. Unknown
+  protection is quarantined inside the encrypted device envelope until canonical
+  online metadata is known. Legacy staging is atomically sealed in place,
+  preserving its complete original document rather than deleting drafts.
+- Native commits use process serialization, OS file lock, flushed ciphertext
+  temporary files and same-directory atomic rename. Web uses encrypted CAS in a
+  single IndexedDB transaction and database v2 to fence old v1 writers.
+- Lock/account generation changes discard transient keys and reject late reads;
+  app disposal clears the vault. Android backup disabled for this private store.
+- `dart analyze lib` passed with no issues. Patch whitespace check passed.
+  No test/runtime/crash/device acceptance was run; sync/Summary/UI wiring follows.
 
 ## M05.2 checkpoint — 2026-10-02
 

@@ -2,6 +2,7 @@
 library;
 
 import '../../application/sync/sync_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 
@@ -16,6 +17,9 @@ abstract final class SyncNoteSnapshotCodec {
   /// Encodes [snapshot] as a JSON-compatible object.
   static Map<String, Object?> encode(SyncNoteSnapshot snapshot) {
     return <String, Object?>{
+      LocalSyncSchema.protected: snapshot.protection.enabled,
+      LocalSyncSchema.protectionRevision: snapshot.protection.revision,
+      LocalSyncSchema.contentAvailable: snapshot.contentAvailable,
       LocalSyncSchema.id: snapshot.id,
       LocalSyncSchema.title: snapshot.title,
       LocalSyncSchema.content: snapshot.content,
@@ -62,6 +66,13 @@ abstract final class SyncNoteSnapshotCodec {
         serverUpdatedAt: serverUpdatedAt,
         revision: revision,
         deletedAt: deletedAt,
+        protection: NoteProtection(
+          enabled: record.requireBool(LocalSyncSchema.protected),
+          revision: record.requireNonNegativeInt(
+            LocalSyncSchema.protectionRevision,
+          ),
+        ),
+        contentAvailable: record.requireBool(LocalSyncSchema.contentAvailable),
       ),
       path: record.path,
     );

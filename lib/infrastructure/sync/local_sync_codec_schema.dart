@@ -8,7 +8,7 @@ library;
 /// Field names and the schema version of the frozen M2 local sync document.
 abstract final class LocalSyncSchema {
   /// The only schema version this codec reads or writes.
-  static const int version = 2;
+  static const int version = 3;
 
   // Envelope fields.
   static const String schemaVersion = 'schemaVersion';
@@ -28,6 +28,9 @@ abstract final class LocalSyncSchema {
   static const String serverRevision = 'serverRevision';
   static const String deletedAt = 'deletedAt';
   static const String status = 'status';
+  static const String protected = 'protected';
+  static const String protectionRevision = 'protectionRevision';
+  static const String contentAvailable = 'contentAvailable';
 
   // Pending mutation fields.
   static const String mutationId = 'mutationId';
@@ -61,6 +64,9 @@ abstract final class LocalSyncSchema {
 
   /// Exactly the fields one local note record carries.
   static const Set<String> noteFields = <String>{
+    protected,
+    protectionRevision,
+    contentAvailable,
     id,
     ownerId,
     title,
@@ -90,6 +96,9 @@ abstract final class LocalSyncSchema {
 
   /// Exactly the fields one remote note snapshot record carries.
   static const Set<String> snapshotFields = <String>{
+    protected,
+    protectionRevision,
+    contentAvailable,
     id,
     title,
     content,

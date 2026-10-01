@@ -18,6 +18,7 @@ import 'application/note_intelligence/summary_run_context.dart';
 import 'application/note_intelligence/summary_consent_app_service.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
+import 'application/notes/local_note_vault.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/auth/auth_identity.dart';
 import 'domain/note_intelligence/summary.dart';
@@ -549,6 +550,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final int? previous = _lastSummarySessionGeneration;
     if (previous != null && previous != generation) {
       _invalidateSummaryRuns();
+      for (final store in _localSyncStores.values) {
+        if (store is ILocalNoteVault) {
+          (store as ILocalNoteVault).lock(null);
+        }
+      }
     }
     _lastSummarySessionGeneration = generation;
 
@@ -1131,6 +1137,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    for (final store in _localSyncStores.values) {
+      if (store is ILocalNoteVault) {
+        (store as ILocalNoteVault).dispose();
+      }
+    }
     _summaryRuntime?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     widget.authController.removeListener(_onAuthenticationChanged);
