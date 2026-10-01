@@ -63,8 +63,8 @@ final class NoteDto {
 
   @override
   String toString() {
-    return 'NoteDto(id: $id, ownerId: $ownerId, title: $title, '
-        'content: $content, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'NoteDto(id: $id, ownerId: $ownerId, title: <redacted>, '
+        'content: <redacted>, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }
 
