@@ -14,6 +14,8 @@ import 'application/sync/local_sync_store.dart';
 import 'application/sync/sync_conflict_resolver.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
+import 'application/note_intelligence/summary_run_context.dart';
+import 'application/note_intelligence/summary_consent_app_service.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
@@ -34,6 +36,8 @@ import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
+import 'infrastructure/note_intelligence/summary_run_runtime.dart';
+import 'infrastructure/note_intelligence/summary_failure_mapper.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/sync/account_sync_runtime.dart';
 import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
@@ -51,6 +55,7 @@ import 'presentation/notes/note_detail_page.dart';
 import 'presentation/notes/note_detail_route_result.dart';
 import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
+import 'presentation/notes/summary_cloud_settings_tile.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
 import 'presentation/sync/sync_localizations.dart';
@@ -330,10 +335,23 @@ class NoteFlowApp extends StatefulWidget {
     super.key,
     required this.authController,
     required this.currentUserSession,
+    this.summaryRuntime,
+    this.localSyncStoreFactory,
+    this.localSummarizer,
+    this.enableSync = true,
   });
 
   final AuthController authController;
   final CurrentUserSession currentUserSession;
+
+  /// Optional composition collaborators for offline acceptance runs.
+  final SummaryRunRuntime? summaryRuntime;
+  final ILocalSyncStore Function({required String accountUserId})?
+  localSyncStoreFactory;
+  final SummarizeNoteContent? localSummarizer;
+
+  /// Offline acceptance roots disable unrelated background synchronization.
+  final bool enableSync;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
@@ -351,6 +369,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   late final AiConfigurationStore _aiConfigurationStore =
       createAiConfigurationStore();
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
+  SummaryRunRuntime? _summaryRuntime;
+  int? _lastSummarySessionGeneration;
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
   AccountSyncRuntime? _syncRuntime;
@@ -370,11 +390,47 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,
-        summarizeContent: _summarize,
+        summarizeContent: (String content) =>
+            withSummaryFailureBoundary(() => _summarize(content)),
+        summarizeRun: _summaryRunRuntime.dispatchesSummary
+            ? _summaryRunRuntime.summarize
+            : null,
+        cloudConsent: _summaryRunRuntime.consent,
+        sessionGeneration: () => _currentUserSession.sessionGeneration,
         requestSync: _requestSyncForAccount,
       );
   late final NotesApplicationController _notesController =
-      NoteApplicationServiceController(_noteApplicationService);
+      NoteApplicationServiceController(
+        _noteApplicationService,
+        summaryConsent: _summaryConsentService,
+      );
+
+  late final SummaryConsentAppService _summaryConsentService =
+      SummaryConsentAppService(
+        currentUser: _currentUserSession,
+        session: _currentUserSession,
+        consent: _summaryRunRuntime.consent,
+        requiresCloudConsent: _summaryRunRuntime.dispatchesSummary,
+        isAvailable: () =>
+            !_disposed &&
+            (_summaryRunRuntime.configuration.isLocal
+                ? !kIsWeb
+                : _summaryRunRuntime.configuration.isRemote &&
+                      _summaryRunRuntime.configuration.canSummarize &&
+                      _noteFlowAuthMode == 'cognito'),
+        cancelActiveRuns: () => _summaryRunRuntime.cancelActive(
+          reason: SummaryRunFailureCode.consentRequired,
+        ),
+      );
+
+  SummaryRunRuntime get _summaryRunRuntime => _summaryRuntime ??=
+      widget.summaryRuntime ??
+      SummaryRunRuntime.fromEnvironment(
+        session: _currentUserSession,
+        localSyncStoreForAccount: _localSyncStoreForAccount,
+        amplifyOutputsJson: amplifyConfig,
+        cognitoMode: _noteFlowAuthMode == 'cognito',
+      );
   late final DashboardController _dashboardController = DashboardController(
     query: GetDashboardOverview(
       noteRepository: _noteRepository,
@@ -411,6 +467,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   );
   late final GoRouter _router;
   bool _disposed = false;
+  // ponytail: one local model worker; per-model latches if multiple runtimes exist.
+  bool _localSummaryRunning = false;
 
   @override
   void initState() {
@@ -472,7 +530,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   AccountSyncRuntime? _accountSyncRuntime() {
-    if (_noteFlowAuthMode != 'cognito') {
+    if (!widget.enableSync || _noteFlowAuthMode != 'cognito') {
       return null;
     }
     final Uri? baseUri = _syncApiBaseUri();
@@ -487,6 +545,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   void _onAuthenticationChanged() {
+    final int generation = _currentUserSession.sessionGeneration;
+    final int? previous = _lastSummarySessionGeneration;
+    if (previous != null && previous != generation) {
+      _invalidateSummaryRuns();
+    }
+    _lastSummarySessionGeneration = generation;
+
     final String? accountUserId = _currentUserSession.userId;
     if (accountUserId == null) {
       _lastSyncAccountUserId = null;
@@ -499,6 +564,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _lastSyncAccountUserId = accountUserId;
     _disposeSyncPresentationController();
     _requestSyncForAccount(accountUserId);
+  }
+
+  void _invalidateSummaryRuns() {
+    _summaryRuntime?.cancelActive(reason: SummaryRunFailureCode.sessionChanged);
+    _summaryRuntime?.consent.revoke();
   }
 
   void _disposeSyncPresentationController() {
@@ -547,15 +617,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ILocalSyncStore _localSyncStoreForAccount({required String accountUserId}) {
     return _localSyncStores.putIfAbsent(
       accountUserId,
-      () => local_sync_infrastructure.createLocalSyncStore(
-        accountUserId: accountUserId,
-      ),
+      () =>
+          widget.localSyncStoreFactory?.call(accountUserId: accountUserId) ??
+          local_sync_infrastructure.createLocalSyncStore(
+            accountUserId: accountUserId,
+          ),
     );
   }
 
   Future<Summary> _summarize(String content) async {
-    final NoteSummaryAppService service = await _ensureService();
-    return service.summarize(content);
+    if (_localSummaryRunning) {
+      throw const SummaryRunFailure(SummaryRunFailureCode.alreadyRunning);
+    }
+    _localSummaryRunning = true;
+    try {
+      final SummarizeNoteContent? supplied = widget.localSummarizer;
+      if (supplied != null) return await supplied(content);
+      final NoteSummaryAppService service = await _ensureService();
+      return await service.summarize(content);
+    } finally {
+      _localSummaryRunning = false;
+    }
   }
 
   void _cancelModelProvisioning() {
@@ -572,8 +654,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           notesController: _notesController,
           note: note,
           syncController: _syncPresentationControllerForCurrentAccount(),
-          provisioningReader: _modelProvisioningStatus,
-          onProvisioningCancel: _cancelModelProvisioning,
+          provisioningReader: _summaryRunRuntime.configuration.isLocal
+              ? _modelProvisioningStatus
+              : null,
+          onProvisioningCancel: _summaryRunRuntime.configuration.isLocal
+              ? _cancelModelProvisioning
+              : null,
           showAppBar: false,
         ),
       ),
@@ -800,6 +886,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   Future<void> _logout() async {
+    _invalidateSummaryRuns();
     try {
       await widget.authController.logout();
     } on Object {
@@ -821,6 +908,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           unawaited(page.reload());
         }
     }
+  }
+
+  void _openLocalDiagnostics(BuildContext context) {
+    if (!_summaryRunRuntime.configuration.isLocal) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LocalLlmDebugPage(
+          summarize: _summarize,
+          loadModelReadiness: _loadModelReadiness,
+          provisioningReader: _modelProvisioningStatus,
+          onProvisioningCancel: _cancelModelProvisioning,
+        ),
+      ),
+    );
   }
 
   Future<void> _showAppearanceSettings(BuildContext context) async {
@@ -906,6 +1007,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                       },
                     ),
                     const SizedBox(height: 24),
+                    if (_summaryConsentService
+                        .requiresCloudConsent) ...<Widget>[
+                      SummaryCloudSettingsTile(service: _summaryConsentService),
+                      const SizedBox(height: 24),
+                    ],
                     OutlinedButton.icon(
                       icon: const Icon(Icons.lock_outline),
                       label: Text(authCopy.changePassword),
@@ -981,18 +1087,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             },
             onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
             onOpenSettings: () => _showAppearanceSettings(context),
-            onOpenDiagnostics: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => LocalLlmDebugPage(
-                    summarize: _summarize,
-                    loadModelReadiness: _loadModelReadiness,
-                    provisioningReader: _modelProvisioningStatus,
-                    onProvisioningCancel: _cancelModelProvisioning,
-                  ),
-                ),
-              );
-            },
+            onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
+                ? () => _openLocalDiagnostics(context)
+                : null,
             dashboard: DashboardPage(
               key: _dashboardPageKey,
               embeddedInWorkspace: true,
@@ -1002,18 +1099,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   _openNoteInWorkspace(context, note: note),
               onCreateNote: () => _openNoteInWorkspace(context),
               onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LocalLlmDebugPage(
-                      summarize: _summarize,
-                      loadModelReadiness: _loadModelReadiness,
-                      provisioningReader: _modelProvisioningStatus,
-                      onProvisioningCancel: _cancelModelProvisioning,
-                    ),
-                  ),
-                );
-              },
+              onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
+                  ? () => _openLocalDiagnostics(context)
+                  : null,
               onSearchVisibilityChanged: (bool active) {
                 _workspaceShellKey.currentState?.setCompactSearchActive(active);
               },
@@ -1021,23 +1109,18 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             notes: NotesWorkspacePage(
               key: _notesPageKey,
               embeddedInWorkspace: true,
-              applicationService: _noteApplicationService,
-              provisioningReader: _modelProvisioningStatus,
-              onProvisioningCancel: _cancelModelProvisioning,
+              controller: _notesController,
+              provisioningReader: _summaryRunRuntime.configuration.isLocal
+                  ? _modelProvisioningStatus
+                  : null,
+              onProvisioningCancel: _summaryRunRuntime.configuration.isLocal
+                  ? _cancelModelProvisioning
+                  : null,
               syncController: _syncPresentationControllerForCurrentAccount(),
               onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LocalLlmDebugPage(
-                      summarize: _summarize,
-                      loadModelReadiness: _loadModelReadiness,
-                      provisioningReader: _modelProvisioningStatus,
-                      onProvisioningCancel: _cancelModelProvisioning,
-                    ),
-                  ),
-                );
-              },
+              onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
+                  ? () => _openLocalDiagnostics(context)
+                  : null,
             ),
           ),
         ),
@@ -1048,6 +1131,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    _summaryRuntime?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     widget.authController.removeListener(_onAuthenticationChanged);
     _disposeSyncPresentationController();

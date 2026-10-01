@@ -28,10 +28,11 @@ implementation only within the scope the user has approved below.
   criterion `[M]` / `[P]`, update the progress page and local progress record,
   then commit and push. A preparation batch or interrupted milestone must be
   recorded as partial / awaiting review, never as Done.
-- **Ask for collab permission before changing Domain or Infrastructure.** This
-  restriction comes directly from the user. Record proposed and approved paths
-  in `docs/m05/COLLAB_REVIEW.md`; include backend persistence/crypto adapters.
-  Approval of Option A does not grant permission to edit these owned layers.
+- **Standing authorization, 2026-10-02:** the user approved all Domain and
+  Infrastructure changes from now on, including backend persistence/crypto
+  adapters and M05 integration prerequisites. Do not ask again or stop for the
+  superseded ownership gate. Continue until M05 is implemented. Keep ordinary
+  DDD boundaries, scoped progress/pushes and data-preservation rules.
 - Keep every push limited to M05. Do not merge, force-push, or deploy without
   separate authorization. Do not implement M06/M09/M07 business features.
 
@@ -89,9 +90,10 @@ implementation only within the scope the user has approved below.
   remote commit after each push. Recheck the remote before writing/pushing.
 - The target and Notion baseline diverge (101 target-only / 5 baseline-only
   commits at the initial inspection). Their tree diff includes 11 Infrastructure
-  paths. Do not wholesale import that diff; baseline dependency alignment needs
-  collab review. Verify actual source in the target worktree before each patch;
-  the existing code graph indexes the original workspace, not this worktree.
+  paths. Align only required baseline dependencies for M05. Verify actual
+  source in the target worktree before each patch. The worktree now has graph
+  project `noteflow-m05`; use it for implementation discovery. The original
+  graph project remains rooted in the baseline workspace.
 - `_agent_ops/` and its `session_start.py` are absent in this checkout, despite
   references from `AGENTS.md`; do not assume those tools or records exist.
 - Do not add or run tests unless the user explicitly asks for testing or
@@ -103,8 +105,8 @@ implementation only within the scope the user has approved below.
 - Read `docs/m05/PROGRESS.md` and `docs/m05/COLLAB_REVIEW.md` in the
   implementation checkout before continuing M05. Keep both current.
 - Initial batch: Application DTO redaction plus review/progress documents.
-  M05.0 is pending contract acceptance; M05.1 is partial. No rubric criterion is
-  Done. Domain/Infrastructure permission has not been granted.
+  Continue M05.0–M05.5 with the standing authorization above. Read current
+  progress for implemented milestones and remaining technical work.
 - `_agent_ops/` records and the closure receipt template are unavailable. Use
   the actual M05 progress files for continuity; do not fabricate absent records.
 

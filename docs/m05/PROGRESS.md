@@ -16,15 +16,16 @@ fast-forward to `final-tuankiet`, and verify the remote tip. An interrupted
 milestone/preparation batch is recorded as partial or awaiting approval.
 No milestone or rubric criterion is Done without its acceptance evidence.
 
-Domain and Infrastructure permission is still pending. The user's explicit
-ownership restriction takes priority over the general authorization to code
-M05. Receive and record scoped permission before touching those paths.
+Standing authorization recorded on 2026-10-02: the user approved all subsequent
+Domain/Infrastructure changes and asked to continue until M05 is complete.
+The previous ownership gate is superseded. Remaining gates are technical
+implementation and evidence, not repeated permission requests.
 
 ## Current milestone status
 
 | Milestone | Status | Remaining acceptance |
 | --- | --- | --- |
-| M05.0 | Preparation recorded; contracts awaiting owner acceptance | M11/M07/M06 contract acceptance and reviewed Summary prerequisite alignment |
+| M05.0 | Implemented: contracts and baseline dependency alignment recorded | Runtime acceptance remains tracked in later milestones |
 | M05.1 | Partial: Application DTO redaction implemented | Domain NoteProtection/safe metadata/capabilities, Domain log redaction, mapping/wiring and acceptance |
 | M05.2 | Not implemented | Verifier/grant/OTP and every protected operation authorized |
 | M05.3 | Not implemented | Full encrypted envelope, atomic v2→v3 migration, Web/native key lifecycle and crash/pending evidence |
@@ -98,12 +99,29 @@ Notion keeps the final pushed checkpoint SHA and delivery verification.
 
 ### Next step
 
-Collab reviews the three immediate M05.1 Domain paths in `COLLAB_REVIEW.md`.
-After explicit permission is recorded, implement their approved contracts and
-Application mapping/wiring; request scoped Infrastructure permission before
-adapter integration. Complete each milestone/criterion gate before marking Done.
+Align the required baseline Summary dependencies, implement M05.1 contracts,
+then continue backend, encrypted storage, sync/Summary authorization and UI.
+Complete each milestone/criterion gate before marking Done. Record evidence
+and push after each checkpoint; do not stop at an intermediate milestone.
 
 ## Continuity receipt
+
+## M05.0 checkpoint — 2026-10-02
+
+- Recorded standing authorization and the concrete security wire/storage/AI
+  vocabulary in SECURITY_CONTRACT.md.
+- Aligned 39 required baseline production/config/contract paths, preserved DTO
+  redaction and the target history; no branch merge or user-file replacement.
+- Indexed the actual worktree as `noteflow-m05` (moderate generation
+  `2026-10-01T18:44:53Z`). Domain, local-state/store, repository and backend
+  integration paths were discovered through the graph; partial library ranges
+  were read directly. No exhaustive caller/coverage claim is made.
+- `flutter pub get`, patch whitespace check and `dart analyze lib` passed
+  (no issues). Backend dependencies were installed. No tests were added/run.
+- Next work, already authorized: M05.1 protection/metadata contracts, safe DTOs
+  and capabilities; then continue the remaining milestones.
+
+## Continuity receipt (current)
 
 | Record | Resolution |
 | --- | --- |

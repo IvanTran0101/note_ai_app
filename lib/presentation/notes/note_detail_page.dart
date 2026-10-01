@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
+import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_conflict_resolver.dart';
 import 'note_detail_back_confirmation.dart';
@@ -16,7 +17,11 @@ import 'note_detail_more_actions.dart';
 import 'note_detail_route_result.dart';
 import 'note_detail_surface.dart';
 import 'note_flow_snackbar.dart';
+import 'note_summary_availability.dart';
+import 'note_summary_controller.dart';
+import 'note_summary_feedback.dart';
 import 'notes_application_controller.dart';
+import 'summary_consent_dialog.dart';
 import '../sync/sync_conflict_prompt.dart';
 import '../sync/sync_localizations.dart';
 import '../sync/sync_presentation_controller.dart';
@@ -73,22 +78,31 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   Timer? _autosaveTimer;
 
   late NoteDto? _note;
+  NoteDto? _pendingSavedNote;
   late String _savedTitle;
   late String _savedContent;
-  String? _summary;
   String? _error;
   String? _statusMessage;
-  bool _summaryStale = false;
   bool _saving = false;
   bool _deleting = false;
-  bool _summarizing = false;
   bool _didPersist = false;
   bool _lastReportedDirty = false;
-  bool _summaryError = false;
   bool _backConfirmationVisible = false;
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
+
+  /// Owns the whole Summary lifecycle for this page: scope, consent capture,
+  /// revalidation, result, typed failure, and the rate-limit countdown.
+  late final NoteSummaryController _summaryController = NoteSummaryController(
+    notesController: () => widget.notesController,
+    editorFacts: () => NoteSummaryEditorFacts(
+      note: _note,
+      isDirty: _isDirty,
+      hasConflict: _currentConflict != null,
+    ),
+    confirmConsent: _confirmSummaryConsent,
+  );
 
   @override
   void initState() {
@@ -102,6 +116,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _contentController.addListener(_editorChanged);
     _titleFocusNode.addListener(_titleFocusChanged);
     _contentFocusNode.addListener(_contentFocusChanged);
+    _summaryController.addListener(_summaryChanged);
     widget.syncController?.addListener(_syncStateChanged);
   }
 
@@ -113,11 +128,62 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       widget.syncController?.addListener(_syncStateChanged);
       _syncStateChanged();
     }
+    if (oldWidget.note != widget.note) {
+      _summaryController.cancelActive(
+        reason: SummaryRunFailureCode.noteChanged,
+      );
+      _summaryController.markStaleIfResult();
+      final NoteDto? incoming = widget.note;
+      final bool sameIdentity =
+          incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
+      if (!sameIdentity) _summaryController.clearResult();
+      if (!_isDirty || !sameIdentity) {
+        _adoptSavedNote(incoming);
+      } else {
+        _pendingSavedNote = incoming;
+      }
+    }
+    if (oldWidget.notesController != widget.notesController) {
+      _summaryController.cancelActive(
+        reason: SummaryRunFailureCode.sessionChanged,
+      );
+      _summaryController.clearResult();
+    }
+  }
+
+  void _adoptSavedNote(NoteDto? incoming) {
+    _pendingSavedNote = null;
+    _autosaveTimer?.cancel();
+    _titleController.removeListener(_editorChanged);
+    _contentController.removeListener(_editorChanged);
+    _note = incoming;
+    _savedTitle = incoming?.title ?? '';
+    _savedContent = incoming?.content ?? '';
+    _titleController.text = _savedTitle;
+    _contentController.text = _savedContent;
+    _titleController.addListener(_editorChanged);
+    _contentController.addListener(_editorChanged);
+    _summaryController.clearFailure();
+  }
+
+  void _summaryChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Opens the cloud disclosure for the run that already captured its request.
+  Future<bool> _confirmSummaryConsent() {
+    if (!mounted) {
+      return Future<bool>.value(false);
+    }
+    return showSummaryConsentDialog(context);
   }
 
   void _syncStateChanged() {
     if (!mounted) return;
     if (_currentConflict != null) {
+      _summaryController.cancelActive(reason: SummaryRunFailureCode.conflict);
       _autosaveTimer?.cancel();
       _autosaveTimer = null;
     } else if (_isDirty) {
@@ -136,24 +202,38 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _contentController.text != _savedContent;
 
   bool get _actionBusy =>
-      _saving || _deleting || _summarizing || _resolvingConflict;
+      _saving || _deleting || _resolvingConflict || _summaryController.isBusy;
 
   bool get _canSave =>
       !_actionBusy && _currentConflict == null && (_note == null || _isDirty);
 
-  bool get _canSummarize => !_actionBusy && _note != null && !_isDirty;
+  /// Availability of the Summary action for the facts the editor shows now.
+  NoteSummaryAvailability get _summaryAvailability =>
+      _summaryController.availability(
+        hasSavedNote: _note != null,
+        isDirty: _isDirty,
+        hasConflict: _currentConflict != null,
+      );
+
+  /// The single eligibility rule the primary, retry, and regenerate actions
+  /// share: the editor is ready (or needs consent), and no run or hint is live.
+  bool get _canSummarize =>
+      !_actionBusy &&
+      _summaryController.canStart &&
+      _summaryAvailability.canStart;
 
   void _editorChanged() {
-    if (mounted) {
-      _ignoreNextEditorFocusLoss = false;
-      setState(() {
-        if (_summary != null && _isDirty) {
-          _summaryStale = true;
-        }
-      });
-      _notifyDirtyChanged();
-      _scheduleAutosave();
+    if (!mounted) return;
+    _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
+    if (_isDirty) {
+      _summaryController.markStaleIfResult();
+    } else if (_pendingSavedNote != null) {
+      _adoptSavedNote(_pendingSavedNote);
     }
+    _ignoreNextEditorFocusLoss = false;
+    setState(() {});
+    _notifyDirtyChanged();
+    _scheduleAutosave();
   }
 
   void _notifyDirtyChanged() {
@@ -230,7 +310,6 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _saving = true;
       _error = null;
       _statusMessage = null;
-      _summaryError = false;
     });
 
     try {
@@ -263,11 +342,13 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       if (!mounted) {
         return true;
       }
+      _summaryController.markStaleIfResult();
       setState(() {
         _note = saved;
+        _pendingSavedNote = null;
         _savedTitle = saved.title;
         _savedContent = saved.content;
-        _summaryStale = _summary != null;
+        _summaryController.clearFailure();
         _statusMessage = copy.saved;
         _didPersist = true;
       });
@@ -295,52 +376,35 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   Future<void> _summarize() async {
-    final NoteDto? current = _note;
-    if (current == null || !_canSummarize) {
+    if (!_canSummarize) {
       return;
     }
-
-    final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    final int accepted = _summaryController.acceptedResultCount;
     setState(() {
-      _summarizing = true;
       _error = null;
       _statusMessage = null;
-      _summaryError = false;
     });
-
-    try {
-      final String summary = await widget.notesController.summarizeNote(
-        current.id,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _summary = summary;
-        _summaryStale = false;
-        _statusMessage = copy.summarized;
-        _summaryError = false;
-      });
-    } on Object {
-      if (!mounted) {
-        return;
-      }
-      final ModelProvisioningState? provisioningState =
-          widget.provisioningReader?.current;
-      final bool provisioningFailed =
-          provisioningState?.phase == ModelProvisioningPhase.failed ||
-          provisioningState?.phase == ModelProvisioningPhase.cancelled;
-      if (!provisioningFailed) {
-        setState(() {
-          _error = copy.summarizeError;
-          _summaryError = true;
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _summarizing = false);
-      }
+    await _summaryController.run();
+    if (!mounted || _summaryController.acceptedResultCount == accepted) {
+      return;
     }
+    setState(() => _statusMessage = NoteDetailCopy.of(context).summarized);
+  }
+
+  /// Stops the in-flight generation; cancelling never retracts what a cloud run
+  /// may already have sent, and the last accepted summary stays displayed.
+  void _cancelSummary() {
+    final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    final bool cloud = _summaryController.isCloudRun;
+    _summaryController.cancelActive();
+    setState(() => _statusMessage = copy.summaryCancelExplanation(cloud));
+  }
+
+  bool get _provisioningFailed {
+    final ModelProvisioningPhase? phase =
+        widget.provisioningReader?.current.phase;
+    return phase == ModelProvisioningPhase.failed ||
+        phase == ModelProvisioningPhase.cancelled;
   }
 
   Future<void> _handleBack() async {
@@ -464,7 +528,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   Future<void> _copySummary() async {
-    final String? summary = _summary;
+    final String? summary = _summaryController.summary;
     if (summary == null) {
       return;
     }
@@ -704,6 +768,12 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   Widget _buildSurface(NoteDetailCopy copy, String pageTitle) {
+    final NoteSummaryFailureCopy? summaryFailure = noteSummaryFailureCopy(
+      copy: copy,
+      controller: _summaryController,
+      suppressed: _provisioningFailed,
+      retryEnabled: _canSummarize,
+    );
     final Widget editor = NoteDetailSurface(
       titleController: _titleController,
       contentController: _contentController,
@@ -719,22 +789,32 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       backKey: NoteDetailPage.backKey,
       hasSavedNote: _note != null,
       isDirty: _isDirty,
-      error: _error,
+      error: _error ?? summaryFailure?.message,
       statusMessage: _statusMessage,
       actionBusy: _actionBusy,
       provisioningReader: widget.provisioningReader,
       onProvisioningRetry: _note == null ? null : _summarize,
       onProvisioningCancel: widget.onProvisioningCancel,
-      summary: _summary,
-      summaryStale: _summaryStale,
-      onCopySummary: _summary == null ? null : () => unawaited(_copySummary()),
+      summary: _summaryController.summary,
+      summaryStale: _summaryController.isStale,
+      onCopySummary: _summaryController.summary == null
+          ? null
+          : () => unawaited(_copySummary()),
       onRegenerateSummary: _canSummarize ? () => unawaited(_summarize()) : null,
       copySummaryLabel: copy.copySummary,
       regenerateSummaryLabel: copy.regenerate,
-      onErrorRetry: _summaryError ? () => unawaited(_summarize()) : null,
-      errorRetryLabel: copy.retry,
+      onErrorRetry: summaryFailure == null
+          ? null
+          : () => unawaited(_summarize()),
+      errorRetryLabel: summaryFailure?.retryLabel,
+      errorRetryEnabled: summaryFailure?.retryEnabled ?? false,
+      summaryAvailability: _summaryAvailability,
+      summaryCloud:
+          widget.notesController.summaryConsent?.requiresCloudConsent ?? false,
+      onCancelSummary: _summaryController.isRunning ? _cancelSummary : null,
       isSaving: _saving,
-      isSummarizing: _summarizing,
+      isSummarizing: _summaryController.isRunning,
+      showBusyIndicator: !_summaryController.isAwaitingConsent,
       canSave: false,
       canSummarize: _canSummarize,
       onSave: null,
@@ -791,6 +871,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    _summaryController.removeListener(_summaryChanged);
+    _summaryController.dispose();
     _autosaveTimer?.cancel();
     widget.syncController?.removeListener(_syncStateChanged);
     _titleController.removeListener(_editorChanged);
