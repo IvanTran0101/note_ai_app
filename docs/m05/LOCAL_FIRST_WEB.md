@@ -36,7 +36,7 @@ local enable/rotation/disable for a new unsynced note are not implemented.
   through an unprotected creation/update/feed path.
 - [x] Sync conflict/idempotency/access/session guards remain effective.
 - [x] Real Chrome offline/reload integration and Android regression pass.
-- [ ] Notion/MUST_REMEMBER/progress updated and checkpoint pushed.
+- [x] Notion/MUST_REMEMBER/progress updated and checkpoint pushed.
 
 The checklist above is the correction acceptance gate. Earlier server-first
 acceptance remains historical in PROGRESS.md.
@@ -115,3 +115,5 @@ and full-page reload phases returned driver true / empty failureDetails with
 network disabled for all password/storage actions. Backend64 checks, root
 analyzer and TypeScript check pass. Native-only tests remain in VM. Source
 fixture/render/target-selection repairs and exact limits are in PROGRESS.md.
+
+Source/acceptance checkpoint pushed and remote-verified: d02fc40526b3f8f33e31f93bc6ef7fd6c749d473.

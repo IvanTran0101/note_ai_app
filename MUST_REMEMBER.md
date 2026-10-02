@@ -196,7 +196,7 @@ Keep the single outbox/cursor engine and encrypted account-scoped IndexedDB.
 
 Web local-first correction runtime acceptance now passes: VM942, Chrome815,
 Chrome integration8, Android8, offline page-reload2 phases and backend64 checks.
-Static checks pass. The final source checkpoint is being recorded/pushed;
+Static checks pass. The source checkpoint is pushed and remote-verified at d02fc40526b3f8f33e31f93bc6ef7fd6c749d473;
 consult the newest PROGRESS.md receipt. Six new Notion M05-LF boxes are ticked.
 M06 stays paused. No live backend deployment is claimed; protected cloud sync
 requires the dedicated new routes and keeps independent server authority.

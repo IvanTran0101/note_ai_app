@@ -540,3 +540,26 @@ progress checkbox are ticked. Notion acceptance includes exact counts/limits.
 The earlier recorded in-progress statements above are historical checkpoints.
 Next: push the scoped source/acceptance checkpoint, record verified SHA, restore
 emulator to the current main app. M06 remains paused.
+
+## Delivered Web local-first checkpoint — 2026-10-02
+
+Source/acceptance commit d02fc40526b3f8f33e31f93bc6ef7fd6c749d473 was pushed to final-tuankiet and matched
+`git ls-remote --heads origin final-tuankiet`. All 6 M05-LF boxes plus the
+correction progress checkbox are checked; the actual M05 implementation page
+was fetched and verified as 25 checked / 0 unchecked. The two M05 source pages
+and progress page link this checkpoint. Local acceptance checklist is complete.
+M06 stays paused at M06.1. Emulator main-app restoration follows as a final
+artifact task; no source changes are required.
+
+### Closure receipt
+
+| Record | Resolution |
+| --- | --- |
+| MUST_REMEMBER.md | Updated: permanent Web local-first, cloud protection, accepted checkpoint and M06 paused boundary |
+| PROGRESS.md | Updated: current-source results, repaired failures, limits and remote-verified SHA |
+| LOCAL_FIRST_WEB.md | Updated: all acceptance gates passed, storage/queue/wire contract and deployment boundary |
+| COLLAB_REVIEW.md | Updated: confirmed local-first/cloud contract and module boundary |
+| IMPLEMENTATION.md | Updated: current Web criterion mapping alongside retained native flow |
+| TESTING.md | Updated: compatible target selection, real platform/reload commands and fixture/environment repairs |
+| Notion | Updated: 6 correction criteria checked, progress and source pages carry results/verified checkpoint |
+| _agent_ops records | Not needed: directory/tools/receipt template absent; actual M05 docs carry continuity |
