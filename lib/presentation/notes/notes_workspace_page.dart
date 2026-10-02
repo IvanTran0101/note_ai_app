@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
+import 'note_ordering.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
 import 'note_flow_snackbar.dart';
@@ -137,7 +138,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   Future<void> _loadNotesInternal() async {
     try {
-      final List<NoteDto> notes = await _application.listNotes();
+      final List<NoteDto> notes = sortNotes(await _application.listNotes());
       if (!mounted) {
         return;
       }
@@ -200,7 +201,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       next[index] = note;
     }
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = note.id;
       _editingNewNote = false;
       _error = null;
@@ -241,7 +242,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     }
 
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = null;
       _editingNewNote = false;
       _detailDirty = false;

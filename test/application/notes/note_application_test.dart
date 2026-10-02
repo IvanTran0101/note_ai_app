@@ -192,26 +192,6 @@ void main() {
   });
 
   group('NoteApplicationService.listNotes', () {
-    test('puts pinned notes first in deterministic pin-time order', () async {
-      final DateTime olderPin = _createdAt.add(const Duration(hours: 1));
-      final DateTime newerPin = _createdAt.add(const Duration(hours: 2));
-      final _FakeNoteRepository repository = _FakeNoteRepository(
-        initial: <Note>[
-          _note(id: 'regular', updatedAt: newerPin),
-          _note(id: 'pinned-old', pinnedAt: olderPin),
-          _note(id: 'pinned-new', pinnedAt: newerPin),
-        ],
-      );
-
-      final List<NoteDto> notes = await _service(repository).listNotes();
-
-      expect(notes.map((NoteDto note) => note.id), <String>[
-        'pinned-new',
-        'pinned-old',
-        'regular',
-      ]);
-    });
-
     test(
       'returns immutable DTO projections for the configured owner',
       () async {

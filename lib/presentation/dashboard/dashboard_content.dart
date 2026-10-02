@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/dashboard/dashboard_overview.dart';
 import '../../application/notes/note_application.dart';
+import '../notes/note_ordering.dart';
 import '../notes/notes_theme_tokens.dart';
 import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';

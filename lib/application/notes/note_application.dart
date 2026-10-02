@@ -85,26 +85,6 @@ final class NoteDto {
   }
 }
 
-/// Stable pin-first ordering shared by note list surfaces.
-List<NoteDto> sortNotes(Iterable<NoteDto> notes, {bool byCreatedAt = false}) {
-  final List<NoteDto> sorted = List<NoteDto>.of(notes);
-  sorted.sort((NoteDto a, NoteDto b) {
-    final DateTime? aPinnedAt = a.pinnedAt;
-    final DateTime? bPinnedAt = b.pinnedAt;
-    if (aPinnedAt != null || bPinnedAt != null) {
-      if (aPinnedAt == null) return 1;
-      if (bPinnedAt == null) return -1;
-      final int byPinTime = bPinnedAt.compareTo(aPinnedAt);
-      if (byPinTime != 0) return byPinTime;
-    }
-    final DateTime aDate = byCreatedAt ? a.createdAt : a.updatedAt;
-    final DateTime bDate = byCreatedAt ? b.createdAt : b.updatedAt;
-    final int byDate = bDate.compareTo(aDate);
-    return byDate == 0 ? a.id.compareTo(b.id) : byDate;
-  });
-  return sorted;
-}
-
 /// Raised when an application operation targets a note that does not exist.
 final class NoteNotFoundException implements Exception {
   const NoteNotFoundException(this.noteId);
@@ -218,7 +198,7 @@ final class NoteApplicationService {
   Future<List<NoteDto>> listNotes() async {
     final String userId = currentUser.requiredUserId;
     final List<Note> notes = await noteRepository.findByOwnerId(userId);
-    return sortNotes(notes.map(NoteDto.fromDomain));
+    return List<NoteDto>.unmodifiable(notes.map(NoteDto.fromDomain));
   }
 
   /// Returns the saved layout for the current account, defaulting to grid.

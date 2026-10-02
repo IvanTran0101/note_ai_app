@@ -80,7 +80,7 @@ void main() {
 
     expect(controller.notes.single.title, 'A new note');
     expect(controller.notes.single.content, 'A new note body');
-    expect(find.text('Note saved.'), findsOneWidget);
+    expect(find.text('Saved locally.'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(
@@ -128,6 +128,46 @@ void main() {
     expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
     expect(controller.notes, isEmpty);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('autosave failure offers retry and saves the latest draft', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..createNoteError = StateError('temporary storage failure');
+    await pumpPage(tester, controller);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Retry this note',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(NoteDetailPage.contentFieldKey));
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Latest draft content',
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Couldn’t save the note. Please try again.'),
+      findsOneWidget,
+    );
+    final Finder retryButton = find.byKey(
+      const ValueKey<String>('note-detail-error-retry'),
+    );
+    expect(retryButton, findsOneWidget);
+
+    controller.createNoteError = null;
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(controller.notes.single.title, 'Retry this note');
+    expect(controller.notes.single.content, 'Latest draft content');
+    expect(find.text('Saved locally.'), findsOneWidget);
+    expect(retryButton, findsNothing);
   });
 
   testWidgets('updates only changed fields on an existing note', (

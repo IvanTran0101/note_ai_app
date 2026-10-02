@@ -85,6 +85,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
   String? _error;
   String? _statusMessage;
   bool _saving = false;
+  bool _saveFailed = false;
   bool _deleting = false;
   bool _didPersist = false;
   bool _lastReportedDirty = false;
@@ -333,6 +334,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
     bool persisted = false;
     setState(() {
       _saving = true;
+      _saveFailed = false;
       _error = null;
       _statusMessage = null;
     });
@@ -396,6 +398,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
         return false;
       }
       setState(() {
+        _saveFailed = error is! UnsupportedError;
         _error = error is UnsupportedError
             ? copy.persistenceUnavailable
             : copy.saveError;
@@ -839,11 +842,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
       onRegenerateSummary: _canSummarize ? () => unawaited(_summarize()) : null,
       copySummaryLabel: copy.copySummary,
       regenerateSummaryLabel: copy.regenerate,
-      onErrorRetry: summaryFailure == null
+      onErrorRetry: _saveFailed
+          ? () => unawaited(_save(automatic: true))
+          : summaryFailure == null
           ? null
           : () => unawaited(_summarize()),
-      errorRetryLabel: summaryFailure?.retryLabel,
-      errorRetryEnabled: summaryFailure?.retryEnabled ?? false,
+      errorRetryLabel: _saveFailed ? copy.retry : summaryFailure?.retryLabel,
+      errorRetryEnabled: _saveFailed
+          ? _canSave
+          : summaryFailure?.retryEnabled ?? false,
       summaryAvailability: _summaryAvailability,
       summaryCloud:
           widget.notesController.summaryConsent?.requiresCloudConsent ?? false,
