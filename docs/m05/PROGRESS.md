@@ -424,3 +424,10 @@ its Notion plan. Original checkout and unrelated user files remain untouched.
 | TESTING.md | Updated: reproducible platform commands and host/harness details |
 | Notion progress/source pages | Updated: verified checklist and linked acceptance evidence |
 | _agent_ops records | Not needed: folder/tools are absent; actual docs carry continuity |
+
+### Additional native-hook verification
+
+Independent local_llm_bridge tests passed: 6 native/stub smoke cases and 1 Chrome
+stub case. The native tests exercised the real built C ABI and safe missing-model
+failure; no GGUF model was loaded. M05 acceptance checkpoint was pushed and remote
+verified at 22587a5954c182c202d07923ec8be1e3060fa42d. M06 now continues separately.

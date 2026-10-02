@@ -129,3 +129,16 @@ implementation only within the scope the user has approved below.
 - [Project AGENTS.md](https://app.notion.com/p/3e6f9c7a1aa080d097f9f281bc352e68)
 
 - [M06 Sharing & Real-time Collaboration plan](https://app.notion.com/p/3e8f9c7a1aa08193b4f9d1fbf42999ed)
+
+## Active module — M06
+
+M05 automated acceptance is complete and pushed at 22587a5; 15 Notion rubric
+boxes are ticked. M06 is now authorized. Read docs/m06/CONTRACT.md and PROGRESS.md
+before continuing. Notion progress: https://app.notion.com/p/3edf9c7a1aa0817fb5fedd1e18b52ab2.
+Share ACTIVE to verified sub, owner+note pair identity, viewer/editor policy,
+fresh server ACL/conditional commit, separate M05 unlock, encrypted retained
+drafts and one cursor sync engine are mandatory. AppSync Events uses durable
+metadata relay and account/session fences; preserve dirty editor and Summary
+consent/lineage. Follow M06.0–M06.5, test/fix Chrome+Android and tick only verified
+criteria; update/push after each M/P or milestone. Other modules/deployment stay
+outside the current scope. M06.0 freezes contracts, not feature acceptance.
