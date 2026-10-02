@@ -113,8 +113,9 @@ check('update and delete parse, and a delete drops any payload', () => {
   assertEqual(deleteMutation.payload, undefined, 'payload must be dropped');
 });
 
-check('a body-supplied ownerId or extra field never reaches the store', () => {
-  const mutation = mutationOf(createBody({ ownerId: 'somebody-else', extra: true }));
+check('owned route refuses canonical fields and drops unrelated additive fields', () => {
+  assertProblem(createBody({ ownerId: 'somebody-else' }), 'PAYLOAD_INVALID', 'shared identity on owned route');
+  const mutation = mutationOf(createBody({ extra: true }));
   assertDeepEqual(
     Object.keys(mutation).sort(),
     ['baseRevision', 'mutationId', 'noteId', 'operation', 'payload'],

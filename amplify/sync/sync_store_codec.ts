@@ -1,4 +1,5 @@
 import { parseProtectionChange } from './sync_protection_change';
+import { decodeShare } from '../sharing/share_models';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { stableDigest } from './cursor';
@@ -137,6 +138,12 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
   if (protectionChange && operation === 'delete') {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Protection changes require content.');
   }
+  const ownerId = mutation.ownerId === undefined ? undefined : cleanIdentifier(mutation.ownerId, 'NOTE_ID_INVALID', 'Invalid canonical owner.');
+  const accessRevision = mutation.accessRevision;
+  if ((ownerId === undefined) !== (accessRevision === undefined) ||
+      (accessRevision !== undefined && (!Number.isSafeInteger(accessRevision) || accessRevision < 1 || operation !== 'update' || protectionChange))) {
+    throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid shared mutation.');
+  }
 
   return {
     mutationId,
@@ -145,6 +152,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     baseRevision,
     payload,
     ...(protectionChange ? { protectionChange } : {}),
+    ...(ownerId ? { ownerId, accessRevision } : {}),
     fingerprint: stableDigest(
       `mutation:${JSON.stringify([
         operation,
@@ -153,6 +161,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         payload?.title ?? null,
         payload?.content ?? null,
         ...(protectionChange ? [protectionChange] : []),
+        ...(ownerId ? [ownerId, accessRevision] : []),
       ])}`,
     ),
   };
@@ -169,6 +178,9 @@ export const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unkno
   deletedAt: snapshot.deletedAt,
   protected: snapshot.protected ?? false,
   protectionRevision: snapshot.protectionRevision ?? 0,
+  ...(snapshot.ownerId ? { canonicalOwnerId: snapshot.ownerId } : {}),
+  ...(snapshot.share ? { share: snapshot.share } : {}),
+  ...(snapshot.sharingRevision !== undefined ? { sharingRevision: snapshot.sharingRevision } : {}),
 });
 
 export const stringFieldOf = (item: Record<string, unknown>, name: string): string => {
@@ -203,6 +215,9 @@ export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
     protected: item.protected === true,
     protectionRevision,
     contentAvailable: true,
+    ...(typeof item.canonicalOwnerId === 'string' ? { ownerId: item.canonicalOwnerId } : {}),
+    ...(item.share !== undefined ? { share: decodeShare(item) } : {}),
+    ...(item.sharingRevision !== undefined ? { sharingRevision: membershipRevision(item) } : {}),
   };
 };
 
@@ -278,7 +293,14 @@ export const nextSnapshot = (
   deletedAt: request.operation === 'delete' ? now : null,
   protected: remote?.protected ?? false,
   protectionRevision: remote?.protectionRevision ?? 0,
+  ...(remote?.sharingRevision !== undefined ? { sharingRevision: remote.sharingRevision } : {}),
 });
+
+export function membershipRevision(row: Record<string, unknown>): number {
+  const n = row.sharingRevision ?? 0;
+  if (!Number.isSafeInteger(n) || (n as number) < 0) throw corruptData();
+  return n as number;
+}
 
 /**
  * The four writes of one applied mutation. Every guard lives here, so this is
@@ -302,8 +324,8 @@ export const transactItemsFor = (
     remote === null
       ? { ConditionExpression: 'attribute_not_exists(noteId)' }
       : {
-          ConditionExpression: 'attribute_exists(noteId) AND revision = :revision',
-          ExpressionAttributeValues: { ':revision': remote.revision },
+          ConditionExpression: 'attribute_exists(noteId) AND revision = :revision AND (attribute_not_exists(sharingRevision) OR sharingRevision = :membership)',
+          ExpressionAttributeValues: { ':revision': remote.revision, ':membership': remote.sharingRevision ?? 0 },
         };
 
   return [

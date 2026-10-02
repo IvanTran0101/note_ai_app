@@ -12,7 +12,12 @@ import { parseChangesQuery, parseMutationBody } from './request_parser';
 import { Argon2idPasswordHasher } from '../protection/argon2id_password_hasher';
 import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
 import { ProtectionUseCases } from '../protection/use_cases';
-import { NoteSecurityError, OwnerNoteAcl } from '../protection/protection_store';
+import { NoteSecurityError } from '../protection/protection_store';
+import { DynamoNoteAcl } from '../sharing/dynamo_note_acl';
+import { DynamoShareStore } from '../sharing/dynamo_share_store';
+import { CognitoRecipientResolver } from '../sharing/cognito_recipient_resolver';
+import { ShareUseCases } from '../sharing/share_use_cases';
+import { handleShares } from '../sharing/share_handler';
 import { SesRecoveryMailer } from '../protection/ses_recovery_mailer';
 import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
 import { CognitoRecoveryMailbox } from '../protection/cognito_recovery_mailbox';
@@ -89,11 +94,13 @@ const documentClient = DynamoDBDocumentClient.from(
   { marshallOptions: { removeUndefinedValues: true } },
 );
 
-const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NAME, documentClient),
-  new Argon2idPasswordHasher(), new OwnerNoteAcl(),
+const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NAME, documentClient, true),
+  new Argon2idPasswordHasher(), new DynamoNoteAcl(NOTES_TABLE_NAME, documentClient),
   new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
   Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
-const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security });
+const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true });
+const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
+  new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
 const recoveryMailbox = new CognitoRecoveryMailbox();
 
 const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
@@ -112,6 +119,7 @@ const routeOf = (method: string, path: string): SyncRoute => {
       return matchesMethod('GET', method) ? 'health' : 'unknown';
     case '/sync/protection-predecessor':
     case '/sync/protected-mutations':
+    case '/sync/shared-mutations':
     case MUTATIONS_PATH:
       return matchesMethod('POST', method) ? 'mutations' : 'unknown';
     case CHANGES_PATH:
@@ -171,14 +179,14 @@ const handleMutation = async (
   event: APIGatewayProxyEventV2WithJWTAuthorizer,
   ownerId: string,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const parsed = parseMutationBody(event.body, event.rawPath === '/sync/protected-mutations');
+  const parsed = parseMutationBody(event.body, event.rawPath === '/sync/protected-mutations', event.rawPath === '/sync/shared-mutations');
   if (!parsed.ok) {
     logRejected('mutations', parsed.problem);
     return invalidMutationResponse(parsed.problem);
   }
 
   try {
-    const result = await store.applyMutation(ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
+    const result = await store.applyMutation(parsed.mutation.ownerId ?? ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
       inspectOnly: event.rawPath === '/sync/protection-predecessor' });
     return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
@@ -217,7 +225,9 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
     route = routeOf(methodOf(event), event.rawPath);
     if (event.rawPath.startsWith('/notes/')) {
       const actor = ownerSubOf(event);
-      return actor ? await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub)) : unauthorizedResponse();
+      if (!actor) return unauthorizedResponse();
+      return event.rawPath.endsWith('/shares') ? await handleShares(event, actor, sharing)
+        : await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub));
     }
 
     // M1.1 behaviour, unchanged: health answers without an identity so the

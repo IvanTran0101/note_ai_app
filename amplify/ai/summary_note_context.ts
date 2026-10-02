@@ -3,6 +3,7 @@ import { SummaryFailure } from './summary_contract';
 export type SummaryNoteContext = Readonly<{
   ownerId: string; noteId: string; contentRevision: number; protectionRevision: number;
   runId: string; sectionIndex: number; sourceStart: number | null; sourceEnd: number | null;
+  accessRevision?: number;
 }>;
 
 const invalid = (): never => { throw new SummaryFailure('invalidInput', 'Invalid note lineage'); };
@@ -11,7 +12,8 @@ export const parseSummaryNoteContext = (value: unknown): SummaryNoteContext => {
   const v = value as Record<string, unknown>;
   const keys = ['ownerId', 'noteId', 'contentRevision', 'protectionRevision',
     'runId', 'sectionIndex', 'sourceStart', 'sourceEnd'];
-  if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid();
+  if (Object.keys(v).some(k => ![...keys, 'accessRevision'].includes(k)) || keys.some(k => !Object.hasOwn(v, k))) return invalid();
+  if (v.accessRevision !== undefined && (!Number.isSafeInteger(v.accessRevision) || (v.accessRevision as number) < 1)) return invalid();
   for (const key of ['ownerId', 'noteId']) {
     if (typeof v[key] !== 'string' || !v[key].trim() || v[key].length > 128 ||
         /[\u0000-\u001f\u007f]/.test(v[key])) return invalid();

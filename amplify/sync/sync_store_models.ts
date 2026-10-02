@@ -1,5 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { NoteSecurityAuthority } from '../protection/protection_store';
+import type { ShareRecord } from '../sharing/share_models';
 
 export type NoteSnapshot = Readonly<{
   id: string;
@@ -12,6 +13,10 @@ export type NoteSnapshot = Readonly<{
   protected?: boolean;
   protectionRevision?: number;
   contentAvailable?: boolean;
+  ownerId?: string;
+  share?: ShareRecord;
+  /** Internal membership CAS; never exposed by transport. */
+  sharingRevision?: number;
 }>;
 
 export type ProtectionSyncChange = Readonly<{
@@ -33,6 +38,8 @@ export type SyncMutation = Readonly<{
   baseRevision: number;
   payload?: MutationPayload;
   protectionChange?: ProtectionSyncChange;
+  ownerId?: string;
+  accessRevision?: number;
 }>;
 
 export type AppliedMutation = Readonly<{
@@ -125,6 +132,7 @@ export type DynamoSyncStoreOptions = Readonly<{
   /** Injection seam: a warmer path or a test can supply its own document client. */
   documentClient?: DynamoDBDocumentClient;
   security?: NoteSecurityAuthority;
+  sharing?: boolean;
 }>;
 
 export type NormalizedMutation = Readonly<{
@@ -134,6 +142,8 @@ export type NormalizedMutation = Readonly<{
   baseRevision: number;
   payload: MutationPayload | null;
   protectionChange?: ProtectionSyncChange;
+  ownerId?: string;
+  accessRevision?: number;
   fingerprint: string;
 }>;
 

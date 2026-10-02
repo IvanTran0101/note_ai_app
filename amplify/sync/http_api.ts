@@ -100,6 +100,7 @@ export const createSyncHttpApi = ({
   api.addRoutes({ path: MUTATIONS_PATH, methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: '/sync/protection-predecessor', methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: '/sync/protected-mutations', methods: [HttpMethod.POST], integration, authorizer });
+  api.addRoutes({ path: '/sync/shared-mutations', methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: CHANGES_PATH, methods: [HttpMethod.GET], integration, authorizer });
   api.addRoutes({ path: '/notes/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
 

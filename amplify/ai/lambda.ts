@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
 import { ProtectionAuthorizer } from '../protection/authorizer';
-import { OwnerNoteAcl } from '../protection/protection_store';
+import { DynamoNoteAcl } from '../sharing/dynamo_note_acl';
 import { DynamoSummaryNoteAuthority } from './summary_note_authority';
 import type { APIGatewayProxyHandlerV2WithJWTAuthorizer } from 'aws-lambda';
 import { createDeepSeekProvider } from './deepseek_client';
@@ -41,7 +41,7 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event, 
       { marshallOptions: { removeUndefinedValues: true } });
     const store = new DynamoProtectionStore(notesTable, db);
     const authority = new DynamoSummaryNoteAuthority(notesTable, db, store,
-      new ProtectionAuthorizer(store, new OwnerNoteAcl()));
+      new ProtectionAuthorizer(store, new DynamoNoteAcl(notesTable, db)));
     const inner = createSummaryHandler({
       generate: (request, timeoutMs) => createDeepSeekProvider({ apiKey, timeoutMs: timeoutMs ?? 15_000 })(request),
       requestTimeoutMs: Math.min(26_000, context.getRemainingTimeInMillis() - 1000),

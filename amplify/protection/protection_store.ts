@@ -1,4 +1,5 @@
 import type { NoteSnapshot } from '../sync/dynamo_sync_store';
+import type { AccessStamp } from '../sharing/share_models';
 
 export const NOTE_OPERATIONS = ['read', 'edit', 'delete', 'manage', 'summary',
   'export', 'attachmentRead', 'attachmentWrite'] as const;
@@ -20,6 +21,7 @@ export type RecoveryChallenge = Readonly<{
 export type SecurityAuthorization = ProtectionMetadata & Readonly<{
   actorId: string; ownerId: string; noteId: string; operation: NoteOperation;
   grantHash?: string; expiresAt?: number;
+  access?: AccessStamp;
 }>;
 
 export interface ProtectionStore {
@@ -38,7 +40,7 @@ export interface ProtectionStore {
 
 export interface NoteAcl {
   require(actorId: string, ownerId: string, noteId: string,
-    operation: NoteOperation): Promise<void>;
+    operation: NoteOperation): Promise<AccessStamp | void>;
 }
 
 /// Owner-scoped baseline. A sharing adapter must supply real current ACL evidence.

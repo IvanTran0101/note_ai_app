@@ -21,7 +21,7 @@ const backend = defineBackend({
 
 const syncStack = backend.createStack('SyncStack');
 const notesTable = createNotesTable(syncStack);
-const syncFunction = createSyncFunction(syncStack, notesTable);
+const syncFunction = createSyncFunction(syncStack, notesTable, backend.auth.resources.userPool.userPoolId);
 const syncHttpApi = createSyncHttpApi({
   scope: syncStack,
   handler: syncFunction.lambda,

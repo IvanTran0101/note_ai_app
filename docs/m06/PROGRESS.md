@@ -1,5 +1,18 @@
 # M06 — Implementation progress
 
+## Current resumed work — 2026-10-02
+
+User resumed M06.2–M06.5 with local-first behavior; all historical pause records
+are superseded. Baseline final-tuankiet@c3436d5, accepted M05 local-first d02fc40.
+Preserve the pre-existing modified macos/Flutter/GeneratedPluginRegistrant.swift
+and untracked .playwright-cli/ and final_project.md. _agent_ops remains absent.
+Current scope: fresh backend ACL/verified recipient + conditional actor/canonical
+sync and Summary, then local-first sharing/UI and durable realtime acceptance.
+M09 is deferred until both collaborators finish and a combined integration/test
+batch precedes a new UI/UX plan. No M09 implementation in this M06 run.
+Next: inspect exact sync/protection/Summary boundaries and implement M06.2 with
+backend role/revoke/replay tests. No new acceptance boxes ticked yet.
+
 Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 22587a5954c182c202d07923ec8be1e3060fa42d. Read MUST_REMEMBER.md before coding.
 
@@ -14,7 +27,7 @@ Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 | --- | --- | --- |
 | M06.0 | Complete contract/evidence freeze | Notion decisions and current source inspected; CONTRACT.md |
 | M06.1 | Complete foundation | Canonical pair/role/share policy, strict v3 codecs, encrypted actor storage; Chrome40 + Android40 |
-| M06.2 | In progress | Verified recipient, fresh ACL/conditional writes, actor feed |
+| M06.2 | Complete backend source/tests | SERVER_CONTRACT.md; 75 backend checks, tsc; AWS live gate remains separate |
 | M06.3 | Planned | Sharing management + Shared With Me, encrypted offline |
 | M06.4 | Planned | Durable AppSync relay and cursor/session recovery |
 | M06.5 | Planned | Full tests + two clients on Web/Android; distinguish live cloud spike |

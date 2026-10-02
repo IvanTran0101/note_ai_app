@@ -79,7 +79,7 @@ const readBaseRevision = (value: unknown): number | null =>
  * Unknown fields are ignored, so a later additive contract change does not
  * break older servers.
  */
-export const parseMutationBody = (body: string | null | undefined, protectedRoute = false): MutationParseResult => {
+export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false): MutationParseResult => {
   if (typeof body !== 'string' || body.length === 0) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
@@ -93,6 +93,11 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   if (!isRecord(decoded)) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
+  const ownerId = readIdentifier(decoded.ownerId);
+  const accessRevision = decoded.accessRevision;
+  if (sharedRoute ? !ownerId || typeof accessRevision !== 'number' || !Number.isSafeInteger(accessRevision) ||
+      accessRevision < 1 || decoded.operation !== 'update' || protectedRoute :
+      'ownerId' in decoded || 'accessRevision' in decoded) return { ok: false, problem: 'PAYLOAD_INVALID' };
 
   if (protectedRoute !== ('protectionChange' in decoded)) return { ok: false, problem: 'PAYLOAD_INVALID' };
   let protectionChange;
@@ -138,6 +143,7 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   return {
     ok: true,
     mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content },
+      ...(sharedRoute ? { ownerId: ownerId!, accessRevision: accessRevision as number } : {}),
       ...(protectionChange ? { protectionChange } : {}) },
   };
 };

@@ -48,6 +48,8 @@ export type NoteBody = Readonly<{
   createdAt: string;
   serverUpdatedAt: string;
   deletedAt: string | null;
+  ownerId?: string;
+  share?: NoteSnapshot['share'];
 }>;
 
 export type AppliedMutationBody = Readonly<{
@@ -109,10 +111,13 @@ const errorResponse = (statusCode: number, body: SyncErrorBody): APIGatewayProxy
 /** Projects a stored snapshot onto the wire shape, so storage fields cannot leak. */
 export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false): NoteBody => ({
   id: note.id,
-  ...(!note.protected || authorizedContent ? { title: note.title, content: note.content } : {}),
+  ...((!note.protected || authorizedContent) && note.contentAvailable !== false ? { title: note.title, content: note.content } : {}),
   ...(note.protected || note.protectionRevision ? { protected: note.protected ?? false,
     protectionRevision: note.protectionRevision ?? 0,
-    contentAvailable: !note.protected || authorizedContent } : {}),
+    contentAvailable: (!note.protected || authorizedContent) && note.contentAvailable !== false } : {}),
+  ...(note.ownerId && note.share ? { ownerId: note.ownerId } : {}),
+  ...(note.share ? { share: { ...note.share, sharerLabel: note.share.sharerLabel ?? undefined } } : {}),
+  ...(note.contentAvailable === false ? { contentAvailable: false } : {}),
   revision: note.revision,
   createdAt: note.createdAt,
   serverUpdatedAt: note.serverUpdatedAt,

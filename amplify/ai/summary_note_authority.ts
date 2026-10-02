@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { stableDigest } from '../sync/cursor';
+import { aclCondition } from '../sharing/dynamo_note_acl';
 import { GetCommand, PutCommand, TransactWriteCommand, type DynamoDBDocumentClient,
   type TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { SummaryFailure, type SummaryRequest } from './summary_contract';
@@ -22,7 +24,9 @@ const key = (owner: string, sort: string) => ({ ownerId: `OWNER#${owner}`, noteI
 const options = () => ({ abortSignal: AbortSignal.timeout(3000) });
 const sameContext = (a: SummaryNoteContext, b: SummaryNoteContext) =>
   a.ownerId === b.ownerId && a.noteId === b.noteId && a.runId === b.runId &&
-  a.contentRevision === b.contentRevision && a.protectionRevision === b.protectionRevision;
+  a.contentRevision === b.contentRevision && a.protectionRevision === b.protectionRevision && a.accessRevision === b.accessRevision;
+const runKey = (c: SummaryNoteContext, actor: string) => key(actor === c.ownerId ? c.ownerId : actor,
+  `SUMMARY#${actor === c.ownerId ? c.runId : stableDigest(JSON.stringify([c.ownerId, c.noteId, c.runId]))}`);
 
 /** Canonical input, contiguous section lineage and current authority on every stage. */
 export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
@@ -34,6 +38,7 @@ export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
     try {
       const authority = await this.security.authorize(actor, context.ownerId,
         context.noteId, 'summary', grant);
+      if (actor !== context.ownerId && authority.access?.accessRevision !== context.accessRevision) return changed();
       const note = await this.store.readNote(context.ownerId, context.noteId);
       if (!note || note.deletedAt || note.revision !== context.contentRevision ||
           authority.revision !== context.protectionRevision ||
@@ -54,7 +59,7 @@ export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
     const context = request.note;
     if (!context) throw new SummaryFailure('invalidInput', 'Note context required');
     const canonical = await this.canonical(context, actor, grant);
-    const rowKey = key(context.ownerId, `SUMMARY#${context.runId}`);
+    const rowKey = runKey(context, actor);
     const stored = (await this.db.send(new GetCommand({ TableName: this.table,
       Key: rowKey, ConsistentRead: true }), options())).Item;
     const previous = stored as Run | undefined;
@@ -120,7 +125,7 @@ export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
     const next = { ...run, working: false, done: request.stage !== 'section',
       version: run.version + 1, outputs: request.stage === 'section' ? [...run.outputs, output.trim()] : run.outputs };
     const writes: TransactWriteCommandInput['TransactItems'] = [
-      { Put: { TableName: this.table, Item: { ...key(c.ownerId, `SUMMARY#${c.runId}`), ...next,
+      { Put: { TableName: this.table, Item: { ...runKey(c, authority.actorId), ...next,
         ttl: Math.floor(run.expiresAt / 1000) }, ConditionExpression: 'nonce = :nonce AND working = :t AND expiresAt > :now',
         ExpressionAttributeValues: { ':nonce': run.nonce, ':t': true, ':now': this.now() } } },
       { ConditionCheck: { TableName: this.table, Key: key(c.ownerId, `NOTE#${c.noteId}`),
@@ -130,6 +135,7 @@ export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
         ConditionExpression: c.protectionRevision === 0 ? 'attribute_not_exists(noteId)' : 'revision = :r AND enabled = :enabled',
         ...(c.protectionRevision === 0 ? {} : { ExpressionAttributeValues: { ':r': c.protectionRevision, ':enabled': authority.enabled } }) } },
     ];
+    writes.push(...aclCondition(this.table, authority));
     if (authority.enabled) writes.push({ ConditionCheck: { TableName: this.table,
       Key: key(c.ownerId, `GRANT#${authority.grantHash}`),
       ConditionExpression: 'expiresAt > :now AND actorId = :a AND revision = :r AND targetNoteId = :n AND contains(operations, :op)',

@@ -1,5 +1,21 @@
 # MUST REMEMBER
 
+## Latest active instruction — M06 resumed, M09 deferred (2026-10-02)
+
+The user explicitly resumed M06 from M06.2 through acceptance, with local-first
+behavior. This supersedes the historical pause statements below. Keep shared
+notes/drafts and edits in the encrypted actor-local store before cloud sync;
+server ACL/verified recipient/protection authority remains independent. Pending
+sharing administration must never grant unverified/offline recipients access.
+Reuse the single durable outbox/cursor engine, preserve ciphertext and data, test
+Chrome in a browser and Android emulator, update Notion FR/NFR/Done When and
+progress, and push final-tuankiet after each accepted M06.x or M/P criterion.
+
+Do not implement or redesign M09 now. After both collaborator 1 and 2 finish,
+integrate their work together, test all functions, then plan M09 UI/UX again from
+the beginning. Keep the existing two-image UX backlog as reference for that later
+plan. Do not pull unrelated collaborator branches during the current M06 slice.
+
 Read this file at the start of every turn that may change source code. Then read
 the current `AGENTS.md`, inspect `git status` and the active branch, and confirm
 the codebase-memory index before structural code discovery. Begin the M05

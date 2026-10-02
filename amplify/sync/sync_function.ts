@@ -32,7 +32,7 @@ export type SyncFunction = Readonly<{
   logGroup: LogGroup;
 }>;
 
-export const createSyncFunction = (stack: Stack, table: ITable): SyncFunction => {
+export const createSyncFunction = (stack: Stack, table: ITable, userPoolId?: string): SyncFunction => {
   const sender = String(stack.node.tryGetContext('noteSecuritySender') ?? '');
   const logGroup = new LogGroup(stack, 'SyncFunctionLogGroup', {
     retention: RetentionDays.TWO_WEEKS,
@@ -56,6 +56,7 @@ export const createSyncFunction = (stack: Stack, table: ITable): SyncFunction =>
       NOTES_TABLE_REGION: stack.region,
       NOTE_SECURITY_SENDER: sender,
       NOTE_SECURITY_GRANT_TTL_MS: '900000',
+      ...(userPoolId ? { USER_POOL_ID: userPoolId } : {}),
     },
   });
 
@@ -75,6 +76,8 @@ export const createSyncFunction = (stack: Stack, table: ITable): SyncFunction =>
       resources: [table.tableArn, `${table.tableArn}/index/*`],
     }),
   );
+  if (userPoolId) lambda.addToRolePolicy(new PolicyStatement({ actions: ['cognito-idp:ListUsers'],
+    resources: [stack.formatArn({ service: 'cognito-idp', resource: 'userpool', resourceName: userPoolId })] }));
 
   if (sender) lambda.addToRolePolicy(new PolicyStatement({
     actions: ['ses:SendEmail'],

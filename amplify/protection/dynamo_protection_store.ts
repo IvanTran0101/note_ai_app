@@ -2,6 +2,7 @@ import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand,
   type TransactWriteCommandInput,
   type DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { toNoteSnapshot } from '../sync/sync_store_codec';
+import { ActorFeed } from '../sharing/actor_feed';
 import { NOTE_OPERATIONS, NoteSecurityError } from './protection_store';
 import type { GrantRecord, ProtectionRecord, ProtectionStore,
   RecoveryChallenge, SecurityAuthorization } from './protection_store';
@@ -20,7 +21,7 @@ const text = (value: unknown): string => {
 
 /** Provider adapter; epoch/feed cutover is one conditional DynamoDB transaction. */
 export class DynamoProtectionStore implements ProtectionStore {
-  constructor(private readonly table: string, private readonly db: DynamoDBDocumentClient) {
+  constructor(private readonly table: string, private readonly db: DynamoDBDocumentClient, private readonly sharing = false) {
     if (!table) throw new NoteSecurityError('unavailable');
   }
 
@@ -66,10 +67,10 @@ export class DynamoProtectionStore implements ProtectionStore {
             ...(current.revision === 0 ? {} : { ExpressionAttributeValues: { ':epoch': current.revision } }) } },
           { Update: { TableName: this.table, Key: key(next.ownerId, `NOTE#${next.noteId}`),
             UpdateExpression: 'SET #protected = :enabled, protectionRevision = :epoch, serverUpdatedAt = :now',
-            ConditionExpression: 'revision = :contentRevision AND attribute_exists(noteId)',
+            ConditionExpression: 'revision = :contentRevision AND attribute_exists(noteId) AND (attribute_not_exists(sharingRevision) OR sharingRevision = :membership)',
             ExpressionAttributeNames: { '#protected': 'protected' },
             ExpressionAttributeValues: { ':enabled': next.enabled, ':epoch': next.revision,
-              ':now': now, ':contentRevision': expectedContentRevision } } },
+              ':now': now, ':contentRevision': expectedContentRevision, ':membership': note.sharingRevision ?? 0 } } },
           { Update: { TableName: this.table, Key: key(next.ownerId, 'META#SYNC'),
             UpdateExpression: 'SET lastSequence = :next',
             ConditionExpression: 'attribute_not_exists(lastSequence) OR lastSequence = :seen',
@@ -77,8 +78,11 @@ export class DynamoProtectionStore implements ProtectionStore {
           { Put: { TableName: this.table, Item: { ...note,
             ...key(next.ownerId, `CHANGE#${sequence + 1}`), serverUpdatedAt: now,
             protected: next.enabled, protectionRevision: next.revision,
+            ...(next.enabled ? { title: '', content: '' } : {}),
             changeOwnerId: `OWNER#${next.ownerId}`, changeSequence: sequence + 1 } } },
         ];
+        if (this.sharing) writes.push(...await new ActorFeed(this.table, this.db).fanout(next.ownerId,
+          { ...note, serverUpdatedAt: now, protected: next.enabled, protectionRevision: next.revision }));
         if (authority) writes.push({ ConditionCheck: { TableName: this.table,
           Key: key(current.ownerId, `GRANT#${authority.grantHash}`),
           ConditionExpression: 'expiresAt > :now AND revision = :epoch AND actorId = :actor AND targetNoteId = :note AND contains(operations, :operation)',

@@ -1,4 +1,8 @@
 import { protectionWrite } from './sync_protection_change';
+import { stableDigest } from './cursor';
+import { ActorFeed } from '../sharing/actor_feed';
+import { aclCondition, DynamoNoteAcl } from '../sharing/dynamo_note_acl';
+import { recipientProjection } from '../sharing/feed_projection';
 import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { decodeChangeCursor, encodeChangeCursor } from './cursor';
@@ -17,6 +21,8 @@ export class DynamoSyncStore implements SyncStore {
   private readonly tableName: string;
   private readonly documentClient: DynamoDBDocumentClient;
   private readonly security?: NoteSecurityAuthority;
+  private readonly feed?: ActorFeed;
+  private readonly acl?: DynamoNoteAcl;
 
   constructor(options: DynamoSyncStoreOptions) {
     if (typeof options?.tableName !== 'string' || options.tableName.length === 0) {
@@ -30,15 +36,31 @@ export class DynamoSyncStore implements SyncStore {
         new DynamoDBClient(options.region === undefined ? {} : { region: options.region }),
         { marshallOptions: { removeUndefinedValues: true } },
       );
+    if (options.sharing) {
+      this.feed = new ActorFeed(this.tableName, this.documentClient);
+      this.acl = new DynamoNoteAcl(this.tableName, this.documentClient);
+    }
   }
 
   async applyMutation(ownerId: string, mutation: SyncMutation,
     authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult> {
     const request = normalizeMutation(mutation);
     const ownerKey = ownerKeyOf(ownerId);
+    const actor = authorization?.actorId ?? ownerId;
+    if (actor !== ownerId && (!this.security || !this.feed || request.ownerId !== ownerId ||
+        !request.accessRevision || request.operation !== 'update')) throw new NoteSecurityError('denied');
+    if (actor === ownerId && request.ownerId) throw new NoteSecurityError('denied');
+    const receiptKey = ownerKeyOf(actor);
+    const receiptId = actor === ownerId ? request.mutationId : stableDigest(JSON.stringify([ownerId, request.noteId, request.mutationId]));
     if (authorization?.inspectOnly) return this.inspectPredecessor(ownerId, ownerKey, request, authorization.actorId);
-    const authorize = () => this.security?.authorize(authorization?.actorId ?? ownerId,
-      ownerId, request.noteId, request.protectionChange ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+    const authorize = async () => {
+      const a = await this.security?.authorize(actor, ownerId, request.noteId,
+        request.protectionChange ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+      if (actor !== ownerId && a?.access?.accessRevision !== request.accessRevision) throw new NoteSecurityError('denied');
+      return a;
+    };
+    const project = async (n: NoteSnapshot, a?: ProtectionMetadata) => actor !== ownerId
+      ? recipientProjection(actor, ownerId, n, this.acl!, this.security!) : this.metadataProjection(n, a);
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       // A compound replay acknowledges a prior owner write with metadata only.
@@ -59,7 +81,7 @@ export class DynamoSyncStore implements SyncStore {
       const [meta, remote, recorded] = await Promise.all([
         this.readMeta(ownerKey),
         this.readNote(ownerKey, request.noteId),
-        this.readMutationRecord(ownerKey, request.mutationId),
+        this.readMutationRecord(receiptKey, receiptId),
       ]);
       if (remote?.protected && !this.security) throw new NoteSecurityError('locked');
       if (remote?.protected && authority && (!authority.enabled ||
@@ -74,18 +96,18 @@ export class DynamoSyncStore implements SyncStore {
         }
         authority = await authorize();
         return { status: 'applied', mutationId: request.mutationId,
-          note: this.metadataProjection(recorded.note, authority), replayed: true };
+          note: await project(recorded.note, authority), replayed: true };
       }
 
       const check = checkConflict(request, remote);
       if (check.kind === 'conflict') {
         authority = await authorize();
         return { status: 'conflict', mutationId: request.mutationId,
-          remoteNote: check.remoteNote ? this.metadataProjection(check.remoteNote, authority) : null };
+          remoteNote: check.remoteNote ? await project(check.remoteNote, authority) : null };
       }
 
       authority = await authorize();
-      const outcome = await this.commit(ownerKey, request, remote, meta.lastSequence, authority);
+      const outcome = await this.commit(ownerKey, request, remote, meta.lastSequence, authority, receiptKey, receiptId);
       if (outcome.kind === 'committed') {
         if (request.protectionChange) {
           const live = await this.security!.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
@@ -94,7 +116,7 @@ export class DynamoSyncStore implements SyncStore {
         }
         authority = await authorize();
         return { status: 'applied', mutationId: request.mutationId,
-          note: this.metadataProjection(outcome.note, authority), replayed: false };
+          note: await project(outcome.note, authority), replayed: false };
       }
     }
 
@@ -150,6 +172,10 @@ export class DynamoSyncStore implements SyncStore {
     return {
       items: await Promise.all(page.map(async (row) => {
         const snapshot = toNoteSnapshot(row);
+        if (snapshot.ownerId && snapshot.ownerId !== ownerId) {
+          if (!this.acl || !this.security) throw new NoteSecurityError('denied');
+          return recipientProjection(ownerId, snapshot.ownerId, snapshot, this.acl, this.security);
+        }
         const protection = await this.security?.metadata(ownerId, ownerId, snapshot.id);
         return this.metadataProjection(snapshot, protection);
       })),
@@ -164,6 +190,8 @@ export class DynamoSyncStore implements SyncStore {
     remote: NoteSnapshot | null,
     lastSequence: number,
     authority?: SecurityAuthorization,
+    receiptKey = ownerKey,
+    receiptId = request.mutationId,
   ): Promise<CommitOutcome> {
     const now = new Date().toISOString();
     const next = nextSnapshot(request, remote, now);
@@ -171,6 +199,11 @@ export class DynamoSyncStore implements SyncStore {
     const note = projection ? { ...next, protected: projection.enabled,
       protectionRevision: projection.revision } : next;
     const transactItems = transactItemsFor(this.tableName, ownerKey, request, remote, note, lastSequence, now);
+    if (receiptKey !== ownerKey && transactItems?.[3]?.Put) {
+      transactItems[3].Put.Item = { ...transactItems[3].Put.Item, ...itemKey(receiptKey, `MUTATION#${receiptId}`) };
+    }
+    if (authority) transactItems?.push(...aclCondition(this.tableName, authority));
+    if (this.feed) transactItems?.push(...await this.feed.fanout(ownerKey.slice('OWNER#'.length), note));
     if (authority) {
       if (request.protectionChange) transactItems?.push(protectionWrite(this.tableName, ownerKey, request.noteId, request.protectionChange, authority));
       else transactItems?.push({ ConditionCheck: { TableName: this.tableName,

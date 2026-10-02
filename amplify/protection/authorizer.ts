@@ -24,13 +24,13 @@ export class ProtectionAuthorizer implements NoteSecurityAuthority {
 
   async authorize(actorId: string, ownerId: string, noteId: string,
     operation: NoteOperation, token?: string): Promise<SecurityAuthorization> {
-    await this.acl.require(actorId, ownerId, identifier(noteId), operation);
+    const access = await this.acl.require(actorId, ownerId, identifier(noteId), operation);
     if ((operation === 'manage' || operation === 'delete') && actorId !== ownerId) {
       throw new NoteSecurityError('denied');
     }
     const protection = await this.store.readProtection(ownerId, noteId);
     const base = { actorId, ownerId, noteId, operation,
-      enabled: protection.enabled, revision: protection.revision };
+      enabled: protection.enabled, revision: protection.revision, ...(access ? { access } : {}) };
     if (!protection.enabled) return base;
     if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new NoteSecurityError('locked');
     const hash = securityDigest(token);

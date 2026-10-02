@@ -88,7 +88,8 @@ export class ProtectionUseCases implements NoteSecurityAuthority {
     const before = await this.authorize(actor, owner, noteId, 'read', token);
     const note = await this.requireNote(owner, noteId);
     const after = await this.authorize(actor, owner, noteId, 'read', token);
-    if (before.revision !== after.revision || (note.protected && !after.enabled) ||
+    if (before.revision !== after.revision || before.access?.accessRevision !== after.access?.accessRevision ||
+        before.access?.role !== after.access?.role || (note.protected && !after.enabled) ||
         (note.protectionRevision ?? 0) > after.revision) throw new NoteSecurityError('staleRevision');
     return { ...note, protected: after.enabled, protectionRevision: after.revision, contentAvailable: true };
   }
