@@ -5,6 +5,7 @@ import '../../application/sync/sync_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
+import 'note_share_grant_codec.dart';
 
 /// Maps a [SyncNoteSnapshot] to and from its stored form.
 ///
@@ -21,6 +22,9 @@ abstract final class SyncNoteSnapshotCodec {
       LocalSyncSchema.protectionRevision: snapshot.protection.revision,
       LocalSyncSchema.contentAvailable: snapshot.contentAvailable,
       LocalSyncSchema.id: snapshot.id,
+      if (snapshot.ownerId != null) LocalSyncSchema.ownerId: snapshot.ownerId,
+      if (snapshot.share != null)
+        LocalSyncSchema.share: NoteShareGrantCodec.encode(snapshot.share!),
       LocalSyncSchema.title: snapshot.title,
       LocalSyncSchema.content: snapshot.content,
       LocalSyncSchema.createdAt: snapshot.createdAt.toIso8601String(),
@@ -38,6 +42,7 @@ abstract final class SyncNoteSnapshotCodec {
         data,
         path: path,
         allowedFields: LocalSyncSchema.snapshotFields,
+        optionalFields: LocalSyncSchema.snapshotOptionalFields,
       ),
     );
   }
@@ -60,6 +65,10 @@ abstract final class SyncNoteSnapshotCodec {
     return buildCodecModel(
       () => SyncNoteSnapshot(
         id: id,
+        ownerId: !record.containsField(LocalSyncSchema.ownerId)
+            ? null
+            : record.requireNonBlankString(LocalSyncSchema.ownerId),
+        share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
         createdAt: createdAt,

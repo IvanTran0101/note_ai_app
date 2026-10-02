@@ -3,6 +3,8 @@ library;
 
 import 'note_sync_status.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
 
 /// Immutable local projection of one note plus its sync bookkeeping.
 ///
@@ -24,15 +26,22 @@ final class LocalNoteState {
     this.status = NoteSyncStatus.synced,
     this.protection = const NoteProtection.unprotected(),
     this.contentAvailable = true,
+    this.share,
   }) : id = _requireNonBlank(id, 'id'),
        ownerId = _requireNonBlank(ownerId, 'ownerId'),
-       serverRevision = _requireNonNegative(serverRevision, 'serverRevision');
+       serverRevision = _requireNonNegative(serverRevision, 'serverRevision') {
+    if (share != null && share!.note != identity) {
+      throw ArgumentError('Share must match canonical note identity.');
+    }
+  }
 
   /// The identity of this note.
   final String id;
+  final NoteShareGrant? share;
+  NoteIdentity get identity => NoteIdentity(ownerId, id);
+  String referenceFor(String actorId) => identity.referenceFor(actorId);
 
-  /// The account this note belongs to. Always the owning account of the store
-  /// that holds it.
+  /// The canonical owner, independent of the actor/account store namespace.
   final String ownerId;
 
   /// The current title.
@@ -74,7 +83,8 @@ final class LocalNoteState {
         other.deletedAt == deletedAt &&
         other.status == status &&
         other.protection == protection &&
-        other.contentAvailable == contentAvailable;
+        other.contentAvailable == contentAvailable &&
+        other.share == share;
   }
 
   @override
@@ -90,6 +100,7 @@ final class LocalNoteState {
     status,
     protection,
     contentAvailable,
+    share,
   );
 
   @override

@@ -5,11 +5,13 @@ import 'local_note_state.dart';
 import 'pending_mutation.dart';
 import 'sync_conflict.dart';
 import 'sync_cursor.dart';
+import 'sync_mutation.dart';
+import '../../domain/notes/note_role.dart';
 
 /// Immutable snapshot of everything the local store holds for one account.
 ///
 /// The state is account-scoped and self-consistent: [accountUserId] must not be
-/// blank, every note must belong to that account, and note ids and mutation ids
+/// blank, every projection must authorize that actor, and canonical keys/mutation ids
 /// must each be unique. The three collections are copied and exposed
 /// read-only, so a caller cannot mutate a state that a store already accepted.
 ///
@@ -28,7 +30,7 @@ final class LocalSyncState {
        outbox = List<PendingMutation>.unmodifiable(outbox),
        conflicts = List<SyncConflict>.unmodifiable(conflicts) {
     _requireUniqueIds(
-      this.notes.map((LocalNoteState note) => note.id),
+      this.notes.map((LocalNoteState note) => note.identity.key),
       'notes',
       'note id',
     );
@@ -38,13 +40,31 @@ final class LocalSyncState {
       'mutationId',
     );
     for (final LocalNoteState note in this.notes) {
-      if (note.ownerId != this.accountUserId) {
-        throw ArgumentError.value(
-          note.ownerId,
-          'notes',
-          'note ${note.id} belongs to another account',
-        );
-      }
+      _requireAccountProjection(note, this.accountUserId);
+    }
+    for (final entry in this.outbox) {
+      _requireActorMutation(entry);
+    }
+    for (final conflict in this.conflicts) {
+      _requireAccountProjection(conflict.local, this.accountUserId);
+    }
+  }
+
+  void _requireActorMutation(PendingMutation entry) {
+    final identity = entry.mutation.identityFor(accountUserId);
+    if (identity.ownerId == accountUserId) return;
+    final note = notes.where((n) => n.identity == identity).firstOrNull;
+    final share = note?.share;
+    if (share == null ||
+        entry.accessRevision == null ||
+        entry.operation != SyncMutationOperation.update ||
+        !entry.blocked &&
+            (!share.isActive ||
+                share.role != NoteRole.editor ||
+                share.accessRevision != entry.accessRevision)) {
+      throw ArgumentError(
+        'Foreign mutation requires its canonical editor epoch.',
+      );
     }
   }
 
@@ -123,4 +143,27 @@ bool _listEquals<T>(List<T> left, List<T> right) {
     }
   }
   return true;
+}
+
+void _requireAccountProjection(LocalNoteState note, String actorId) {
+  if (note.ownerId == actorId) {
+    if (note.share != null) {
+      throw ArgumentError('Owned projections must not carry recipient access.');
+    }
+    return;
+  }
+  final share = note.share;
+  if (share == null ||
+      share.recipientId != actorId ||
+      share.note != note.identity ||
+      (!share.isActive &&
+          (note.contentAvailable ||
+              note.title.isNotEmpty ||
+              note.content.isNotEmpty))) {
+    throw ArgumentError.value(
+      note.ownerId,
+      'notes',
+      'Foreign projection needs matching actor access.',
+    );
+  }
 }

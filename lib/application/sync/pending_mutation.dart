@@ -21,6 +21,8 @@ final class PendingMutation {
     required SyncMutationOperation operation,
     required int baseRevision,
     SyncNotePayload? payload,
+    String? ownerId,
+    int? accessRevision,
     required this.createdAt,
     int retryCount = 0,
     this.lastError,
@@ -31,6 +33,8 @@ final class PendingMutation {
          operation: operation,
          baseRevision: baseRevision,
          payload: payload,
+         ownerId: ownerId,
+         accessRevision: accessRevision,
        ),
        retryCount = _requireNonNegative(retryCount, 'retryCount');
 
@@ -54,6 +58,9 @@ final class PendingMutation {
 
   /// The note this entry changes.
   String get noteId => mutation.noteId;
+  String? get ownerId => mutation.ownerId;
+  int? get accessRevision => mutation.accessRevision;
+  String keyFor(String actorId) => mutation.identityFor(actorId).key;
 
   /// The operation to push.
   SyncMutationOperation get operation => mutation.operation;

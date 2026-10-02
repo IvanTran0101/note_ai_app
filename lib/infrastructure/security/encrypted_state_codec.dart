@@ -4,7 +4,9 @@ import 'package:cryptography/cryptography.dart';
 
 import '../../application/notes/note_access.dart';
 import '../../application/sync/local_sync_state.dart';
+import '../../application/sync/local_note_state.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_role.dart';
 import '../sync/local_sync_state_codec.dart';
 import '../sync/local_sync_store_account_namespace.dart';
 import 'device_envelope_keys.dart';
@@ -12,6 +14,8 @@ import 'note_bundle_projection.dart';
 import 'note_crypto.dart';
 
 part 'encrypted_state_keys.dart';
+part 'encrypted_shared_drafts.dart';
+part 'encrypted_legacy_bindings.dart';
 
 /// Account encryption and per-note wrapping are separate boundaries. Migration
 /// quarantines unknown legacy content until canonical online metadata is known.
@@ -33,8 +37,9 @@ final class EncryptedStateCodec {
   bool _disposed = false;
   String get _accountAad => 'NoteFlow/M05/v3/${namespace.hash}';
   String _noteAad(String id, int epoch) =>
-      '$_accountAad/note/${jsonEncode(id)}/$epoch';
-  String _legacyAad(String id) => '$_accountAad/quarantine/${jsonEncode(id)}';
+      '$_accountAad/note/${jsonEncode((_records[id] as Map?)?["binding"] ?? id)}/$epoch';
+  String _legacyAad(String id) =>
+      '$_accountAad/quarantine/${jsonEncode((_quarantine[id] as Map?)?["binding"] ?? id)}';
 
   Future<void> _ensureDeviceKey() async {
     if (_deviceKey != null) return;
@@ -105,8 +110,9 @@ final class EncryptedStateCodec {
     _quarantine = Map<String, Object?>.from(inner['quarantine'] as Map);
     _retained = Map<String, Object?>.from(inner['retained'] as Map);
     final state = Map<String, Object?>.from(inner['state'] as Map);
+    _normalizeLegacyBindings(state);
     for (final note in NoteBundleProjection.notes(state)) {
-      final noteId = note['id'] as String;
+      final noteId = NoteBundleProjection.reference(state, note);
       final record = _records[noteId];
       final opened = _opened[noteId];
       if (record != null &&
@@ -145,12 +151,19 @@ final class EncryptedStateCodec {
     _quarantine = {};
     _retained = {};
     for (final note in decoded.notes) {
-      _quarantine[note.id] = await crypto.encryptJson(
-        NoteBundleProjection.bundle(state, note.id),
-        _deviceKey!,
-        _legacyAad(note.id),
+      _quarantine[note.referenceFor(namespace.accountUserId)] = await crypto
+          .encryptJson(
+            NoteBundleProjection.bundle(
+              state,
+              note.referenceFor(namespace.accountUserId),
+            ),
+            _deviceKey!,
+            _legacyAad(note.referenceFor(namespace.accountUserId)),
+          );
+      NoteBundleProjection.redact(
+        state,
+        note.referenceFor(namespace.accountUserId),
       );
-      NoteBundleProjection.redact(state, note.id);
     }
     migrationRequired = true;
     return LocalSyncStateCodec.decode(state);
@@ -165,29 +178,48 @@ final class EncryptedStateCodec {
     await _ensureDeviceKey();
     final data = LocalSyncStateCodec.encode(state);
     for (final note in state.notes) {
-      if (!note.protection.enabled && !_quarantine.containsKey(note.id)) {
+      if (!note.protection.enabled &&
+          !_quarantine.containsKey(
+            note.referenceFor(namespace.accountUserId),
+          )) {
         continue;
       }
-      final opened = _opened[note.id];
-      final prior = _records[note.id] as Map?;
+      final opened = _opened[note.referenceFor(namespace.accountUserId)];
+      final prior =
+          _records[note.referenceFor(namespace.accountUserId)] as Map?;
       if (note.protection.enabled &&
           opened?.epoch == note.protection.revision &&
           (note.contentAvailable || prior?['box'] == null)) {
-        final r = Map<String, Object?>.from(_records[note.id] as Map);
+        final r = Map<String, Object?>.from(
+          _records[note.referenceFor(namespace.accountUserId)] as Map,
+        );
         r['box'] = await crypto.encryptJson(
-          NoteBundleProjection.bundle(data, note.id),
+          NoteBundleProjection.bundle(
+            data,
+            note.referenceFor(namespace.accountUserId),
+          ),
           opened!.key,
-          _noteAad(note.id, opened.epoch),
+          _noteAad(note.referenceFor(namespace.accountUserId), opened.epoch),
         );
         r['pendingIds'] = state.outbox
-            .where((m) => m.noteId == note.id)
+            .where(
+              (m) =>
+                  m.mutation.identityFor(namespace.accountUserId) ==
+                  note.identity,
+            )
             .map((m) => m.mutationId)
             .toList();
-        _records[note.id] = r;
-      } else if (note.contentAvailable && !_quarantine.containsKey(note.id)) {
+        _records[note.referenceFor(namespace.accountUserId)] = r;
+      } else if (note.contentAvailable &&
+          !_quarantine.containsKey(
+            note.referenceFor(namespace.accountUserId),
+          )) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
       }
-      NoteBundleProjection.redact(data, note.id);
+      NoteBundleProjection.redact(
+        data,
+        note.referenceFor(namespace.accountUserId),
+      );
     }
     final packet = await crypto.encryptJson(
       {
@@ -285,7 +317,7 @@ final class EncryptedStateCodec {
     }
     if (p.enabled) {
       final note = NoteBundleProjection.notes(data)
-          .where((n) => n['id'] == id)
+          .where((n) => NoteBundleProjection.reference(data, n) == id)
           .firstOrNull;
       if (note?['contentAvailable'] == true && !_records.containsKey(id)) {
         _quarantine[id] = await crypto.encryptJson(
@@ -299,7 +331,7 @@ final class EncryptedStateCodec {
     }
     if (!_quarantine.containsKey(id)) return LocalSyncStateCodec.decode(data);
     final bundle = await crypto.decryptJson(
-      _quarantine[id],
+      _quarantinePacket(id),
       _deviceKey!,
       _legacyAad(id),
     );
@@ -323,7 +355,7 @@ final class EncryptedStateCodec {
     final data = LocalSyncStateCodec.encode(state);
     data['notes'] = NoteBundleProjection.notes(data)
         .map(
-          (n) => n['id'] == id
+          (n) => NoteBundleProjection.reference(data, n) == id
               ? {...n, 'protected': p.enabled, 'protectionRevision': p.revision}
               : n,
         )

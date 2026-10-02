@@ -6,6 +6,7 @@ import '../../application/sync/note_sync_status.dart';
 import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
+import 'note_share_grant_codec.dart';
 
 /// Maps a [LocalNoteState] to and from one stored record.
 ///
@@ -28,6 +29,8 @@ abstract final class LocalNoteStateCodec {
       LocalSyncSchema.serverRevision: note.serverRevision,
       LocalSyncSchema.deletedAt: note.deletedAt?.toIso8601String(),
       LocalSyncSchema.status: note.status.name,
+      if (note.share != null)
+        LocalSyncSchema.share: NoteShareGrantCodec.encode(note.share!),
     };
   }
 
@@ -38,6 +41,7 @@ abstract final class LocalNoteStateCodec {
         data,
         path: path,
         allowedFields: LocalSyncSchema.noteFields,
+        optionalFields: LocalSyncSchema.noteOptionalFields,
       ),
     );
   }
@@ -70,6 +74,7 @@ abstract final class LocalNoteStateCodec {
       () => LocalNoteState(
         id: id,
         ownerId: ownerId,
+        share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
         createdAt: createdAt,

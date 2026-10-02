@@ -2,6 +2,26 @@ part of 'encrypted_state_codec.dart';
 
 /// Password wrapping and transient per-note keys have one owner.
 extension EncryptedStateKeys on EncryptedStateCodec {
+  LocalNoteState _requireLocalRead(LocalSyncState state, String reference) {
+    final note = state.notes
+        .where((n) => n.referenceFor(namespace.accountUserId) == reference)
+        .firstOrNull;
+    if (note == null ||
+        note.ownerId != namespace.accountUserId &&
+            note.share?.isActive != true) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    return note;
+  }
+
+  LocalNoteState _requireLocalOwner(LocalSyncState state, String reference) {
+    final note = _requireLocalRead(state, reference);
+    if (note.ownerId != namespace.accountUserId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    return note;
+  }
+
   Future<LocalSyncState> unlock(
     LocalSyncState state,
     String id,
@@ -9,6 +29,7 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     NoteProtection p, {
     required bool verifiedOnline,
   }) async {
+    _requireLocalRead(state, id);
     if (!p.enabled) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.invalidInput);
     }
@@ -76,20 +97,29 @@ extension EncryptedStateKeys on EncryptedStateCodec {
       final data = LocalSyncStateCodec.encode(state);
       NoteBundleProjection.restore(
         data,
-        await crypto.decryptJson(_quarantine[id], _deviceKey!, _legacyAad(id)),
+        await crypto.decryptJson(
+          _quarantinePacket(id),
+          _deviceKey!,
+          _legacyAad(id),
+        ),
       );
       next = LocalSyncStateCodec.decode(data);
       _quarantine.remove(id);
     }
-    return seal(next, id, password, p);
+    return seal(next, id, password, p, recipientUnlock: true);
   }
 
   Future<LocalSyncState> seal(
     LocalSyncState state,
     String id,
     String password,
-    NoteProtection p,
-  ) async {
+    NoteProtection p, {
+    bool recipientUnlock = false,
+  }) async {
+    final note = _requireLocalRead(state, id);
+    if (!recipientUnlock && note.ownerId != namespace.accountUserId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
     if (!p.enabled) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.invalidInput);
     }
@@ -116,7 +146,7 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     String newPassword,
     NoteProtection p,
   ) async {
-    final oldNote = state.notes.firstWhere((n) => n.id == id);
+    final oldNote = _requireLocalOwner(state, id);
     final decoded = await unlock(
       state,
       id,
@@ -140,12 +170,14 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     NoteProtection p,
     SecretKey key,
   ) async {
+    final binding = (_records[id] as Map?)?['binding'] ?? id;
     final salt = crypto.randomBytes(16);
     final kek = await crypto.passwordKey(password, salt);
     final bytes = List<int>.of(await key.extractBytes());
     try {
       _records[id] = {
         'epoch': p.revision,
+        'binding': binding,
         'salt': base64Encode(salt),
         'wrapped': await crypto.encrypt(
           bytes,
@@ -165,7 +197,7 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     String password,
     NoteProtection p,
   ) async {
-    final old = state.notes.firstWhere((n) => n.id == id);
+    final old = _requireLocalOwner(state, id);
     final decoded = await unlock(
       state,
       id,

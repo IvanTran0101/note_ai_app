@@ -1,13 +1,33 @@
+import '../../domain/notes/note_identity.dart';
+
 /// Serialized bundles are private to encrypted Infrastructure. Queue identities
 /// and ordering stay in the root projection; content only lives in sealed bundles.
 abstract final class NoteBundleProjection {
+  static String reference(
+    Map<String, Object?> state,
+    Map<String, Object?> record, {
+    String idField = 'id',
+  }) {
+    final actor = state['accountUserId'] as String;
+    return NoteIdentity(
+      (record['ownerId'] as String?) ?? actor,
+      record[idField] as String,
+    ).referenceFor(actor);
+  }
+
   static Map<String, Object?> bundle(Map<String, Object?> state, String id) => {
-    'note': notes(state).firstWhere((n) => n['id'] == id),
-    'outbox': entries(state, 'outbox').where((e) => e['noteId'] == id).toList(),
-    'conflicts': entries(
+    'note': notes(state).firstWhere((n) => reference(state, n) == id),
+    'outbox': entries(
       state,
-      'conflicts',
-    ).where((e) => e['noteId'] == id).toList(),
+      'outbox',
+    ).where((e) => reference(state, e, idField: 'noteId') == id).toList(),
+    'conflicts': entries(state, 'conflicts')
+        .where(
+          (e) =>
+              reference(state, Map<String, Object?>.from(e['local'] as Map)) ==
+              id,
+        )
+        .toList(),
   };
 
   static List<Map<String, Object?>> entries(
@@ -21,14 +41,22 @@ abstract final class NoteBundleProjection {
 
   static void redact(Map<String, Object?> state, String id) {
     state['notes'] = notes(state)
-        .map((n) => n['id'] == id ? _private(n) : n)
+        .map((n) => reference(state, n) == id ? _private(n) : n)
         .toList();
-    state['outbox'] = entries(
-      state,
-      'outbox',
-    ).map((m) => m['noteId'] == id ? _pending(m) : m).toList();
+    redactWork(state, id);
+  }
+
+  static void redactWork(Map<String, Object?> state, String id) {
+    state['outbox'] = entries(state, 'outbox')
+        .map(
+          (m) => reference(state, m, idField: 'noteId') == id ? _pending(m) : m,
+        )
+        .toList();
     state['conflicts'] = entries(state, 'conflicts').map((c) {
-      if (c['noteId'] != id) return c;
+      if (reference(state, Map<String, Object?>.from(c['local'] as Map)) !=
+          id) {
+        return c;
+      }
       return {
         ...c,
         'local': _private(Map<String, Object?>.from(c['local'] as Map)),
@@ -58,9 +86,21 @@ abstract final class NoteBundleProjection {
     bool requireCurrentRevision = false,
   }) {
     final note = Map<String, Object?>.from(bundle['note'] as Map);
-    final id = note['id'];
-    final currentNote = notes(state).where((n) => n['id'] == id).firstOrNull;
-    final hasPending = entries(state, 'outbox').any((m) => m['noteId'] == id);
+    final id = reference(state, note);
+    final currentNote = notes(state)
+        .where((n) => reference(state, n) == id)
+        .firstOrNull;
+    final access = currentNote?['share'] as Map?;
+    if (access != null &&
+        (access['status'] != 'active' ||
+            access['accessRevision'] !=
+                (note['share'] as Map?)?['accessRevision'])) {
+      return;
+    }
+    final hasPending = entries(
+      state,
+      'outbox',
+    ).any((m) => reference(state, m, idField: 'noteId') == id);
     if (requireCurrentRevision &&
         !hasPending &&
         currentNote != null &&
@@ -68,13 +108,25 @@ abstract final class NoteBundleProjection {
             (note['serverRevision'] as int)) {
       return;
     }
-    state['notes'] = notes(state).map((n) => n['id'] == id ? note : n).toList();
+    state['notes'] = notes(state)
+        .map((n) => reference(state, n) == id ? note : n)
+        .toList();
     for (final field in ['outbox', 'conflicts']) {
       final originals = entries(bundle, field);
       final identity = field == 'outbox' ? 'mutationId' : 'noteId';
       state[field] = entries(state, field).map((current) {
         final matching = originals.where(
-          (e) => e[identity] == current[identity],
+          (e) =>
+              e[identity] == current[identity] &&
+              (field == 'outbox' ||
+                  reference(
+                        state,
+                        Map<String, Object?>.from(e['local'] as Map),
+                      ) ==
+                      reference(
+                        state,
+                        Map<String, Object?>.from(current['local'] as Map),
+                      )),
         );
         if (matching.isEmpty) return current;
         final original = matching.first;

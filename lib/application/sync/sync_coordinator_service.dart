@@ -113,8 +113,8 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     final Set<String> stoppedNotes = <String>{
       ...state.outbox
           .where((PendingMutation item) => item.blocked)
-          .map((PendingMutation item) => item.noteId),
-      ...state.conflicts.map((SyncConflict item) => item.noteId),
+          .map((PendingMutation item) => item.keyFor(accountUserId)),
+      ...state.conflicts.map((SyncConflict item) => item.identity.key),
     };
     final Set<String> attempted = <String>{};
 
@@ -124,10 +124,10 @@ final class SyncCoordinatorService implements ISyncCoordinator {
       stoppedNotes.addAll(
         state.outbox
             .where((PendingMutation item) => item.blocked)
-            .map((PendingMutation item) => item.noteId),
+            .map((PendingMutation item) => item.keyFor(accountUserId)),
       );
       stoppedNotes.addAll(
-        state.conflicts.map((SyncConflict item) => item.noteId),
+        state.conflicts.map((SyncConflict item) => item.identity.key),
       );
       final PendingMutation? entry = state.outbox
           .cast<PendingMutation?>()
@@ -135,7 +135,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
             (PendingMutation? item) =>
                 item != null &&
                 !item.blocked &&
-                !stoppedNotes.contains(item.noteId) &&
+                !stoppedNotes.contains(item.keyFor(accountUserId)) &&
                 !attempted.contains(item.mutationId),
             orElse: () => null,
           );
@@ -152,7 +152,8 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           );
           if (index < 0 ||
               current.conflicts.any(
-                (SyncConflict item) => item.noteId == entry.noteId,
+                (SyncConflict item) =>
+                    item.identity == entry.mutation.identityFor(accountUserId),
               )) {
             return current;
           }
@@ -171,7 +172,8 @@ final class SyncCoordinatorService implements ISyncCoordinator {
         if (sendingIndex < 0 ||
             state.outbox[sendingIndex].blocked ||
             state.conflicts.any(
-              (SyncConflict item) => item.noteId == entry.noteId,
+              (SyncConflict item) =>
+                  item.identity == entry.mutation.identityFor(accountUserId),
             )) {
           continue pushQueue;
         }
@@ -185,7 +187,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           if (!failure.retryable || tries >= 2) {
             await _reconciliation.recordPushFailure(entry.mutationId, failure);
             if (failure.code == SyncErrorCode.forbidden) {
-              stoppedNotes.add(entry.noteId);
+              stoppedNotes.add(entry.keyFor(accountUserId));
               continue pushQueue;
             }
             rethrow;
@@ -202,13 +204,15 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           await observeSnapshot?.call(snapshot);
         }
         if (await _reconciliation.recordConflict(entry, result)) {
-          stoppedNotes.add(entry.noteId);
+          stoppedNotes.add(entry.keyFor(accountUserId));
           conflicts++;
         }
         continue;
       }
       final SyncNoteSnapshot? snapshot = result.note;
-      if (snapshot == null || snapshot.id != entry.noteId) {
+      if (snapshot == null ||
+          snapshot.identityFor(accountUserId) !=
+              entry.mutation.identityFor(accountUserId)) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       await observeSnapshot?.call(snapshot);
@@ -245,9 +249,11 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     if (state.outbox.any(
       (m) =>
           !m.blocked &&
-          !stoppedNotes.contains(m.noteId) &&
+          !stoppedNotes.contains(m.keyFor(accountUserId)) &&
           !attempted.contains(m.mutationId) &&
-          !state.conflicts.any((c) => c.noteId == m.noteId),
+          !state.conflicts.any(
+            (c) => c.identity == m.mutation.identityFor(accountUserId),
+          ),
     )) {
       _rerun = true;
     }

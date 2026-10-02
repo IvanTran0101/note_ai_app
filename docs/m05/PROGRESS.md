@@ -431,3 +431,10 @@ Independent local_llm_bridge tests passed: 6 native/stub smoke cases and 1 Chrom
 stub case. The native tests exercised the real built C ABI and safe missing-model
 failure; no GGUF model was loaded. M05 acceptance checkpoint was pushed and remote
 verified at 22587a5954c182c202d07923ec8be1e3060fa42d. M06 now continues separately.
+
+## Implementation checklist synchronization - 2026-10-02
+
+At user request, the actual Implement plan Note AI App / 05 - Note Security (1)
+page now has all 15 accepted FR/NFR and 4 Done When boxes checked. Fetched again
+and verified all 19. Evidence links to 22587a5 and automated scope above; live
+AWS/SES remains unclaimed. M06/M08 integrations retain these protection gates.

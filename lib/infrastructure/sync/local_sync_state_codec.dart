@@ -88,15 +88,17 @@ abstract final class LocalSyncStateCodec {
     for (final SyncCodecObject record in envelope.requireObjectList(
       LocalSyncSchema.notes,
       LocalSyncSchema.noteFields,
+      optionalFields: LocalSyncSchema.noteOptionalFields,
     )) {
       final LocalNoteState note = LocalNoteStateCodec.decodeRecord(record);
-      if (note.ownerId != accountUserId) {
+      if (note.ownerId != accountUserId &&
+          (note.share == null || note.share!.recipientId != accountUserId)) {
         record.fail(
           LocalSyncSchema.ownerId,
           'must belong to the state account.',
         );
       }
-      if (!noteIds.add(note.id)) {
+      if (!noteIds.add(note.identity.key)) {
         record.fail(LocalSyncSchema.id, 'duplicates an earlier note id.');
       }
       notes.add(note);
@@ -107,6 +109,7 @@ abstract final class LocalSyncStateCodec {
     for (final SyncCodecObject record in envelope.requireObjectList(
       LocalSyncSchema.outbox,
       LocalSyncSchema.mutationFields,
+      optionalFields: LocalSyncSchema.mutationOptionalFields,
     )) {
       final PendingMutation entry = PendingMutationCodec.decodeRecord(record);
       if (!mutationIds.add(entry.mutationId)) {

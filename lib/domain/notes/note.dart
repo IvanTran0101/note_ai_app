@@ -1,5 +1,7 @@
 import 'note_metadata.dart';
 import 'note_protection.dart';
+import 'note_identity.dart';
+import 'note_share_grant.dart';
 
 /// The Note aggregate root for the notes domain.
 ///
@@ -21,6 +23,7 @@ class Note {
     this._protection,
     this._contentAvailable,
     this._contentRevision,
+    this.share,
   );
 
   /// Creates a new note. Both [createdAt] and [updatedAt] are initialized from
@@ -42,6 +45,7 @@ class Note {
       const NoteProtection.unprotected(),
       true,
       0,
+      null,
     );
   }
 
@@ -60,7 +64,13 @@ class Note {
     NoteProtection protection = const NoteProtection.unprotected(),
     bool contentAvailable = true,
     int contentRevision = 0,
+    NoteShareGrant? share,
   }) {
+    if (share != null &&
+        (share.note != NoteIdentity(ownerId, id) ||
+            !share.isActive && contentAvailable)) {
+      throw ArgumentError('Invalid canonical sharing projection.');
+    }
     if (contentRevision < 0 ||
         (!contentAvailable && (title.isNotEmpty || content.isNotEmpty))) {
       throw ArgumentError('Invalid note content availability.');
@@ -75,8 +85,13 @@ class Note {
       protection,
       contentAvailable,
       contentRevision,
+      share,
     );
   }
+
+  final NoteShareGrant? share;
+  NoteIdentity get identity => NoteIdentity(ownerId, id);
+  String get reference => identity.referenceFor(share?.recipientId ?? ownerId);
 
   final String _id;
   final String _ownerId;

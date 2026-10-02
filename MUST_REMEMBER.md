@@ -83,22 +83,13 @@ implementation only within the scope the user has approved below.
 - For code discovery, use codebase-memory in this order: `search_graph`,
   `trace_path`, `get_code_snippet`, then `check_index_coverage` for every source
   path relied on. Read missed/partial source ranges directly and qualify claims.
-- The current checkout is `Final-here-do-not-merge-main` at `6ce2afe`; the prior
-  `codex/m05-note-dto-redaction` branch is not present in the current checkout.
-  Current untracked user data: `.playwright-cli/` and `final_project.md`; preserve
-  both. Recheck status before each change.
-- The implementation checkout is a managed worktree at
-  `C:/Users/meow/.codex/worktrees/m05-final-tuankiet/note_ai_app-note-ai-app`,
-  branch `codex/m05-final-tuankiet`, initially based on
-  `origin/final-tuankiet@c46498bdc015735be145147b1f81da842e327d6d`.
-  Push normal fast-forwards to `HEAD:refs/heads/final-tuankiet` and verify the
-  remote commit after each push. Recheck the remote before writing/pushing.
-- The target and Notion baseline diverge (101 target-only / 5 baseline-only
-  commits at the initial inspection). Their tree diff includes 11 Infrastructure
-  paths. Align only required baseline dependencies for M05. Verify actual
-  source in the target worktree before each patch. The worktree now has graph
-  project `noteflow-m05`; use it for implementation discovery. The original
-  graph project remains rooted in the baseline workspace.
+- Current primary checkout: D:/kiet/hk7/flutter/midterm/note_ai_app-note-ai-app,
+  branch final-tuankiet. Use graph noteflow-final-d and R: short-path alias.
+  The former C: implementation and merge worktrees were archived/removed per
+  user request. Keep .playwright-cli/ and final_project.md untracked and unchanged.
+  Normal fast-forward push to HEAD:refs/heads/final-tuankiet; verify remote SHA.
+- Historical baseline divergence and M05 alignment are recorded in docs/m05;
+  do not return to the old checkout or recreate C: worktrees.
 - `_agent_ops/` and its `session_start.py` are absent in this checkout, despite
   references from `AGENTS.md`; do not assume those tools or records exist.
 - Testing is now explicitly authorized (2026-10-02): run the suites and Chrome/
@@ -142,3 +133,33 @@ metadata relay and account/session fences; preserve dirty editor and Summary
 consent/lineage. Follow M06.0–M06.5, test/fix Chrome+Android and tick only verified
 criteria; update/push after each M/P or milestone. Other modules/deployment stay
 outside the current scope. M06.0 freezes contracts, not feature acceptance.
+
+## Workspace correction — 2026-10-02
+
+The user requested removing this repository's C: worktrees and continuing in
+D:/kiet/hk7/flutter/midterm/note_ai_app-note-ai-app. The primary checkout is now
+final-tuankiet@61a826b, with the four uncommitted M06 domain files restored and
+hash-verified. The managed M05 worktree was archived with a recoverable snapshot;
+the clean old merge worktree and a stale registration were removed. Original
+untracked .playwright-cli/ and final_project.md stay in the primary checkout.
+The prior untracked instructions and non-generated configuration backup are in
+D:/kiet/hk7/flutter/midterm/note_ai_app-backups/2026-10-02-worktree-move.
+Use graph project noteflow-final-d (root D:), Tier2, with coverage/source fallback.
+R: is only a short path alias to this same D: folder, not another worktree.
+All subsequent source changes happen in the primary checkout; do not recreate
+C: worktrees. For platform tests use Chrome in a real browser and Android on
+emulator-5554, preserving installed user data. Record this workspace correction
+and continue M06.1; M06.0 was pushed at 61a826b.
+
+## Implementation checklist tracking - 2026-10-02
+
+User requested ticking the actual Implement plan Note AI App child pages for
+M05/M06/M09, including Functional, Non-functional and Done When. Consult
+/docs/m06/CHECKLIST_AUDIT.md. M05 has 19 verified checkboxes; M09 has 11 checked
+and 5 pending evidence. M06 rubric stays pending until each acceptance gate.
+Keep those pages synchronized after every completed M/P or milestone and push.
+
+M06.1 foundation accepted: real Chrome40 and Android40, strict legacy codecs,
+canonical pair queue/conflict/vault, access-first encrypted retained draft and
+legacy reserved-ID authenticated bindings. Next M06.2 backend. Final M06 rubric
+remains pending integration; see docs/m06/PROGRESS.md and CHECKLIST_AUDIT.md.

@@ -1,6 +1,8 @@
 /// Client-owned changes sent to the remote note API.
 library;
 
+import '../../domain/notes/note_identity.dart';
+
 enum SyncMutationOperation { create, update, delete }
 
 final class SyncNotePayload {
@@ -27,6 +29,8 @@ final class SyncMutation {
     required this.operation,
     required this.baseRevision,
     required this.payload,
+    required this.ownerId,
+    required this.accessRevision,
   });
 
   factory SyncMutation({
@@ -35,9 +39,15 @@ final class SyncMutation {
     required SyncMutationOperation operation,
     required int baseRevision,
     SyncNotePayload? payload,
+    String? ownerId,
+    int? accessRevision,
   }) {
     _requireNonBlank(mutationId, 'mutationId');
     _requireNonBlank(noteId, 'noteId');
+    if (ownerId != null) _requireNonBlank(ownerId, 'ownerId');
+    if (accessRevision != null && accessRevision <= 0) {
+      throw ArgumentError('Access revision must be positive.');
+    }
     if (baseRevision < 0) {
       throw ArgumentError.value(
         baseRevision,
@@ -58,8 +68,15 @@ final class SyncMutation {
       operation: operation,
       baseRevision: baseRevision,
       payload: payload,
+      ownerId: ownerId,
+      accessRevision: accessRevision,
     );
   }
+
+  final String? ownerId;
+  final int? accessRevision;
+  NoteIdentity identityFor(String actorId) =>
+      NoteIdentity(ownerId ?? actorId, noteId);
 
   final String mutationId;
   final String noteId;
@@ -74,12 +91,21 @@ final class SyncMutation {
         other.noteId == noteId &&
         other.operation == operation &&
         other.baseRevision == baseRevision &&
-        other.payload == payload;
+        other.payload == payload &&
+        other.ownerId == ownerId &&
+        other.accessRevision == accessRevision;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(mutationId, noteId, operation, baseRevision, payload);
+  int get hashCode => Object.hash(
+    mutationId,
+    noteId,
+    operation,
+    baseRevision,
+    payload,
+    ownerId,
+    accessRevision,
+  );
 }
 
 String _requireNonBlank(String value, String fieldName) {

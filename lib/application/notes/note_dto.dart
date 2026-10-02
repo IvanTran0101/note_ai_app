@@ -1,4 +1,6 @@
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
 
 /// A read-only application projection of the Note aggregate.
 ///
@@ -16,6 +18,7 @@ final class NoteDto {
     this.protectionRevision = 0,
     this.contentAvailable = true,
     this.contentRevision = 0,
+    this.share,
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -31,8 +34,13 @@ final class NoteDto {
       protectionRevision: note.protection.revision,
       contentAvailable: note.contentAvailable,
       contentRevision: note.contentRevision,
+      share: note.share,
     );
   }
+
+  final NoteShareGrant? share;
+  NoteIdentity get identity => NoteIdentity(ownerId, id);
+  String get reference => identity.referenceFor(share?.recipientId ?? ownerId);
 
   final String id;
   final String ownerId;
@@ -57,6 +65,7 @@ final class NoteDto {
     protectionRevision: protectionRevision,
     contentRevision: contentRevision,
     contentAvailable: false,
+    share: share,
   );
 
   @override
@@ -71,7 +80,8 @@ final class NoteDto {
         other.isProtected == isProtected &&
         other.protectionRevision == protectionRevision &&
         other.contentAvailable == contentAvailable &&
-        other.contentRevision == contentRevision;
+        other.contentRevision == contentRevision &&
+        other.share == share;
   }
 
   @override
@@ -86,6 +96,7 @@ final class NoteDto {
     protectionRevision,
     contentAvailable,
     contentRevision,
+    share,
   );
 
   @override

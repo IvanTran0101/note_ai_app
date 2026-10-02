@@ -22,6 +22,9 @@ abstract final class PendingMutationCodec {
     return <String, Object?>{
       LocalSyncSchema.mutationId: entry.mutationId,
       LocalSyncSchema.noteId: entry.noteId,
+      if (entry.ownerId != null) LocalSyncSchema.ownerId: entry.ownerId,
+      if (entry.accessRevision != null)
+        LocalSyncSchema.accessRevision: entry.accessRevision,
       LocalSyncSchema.operation: entry.operation.name,
       LocalSyncSchema.baseRevision: entry.baseRevision,
       LocalSyncSchema.payload: payload == null
@@ -44,6 +47,7 @@ abstract final class PendingMutationCodec {
         data,
         path: path,
         allowedFields: LocalSyncSchema.mutationFields,
+        optionalFields: LocalSyncSchema.mutationOptionalFields,
       ),
     );
   }
@@ -83,6 +87,12 @@ abstract final class PendingMutationCodec {
       () => PendingMutation(
         mutationId: mutationId,
         noteId: noteId,
+        ownerId: !record.containsField(LocalSyncSchema.ownerId)
+            ? null
+            : record.requireNonBlankString(LocalSyncSchema.ownerId),
+        accessRevision: !record.containsField(LocalSyncSchema.accessRevision)
+            ? null
+            : record.requirePositiveInt(LocalSyncSchema.accessRevision),
         operation: operation,
         baseRevision: baseRevision,
         payload: payload,

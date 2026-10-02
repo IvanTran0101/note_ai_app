@@ -11,6 +11,8 @@ import 'sync_mutation.dart';
 import 'sync_snapshot.dart';
 import '../notes/note_access.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_access_policy.dart';
+import '../../domain/notes/note_identity.dart';
 
 enum SyncConflictChoice { useLocal, useRemote, later }
 
@@ -45,18 +47,39 @@ final class SyncConflictResolver {
       if (conflictIndex == -1) {
         throw StateError('The conflict is no longer stored for this account.');
       }
-      final LocalNoteState? local = _findNote(current, conflict.noteId);
-      if (local == null || local.ownerId != accountUserId) {
+      final LocalNoteState? local = _findNote(current, conflict.identity);
+      if (local == null) {
         throw StateError(
-          'The conflict note is no longer owned by this account.',
+          'The conflict note is no longer available in this account.',
         );
       }
 
+      final operation = choice == SyncConflictChoice.useRemote
+          ? NoteOperation.read
+          : local.isDeleted
+          ? NoteOperation.delete
+          : NoteOperation.edit;
+      if (!const NoteAccessPolicy().allows(
+            actorId: accountUserId,
+            note: local.identity,
+            share: local.share,
+            operation: operation,
+          ) ||
+          local.ownerId != accountUserId &&
+              choice == SyncConflictChoice.useLocal &&
+              (conflict.remote == null ||
+                  conflict.remote!.isDeleted ||
+                  local.isDeleted)) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+      }
       final List<LocalNoteState> notes = current.notes
-          .where((LocalNoteState note) => note.id != local.id)
+          .where((LocalNoteState note) => note.identity != local.identity)
           .toList();
       final List<PendingMutation> outbox = current.outbox
-          .where((PendingMutation item) => item.noteId != local.id)
+          .where(
+            (PendingMutation item) =>
+                item.mutation.identityFor(accountUserId) != local.identity,
+          )
           .toList();
       final DateTime timestamp = now();
       final SyncNoteSnapshot? remote = conflict.remote;
@@ -70,18 +93,16 @@ final class SyncConflictResolver {
           throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
         }
         guard.requireAccess(
-          ownerId: accountUserId,
+          ownerId: local.ownerId,
           noteId: local.id,
           protection: local.protection,
-          operation: local.isDeleted
-              ? NoteOperation.delete
-              : NoteOperation.edit,
+          operation: operation,
         );
         // Copying a protected deleted note into another identity is export.
         if (choice == SyncConflictChoice.useLocal &&
             (remote == null || remote.isDeleted)) {
           guard.requireAccess(
-            ownerId: accountUserId,
+            ownerId: local.ownerId,
             noteId: local.id,
             protection: local.protection,
             operation: NoteOperation.export,
@@ -100,6 +121,7 @@ final class SyncConflictResolver {
               operation: SyncMutationOperation.create,
               baseRevision: 0,
               local: local,
+              accountUserId: accountUserId,
               timestamp: timestamp,
             ),
           );
@@ -115,6 +137,7 @@ final class SyncConflictResolver {
               operation: SyncMutationOperation.delete,
               baseRevision: remote.revision,
               local: local,
+              accountUserId: accountUserId,
               timestamp: timestamp,
             ),
           );
@@ -138,6 +161,7 @@ final class SyncConflictResolver {
             operation: SyncMutationOperation.create,
             baseRevision: 0,
             local: replacement,
+            accountUserId: accountUserId,
             timestamp: timestamp,
           ),
         );
@@ -149,6 +173,7 @@ final class SyncConflictResolver {
             operation: SyncMutationOperation.update,
             baseRevision: remote.revision,
             local: local,
+            accountUserId: accountUserId,
             timestamp: timestamp,
           ),
         );
@@ -171,10 +196,13 @@ final class SyncConflictResolver {
     required SyncMutationOperation operation,
     required int baseRevision,
     required LocalNoteState local,
+    required String accountUserId,
     required DateTime timestamp,
   }) => PendingMutation(
     mutationId: generateMutationId(),
     noteId: id,
+    ownerId: local.ownerId == accountUserId ? null : local.ownerId,
+    accessRevision: local.share?.accessRevision,
     operation: operation,
     baseRevision: baseRevision,
     payload: operation == SyncMutationOperation.delete
@@ -184,9 +212,9 @@ final class SyncConflictResolver {
   );
 }
 
-LocalNoteState? _findNote(LocalSyncState state, String id) {
+LocalNoteState? _findNote(LocalSyncState state, NoteIdentity identity) {
   for (final LocalNoteState note in state.notes) {
-    if (note.id == id) return note;
+    if (note.identity == identity) return note;
   }
   return null;
 }
@@ -197,6 +225,7 @@ LocalNoteState _pendingNote(
 }) => LocalNoteState(
   id: note.id,
   ownerId: note.ownerId,
+  share: note.share,
   title: note.title,
   content: note.content,
   createdAt: note.createdAt,
@@ -211,7 +240,8 @@ LocalNoteState _pendingNote(
 LocalNoteState _fromRemote(SyncNoteSnapshot note, String accountUserId) =>
     LocalNoteState(
       id: note.id,
-      ownerId: accountUserId,
+      ownerId: note.ownerId ?? accountUserId,
+      share: note.share,
       title: note.title,
       content: note.content,
       createdAt: note.createdAt,

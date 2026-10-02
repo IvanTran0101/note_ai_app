@@ -67,7 +67,8 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
     for (var attempt = 0; attempt < 5; attempt++) {
       final encoded = await backing.readEncoded();
       final current = await codec.decode(encoded);
-      final next = await transform(current);
+      final transformed = await transform(current);
+      final next = await codec.retainAccessChanges(current, transformed);
       codec.namespace.requireOwned(next);
       final start = codec.generation;
       final sealed = await codec.encode(next);
@@ -127,7 +128,9 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
   Future<void> observeProtection(String id, NoteProtection p) =>
       _enqueue(() async {
         await _mutate((state) async {
-          final old = state.notes.where((n) => n.id == id).firstOrNull;
+          final old = state.notes
+              .where((n) => n.referenceFor(state.accountUserId) == id)
+              .firstOrNull;
           if (old != null && old.protection != p) codec.lock(id);
           final reconciled = await codec.observe(state, id, p);
           return EncryptedStateCodec.changeMetadata(reconciled, id, p);
@@ -135,17 +138,25 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
       });
   @override
   Future<void> hydrate(SyncNoteSnapshot snapshot) => _enqueue(() async {
-    if (!snapshot.contentAvailable ||
+    final identity = snapshot.identityFor(codec.namespace.accountUserId);
+    final reference = identity.referenceFor(codec.namespace.accountUserId);
+    if (snapshot.accessRemoved ||
+        !snapshot.contentAvailable ||
         (snapshot.protection.enabled &&
-            !codec.isUnlocked(snapshot.id, snapshot.protection))) {
+            !codec.isUnlocked(reference, snapshot.protection))) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
     }
     await _mutate((state) async {
-      final current = state.notes.where((n) => n.id == snapshot.id).firstOrNull;
-      final pending = state.outbox.any((m) => m.noteId == snapshot.id);
+      final current = state.notes
+          .where((n) => n.identity == identity)
+          .firstOrNull;
+      final pending = state.outbox.any(
+        (m) => m.mutation.identityFor(state.accountUserId) == identity,
+      );
       final hydrated = LocalNoteState(
         id: snapshot.id,
-        ownerId: state.accountUserId,
+        ownerId: identity.ownerId,
+        share: snapshot.share,
         title: pending && current?.contentAvailable == true
             ? current!.title
             : snapshot.title,
@@ -165,11 +176,11 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
       );
       return LocalSyncState(
         accountUserId: state.accountUserId,
-        notes: [...state.notes.where((n) => n.id != snapshot.id), hydrated],
+        notes: [...state.notes.where((n) => n.identity != identity), hydrated],
         outbox: state.outbox,
         conflicts: state.conflicts.map(
           (c) =>
-              c.noteId == snapshot.id &&
+              c.identity == identity &&
                   (c.remote?.revision ?? 0) <= snapshot.revision
               ? SyncConflict(
                   noteId: c.noteId,

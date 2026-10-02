@@ -31,6 +31,11 @@ abstract final class LocalSyncSchema {
   static const String protected = 'protected';
   static const String protectionRevision = 'protectionRevision';
   static const String contentAvailable = 'contentAvailable';
+  static const String share = 'share';
+  static const String accessRevision = 'accessRevision';
+  static const Set<String> noteOptionalFields = {share};
+  static const Set<String> mutationOptionalFields = {ownerId, accessRevision};
+  static const Set<String> snapshotOptionalFields = {ownerId, share};
 
   // Pending mutation fields.
   static const String mutationId = 'mutationId';

@@ -2,6 +2,8 @@
 library;
 
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
 
 final class SyncNoteSnapshot {
   SyncNoteSnapshot({
@@ -14,10 +16,28 @@ final class SyncNoteSnapshot {
     this.deletedAt,
     this.protection = const NoteProtection.unprotected(),
     this.contentAvailable = true,
+    this.ownerId,
+    this.share,
   }) : id = _requireNonBlank(id, 'id'),
-       revision = _requirePositive(revision, 'revision');
+       revision = _requirePositive(revision, 'revision') {
+    if (ownerId != null && ownerId!.trim().isEmpty ||
+        share != null &&
+            (ownerId == null ||
+                share!.note != identityFor(ownerId!) ||
+                accessRemoved &&
+                    (contentAvailable ||
+                        title.isNotEmpty ||
+                        content.isNotEmpty))) {
+      throw ArgumentError('Invalid canonical access projection.');
+    }
+  }
 
   final String id;
+  final String? ownerId;
+  final NoteShareGrant? share;
+  NoteIdentity identityFor(String actorId) =>
+      NoteIdentity(ownerId ?? actorId, id);
+  bool get accessRemoved => share != null && !share!.isActive;
   final String title;
   final String content;
   final DateTime createdAt;
@@ -40,7 +60,9 @@ final class SyncNoteSnapshot {
         other.revision == revision &&
         other.deletedAt == deletedAt &&
         other.protection == protection &&
-        other.contentAvailable == contentAvailable;
+        other.contentAvailable == contentAvailable &&
+        other.ownerId == ownerId &&
+        other.share == share;
   }
 
   @override
@@ -54,6 +76,8 @@ final class SyncNoteSnapshot {
     deletedAt,
     protection,
     contentAvailable,
+    ownerId,
+    share,
   );
 }
 

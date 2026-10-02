@@ -8,6 +8,7 @@ import 'sync_cursor.dart';
 import 'sync_failure.dart';
 import 'sync_result.dart';
 import 'sync_snapshot.dart';
+import 'sync_page_projection.dart';
 
 /// Applies remote outcomes to fresh local state inside store transactions.
 final class SyncStateReconciliation {
@@ -59,7 +60,8 @@ final class SyncStateReconciliation {
               failure.code == SyncErrorCode.forbidden)
           ? current.notes
                 .map(
-                  (LocalNoteState note) => note.id == entry.noteId
+                  (LocalNoteState note) =>
+                      note.identity == entry.mutation.identityFor(accountUserId)
                       ? withStatus(note, NoteSyncStatus.failed)
                       : note,
                 )
@@ -80,10 +82,14 @@ final class SyncStateReconciliation {
       );
       if (entryIndex < 0) return current;
       final int noteIndex = current.notes.indexWhere(
-        (LocalNoteState note) => note.id == requested.noteId,
+        (LocalNoteState note) =>
+            note.identity == requested.mutation.identityFor(accountUserId),
       );
       final SyncNoteSnapshot? remote = result.conflictRemote;
-      if (noteIndex < 0 || (remote != null && remote.id != requested.noteId)) {
+      if (noteIndex < 0 ||
+          (remote != null &&
+              remote.identityFor(accountUserId) !=
+                  requested.mutation.identityFor(accountUserId))) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       final LocalNoteState local = current.notes[noteIndex];
@@ -99,7 +105,9 @@ final class SyncStateReconciliation {
       final List<SyncConflict> conflicts =
           List<SyncConflict>.of(current.conflicts)
             ..removeWhere(
-              (SyncConflict item) => item.noteId == requested.noteId,
+              (SyncConflict item) =>
+                  item.identity ==
+                  requested.mutation.identityFor(accountUserId),
             )
             ..add(
               SyncConflict(
@@ -119,7 +127,7 @@ final class SyncStateReconciliation {
     });
     return updated.conflicts.any(
       (SyncConflict item) =>
-          item.noteId == requested.noteId &&
+          item.identity == requested.mutation.identityFor(accountUserId) &&
           item.pending.mutationId == requested.mutationId,
     );
   }
@@ -128,6 +136,10 @@ final class SyncStateReconciliation {
     PendingMutation requested,
     SyncNoteSnapshot snapshot,
   ) async {
+    if (snapshot.identityFor(accountUserId) !=
+        requested.mutation.identityFor(accountUserId)) {
+      throw const SyncFailure(code: SyncErrorCode.unexpected);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(
@@ -135,14 +147,16 @@ final class SyncStateReconciliation {
       );
       if (entryIndex < 0) return current;
       final int noteIndex = current.notes.indexWhere(
-        (LocalNoteState note) => note.id == requested.noteId,
+        (LocalNoteState note) =>
+            note.identity == requested.mutation.identityFor(accountUserId),
       );
       if (noteIndex < 0) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       final bool later = current.outbox.any(
         (PendingMutation item) =>
-            item.noteId == requested.noteId &&
+            item.mutation.identityFor(accountUserId) ==
+                requested.mutation.identityFor(accountUserId) &&
             item.mutationId != requested.mutationId,
       );
       final List<PendingMutation> outbox = current.outbox
@@ -160,6 +174,7 @@ final class SyncStateReconciliation {
           ? LocalNoteState(
               id: local.id,
               ownerId: local.ownerId,
+              share: snapshot.share ?? local.share,
               title: local.title,
               content: local.content,
               createdAt: local.createdAt,
@@ -185,53 +200,12 @@ final class SyncStateReconciliation {
     var changed = false;
     final LocalSyncState updated = await update((current) {
       if (current.cursor?.value != expectedCursor) return current;
-      final List<LocalNoteState> notes = List<LocalNoteState>.of(current.notes);
-      final List<SyncConflict> conflicts = List<SyncConflict>.of(
-        current.conflicts,
-      );
-      for (final SyncNoteSnapshot snapshot in page.snapshots) {
-        final int conflictIndex = conflicts.indexWhere(
-          (SyncConflict item) => item.noteId == snapshot.id,
-        );
-        if (conflictIndex >= 0) {
-          final SyncConflict conflict = conflicts[conflictIndex];
-          if (snapshot.revision > (conflict.remote?.revision ?? 0)) {
-            conflicts[conflictIndex] = SyncConflict(
-              noteId: conflict.noteId,
-              remote: snapshot,
-              local: conflict.local,
-              pending: conflict.pending,
-              detectedAt: conflict.detectedAt,
-            );
-            changed = true;
-          }
-          continue;
-        }
-        if (current.outbox.any(
-          (PendingMutation item) => item.noteId == snapshot.id,
-        )) {
-          continue;
-        }
-        final int noteIndex = notes.indexWhere(
-          (LocalNoteState item) => item.id == snapshot.id,
-        );
-        if (noteIndex >= 0 &&
-            snapshot.revision <= notes[noteIndex].serverRevision &&
-            snapshot.protection == notes[noteIndex].protection) {
-          continue;
-        }
-        final LocalNoteState incoming = fromRemote(
-          snapshot,
-          NoteSyncStatus.synced,
-        );
-        if (noteIndex < 0) {
-          notes.add(incoming);
-        } else {
-          notes[noteIndex] = incoming;
-        }
-        pulled++;
-        changed = true;
+      final projection = SyncPageProjection(current, fromRemote);
+      for (final snapshot in page.snapshots) {
+        projection.apply(snapshot);
       }
+      changed = projection.changed;
+      pulled = projection.pulled;
       final SyncCursor? cursor = page.nextCursor == null
           ? current.cursor
           : SyncCursor(page.nextCursor);
@@ -240,8 +214,9 @@ final class SyncStateReconciliation {
       }
       return copyState(
         current,
-        notes: notes,
-        conflicts: conflicts,
+        notes: projection.notes,
+        outbox: projection.outbox,
+        conflicts: projection.conflicts,
         cursor: cursor,
       );
     });
@@ -276,6 +251,8 @@ final class SyncStateReconciliation {
   }) => PendingMutation(
     mutationId: entry.mutationId,
     noteId: entry.noteId,
+    ownerId: entry.ownerId,
+    accessRevision: entry.accessRevision,
     operation: entry.operation,
     baseRevision: entry.baseRevision,
     payload: entry.payload,
@@ -289,6 +266,7 @@ final class SyncStateReconciliation {
       LocalNoteState(
         id: note.id,
         ownerId: note.ownerId,
+        share: note.share,
         title: note.title,
         content: note.content,
         createdAt: note.createdAt,
@@ -303,7 +281,8 @@ final class SyncStateReconciliation {
   LocalNoteState fromRemote(SyncNoteSnapshot snapshot, NoteSyncStatus status) =>
       LocalNoteState(
         id: snapshot.id,
-        ownerId: accountUserId,
+        ownerId: snapshot.ownerId ?? accountUserId,
+        share: snapshot.share,
         title: snapshot.title,
         content: snapshot.content,
         createdAt: snapshot.createdAt,

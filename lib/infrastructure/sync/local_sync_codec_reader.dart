@@ -26,6 +26,7 @@ final class SyncCodecObject {
     Object? data, {
     required String path,
     required Set<String> allowedFields,
+    Set<String> optionalFields = const {},
   }) {
     if (data is! Map) {
       throw LocalSyncCodecException('must be an object.', path: path);
@@ -42,7 +43,7 @@ final class SyncCodecObject {
       values[key] = entry.value;
     }
     for (final String key in values.keys) {
-      if (!allowedFields.contains(key)) {
+      if (!allowedFields.contains(key) && !optionalFields.contains(key)) {
         throw LocalSyncCodecException(
           'must not contain a field outside the M2 local sync schema.',
           path: path,
@@ -78,6 +79,7 @@ final class SyncCodecObject {
   /// Used for a scalar with dedicated mapping rules, such as the opaque cursor,
   /// where the dedicated codec owns type validation.
   Object? rawValue(String field) => _values[field];
+  bool containsField(String field) => _values.containsKey(field);
 
   /// Reads a required string field.
   String requireString(String field) {
@@ -177,23 +179,29 @@ final class SyncCodecObject {
   }
 
   /// Reads a required nested object with exactly [allowedFields].
-  SyncCodecObject requireObject(String field, Set<String> allowedFields) {
+  SyncCodecObject requireObject(
+    String field,
+    Set<String> allowedFields, {
+    Set<String> optionalFields = const {},
+  }) {
     return SyncCodecObject.from(
       _values[field],
       path: fieldPath(field),
       allowedFields: allowedFields,
+      optionalFields: optionalFields,
     );
   }
 
   /// Reads an optional nested object, stored as an explicit null.
   SyncCodecObject? requireNullableObject(
     String field,
-    Set<String> allowedFields,
-  ) {
+    Set<String> allowedFields, {
+    Set<String> optionalFields = const {},
+  }) {
     if (_values[field] == null) {
       return null;
     }
-    return requireObject(field, allowedFields);
+    return requireObject(field, allowedFields, optionalFields: optionalFields);
   }
 
   /// Reads a required array field, rejecting a non-array value.
@@ -208,8 +216,9 @@ final class SyncCodecObject {
   /// Reads a required array of objects, each with exactly [allowedFields].
   List<SyncCodecObject> requireObjectList(
     String field,
-    Set<String> allowedFields,
-  ) {
+    Set<String> allowedFields, {
+    Set<String> optionalFields = const {},
+  }) {
     final String basePath = fieldPath(field);
     final List<Object?> entries = _requireList(field);
     return <SyncCodecObject>[
@@ -218,6 +227,7 @@ final class SyncCodecObject {
           entries[index],
           path: '$basePath[$index]',
           allowedFields: allowedFields,
+          optionalFields: optionalFields,
         ),
     ];
   }
