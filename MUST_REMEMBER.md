@@ -16,6 +16,17 @@ integrate their work together, test all functions, then plan M09 UI/UX again fro
 the beginning. Keep the existing two-image UX backlog as reference for that later
 plan. Do not pull unrelated collaborator branches during the current M06 slice.
 
+Runtime setup after the requested SDK reinstall (2026-10-03): Android SDK is
+D:/tools/AndroidSdk; Flutter configuration and ignored android/local.properties
+point there. Keep the existing NoteFlow_API35 AVD and installed data. R: is an
+ephemeral SUBST alias to the primary D checkout; verify/recreate it after restart
+before Flutter native builds. Read docs/m06/ACCEPTANCE.md and LIVE_GATE.md for
+current receipts; local/source acceptance never implies deployed AWS acceptance.
+M06.0–M06.5 source/local acceptance passed (VM971, Chrome844, real Chrome90/
+Android90 and two-client HTTP/socket). Actual rubric is15/19 checked; four
+realtime criteria still require the plan's live Cognito/AppSync gate. Do not
+reimplement accepted milestones or begin M09 from the historical pause notes.
+
 Read this file at the start of every turn that may change source code. Then read
 the current `AGENTS.md`, inspect `git status` and the active branch, and confirm
 the codebase-memory index before structural code discovery. Begin the M05

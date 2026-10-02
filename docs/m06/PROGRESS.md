@@ -1,6 +1,6 @@
 # M06 — Implementation progress
 
-## Current resumed work — 2026-10-02
+## Current acceptance — 2026-10-03
 
 User resumed M06.2–M06.5 with local-first behavior; all historical pause records
 are superseded. Baseline final-tuankiet@c3436d5, accepted M05 local-first d02fc40.
@@ -10,11 +10,12 @@ Current scope: fresh backend ACL/verified recipient + conditional actor/canonica
 sync and Summary, then local-first sharing/UI and durable realtime acceptance.
 M09 is deferred until both collaborators finish and a combined integration/test
 batch precedes a new UI/UX plan. No M09 implementation in this M06 run.
-M06.2–M06.4 source acceptance now passes. Next M06.5 full two-client local
-acceptance and the separate deployed AppSync/Cognito gate.
+M06.0–M06.5 source/local acceptance now passes, including full regressions and
+two clients on Chrome/Android. The deployed AppSync/Cognito gate remains pending;
+see ACCEPTANCE.md and LIVE_GATE.md. M06 is not fully accepted on live AWS.
 
-Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
-22587a5954c182c202d07923ec8be1e3060fa42d. Read MUST_REMEMBER.md before coding.
+Updated 2026-10-03. Active scope: M06 only, after the accepted M05 Web local-first
+correction d02fc40526b3f8f33e31f93bc6ef7fd6c749d473. Read MUST_REMEMBER.md before coding.
 
 - [Source plan](https://app.notion.com/p/3e8f9c7a1aa08193b4f9d1fbf42999ed)
 - [Progress page](https://app.notion.com/p/3edf9c7a1aa0817fb5fedd1e18b52ab2)
@@ -30,13 +31,16 @@ Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 | M06.2 | Complete backend source/tests | SERVER_CONTRACT.md; 75 backend checks, tsc; AWS live gate remains separate |
 | M06.3 | Complete client source acceptance | CLIENT_CONTRACT.md; Chrome56 + Android56, local encrypted storage/UI/atomic draft review |
 | M06.4 | Complete source/protocol acceptance | REALTIME.md; backend84, Chrome14 + Android14, VM280 (+1skip); deployed AWS gate pending |
-| M06.5 | Planned | Full tests + two clients on Web/Android; distinguish live cloud spike |
+| M06.5 | Complete source/local acceptance | VM971, Chrome844, platform Chrome90/Android90, two-client HTTP/socket; ACCEPTANCE.md |
+| Live provider gate | Pending | Actual Cognito/AppSync/Streams/GSI acceptance; LIVE_GATE.md; separate deployment authorization |
 
-At contract freeze all criteria were pending. Current accepted criteria: FR05,
-FR06, FR10, NFR04, NFR05 and recipient Shared With Me Done When; backend/live
-realtime and full two-client gates remain explicit. Update this record DURING
-work with files, confirmed failures and the next step; after each completed M06.x
-or M/P criterion, update Notion, explicit-stage commit/push and verify remote SHA.
+At contract freeze all criteria were pending. Current actual Notion rubric:
+15/19 checked — FR01/02/03/04/05/06/08/09/10, NFR01/04/05, owner sharing,
+recipient Shared With Me and viewer direct-write denial Done When. Four remain
+pending: FR07, NFR02, NFR03 and two-editor realtime Done When, because the plan
+requires deployed Cognito/AppSync proof. The local two-client gate passed.
+Update this record DURING work; after each accepted M06.x or M/P criterion,
+update Notion, explicit-stage commit/push and verify the remote SHA.
 
 ## M06.0 evidence
 
@@ -49,9 +53,9 @@ Chrome stub1 also passed; no model loaded. No deployment was performed.
 
 ## Current work
 
-Next: implement M06.1 domain types, preserve owned-note compatibility, add tests
-for same noteId across two owners and foreign projection validation; then extend
-vault/codec identity without relabeling existing authenticated ciphertext.
+Source/local implementation and acceptance are complete. Remaining work is the
+separate live provider gate. Final Git and main-app restoration receipts belong
+on the Notion progress page; no collaborator integration or M09 work yet.
 
 ### Workspace correction and current M06.1 files
 
@@ -143,3 +147,28 @@ verified lookup/ACL/atomic actor feed and shared-route evidence and cloud limits
   awaits actual two-client local acceptance and the separate AWS/Cognito live gate.
 - M06.5 synthetic two-client HTTP/socket fixture is prepared, outside this source
   checkpoint. No AWS deployment or collaborator branch integration occurred.
+
+## M06.5 source/local receipt — 2026-10-03
+
+- Full VM971 passed/2skips; all89 browser-compatible original targets Chrome844
+  passed/1skip. Real Chrome90 and Android90 M05/M06 plugin scenarios passed.
+  Backend84 checks, backend tsc, root analyzer and formatting passed.
+- Real Chrome owner + Android editor passed on the reinstalled SDK: two-way
+  automatic edits, durable local outbox, disconnect/cursor recovery, lost relay
+  ACK, viewer API denial and revoke content masking; eventPublishes13 and both
+  passed flags true. Synthetic identities/SDK doubles do not prove live AWS.
+- New acceptance source: integration_test/m06_regression_test.dart,
+  integration_test/m06_two_client_test.dart, amplify/realtime/two_client_fixture.ts,
+  tool/m06_socket_fixture.py and tool/m06_cloud_review.ts. Records:
+  ACCEPTANCE.md, LIVE_GATE.md, CHECKLIST_AUDIT.md and CURRENT_WORK.md.
+- Android SDK installed at D:/tools/AndroidSdk and SDK Manager inventory verified.
+  Existing NoteFlow_API35 AVD/app data retained, no uninstall/wipe. Android90:
+  524s native build and 6m09s tests. Repeated two-client run1 passed after reinstall.
+- Initial fixture canonical-owner binding and Chrome aggregate compiler memory
+  failures are documented excluded setup attempts; final runs passed unchanged
+  product guards/assertions. Main APK will be rebuilt from this accepted Git
+  checkpoint and installed with adb install -r; record the receipt on Notion.
+- Notion rubric/progress:15 checked,4 pending live criteria. Local cloud-resource
+  synth is review-only with a fictional account, not an actual stack diff/deploy.
+- Pre-existing macOS registrant, final_project.md, browser logs, ignored output
+  and SDK artifacts remain excluded. M09 stays deferred per the user instruction.

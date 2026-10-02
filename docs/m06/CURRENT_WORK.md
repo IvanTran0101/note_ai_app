@@ -42,8 +42,74 @@ subagents; graph Tier2 exact D root. _agent_ops tools are absent.
 - M06.5 preparation: loopback synthetic WebSocket fixture + production Dynamo
   store/ACL/relay SDK-double HTTP fixture and two-client target. No AWS access,
   real Cognito/JWT verification or cloud encryption is claimed by that fixture.
-- Next M06.4 durable metadata event relay/session
-  subscription, M06.5 two-client Chrome + Android, full regression/fix.
+- M06.4 pushed/remote verified 315caf4a7c0fb5f678a7df5f45090428a8983015.
+  M06.5 active two-client batch: Chrome owner at localhost8776, Android recipient
+  uses 10.0.2.2:8786 HTTP/8787 socket. Private TEMP/native hooks now cached. Both
+  test apps use separate fixed synthetic account namespaces, never real data.
+- M06.5 first two-client run failed because the synthetic HTTP fixture passed
+  the recipient as canonical owner to applyMutation. Production handler already
+  separates canonical owner and actor; fixture now uses the same binding.
+  This setup attempt is excluded, not a product ACL defect. Rerun with fresh
+  synthetic fixture state, then full regression/fix and final acceptance.
+- M06.5 two-client retry passed: real Chrome owner driver true/no failures and
+  Android recipient1 passed; both fixture passed flags true, eventPublishes13.
+  Actual HTTP/socket, local-first durable outbox, bidirectional automatic edit,
+  disconnect/cursor catch-up, lost relay ACK, viewer API denial and revoke mask.
+  Fixture uses synthetic identities/SDK doubles; live AWS remains unverified.
+- Full VM and Chrome-compatible regression and backend/tsc are running. Added
+  m06_regression_test.dart to group the existing M05/M06 registrations for one
+  final real-plugin Chrome/Android run. No product assertions are changed.
+- Final platform Android startup found no emulator device after the two-client
+  run. Host had only587MB free physical RAM while two Web compilers and VM were
+  active. The extra platform Web build completed155.6s before a guarded stop
+  could run; the guard rejected an absent process, so nothing was stopped.
+  Let full regressions finish, then restart existing AVD without wipe/reset and
+  run platform builds sequentially. This pre-test device failure is excluded.
+- Continuation03/10: full VM971 passed (+2skips). Chrome89 aggregate compiler
+  exited unexpectedly during host memory pressure; excluded setup attempt.
+  Retrying browser targets in three layer groups: Application/Domain35 targets
+  passed232 cases; Storage/Sharing33 and remaining UI21 are next.
+- User confirmed deleting C:/AndroidSdk and requested reinstall. New official
+  command-line tools22 archive SHA256 verified against Android download page;
+  installing D:/tools/AndroidSdk with API36 build tools/NDK28.2 and the existing
+  API35 Google APIs x86_64 image/emulator. Existing NoteFlow AVD data is retained.
+  Flutter SDK config + ignored local.properties point to D; no product source
+  or tracked native configuration is changed. Notion connector is available
+  again after plugin discovery; fresh plan/rubric/progress were fetched.
+- Final Chrome regression is844 passed (+1skip) across89 original targets:
+  Application/Domain232, Storage/Sharing363 (+1skip), UI249. Full aggregate
+  compiler failure is excluded; grouped runs use unchanged original test mains.
+  Real Chrome final M05/M06 platform integration90 passed, driver true with
+  no failureDetails. Root analyzer clean (160s) and Dart formatter0 changes.
+- SDK Manager installed emulator + CMake, but remaining Java download was waiting
+  on TLS reads. Stopped only the verified SDK installer; direct official archive
+  download/checksum verification uses HTTPS repository manifests and writes local
+  package metadata for later SDK Manager validation. No AVD/data reset.
+- SDK Manager --list_installed now validates all seven required packages:
+  API36/build36, platform-tools37.0.1, emulator37.2.12, NDK28.2.13676358,
+  CMake3.22.1 and Google APIs API35 x86_64 revision9. Existing AVD started
+  without snapshot load/save or wipe; task RAM1536MB. Final Android90 next.
+- Prepared LIVE_GATE.md plus a local CloudFormation resource review through
+  tool/m06_cloud_review.ts. Synth uses a fictional account/pool and makes no
+  AWS call; it cannot substitute for the real account/stack diff or deployment.
+- New SDK booted emulator5554 (sys.boot_completed=1); final Android90 build
+  is active. Gradle installed its additional API35 platform dependency. Verified
+  local_llm_bridge clang compilation is running after the SDK-root change;
+  preserve the task-private TEMP and let the sequential native build finish.
+- Graph connection recovered: D root ready, generation2026-10-02T16:47:30Z.
+  Coverage checked all five new acceptance/review code paths; four show changed
+  metadata and cloud_review not_tracked. Exact source/patch fallback was read;
+  no exhaustive graph or deployed-provider claim is made.
+- Final Android platform90 passed after SDK reinstall: native build524s,
+  all90 in6m09s, no uninstall/data reset. Chrome90 + Android90 plugin regression
+  accepted. Repeated two-client HTTP/socket on the new SDK also passed: Android1,
+  Chrome driver true/no failures, both fixture passed flags true, eventPublishes13.
+- M06.5 source/local acceptance is complete: VM971/2skips, Chrome844/1skip across
+  all89 original targets, backend84/tsc, root analyzer clean and formatter0 changes.
+  ACCEPTANCE.md and LIVE_GATE.md hold reproduction/evidence and provider limits.
+  Notion actual rubric/progress now15 checked/4 pending deployed realtime criteria.
+  Finish plan/status consistency, explicit-stage checkpoint/push and verify remote;
+  then rebuild/install main.dart APK with -r and record final receipts on Notion.
 - Local sharing intents may be durable, but ACTIVE ACL is only server-authorized.
 - M05 encrypted drafts/session/consent/lineage must survive all changes.
 - Update/push after accepted milestone/M/P, not after partial preparation.
