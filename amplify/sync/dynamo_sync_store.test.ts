@@ -3,7 +3,7 @@
  * document client avoids AWS calls and simulates eventual GSI visibility.
  * Run with `npx tsx amplify/sync/dynamo_sync_store.test.ts`.
  */
-import { QueryCommand, type DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, type DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 import { decodeChangeCursor } from './cursor';
 import { DynamoSyncStore } from './dynamo_sync_store';
@@ -61,6 +61,7 @@ const main = async (): Promise<void> => {
     assertEqual(first.items[0]?.id, 'note-1', 'first item');
     assertEqual(decodeChangeCursor(first.nextCursor, 'user-1'), 1, 'cursor before gap');
     assertEqual(first.hasMore, false, 'a known gap stops this poll');
+    assertEqual(first.catchUpPending, true, 'realtime must retry this gap');
 
     visibleRows = [change(2), change(3), change(4)];
     const recovered = await store.listChanges('user-1', first.nextCursor, 50);
@@ -87,6 +88,15 @@ const main = async (): Promise<void> => {
     assertEqual(last.items.length, 1, 'last page size');
     assertEqual(last.hasMore, false, 'last page status');
     assertEqual(decodeChangeCursor(last.nextCursor, 'user-3'), 3, 'last page cursor');
+  });
+  await check('an empty eventual GSI still signals committed actor-feed catch-up', async () => {
+    const documentClient = { async send(command: unknown) {
+      return command instanceof GetCommand ? { Item: { lastSequence: 1 } } : { Items: [] };
+    } } as unknown as DynamoDBDocumentClient;
+    const current = new DynamoSyncStore({ tableName: 'notes', documentClient, sharing: true });
+    const page = await current.listChanges('user', null, 50);
+    assertEqual(page.catchUpPending, true, 'strong metadata detects invisible committed row');
+    assertEqual(decodeChangeCursor(page.nextCursor, 'user'), 0, 'never skip invisible change');
   });
 };
 

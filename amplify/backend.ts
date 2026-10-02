@@ -5,6 +5,7 @@ import { createSummaryInfrastructure } from './ai/infrastructure';
 import { createSyncHttpApi } from './sync/http_api';
 import { createNotesTable } from './sync/notes_table';
 import { createSyncFunction } from './sync/sync_function';
+import { createRealtimeInfrastructure } from './realtime/infrastructure';
 
 /**
  * NoteFlow Amplify Gen 2 backend.
@@ -21,6 +22,8 @@ const backend = defineBackend({
 
 const syncStack = backend.createStack('SyncStack');
 const notesTable = createNotesTable(syncStack);
+const realtime = createRealtimeInfrastructure(syncStack, notesTable,
+  backend.auth.resources.userPool.userPoolId, backend.auth.resources.userPoolClient.userPoolClientId);
 const syncFunction = createSyncFunction(syncStack, notesTable, backend.auth.resources.userPool.userPoolId);
 const syncHttpApi = createSyncHttpApi({
   scope: syncStack,
@@ -40,6 +43,8 @@ backend.addOutput({
   custom: {
     syncApiEndpoint: syncHttpApi.api.apiEndpoint,
     aiApiEndpoint: summaryInfrastructure.api.apiEndpoint,
+    eventHttpEndpoint: realtime.httpEndpoint,
+    eventSocketEndpoint: realtime.socketEndpoint,
   },
 });
 

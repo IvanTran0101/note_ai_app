@@ -22,7 +22,26 @@ subagents; graph Tier2 exact D root. _agent_ops tools are absent.
   prevent silent local/remote overwrite. Shared With Me/management and encrypted
   unsaved access-loss evidence are connected. Final analyzer is clean and row
   regression119 passed. Notion actual FR05/06/10 NFR04/05 + recipient Done When
-  checked. Preparing scoped checkpoint push. No live AWS claim.
+  checked. Pushed/remote verified 22dc1cc3faba47362ceac57f50791d64c5d37463.
+  No live AWS claim.
+- M06.4 source/protocol accepted: durable EVENT lease/recovery and scoped AppSync Events publish;
+  account/session-owned socket adapter requests the existing cursor coordinator.
+  No second local writer and no client publication. Protocol and two-client
+  local acceptance precede the separate deployed AppSync/Cognito gate.
+  Backend84/84 and tsc pass; final protocol/cursor VM14 and real Chrome14 pass.
+  Android14 now passed after task-private TEMP retry (496s build, no uninstall).
+  Scoped VM280 (+1skip), analyzer and diff check pass. Added catchUpPending feed flag and
+  saved-cursor retry to cover an event arriving before GSI visibility.
+  Android first build failed clang temporary-object rename in system TEMP,
+  before any test. Retry uses a task-private ignored build temp directory;
+  after the shared hook lock timeout, final Android retry now compiles with that
+  private TEMP succeeded. Setup failures are excluded from acceptance counts.
+  Subsequent uncached native builds must run sequentially; no native source edits.
+  Duplicate D-path VM startup attempts timed out on the native hook lock and
+  are excluded; the R-path VM receipt passed. Never overlap uncached native builds.
+- M06.5 preparation: loopback synthetic WebSocket fixture + production Dynamo
+  store/ACL/relay SDK-double HTTP fixture and two-client target. No AWS access,
+  real Cognito/JWT verification or cloud encryption is claimed by that fixture.
 - Next M06.4 durable metadata event relay/session
   subscription, M06.5 two-client Chrome + Android, full regression/fix.
 - Local sharing intents may be durable, but ACTIVE ACL is only server-authorized.

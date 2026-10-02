@@ -1,5 +1,5 @@
 import { RemovalPolicy, Stack } from 'aws-cdk-lib';
-import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, ProjectionType, StreamViewType, Table } from 'aws-cdk-lib/aws-dynamodb';
 
 /**
  * NoteFlow remote sync table (M1.2 persistence slice A).
@@ -39,6 +39,7 @@ export const createNotesTable = (stack: Stack): Table => {
     billingMode: BillingMode.PAY_PER_REQUEST,
     timeToLiveAttribute: 'ttl',
     removalPolicy: RemovalPolicy.DESTROY,
+    stream: StreamViewType.NEW_IMAGE,
   });
 
   // `ProjectionType.ALL` on purpose: the change feed hands callers the whole
@@ -51,5 +52,11 @@ export const createNotesTable = (stack: Stack): Table => {
     projectionType: ProjectionType.ALL,
   });
 
+  table.addGlobalSecondaryIndex({
+    indexName: 'PendingRelays',
+    partitionKey: { name: 'relayQueue', type: AttributeType.STRING },
+    sortKey: { name: 'relayDueAt', type: AttributeType.NUMBER },
+    projectionType: ProjectionType.KEYS_ONLY,
+  });
   return table;
 };

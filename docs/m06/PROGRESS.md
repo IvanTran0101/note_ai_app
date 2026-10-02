@@ -10,8 +10,8 @@ Current scope: fresh backend ACL/verified recipient + conditional actor/canonica
 sync and Summary, then local-first sharing/UI and durable realtime acceptance.
 M09 is deferred until both collaborators finish and a combined integration/test
 batch precedes a new UI/UX plan. No M09 implementation in this M06 run.
-M06.2 backend and M06.3 client source acceptance now pass. Next M06.4 durable
-AppSync relay/session transport, then M06.5 full two-client acceptance.
+M06.2–M06.4 source acceptance now passes. Next M06.5 full two-client local
+acceptance and the separate deployed AppSync/Cognito gate.
 
 Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 22587a5954c182c202d07923ec8be1e3060fa42d. Read MUST_REMEMBER.md before coding.
@@ -29,7 +29,7 @@ Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 | M06.1 | Complete foundation | Canonical pair/role/share policy, strict v3 codecs, encrypted actor storage; Chrome40 + Android40 |
 | M06.2 | Complete backend source/tests | SERVER_CONTRACT.md; 75 backend checks, tsc; AWS live gate remains separate |
 | M06.3 | Complete client source acceptance | CLIENT_CONTRACT.md; Chrome56 + Android56, local encrypted storage/UI/atomic draft review |
-| M06.4 | Planned | Durable AppSync relay and cursor/session recovery |
+| M06.4 | Complete source/protocol acceptance | REALTIME.md; backend84, Chrome14 + Android14, VM280 (+1skip); deployed AWS gate pending |
 | M06.5 | Planned | Full tests + two clients on Web/Android; distinguish live cloud spike |
 
 At contract freeze all criteria were pending. Current accepted criteria: FR05,
@@ -127,3 +127,19 @@ verified lookup/ACL/atomic actor feed and shared-route evidence and cloud limits
   it preserves keys/content/layout and is covered by final UI regression.
 - Tick actual Implement plan criteria FR05/06/10, NFR04/05 and recipient list
   Done When. No live AWS/AppSync claim, no M09 redesign, no data reset.
+
+## M06.4 source/protocol receipt — 2026-10-02
+
+- Durable EVENT stream relay, conditional lease, sparse recovery, stable event ID,
+  SDK SigV4 IAM-only publish and own-sub Cognito channel handler are implemented.
+- Account/session adapter refreshes ID token, keepalive/reconnect and cursor catch-up.
+  No second data writer. Additive catchUpPending flag covers GSI visibility gaps.
+- Acceptance: backend84/84 + tsc; VM protocol14; real Chrome14 and Android14;
+  scoped VM280 (+1skip), root analyzer clean and diff check pass.
+- Android initial system-TEMP rename error and later shared-hook lock timeout are
+  excluded setup attempts. Final build used task-private ignored TEMP, 496 seconds,
+  then installed with --no-uninstall and all14 passed. No native source changed.
+- Notion M06.4 source/protocol milestone recorded; full realtime rubric still
+  awaits actual two-client local acceptance and the separate AWS/Cognito live gate.
+- M06.5 synthetic two-client HTTP/socket fixture is prepared, outside this source
+  checkpoint. No AWS deployment or collaborator branch integration occurred.

@@ -86,6 +86,7 @@ final class SyncChangesPage {
     required Iterable<SyncNoteSnapshot> snapshots,
     String? nextCursor,
     this.hasMore = false,
+    this.catchUpPending = false,
   }) : snapshots = List<SyncNoteSnapshot>.unmodifiable(snapshots),
        nextCursor = _normalizeCursor(nextCursor) {
     if (hasMore && this.nextCursor == null) {
@@ -96,6 +97,7 @@ final class SyncChangesPage {
   final List<SyncNoteSnapshot> snapshots;
   final String? nextCursor;
   final bool hasMore;
+  final bool catchUpPending;
 }
 
 String _requireNonBlank(String value, String fieldName) {

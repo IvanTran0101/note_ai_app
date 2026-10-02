@@ -161,6 +161,10 @@ SyncChangesPage decodeChangesPage(Object? body) {
     throw const FormatException('Changes page "hasMore" must be a boolean.');
   }
   final bool hasMorePages = hasMore == true;
+  final catchUpPending = json['catchUpPending'];
+  if (catchUpPending != null && catchUpPending is! bool) {
+    throw const FormatException('Changes catch-up flag must be a boolean.');
+  }
   if (hasMorePages && nextCursor == null) {
     throw const FormatException(
       'Changes page with "hasMore" true must carry a "nextCursor".',
@@ -170,6 +174,7 @@ SyncChangesPage decodeChangesPage(Object? body) {
     snapshots: snapshots,
     nextCursor: nextCursor,
     hasMore: hasMorePages,
+    catchUpPending: catchUpPending == true,
   );
 }
 

@@ -18,10 +18,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "5.2.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1145.0",
     "@aws-sdk/client-dynamodb": "^3.1139.0",
     "@aws-sdk/client-sesv2": "^3.1144.0",
+    "@aws-sdk/credential-provider-node": "3.972.84",
     "@aws-sdk/lib-dynamodb": "^3.1139.0",
-    "@noble/hashes": "^2.4.0"
+    "@noble/hashes": "^2.4.0",
+    "@smithy/signature-v4": "5.7.3"
   }
 }

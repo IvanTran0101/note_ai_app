@@ -242,6 +242,11 @@ final class SyncCoordinatorService implements ISyncCoordinator {
         requireSession?.call();
       }
       pulled += appliedPage.pulled;
+      // Persist the contiguous prefix, then let realtime retry the same cursor.
+      // An early event must not be marked caught up across an eventual GSI gap.
+      if (page.catchUpPending) {
+        throw const SyncFailure(code: SyncErrorCode.serverUnavailable);
+      }
       if (!page.hasMore) break;
     }
 

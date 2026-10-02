@@ -69,6 +69,7 @@ export type ConflictBody = Readonly<{
 export type ChangesPageBody = Readonly<{
   items: readonly NoteBody[];
   hasMore: boolean;
+  catchUpPending?: boolean;
   nextCursor?: string;
 }>;
 
@@ -147,10 +148,11 @@ export const conflictBody = ({ mutationId, remoteNote }: ConflictedMutation): Co
  * optional on the port, and an absent cursor must stay absent rather than be
  * serialized as `null`.
  */
-export const changesPageBody = ({ items, nextCursor, hasMore }: ChangesPage): ChangesPageBody => {
-  const body: { items: NoteBody[]; hasMore: boolean; nextCursor?: string } = {
+export const changesPageBody = ({ items, nextCursor, hasMore, catchUpPending }: ChangesPage): ChangesPageBody => {
+  const body: { items: NoteBody[]; hasMore: boolean; nextCursor?: string; catchUpPending?: boolean } = {
   items: items.map(note => noteBodyOf(note)),
     hasMore,
+    ...(catchUpPending ? { catchUpPending: true } : {}),
   };
   if (typeof nextCursor === 'string' && nextCursor.length > 0) {
     body.nextCursor = nextCursor;

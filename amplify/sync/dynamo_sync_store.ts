@@ -168,6 +168,10 @@ export class DynamoSyncStore implements SyncStore {
     }
     const hasMore = !foundGap && contiguousRows.length > pageSize;
     const page = contiguousRows.slice(0, pageSize);
+    const lastVisible = page.length === 0 ? after : sequenceOf(page[page.length - 1]);
+    const committed = this.feed && !hasMore ? await this.feed.item(ownerId, META_SORT_KEY) : null;
+    if (committed && (!Number.isSafeInteger(committed.lastSequence) || committed.lastSequence < 0)) throw corruptData();
+    const catchUpPending = foundGap || Boolean(committed && committed.lastSequence > lastVisible);
 
     return {
       items: await Promise.all(page.map(async (row) => {
@@ -181,6 +185,7 @@ export class DynamoSyncStore implements SyncStore {
       })),
       nextCursor: encodeChangeCursor(ownerId, page.length === 0 ? after : sequenceOf(page[page.length - 1])),
       hasMore,
+      ...(catchUpPending ? { catchUpPending: true } : {}),
     };
   }
 

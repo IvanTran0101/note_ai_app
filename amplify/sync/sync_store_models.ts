@@ -64,6 +64,8 @@ export type ChangesPage = Readonly<{
   /** Always minted: the caller stores it and sends it back on the next poll. */
   nextCursor: string;
   hasMore: boolean;
+  /** Event committed, but the eventual GSI has not exposed the whole prefix. */
+  catchUpPending?: boolean;
 }>;
 
 /** The port `handler.ts` codes against; nothing here knows about HTTP. */

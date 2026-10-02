@@ -14,6 +14,9 @@ import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
 import 'application/sync/local_sync_store.dart';
 import 'application/sync/sync_conflict_resolver.dart';
+import 'application/sync/account_realtime_service.dart';
+import 'infrastructure/sync/appsync_revision_source.dart';
+import 'infrastructure/sync/cognito_id_token_provider.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/summary_run_context.dart';
@@ -70,6 +73,8 @@ import 'presentation/routing/app_router.dart';
 import 'presentation/routing/app_routes.dart';
 import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
+
+part 'main_realtime.dart';
 
 const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
@@ -380,6 +385,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
   AccountSyncRuntime? _syncRuntime;
+  AccountRealtimeService? _realtimeService;
   HttpShareGateway? _sharingGateway;
   NoteSharingAppService? _sharingService;
   NoteSharingAppService? _sharingForCurrentAccount() {
@@ -609,6 +615,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final int generation = _currentUserSession.sessionGeneration;
     final int? previous = _lastSummarySessionGeneration;
     if (previous != null && previous != generation) {
+      _stopRealtime();
       _invalidateSummaryRuns();
       _noteSecurityRuntime.invalidateSession();
       _sharingGateway?.close();
@@ -628,6 +635,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
     final String? accountUserId = _currentUserSession.userId;
     if (accountUserId == null) {
+      _stopRealtime();
       _lastSyncAccountUserId = null;
       _disposeSyncPresentationController();
       return;
@@ -638,6 +646,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _lastSyncAccountUserId = accountUserId;
     _disposeSyncPresentationController();
     _requestSyncForAccount(accountUserId);
+    _startRealtime(accountUserId);
   }
 
   void _invalidateSummaryRuns() {
@@ -689,11 +698,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _noteSecurityRuntime.lockAll();
+      _stopRealtime();
     }
     if (state == AppLifecycleState.resumed) {
       final String? accountUserId = _currentUserSession.userId;
       if (accountUserId != null) {
         _requestSyncForAccount(accountUserId);
+        _startRealtime(accountUserId);
       }
     }
   }
@@ -1214,6 +1225,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _stopRealtime();
     _noteSecurityRuntime.dispose();
     _disposed = true;
     for (final store in _localSyncStores.values) {

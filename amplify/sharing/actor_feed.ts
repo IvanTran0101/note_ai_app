@@ -68,6 +68,7 @@ export class ActorFeed {
       eventId, canonicalOwnerId: owner, targetNoteId: note.id, revision: note.revision,
       protectionRevision: note.protectionRevision ?? 0, sharingRevision: note.sharingRevision ?? 0,
       actors: [...new Set(actors)], relayStatus: 'pending', attempts: 0,
-      nextAttemptAt: Date.now(), createdAt: new Date().toISOString() } } };
+        nextAttemptAt: Date.now(), relayQueue: 'pending', relayDueAt: Date.now(),
+        createdAt: new Date().toISOString() } } };
   }
 }

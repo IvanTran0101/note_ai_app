@@ -36,18 +36,25 @@ export class TestDynamo {
     if (attribute) return (this.value(attribute[2], row ?? {}, names) !== undefined) !== !!attribute[1];
     const contains = /^contains\((.+), (:.+)\)$/.exec(e);
     if (contains) return this.value(contains[1], row ?? {}, names)?.includes(v[contains[2]]) ?? false;
-    const match = /^([\w#.]+) (=|>|<) (:\w+)$/.exec(e);
+    const match = /^([\w#.]+) (=|>|<|<=|>=) (:\w+)$/.exec(e);
     assert.ok(match, `Unsupported test condition ${e}`);
     const left = this.value(match[1], row ?? {}, names), right = v[match[3]];
-    return match[2] === '=' ? left === right : match[2] === '>' ? left > right : left < right;
+    return match[2] === '=' ? left === right : match[2] === '>' ? left > right :
+      match[2] === '<' ? left < right : match[2] === '<=' ? left <= right : left >= right;
   }
   private apply(op: Row) {
     if (op.Item) this.put(op.Item);
     else if (op.UpdateExpression) {
       const row = { ...op.Key, ...this.rows.get(rowKey(op.Key)) };
-      for (const assignment of op.UpdateExpression.replace(/^SET /, '').split(',')) {
-        const [name, value] = assignment.trim().split(' = ');
-        row[op.ExpressionAttributeNames?.[name] ?? name] = op.ExpressionAttributeValues[value];
+      const sections = op.UpdateExpression.split(/\b(SET|REMOVE|ADD)\b/);
+      for (let i = 1; i < sections.length; i += 2) {
+        for (const assignment of sections[i + 1].trim().split(',')) {
+          const [name, value] = assignment.trim().split(sections[i] === 'SET' ? ' = ' : ' ');
+          const field = op.ExpressionAttributeNames?.[name] ?? name;
+          if (sections[i] === 'REMOVE') delete row[field];
+          else if (sections[i] === 'ADD') row[field] = (row[field] ?? 0) + op.ExpressionAttributeValues[value];
+          else row[field] = op.ExpressionAttributeValues[value];
+        }
       }
       this.put(row);
     }
@@ -56,11 +63,17 @@ export class TestDynamo {
     if (c instanceof GetCommand) return { Item: structuredClone(this.rows.get(rowKey(c.input.Key!))) };
     if (c instanceof QueryCommand) {
       const v = c.input.ExpressionAttributeValues!;
-      const rows = [...this.rows.values()].filter(row => c.input.IndexName
+      const rows = [...this.rows.values()].filter(row => c.input.IndexName === 'PendingRelays'
+        ? row.relayQueue === v[':pending'] && row.relayDueAt <= v[':now'] : c.input.IndexName
         ? row.changeOwnerId === v[':ownerKey'] && row.changeSequence > v[':after']
         : row.ownerId === v[':owner'] && row.noteId.startsWith(v[':prefix']));
-      rows.sort((a, b) => c.input.IndexName ? a.changeSequence - b.changeSequence : a.noteId.localeCompare(b.noteId));
-      return { Items: structuredClone(rows.slice(0, c.input.Limit ?? rows.length)) };
+      rows.sort((a, b) => c.input.IndexName === 'PendingRelays' ? a.relayDueAt - b.relayDueAt :
+        c.input.IndexName ? a.changeSequence - b.changeSequence : a.noteId.localeCompare(b.noteId));
+      const offset = c.input.ExclusiveStartKey ? rows.findIndex(r => rowKey(r) === rowKey(c.input.ExclusiveStartKey!)) + 1 : 0;
+      const items = rows.slice(offset, offset + (c.input.Limit ?? rows.length));
+      const last = items.at(-1);
+      return { Items: structuredClone(items), ...(last && offset + items.length < rows.length ?
+        { LastEvaluatedKey: { ownerId: last.ownerId, noteId: last.noteId } } : {}) };
     }
     if (c instanceof TransactWriteCommand) {
       const hook = this.beforeTransaction; this.beforeTransaction = undefined; hook?.();
@@ -84,6 +97,7 @@ export class TestDynamo {
     if (!this.check(op.ConditionExpression, this.rows.get(rowKey(op.Item ?? op.Key)), op.ExpressionAttributeNames, op.ExpressionAttributeValues)) {
       throw Object.assign(new Error('Conditional'), { name: 'ConditionalCheckFailedException' });
     }
-    this.apply(op); return {};
+    this.apply(op); return c.input.ReturnValues === 'ALL_NEW' ?
+      { Attributes: structuredClone(this.rows.get(rowKey(op.Key))) } : {};
   }
 }
