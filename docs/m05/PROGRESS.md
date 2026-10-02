@@ -563,3 +563,13 @@ artifact task; no source changes are required.
 | TESTING.md | Updated: compatible target selection, real platform/reload commands and fixture/environment repairs |
 | Notion | Updated: 6 correction criteria checked, progress and source pages carry results/verified checkpoint |
 | _agent_ops records | Not needed: directory/tools/receipt template absent; actual M05 docs carry continuity |
+
+## M02/M03/M04 integration verification — 2026-10-02
+
+User requested checking the collaborator's G1–G5 and cross-module questions.
+Read current final-tuankiet@528a745 source, Notion M02/M03/M04 specs and current
+M05/M06 contracts. [M02_M03_M04_HANDOFF.md](M02_M03_M04_HANDOFF.md) records the
+confirmed boundaries, exact implementation gaps and required attachment tests.
+COLLAB_REVIEW.md links the report. No source changes, runtime tests, new rubric
+checkboxes or deployment; M06 remains paused at M06.1. This is contract review,
+not acceptance of collaborator code from an unspecified branch/PR.

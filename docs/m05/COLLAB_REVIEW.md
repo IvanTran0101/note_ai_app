@@ -106,3 +106,14 @@ New routes fail closed against older deployments. No second sync writer, raw
 password persistence or reset is introduced. LOCAL_FIRST_WEB.md records the
 migration-compatible intent, predecessor receipt/conflict path and QA limits.
 M06 remains paused at M06.1; M09's two visual redesigns remain on its Notion backlog.
+
+## M02/M03/M04 handoff verification — 2026-10-02
+
+The user requested verification of the collaborator's G1–G5 integration table.
+[M02_M03_M04_HANDOFF.md](M02_M03_M04_HANDOFF.md) records source-backed scope,
+role matrix, streaming/signed URL conditions, metadata compatibility, binary
+cache/attempt requirements and the pending regression matrix. Reviewed baseline:
+final-tuankiet@528a745. Current OwnerNoteAcl/runtime, default attachment grant
+scope gap and missing shared HTTP owner/access mapping are explicitly identified.
+No collaborator implementation or attachment runtime acceptance is claimed.
+M06 remains paused; this batch changes documentation only.
