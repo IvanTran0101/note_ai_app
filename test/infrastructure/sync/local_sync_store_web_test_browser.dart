@@ -10,13 +10,14 @@ import 'dart:convert';
 import 'dart:js_interop';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
 import 'package:indexed_db/indexed_db.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_store.dart';
 import 'package:note_ai_app/application/sync/pending_mutation.dart';
 import 'package:note_ai_app/application/sync/sync_cursor.dart';
-import 'package:note_ai_app/infrastructure/sync/local_sync_codec_schema.dart';
 import 'package:note_ai_app/infrastructure/sync/local_sync_state_codec.dart';
 import 'package:note_ai_app/infrastructure/sync/local_sync_store_account_namespace.dart';
 import 'package:note_ai_app/infrastructure/sync/local_sync_store_contract.dart';
@@ -46,7 +47,7 @@ LocalSyncState _stateFor(String accountUserId, {String noteId = 'note-1'}) {
 Future<Database> _openAccountDatabase(String accountUserId) {
   return IdbFactory().open(
     LocalSyncAccountNamespace(accountUserId).webDatabaseName,
-    version: 1,
+    version: 2,
     onUpgradeNeeded: (VersionChangeEvent event) {
       final Database database = event.target.database;
       final List<String> stores = database.objectStoreNames ?? const <String>[];
@@ -145,6 +146,8 @@ void _expectNoLeakage(Object error, String accountUserId) {
 }
 
 void runLocalSyncStoreWebTests() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   group('Web IndexedDbLocalSyncStore', () {
     test('reads an empty bound state when the account has no record', () async {
       const String account = 'web-empty-account';
@@ -200,15 +203,19 @@ void runLocalSyncStoreWebTests() {
       expect(record, isNotNull);
       final Map<Object?, Object?> decoded =
           (jsonDecode(_jsonText(record!)) as Map).cast<Object?, Object?>();
-      expect(decoded.keys.toSet(), LocalSyncSchema.envelopeFields);
-      expect(decoded[LocalSyncSchema.accountUserId], _richAccount);
-      expect(decoded[LocalSyncSchema.notes], hasLength(state.notes.length));
-      expect(decoded[LocalSyncSchema.outbox], hasLength(state.outbox.length));
-      expect(
-        decoded[LocalSyncSchema.conflicts],
-        hasLength(state.conflicts.length),
-      );
-      expect(decoded[LocalSyncSchema.cursor], isNotNull);
+      expect(decoded['schemaVersion'], 3);
+      expect(decoded['packet'], isNotNull);
+      final raw = _jsonText(record);
+      for (final secret in [
+        secretTitle,
+        secretContent,
+        secretCursor,
+        fixturePayloadTitle,
+        fixturePayloadContent,
+        _richAccount,
+      ]) {
+        expect(raw, isNot(contains(secret)));
+      }
     });
 
     test(
@@ -274,14 +281,26 @@ void runLocalSyncStoreWebTests() {
       });
       await expectLater(
         store.read(),
-        _storeError(LocalSyncStoreFailure.malformed, 'M2 schema'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
       expect(await _readRawRecord(account), isNotNull);
 
       await _writeRawRecord(account, 'not-an-envelope');
       await expectLater(
         store.read(),
-        _storeError(LocalSyncStoreFailure.malformed, 'M2 schema'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
 
       // A secret-carrying envelope that is corrupt in an unrelated field.
@@ -302,9 +321,9 @@ void runLocalSyncStoreWebTests() {
       await _writeRawRecord(account, secretEnvelope);
       try {
         await store.read();
-        fail('expected a LocalSyncStoreException');
-      } on LocalSyncStoreException catch (error) {
-        expect(error.failure, LocalSyncStoreFailure.malformed);
+        fail('expected a NoteSecurityFailure');
+      } on NoteSecurityFailure catch (error) {
+        expect(error.code, NoteSecurityFailureCode.storage);
         _expectNoLeakage(error, account);
       }
       expect(await _readRawRecord(account), isNotNull);
@@ -315,7 +334,13 @@ void runLocalSyncStoreWebTests() {
       );
       await expectLater(
         store.read(),
-        _storeError(LocalSyncStoreFailure.foreignAccount, 'different account'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
     });
 

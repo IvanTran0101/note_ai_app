@@ -113,7 +113,7 @@ final class NoteRepository
           .toList(growable: false);
 
   @override
-  Future<void> save(Note note) {
+  Future<void> save(Note note) async {
     final context = _captureWrite();
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();

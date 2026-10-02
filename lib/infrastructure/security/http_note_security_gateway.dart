@@ -162,9 +162,11 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
   @override
   Future<NoteRecoveryChallenge> requestRecovery(String id) async {
     final r = await _request(id, 'protection/reset/request', body: {});
-    return NoteRecoveryChallenge(
-      r['challengeId'] as String,
-      _expiry(r['expiresAt']),
+    return _decode(
+      () => NoteRecoveryChallenge(
+        r['challengeId'] as String,
+        _expiry(r['expiresAt']),
+      ),
     );
   }
 
@@ -183,7 +185,7 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
     ),
   );
 
-  NoteUnlockLease _lease(String id, Map<String, Object?> r) {
+  NoteUnlockLease _lease(String id, Map<String, Object?> r) => _decode(() {
     final token = r['grant'];
     if (token is! String || !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(token)) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
@@ -202,11 +204,23 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
     }
     _proofs[id] = _Proof(token, lease);
     return lease;
+  });
+
+  static T _decode<T>(T Function() read) {
+    try {
+      return read();
+    } on NoteSecurityFailure {
+      rethrow;
+    } on Object {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+    }
   }
 
-  static NoteProtection _metadata(Map<String, Object?> r) => NoteProtection(
-    enabled: r['enabled'] as bool,
-    revision: r['revision'] as int,
+  static NoteProtection _metadata(Map<String, Object?> r) => _decode(
+    () => NoteProtection(
+      enabled: r['enabled'] as bool,
+      revision: r['revision'] as int,
+    ),
   );
   static DateTime _expiry(Object? value) {
     if (value is! int) {

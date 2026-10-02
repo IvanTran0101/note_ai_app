@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
@@ -187,7 +188,7 @@ void main() {
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 360);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, 24);
+    expect(tester.getTopLeft(form).dy, kIsWeb ? 36 : 24);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
       40,
@@ -217,7 +218,7 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, 73);
+    expect(tester.getTopLeft(form).dy, kIsWeb ? 141 : 73);
     expect(tester.getSize(form).width, 354);
     expect(tester.takeException(), isNull);
   });

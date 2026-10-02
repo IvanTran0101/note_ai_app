@@ -48,25 +48,13 @@ final class NoteDetailCopy {
       ? 'Tóm tắt đã cũ vì ghi chú đã thay đổi.'
       : 'This summary is out of date because the note changed.';
   String get saveBeforeSummary => _isVietnamese
-      ? kIsWeb
-            ? 'Phiên bản Web không hỗ trợ lưu ghi chú nên không thể tạo tóm tắt.'
-            : 'Ghi chú sẽ được tạo tự động khi bạn nhập. Sau đó, bạn có thể tạo tóm tắt.'
-      : kIsWeb
-      ? 'Summaries are unavailable because this Web build cannot save notes.'
+      ? 'Ghi chú sẽ được tạo tự động khi bạn nhập. Sau đó, bạn có thể tạo tóm tắt.'
       : 'Your note is created automatically as you type. You can summarize it once it is created.';
   String get autoSaveHint => _isVietnamese
-      ? kIsWeb
-            ? 'Web không hỗ trợ lưu ghi chú'
-            : 'Tự động lưu khi bạn nhập'
-      : kIsWeb
-      ? 'Saving unavailable on Web'
+      ? 'Tự động lưu khi bạn nhập'
       : 'Saves automatically as you type';
   String get autoSavePending => _isVietnamese
-      ? kIsWeb
-            ? 'Thay đổi chưa được lưu trên Web'
-            : 'Thay đổi sẽ được tự động lưu'
-      : kIsWeb
-      ? 'Changes are not saved on Web'
+      ? 'Thay đổi sẽ được tự động lưu'
       : 'Changes will save automatically';
   String get persistenceUnavailable => _isVietnamese
       ? 'Phiên bản Web này không hỗ trợ lưu ghi chú. Thay đổi trong bản nháp sẽ mất khi bạn rời trang.'

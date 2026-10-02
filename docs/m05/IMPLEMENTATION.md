@@ -1,8 +1,8 @@
 # M05 — Implementation and acceptance evidence
 
 Scope: M05 only. Updated 2026-10-02. All six milestones are implemented in
-source. The evidence below is source/static/build evidence; it is not a claim
-that deployed API, mailbox delivery, device lifecycle or crash behavior passed.
+source. Source and automated runtime evidence are recorded below and in PROGRESS.md.
+Live deployed API/mailbox/provider delivery is outside this acceptance.
 
 ## Rubric mapping
 
@@ -24,8 +24,8 @@ that deployed API, mailbox delivery, device lifecycle or crash behavior passed.
 | SEC-NFR-04 Locked AI | P | Live Application/Summary guards, immutable run scope, canonical v0.4 note/revision/stage lineage, checks before provider and authorized release; lock clears UI output and rejects late results |
 | SEC-NFR-05 Scope/timeout | P | 15-minute unlock, session/account/protection epoch scopes, background/lock/logout invalidation; generation fences across reads, writes, sync and UI |
 
-All rows have source implementation. Deployed/runtime acceptance remains pending;
-there are no fabricated test results or Done checkboxes for those scenarios.
+All rows have source implementation and passed scoped automated acceptance.
+See PROGRESS.md for platform results and the separate live deployment limits.
 
 ## UI integration
 
@@ -64,7 +64,9 @@ there are no fabricated test results or Done checkboxes for those scenarios.
 
 ## Evidence limits
 
-No tests were added or run, no app/device acceptance, live provider call, OTP mail
-or backend deployment was performed in this task. Static/build results and graph
-coverage/fallback details are recorded in PROGRESS.md. Integration acceptance
-remains distinct from the completed source delivery.
+VM and Chrome app suites, Android and real-browser-plugin integration, backend
+policy/transaction checks and static checks passed. See PROGRESS.md for exact
+counts. UI security gateways and backend AWS/SES/provider calls use test doubles;
+real AES/PBKDF, Argon2id, IndexedDB and Android key/file adapters were exercised.
+No live provider call, OTP mail or backend deployment was performed. Tests cannot
+prove absence of every possible bug; the listed runs have no observed failures.

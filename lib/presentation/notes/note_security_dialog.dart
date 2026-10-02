@@ -187,6 +187,8 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
     return PopScope(
       canPop: !_busy,
       child: AlertDialog(
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         title: Text(copy.label(widget.action)),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

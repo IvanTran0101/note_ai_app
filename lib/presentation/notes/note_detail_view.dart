@@ -19,7 +19,7 @@ extension _NoteDetailView on _NoteDetailPageState {
             ],
           )
         : Scaffold(
-            resizeToAvoidBottomInset: true,
+            resizeToAvoidBottomInset: !_securityBusy,
             appBar: widget.showAppBar ? _buildAppBar(copy, pageTitle) : null,
             body: surface,
           );
@@ -179,14 +179,28 @@ extension _NoteDetailView on _NoteDetailPageState {
         (sync == null || widget.onEmbeddedExit != null)) {
       return editor;
     }
-    return Column(
-      children: <Widget>[
-        if (_note != null) _securityPanel(),
-        if (sync != null && widget.onEmbeddedExit == null)
-          SyncStatusPanel(controller: sync),
-        if (conflict != null) _buildConflictNotice(),
-        Expanded(child: editor),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minimumHeight = MediaQuery.textScalerOf(context).scale(320);
+        final content = Column(
+          children: <Widget>[
+            if (_note != null) _securityPanel(),
+            if (sync != null && widget.onEmbeddedExit == null)
+              SyncStatusPanel(controller: sync),
+            if (conflict != null) _buildConflictNotice(),
+            Expanded(child: editor),
+          ],
+        );
+        // Keyboard and accessibility text may leave less room than the fixed
+        // controls need. Scroll the complete surface while keeping editor state.
+        if (constraints.hasBoundedHeight &&
+            constraints.maxHeight < minimumHeight) {
+          return SingleChildScrollView(
+            child: SizedBox(height: minimumHeight, child: content),
+          );
+        }
+        return content;
+      },
     );
   }
 

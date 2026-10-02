@@ -151,10 +151,38 @@ List<String> _threadFlags(OS targetOS) =>
     : const [];
 
 List<String> _systemLibraries(OS targetOS) => switch (targetOS) {
+  OS.windows => const ['advapi32'],
   OS.android => const ['dl', 'm'],
   OS.linux => const ['dl', 'm'],
   _ => const [],
 };
+
+/// MSVC emits objects by basename. Upstream has multiple quants/repack/llama
+/// sources; unique translation units prevent one object replacing another.
+Future<List<String>> _windowsTranslationUnits(
+  BuildInput input,
+  BuildOutputBuilder output,
+  List<String> sources,
+  String group,
+) async {
+  if (input.config.code.targetOS != OS.windows) return sources;
+  final directory = Directory.fromUri(input.outputDirectory.resolve('units/'));
+  await directory.create(recursive: true);
+  output.dependencies.addAll(sources.map(input.packageRoot.resolve));
+  final result = <String>[];
+  for (var i = 0; i < sources.length; i++) {
+    final original = File.fromUri(input.packageRoot.resolve(sources[i]));
+    final extension = sources[i].endsWith('.cpp') ? 'cpp' : 'c';
+    final wrapper = File('${directory.path}/${group}_$i.$extension');
+    final include = original.path.replaceAll('\\', '/');
+    final source = '#include "$include"\n';
+    if (!await wrapper.exists() || await wrapper.readAsString() != source) {
+      await wrapper.writeAsString(source);
+    }
+    result.add(wrapper.path);
+  }
+  return result;
+}
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
@@ -178,7 +206,12 @@ void main(List<String> args) async {
 
     final ggmlCBuilder = CBuilder.library(
       name: _ggmlCArchiveName,
-      sources: _ggmlCSources(architecture),
+      sources: await _windowsTranslationUnits(
+        input,
+        output,
+        _ggmlCSources(architecture),
+        'ggml',
+      ),
       includes: includes,
       defines: defines,
       flags: flags,
@@ -198,7 +231,12 @@ void main(List<String> args) async {
     final bridgeBuilder = CBuilder.library(
       name: input.packageName,
       assetName: '${input.packageName}_bindings_generated.dart',
-      sources: _llamaCppSources(input.packageRoot, architecture),
+      sources: await _windowsTranslationUnits(
+        input,
+        output,
+        _llamaCppSources(input.packageRoot, architecture),
+        'llama',
+      ),
       includes: includes,
       defines: defines,
       flags: flags,

@@ -1,7 +1,7 @@
 part of 'note_repository.dart';
 
 extension _NoteRepositoryDelete on NoteRepository {
-  Future<void> _deleteById(String id) {
+  Future<void> _deleteById(String id) async {
     final context = _captureWrite();
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();

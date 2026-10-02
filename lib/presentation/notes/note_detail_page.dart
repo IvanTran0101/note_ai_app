@@ -314,12 +314,18 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     if (!mounted ||
         !_isDirty ||
         !_canEdit ||
+        _backConfirmationVisible ||
         _conflictFlowActive ||
         _currentConflict != null) {
       return;
     }
     if (immediate) {
-      unawaited(_save(automatic: true));
+      // A back click also moves focus. Let its confirmation cancel this save
+      // before persisting, so Discard remains meaningful on every platform.
+      _autosaveTimer = Timer(Duration.zero, () {
+        _autosaveTimer = null;
+        if (!_backConfirmationVisible) unawaited(_save(automatic: true));
+      });
       return;
     }
     _autosaveTimer = Timer(_autosaveDelay, () {

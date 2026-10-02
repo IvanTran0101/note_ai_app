@@ -109,10 +109,14 @@ implementation only within the scope the user has approved below.
 
 - [M05 progress page](https://app.notion.com/p/3ecf9c7a1aa081d5bd92f68f2aa9698f)
 - Read `docs/m05/PROGRESS.md` and `docs/m05/COLLAB_REVIEW.md` in the
-  implementation checkout before continuing M05. Keep both current.
+  implementation checkout before continuing M05. Keep both current. M05 automated acceptance passed on VM/Chrome and real
+  Android/Web-plugin integration; see the final acceptance table for scope.
+  Continue with M06 only, following its Notion plan and the same per-milestone
+  progress, test/fix, checkbox and fast-forward push workflow.
 - M05.0–M05.5 are now implemented in source, including backend, encrypted
-  storage/migration, scoped sync/Summary and security UI. Read current progress
-  and IMPLEMENTATION.md for delivery evidence and separate runtime acceptance.
+  storage/migration, scoped sync/Summary and security UI, and passed automated
+  runtime acceptance. Read current progress and IMPLEMENTATION.md for evidence
+  and separate live deployment limits.
   Keep reading this file before future coding turns; do not reopen settled choices.
 - `_agent_ops/` records and the closure receipt template are unavailable. Use
   the actual M05 progress files for continuity; do not fabricate absent records.
@@ -123,3 +127,5 @@ implementation only within the scope the user has approved below.
 - [Planning before code](https://app.notion.com/p/3e6f9c7a1aa080978256eb9e02768c3a)
 - [M05 Note Security plan](https://app.notion.com/p/3e8f9c7a1aa0819bbbded3ee8ff44f32)
 - [Project AGENTS.md](https://app.notion.com/p/3e6f9c7a1aa080d097f9f281bc352e68)
+
+- [M06 Sharing & Real-time Collaboration plan](https://app.notion.com/p/3e8f9c7a1aa08193b4f9d1fbf42999ed)

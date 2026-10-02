@@ -26,13 +26,13 @@ void main() {
       expect(decoded.cursor, const SyncCursor('opaque-cursor-1'));
     });
 
-    test('writes exactly the frozen envelope fields at schema version 2', () {
+    test('writes exactly the frozen envelope fields at schema version 3', () {
       final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
         richStateFixture(),
       );
 
-      expect(LocalSyncStateCodec.schemaVersion, 2);
-      expect(LocalSyncSchema.version, 2);
+      expect(LocalSyncStateCodec.schemaVersion, 3);
+      expect(LocalSyncSchema.version, 3);
       expect(envelope.keys.toSet(), <String>{
         'schemaVersion',
         'accountUserId',
@@ -41,7 +41,7 @@ void main() {
         'cursor',
         'conflicts',
       });
-      expect(envelope['schemaVersion'], 2);
+      expect(envelope['schemaVersion'], 3);
       expect(envelope['accountUserId'], 'user-1');
       expect(envelope['cursor'], 'opaque-cursor-1');
       expect(envelope['notes'], isA<List<Object?>>());
@@ -225,8 +225,10 @@ void main() {
       }
     });
 
-    test('rejects any schema version but 2', () {
-      final List<Object?> versions = <Object?>[0, 1, 3, '2', 2.0, null, true];
+    test('rejects versions outside the v2 legacy and v3 current contract', () {
+      // Web numbers erase the int/double distinction for integral values.
+      // A fractional version is invalid on both runtimes.
+      final List<Object?> versions = <Object?>[0, 1, 4, '3', 3.25, null, true];
 
       for (final Object? version in versions) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(

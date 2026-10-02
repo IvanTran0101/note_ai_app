@@ -105,6 +105,7 @@ extension NoteSecurityActions on NoteSecurityService {
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
     requireRemote(id, note.protection, NoteOperation.manage);
+    var remoteChanged = false;
     try {
       final next = await gateway.change(
         id,
@@ -112,9 +113,19 @@ extension NoteSecurityActions on NoteSecurityService {
         newPassword,
         note.protection.revision,
       );
+      remoteChanged = true;
       _live(captured, generation);
       await vault.rewrap(id, currentPassword, newPassword, next);
       _live(captured, generation);
+    } on NoteSecurityFailure catch (failure) {
+      // A rejected verifier changed neither side; keep the live grant so the
+      // current-password form can be corrected. Any ambiguous/partial change
+      // still clears authority and requires a fresh unlock.
+      if (remoteChanged ||
+          failure.code != NoteSecurityFailureCode.invalidPassword) {
+        lock(id);
+      }
+      rethrow;
     } on Object {
       lock(id);
       rethrow;
@@ -127,19 +138,29 @@ extension NoteSecurityActions on NoteSecurityService {
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
     requireRemote(id, note.protection, NoteOperation.manage);
+    var remoteChanged = false;
     try {
       final next = await gateway.disable(
         id,
         currentPassword,
         note.protection.revision,
       );
+      remoteChanged = true;
       _live(captured, generation);
       _knownProtection[id] = next;
       await vault.disable(id, currentPassword, next);
       _live(captured, generation);
-    } finally {
+    } on NoteSecurityFailure catch (failure) {
+      if (remoteChanged ||
+          failure.code != NoteSecurityFailureCode.invalidPassword) {
+        lock(id);
+      }
+      rethrow;
+    } on Object {
       lock(id);
+      rethrow;
     }
+    lock(id);
   }
 
   Future<NoteRecoveryChallenge> requestRecovery(String id) async {

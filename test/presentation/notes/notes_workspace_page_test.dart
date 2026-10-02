@@ -1,3 +1,6 @@
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -756,8 +759,14 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async =>
-      'Summary of ${_find(noteId).content}';
+  SummaryConsentAppService? get summaryConsent => null;
+
+  @override
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async => 'Summary of ${_find(noteId).content}';
 
   NoteDto _find(String id) => notes.firstWhere((NoteDto note) => note.id == id);
 

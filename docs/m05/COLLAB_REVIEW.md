@@ -91,5 +91,6 @@ is maintained there and on the Notion progress page.
 
 Backend, local encryption/migration, scoped sync/Summary and security UI are now
 implemented. Criterion/path mapping and deployment prerequisites are recorded in
-IMPLEMENTATION.md. Static/build evidence and remote checkpoints live in PROGRESS.md
-and the Notion progress page. Deployed/runtime acceptance is still outstanding.
+IMPLEMENTATION.md. Automated acceptance and remote checkpoints live in PROGRESS.md and the Notion
+progress page. VM/Chrome, Android and real Web-plugin integration passed. Live
+AWS/SES/provider deployment remains separate; test doubles are identified there.

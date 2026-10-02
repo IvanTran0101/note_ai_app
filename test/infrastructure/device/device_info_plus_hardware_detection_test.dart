@@ -1,4 +1,7 @@
-// Worker B: contract tests for the M3.2 plugin-first hardware detection
+@TestOn('vm')
+library;
+
+// Contract tests for the native plugin-first hardware detection
 // adapter built on device_info_plus.
 //
 // The adapter under test is `DeviceInfoPlusHardwareDetectionService`

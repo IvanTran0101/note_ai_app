@@ -25,36 +25,36 @@ implementation and evidence, not repeated permission requests.
 
 | Milestone | Status | Remaining acceptance |
 | --- | --- | --- |
-| M05.0 | Implemented: contracts and baseline dependency alignment recorded | Runtime acceptance remains tracked in later milestones |
-| M05.1 | Implemented: protection/metadata contracts, safe DTOs/capabilities and access guard | Runtime wiring continues in backend/storage/UI milestones |
-| M05.2 | Backend implemented and pushed: 5edd28d | UI and Summary integration, deployed/runtime acceptance |
-| M05.3 | Implemented: encrypted envelope, per-note wrapping and native/Web cutover | Crash/pending/runtime acceptance; UI wiring follows |
-| M05.4 | Implemented: scoped sync and authoritative Summary v0.4 lineage | UI and deployed/runtime acceptance in M05.5 |
-| M05.5 | Implemented in source: security forms, locked views and lifecycle/capability wiring | Static/build evidence below; deployed/runtime acceptance pending |
+| M05.0 | Complete | Reviewed contracts and dependency alignment; subsequent runtime gates passed |
+| M05.1 | Complete | Safe projections/capabilities covered by app/backend tests |
+| M05.2 | Complete | Production verifier/use-case/conditional authorization tests passed; live AWS delivery remains a separate deployment step |
+| M05.3 | Complete | Real Web IndexedDB and Android file/key adapters; atomic migration/failure/retention scenarios passed |
+| M05.4 | Complete | Sync blocked-note regression, scoped transport and Summary lineage/late-result tests passed |
+| M05.5 | Complete | Enable/unlock/change/disable/recovery/lock/expiry/logout and narrow keyboard/text-scale integration passed on Web/Android |
 
 ## Rubric status
 
-All 15 criteria now have integrated source implementation. Details and concrete
-paths are mapped in [IMPLEMENTATION.md](IMPLEMENTATION.md). Static/build evidence
-is recorded below; deployed/runtime acceptance has not been performed.
+All 15 criteria passed automated acceptance in the scopes below. Backend AWS/SES
+and provider integrations use doubles; no live deployment/mailbox claim. Full
+implementation mapping is in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 | Criterion | Level | Milestone | Status |
 | --- | --- | --- | --- |
-| SEC-FR-01 Enable protection | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-02 Per-note password | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-03 Unlock before protected operations | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-04 Unlock with correct password | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-05 Change password | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-06 Disable protection | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-07 No plaintext password storage | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-08 Backend access enforcement | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-09 Password confirmation | P | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-FR-10 Current password before change/disable | P | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-NFR-01 Safe representation/no password logs | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-NFR-02 API cannot bypass unlock | M | M05.2 | Source implemented; runtime acceptance pending |
-| SEC-NFR-03 Encrypted local cache | P | M05.3 | Source implemented; runtime acceptance pending |
-| SEC-NFR-04 Locked AI | P | M05.4 | Source implemented; runtime acceptance pending |
-| SEC-NFR-05 Session/timeout scope | P | M05.5 | Source implemented; runtime acceptance pending |
+| SEC-FR-01 Enable protection | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-02 Per-note password | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-03 Unlock before protected operations | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-04 Unlock with correct password | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-05 Change password | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-06 Disable protection | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-07 No plaintext password storage | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-08 Backend access enforcement | M | M05.2 | Verified by automated acceptance |
+| SEC-FR-09 Password confirmation | P | M05.2 | Verified by automated acceptance |
+| SEC-FR-10 Current password before change/disable | P | M05.2 | Verified by automated acceptance |
+| SEC-NFR-01 Safe representation/no password logs | M | M05.2 | Verified by automated acceptance |
+| SEC-NFR-02 API cannot bypass unlock | M | M05.2 | Verified by automated acceptance |
+| SEC-NFR-03 Encrypted local cache | P | M05.3 | Verified by automated acceptance |
+| SEC-NFR-04 Locked AI | P | M05.4 | Verified by automated acceptance |
+| SEC-NFR-05 Session/timeout scope | P | M05.5 | Verified by automated acceptance |
 
 ## Preparation batch 01 — M05.0 / Application portion of M05.1
 
@@ -293,3 +293,134 @@ No Android device is connected at this checkpoint; use the available emulator
 with separate synthetic test data and preserve existing application data.
 Current step: deliver source checkpoint, run existing suites and scoped security
 regressions, exercise Chrome and Android, and fix each confirmed failure.
+
+## Runtime acceptance in progress — 2026-10-02
+
+Source checkpoint `8a889778d2be3ad508a5d2c21735caa0805751e1` was pushed and remote-verified. Android emulator-5554 (API 35) booted. Existing backend tests passed: 39 checks in 4 files. New backend protection suite passed 8 tests, including real Argon2id, wrong/scoped/expired grants and OTP limits/consume. Summary lineage tests are being added. Chrome test startup exposed existing Windows native-hook basename collisions and missing Advapi32 linkage; the scoped runner prerequisite is being fixed. No Chrome/Android functional acceptance claimed yet. Added shared crypto/UI regression scenarios and Android integration target; use real device secure storage with synthetic namespaces and preserve user data.
+
+Next: finish Chrome runner, run/fix regression and existing suites, then execute Android tests and verify Notion criteria. M06 source remains gated on M05 acceptance.
+
+### Runtime delta / regression fixes (in progress)
+
+- Consolidated backend run passed all 39 existing checks and 18 new tests (22 Node test entries, including four self-check files). Tests exercise production protection/Summary/sync policies with AWS/SES doubles; no deployed-service claim.
+- Android: first seven real AES/key/file-storage scenarios passed; UI harness initially stalled on animated busy-state `pumpAndSettle`. Test data has unique synthetic namespaces and the installed app was not uninstalled/reset.
+- Chrome: AES/storage/IndexedDB cases passed. A malformed unlock response raised raw StateError/TypeError: confirmed and fixed at the transport decode boundary; regression rerun pending.
+- VM UI: enable confirmation, wrong/correct password, lock/logout scrub and late Summary/offline scope passed. Narrow keyboard test exposed an async harness wait; changed to bounded pumping with real async work and added actual 1.6 text scaling.
+- Existing presentation fake controllers did not implement the reviewed Summary port; updated only their signatures/optional consent seam so the existing suite can compile.
+- Windows native hook now gives MSVC unique translation-unit names and links Advapi32. Keep generated wrapper timestamps stable to allow test cache reuse. Chrome runner uses a temporary tools overlay for the installed SDK Windows URL-path bug; the installed SDK remains untouched.
+
+Next: rerun shared UI on Chrome/Android, complete existing suite and mark only verified Notion acceptance. M06 remains pending.
+
+### Full-suite delta (2026-10-02, still in progress)
+
+- Full VM suite reached 920 passing cases with two browser-only skips; one newly added management test still needed its reset fixture corrected. A subsequent complete rerun is required.
+- Confirmed sync regression: the rerun predicate selected successors of an already blocked note even though the push queue deliberately skipped them, causing an endless pass. Excluded stopped notes from rerun and bounded the existing regression test. The four-file sync/repository/storage regression run passed all 79 cases.
+- Confirmed current-password form regression: a verifier rejection cleared an otherwise live manage grant, preventing a correct retry in the same form. Keep authority only for an explicit invalid-password rejection before any remote change; stale/network/partial changes still lock. Enable/unlock and late Summary protections remain.
+- Chrome has passed ciphertext, independent passwords/locks, IndexedDB migration, JWT/grant transport validation, narrow keyboard/large text and the enable/unlock/lock/logout UI flow. Management now reaches OTP reset; seed a real unsynced synthetic edit to verify the retained-draft warning rather than expecting retention with an empty queue.
+- Serialize native-hook build prerequisites: Android recompilation holds a shared package lock, so queued host/Chrome launches were cancelled before retrying after it completes. These cancellations are not test passes or product failures.
+
+### Platform rerun after observed defects
+
+- Chrome M05 security suite now passes all 17 cases, including management/OTP,
+  malformed-response failures, independent passwords, IndexedDB migration and
+  keyboard/text-scale UI. This suite still mocks only the secure-storage plugin.
+- VM security/detail regression passes all 18 cases. Widget teardown explicitly
+  cancels unlock timers before binding checks; reset retention now seeds real
+  unsynced work. These were harness defects, not acceptance shortcuts.
+- Android's previous run passed 10/12 and exposed actual keyboard/large-text
+  overflow in the modal and underlying editor. Added scrollable dialogs and a
+  bounded scroll surface; current full Android rerun uses the revised UI.
+- Final scoped analyzer and backend typecheck both pass. Full VM/browser runs
+  and browser plugin integration remain pending before M05 acceptance.
+
+### Verified native acceptance
+
+- Android final integration: **12 passed, 0 failed**, API35 emulator-5554,
+  real secure-storage/file adapters; build 28.4s, test 1m56s. No uninstall/reset.
+  The keyboard/large-text overflow regression is now fixed on the device.
+- Full VM final: **921 passed, 2 browser-only skips, 0 failed**, 1m13s.
+- Chrome security final: **17 passed, 0 failed**, 37s. Browser-wide suite and
+  real browser secure-storage plugin integration are the remaining M05 gates.
+
+### Browser-wide follow-up
+
+- The 81-file Chrome run exposed old UI assertions that differ on Web; collect
+  diagnostic details and fix the confirmed cases before accepting the suite.
+- Standalone browser integration passed the eight real crypto/IndexedDB/plugin
+  scenarios but two UI input cases failed: live DOM keyboard blur overwrote
+  WidgetTester synthetic input. The integration harness now registers a test
+  keyboard for Web only; secure-storage and IndexedDB plugins remain real.
+- Serve standalone Web acceptance from a separate output directory. Browser
+  unit builds share build/web assets and can remove a concurrently served
+  integration app's manifests. Build/serve acceptance only after the unit run.
+
+### Wider Chrome suite findings
+
+The first 81-file run was superseded after 702 passing cases and 30 failures.
+Seventeen failures were native Android/iOS hardware fixtures running against the
+intentional Web stub: route those fixtures to VM and add a Web unavailability
+assertion. Five IndexedDB tests lacked the new secure-storage mock and still
+asserted plaintext schema/error contracts; update them to v3 ciphertext and safe
+failure/no-repair assertions. One codec case assumed JS distinguishes 3 and
+3.0: use a genuinely fractional invalid version. Six UI cases need platform-
+aware geometry, truthful autosave copy and focus/back-flow verification.
+
+The reusable Chrome runner can register the original mains in independent test
+groups to avoid recompiling every file. Generated input is explicitly ignored
+and stays inside test/ because the SDK excludes .dart_tool from Web compilation.
+No product code, test case bodies or installed SDK are substituted by this mode.
+
+### Final app-suite rerun (current source)
+
+- Chrome: **797 passed, 1 intentional local-AI skip, 0 failed**, all 81
+  browser-compatible original file mains, 53s test body. All 17 previous
+  failures are fixed: JS fixture bit shifts now use arithmetic GiB values;
+  focus fixture waits for focus notifications and remounts each theme.
+- VM: **921 passed, 2 browser-only skips, 0 failed**, 1m08s. Includes native
+  hardware fixtures and native storage paths omitted from Chrome.
+- Backend: all **57 checks** passed again (39 existing self-check assertions
+  plus 18 new cases, 22 Node entries); backend typecheck also passed.
+- Android's 12-case current-source rerun and real Web-plugin integration remain
+  in progress. Do not mark overall acceptance or begin M06 source yet.
+- Root analyzer found unresolved package:test imports only in the independent
+  local_llm_bridge package's tests. Resolve that package's declared developer
+  dependencies before rerunning root analysis; this is not a product failure.
+
+### M05 acceptance — current source, 2026-10-02
+
+| Gate | Verified result | Scope |
+| --- | --- | --- |
+| Complete app VM suite | 921 pass / 2 browser-only skips / 0 fail, 1m08s | Native fixtures, app use cases and widget regressions |
+| Complete compatible Chrome suite | 797 pass / 1 deliberate native-AI skip / 0 fail, 53s | 81 original file mains; real browser engine/IndexedDB, plugin mocked for units |
+| Android integration | 12 scenarios pass / 0 fail, 2m03s; build 28.5s | API35 emulator-5554, real secure-storage and file adapters; no uninstall/reset |
+| Standalone Chrome integration | 12 scenarios pass / no driver failureDetails, 14s | Real browser secure-storage/IndexedDB; synthetic widget keyboard |
+| Backend tests | 57 checks pass / 0 fail | 39 existing assertions + 18 new tests; real Argon2id and production policies/transactions, AWS/SES/provider doubles |
+| Static checks | Root Flutter analyzer and backend TypeScript check pass | Independent bridge dev dependencies resolved; no installed SDK modification |
+
+Chrome integration returned driver `result: true`, empty failureDetails. Its
+console includes the driver's own completion test in the final counter (13);
+the module suite itself contains 12 scenarios. Source failures observed during
+this batch were fixed and rerun: malformed security responses, async repository
+guards, blocked-note sync loop, password retry authority, Android layout overflow,
+Web saving copy and blur-save/Back race. Harness/fixture repairs are recorded
+above. No remaining failure was observed in the listed acceptance runs.
+
+Live Cognito/DynamoDB/SES/provider delivery, deployed endpoints and exhaustive
+security guarantees are not claimed. No backend deployment was performed. The
+independent native bridge smoke suite is running as an additional build-hook
+check; it is outside the M05 security acceptance suite.
+
+Next: record and push this acceptance checkpoint, then begin M06 according to
+its Notion plan. Original checkout and unrelated user files remain untouched.
+
+### Closure records
+
+| Record | Resolution |
+| --- | --- |
+| MUST_REMEMBER.md | Updated: M05 automated acceptance and authorized next M06 scope |
+| PROGRESS.md | Updated: exact acceptance counts, defects, limitations and next step |
+| COLLAB_REVIEW.md | Updated: runtime evidence replaces source-only delivery status |
+| IMPLEMENTATION.md | Updated: tested scope and deployment limits |
+| TESTING.md | Updated: reproducible platform commands and host/harness details |
+| Notion progress/source pages | Updated: verified checklist and linked acceptance evidence |
+| _agent_ops records | Not needed: folder/tools are absent; actual docs carry continuity |

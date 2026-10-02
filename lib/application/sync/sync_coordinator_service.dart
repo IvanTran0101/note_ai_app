@@ -245,6 +245,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     if (state.outbox.any(
       (m) =>
           !m.blocked &&
+          !stoppedNotes.contains(m.noteId) &&
           !attempted.contains(m.mutationId) &&
           !state.conflicts.any((c) => c.noteId == m.noteId),
     )) {

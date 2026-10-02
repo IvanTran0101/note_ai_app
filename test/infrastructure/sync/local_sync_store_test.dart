@@ -1,8 +1,13 @@
+@TestOn('vm')
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
 import 'package:note_ai_app/application/sync/pending_mutation.dart';
@@ -84,6 +89,7 @@ List<String> _relativePaths(Directory support) {
   return support
       .listSync(recursive: true)
       .whereType<File>()
+      .where((file) => !file.path.endsWith('.lock'))
       .map((File file) => file.path.replaceFirst(prefix, ''))
       .toList(growable: false);
 }
@@ -143,6 +149,8 @@ void _expectNoLeakage(Object error, Directory support) {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   group('LocalSyncAccountNamespace', () {
     test('derives one stable hash per account and no raw id in a name', () {
       final LocalSyncAccountNamespace namespace = LocalSyncAccountNamespace(
@@ -267,7 +275,7 @@ void main() {
     );
 
     test(
-      'round-trips a rich state through the schemaVersion 2 envelope',
+      'round-trips a rich state through the encrypted schemaVersion 3 envelope',
       () async {
         final _Fixture fixture = await _newFixture();
         final LocalSyncState state = richStateFixture();
@@ -275,7 +283,7 @@ void main() {
         await fixture.store.replace(state);
 
         expect(await fixture.store.read(), state);
-        expect(LocalSyncStateCodec.schemaVersion, 2);
+        expect(LocalSyncStateCodec.schemaVersion, 3);
         expect(_relativePaths(fixture.supportDirectory), <String>[
           '${LocalSyncAccountNamespace.accountsDirectoryName}'
               '${_separator()}${LocalSyncAccountNamespace(_account).hash}'
@@ -283,11 +291,18 @@ void main() {
         ]);
 
         final File file = _stateFile(fixture.supportDirectory, _account);
-        // The stored bytes are exactly the shared codec's envelope.
-        expect(
-          jsonDecode(await file.readAsString()),
-          LocalSyncStateCodec.encode(state),
-        );
+        final raw = await file.readAsString();
+        expect((jsonDecode(raw) as Map)['schemaVersion'], 3);
+        expect((jsonDecode(raw) as Map)['packet'], isA<Map>());
+        for (final secret in [
+          secretTitle,
+          secretContent,
+          secretCursor,
+          fixturePayloadTitle,
+          fixturePayloadContent,
+        ]) {
+          expect(raw, isNot(contains(secret)));
+        }
         expect(await _temporaryResidue(fixture.supportDirectory), isEmpty);
       },
     );
@@ -379,7 +394,13 @@ void main() {
       await file.writeAsString(notJson);
       await expectLater(
         fixture.store.read(),
-        _storeError(LocalSyncStoreFailure.malformed, 'not valid JSON'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
       expect(await file.readAsString(), notJson);
 
@@ -394,7 +415,13 @@ void main() {
       await file.writeAsString(wrongShape);
       await expectLater(
         fixture.store.read(),
-        _storeError(LocalSyncStoreFailure.malformed, 'M2 schema'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
       expect(await file.readAsString(), wrongShape);
 
@@ -409,7 +436,13 @@ void main() {
       await file.writeAsString(wrongVersion);
       await expectLater(
         fixture.store.read(),
-        _storeError(LocalSyncStoreFailure.malformed, 'M2 schema'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
       expect(await file.readAsString(), wrongVersion);
 
@@ -419,7 +452,13 @@ void main() {
       await file.writeAsString(otherAccount);
       await expectLater(
         fixture.store.read(),
-        _storeError(LocalSyncStoreFailure.foreignAccount, 'different account'),
+        throwsA(
+          isA<NoteSecurityFailure>().having(
+            (e) => e.code,
+            'code',
+            NoteSecurityFailureCode.storage,
+          ),
+        ),
       );
       expect(await file.readAsString(), otherAccount);
     });
@@ -452,8 +491,8 @@ void main() {
         try {
           await fixture.store.read();
           fail('expected a LocalSyncStoreException');
-        } on LocalSyncStoreException catch (error) {
-          expect(error.failure, LocalSyncStoreFailure.malformed);
+        } on NoteSecurityFailure catch (error) {
+          expect(error.code, NoteSecurityFailureCode.storage);
           _expectNoLeakage(error, fixture.supportDirectory);
         }
         expect(await file.readAsString(), stored);
@@ -471,7 +510,7 @@ void main() {
 
         await expectLater(
           fixture.store.read(),
-          _storeError(LocalSyncStoreFailure.unreadable, 'could not be read'),
+          _storeError(LocalSyncStoreFailure.unreadable, 'cannot be read'),
         );
         expect(await file.readAsBytes(), invalidUtf8);
       },
@@ -486,7 +525,7 @@ void main() {
 
       await expectLater(
         fixture.store.replace(richStateFixture()),
-        _storeError(LocalSyncStoreFailure.unwritable, 'could not be replaced'),
+        _storeError(LocalSyncStoreFailure.unwritable, 'cannot be committed'),
       );
 
       expect(await _temporaryResidue(fixture.supportDirectory), isEmpty);
@@ -523,10 +562,7 @@ void main() {
 
         await expectLater(
           fixture.store.replace(_stateFor(_account, noteId: 'note-9')),
-          _storeError(
-            LocalSyncStoreFailure.unwritable,
-            'namespace directory could not be created',
-          ),
+          _storeError(LocalSyncStoreFailure.unwritable, 'cannot be committed'),
         );
 
         await File(namespaceDirectory.path).delete();
