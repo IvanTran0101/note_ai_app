@@ -168,6 +168,7 @@ final class SyncStateReconciliation {
       final LocalNoteState local = notes[noteIndex];
       notes[noteIndex] =
           later ||
+              (requested.protectionChange != null && local.contentAvailable) ||
               (snapshot.protection.enabled &&
                   local.protection == snapshot.protection &&
                   local.contentAvailable)
@@ -182,7 +183,15 @@ final class SyncStateReconciliation {
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
               status: later ? local.status : NoteSyncStatus.synced,
-              protection: snapshot.protection,
+              protection:
+                  outbox.any(
+                    (m) =>
+                        m.mutation.identityFor(accountUserId) ==
+                            local.identity &&
+                        m.protectionChange != null,
+                  )
+                  ? local.protection
+                  : snapshot.protection,
               contentAvailable: local.contentAvailable,
             )
           : fromRemote(snapshot, NoteSyncStatus.synced);
@@ -256,6 +265,7 @@ final class SyncStateReconciliation {
     operation: entry.operation,
     baseRevision: entry.baseRevision,
     payload: entry.payload,
+    protectionChange: entry.protectionChange,
     createdAt: entry.createdAt,
     retryCount: retryCount ?? entry.retryCount,
     lastError: lastError ?? entry.lastError,

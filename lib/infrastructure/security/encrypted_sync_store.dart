@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+
+import '../../application/notes/local_first_note_vault.dart';
+import '../../application/sync/local_protection_queue.dart';
+import '../../application/sync/protection_sync_change.dart';
 
 import '../../application/notes/local_note_vault.dart';
 import '../../application/notes/note_access.dart';
@@ -15,7 +20,10 @@ import 'encrypted_state_codec.dart';
 
 /// One queue freezes all reads, updates and AI source access during migration.
 /// Cross-context races use CAS; a migration failure never seeds an empty state.
-class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
+part 'encrypted_local_protection.dart';
+
+class EncryptedSyncStore
+    implements ILocalSyncStore, ILocalNoteVault, ILocalFirstNoteVault {
   EncryptedSyncStore(String accountId, this.backing)
     : codec = EncryptedStateCodec(LocalSyncAccountNamespace(accountId));
   final EncodedAccountStore backing;
@@ -90,6 +98,16 @@ class EncryptedSyncStore implements ILocalSyncStore, ILocalNoteVault {
   Future<LocalSyncState> update(
     LocalSyncState Function(LocalSyncState) transform,
   ) => _enqueue(() => _mutate((state) async => transform(state)));
+
+  @override
+  Future<NoteProtection> enableLocal(String id, String password) =>
+      _localProtection(id, null, password, enable: true);
+  @override
+  Future<NoteProtection> changeLocal(String id, String current, String next) =>
+      _localProtection(id, current, next, enable: true);
+  @override
+  Future<NoteProtection> disableLocal(String id, String current) =>
+      _localProtection(id, current, null, enable: false);
 
   @override
   Future<void> seal(String id, String password, NoteProtection p) =>

@@ -1,3 +1,4 @@
+import { parseProtectionChange } from './sync_protection_change';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { stableDigest } from './cursor';
@@ -132,6 +133,10 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     throw new SyncInvalidMutationError('BASE_REVISION_INVALID', 'baseRevision must be a non-negative whole number.');
   }
   const payload = normalizePayload(operation, mutation?.payload);
+  const protectionChange = mutation?.protectionChange === undefined ? undefined : parseProtectionChange(mutation.protectionChange);
+  if (protectionChange && operation === 'delete') {
+    throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Protection changes require content.');
+  }
 
   return {
     mutationId,
@@ -139,6 +144,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     operation,
     baseRevision,
     payload,
+    ...(protectionChange ? { protectionChange } : {}),
     fingerprint: stableDigest(
       `mutation:${JSON.stringify([
         operation,
@@ -146,6 +152,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         baseRevision,
         payload?.title ?? null,
         payload?.content ?? null,
+        ...(protectionChange ? [protectionChange] : []),
       ])}`,
     ),
   };
@@ -288,6 +295,7 @@ export const transactItemsFor = (
 ): TransactWriteCommandInput['TransactItems'] => {
   const sequence = lastSequence + 1;
   const attributes = snapshotAttributes(note);
+  const metadata = note.protected ? { ...attributes, title: '', content: '' } : attributes;
   // Unused expression attribute values are a DynamoDB validation error, so the
   // revision guard only appears when a stored note has a revision to match.
   const noteGuard =
@@ -323,7 +331,7 @@ export const transactItemsFor = (
         Item: {
           ownerId: ownerKey,
           noteId: `${CHANGE_SORT_KEY_PREFIX}${sequence}`,
-          ...attributes,
+          ...metadata,
           changeOwnerId: ownerKey,
           changeSequence: sequence,
         },
@@ -340,7 +348,7 @@ export const transactItemsFor = (
           operation: request.operation,
           fingerprint: request.fingerprint,
           sequence,
-          resultNote: attributes,
+          resultNote: metadata,
           serverUpdatedAt: now,
         },
         // A concurrent duplicate of the same mutationId must not overwrite the

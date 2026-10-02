@@ -37,6 +37,19 @@ final class NoteCrypto {
     }
   }
 
+  /// Separate salt from the wrapping KEK: publishing this hash cannot unwrap keys.
+  Future<String> passwordVerifier(String password) async {
+    final salt = randomBytes(16);
+    final key = await passwordKey(password, salt);
+    final bytes = List<int>.of(await key.extractBytes());
+    try {
+      return 'pbkdf2-sha256-v1\$${base64Encode(salt)}\$${base64Encode(bytes)}';
+    } finally {
+      key.destroy();
+      bytes.fillRange(0, bytes.length, 0);
+    }
+  }
+
   Future<Map<String, Object?>> encrypt(
     List<int> data,
     SecretKey key,

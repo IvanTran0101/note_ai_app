@@ -136,7 +136,9 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
 
   Widget _securityPanel() {
     final controller = _securityController;
-    return NoteSecurityPanel(
+    Widget panel(bool pending) => NoteSecurityPanel(
+      localFirst: controller?.noteSecurity?.localFirst ?? false,
+      pendingProtection: pending,
       note: _note!,
       locked: !_canRead,
       busy: _actionBusy,
@@ -147,6 +149,11 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
           ? () => unawaited(_handleBack())
           : null,
       onAction: (action) => unawaited(_runSecurity(action)),
+    );
+    if (controller?.noteSecurity?.localFirst != true) return panel(false);
+    return FutureBuilder<bool>(
+      future: controller?.noteSecurity?.hasPendingProtection(_note!.id),
+      builder: (context, pending) => panel(pending.data ?? false),
     );
   }
 }

@@ -51,7 +51,7 @@ export class OwnerNoteAcl implements NoteAcl {
 export interface NoteSecurityAuthority {
   authorize(actorId: string, ownerId: string, noteId: string,
     operation: NoteOperation, token?: string): Promise<SecurityAuthorization>;
-  metadata(actorId: string, ownerId: string, noteId: string): Promise<ProtectionMetadata>;
+  metadata(actorId: string, ownerId: string, noteId: string, allowMissing?: boolean): Promise<ProtectionMetadata>;
 }
 
 export type NoteSecurityCode = 'locked' | 'invalidPassword' | 'invalidInput' |

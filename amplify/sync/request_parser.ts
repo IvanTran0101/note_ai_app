@@ -18,6 +18,7 @@
  * the caller's `ownerId`; the parser only carries it through.
  */
 
+import { parseProtectionChange } from './sync_protection_change';
 import type { InvalidMutationReason, SyncMutation, SyncOperation } from './dynamo_sync_store';
 
 /** Contract defaults for `GET /sync/changes`; the store clamps to the same window. */
@@ -78,7 +79,7 @@ const readBaseRevision = (value: unknown): number | null =>
  * Unknown fields are ignored, so a later additive contract change does not
  * break older servers.
  */
-export const parseMutationBody = (body: string | null | undefined): MutationParseResult => {
+export const parseMutationBody = (body: string | null | undefined, protectedRoute = false): MutationParseResult => {
   if (typeof body !== 'string' || body.length === 0) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
@@ -93,6 +94,12 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
 
+  if (protectedRoute !== ('protectionChange' in decoded)) return { ok: false, problem: 'PAYLOAD_INVALID' };
+  let protectionChange;
+  if (protectedRoute) {
+    try { protectionChange = parseProtectionChange(decoded.protectionChange); }
+    catch { return { ok: false, problem: 'PAYLOAD_INVALID' }; }
+  }
   const mutationId = readIdentifier(decoded.mutationId);
   if (mutationId === null) {
     return { ok: false, problem: 'MUTATION_ID_INVALID' };
@@ -114,6 +121,7 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
   }
 
   if (operation === 'delete') {
+    if (protectionChange) return { ok: false, problem: 'PAYLOAD_INVALID' };
     return { ok: true, mutation: { mutationId, noteId, operation, baseRevision } };
   }
 
@@ -129,7 +137,8 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content } },
+    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content },
+      ...(protectionChange ? { protectionChange } : {}) },
   };
 };
 

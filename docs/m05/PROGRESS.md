@@ -438,3 +438,105 @@ At user request, the actual Implement plan Note AI App / 05 - Note Security (1)
 page now has all 15 accepted FR/NFR and 4 Done When boxes checked. Fetched again
 and verified all 19. Evidence links to 22587a5 and automated scope above; live
 AWS/SES remains unclaimed. M06/M08 integrations retain these protection gates.
+
+## Active correction - Web local-first, 2026-10-02
+
+User requested local persistence/protection first and cloud sync afterward, for
+M05 and future Web implementation. M06 remains paused at pushed M06.1, 9f94237.
+Previous M05 acceptance is historical for its server-first password action flow.
+New acceptance is pending; see LOCAL_FIRST_WEB.md. Confirmed source gap:
+note_security_actions.dart.enable calls sync + remote metadata before local seal
+and rejects serverRevision<1/outbox/conflict; change/disable depend on remote
+manage/grant first. Existing Web note backing is already encrypted IndexedDB.
+Next: revise local password orchestration, persist safe pending protection state,
+keep cloud authority distinct, then Chrome offline/reload + Android regressions.
+
+### Local-first correction implementation checkpoint (in progress)
+
+Local vault/outbox atomic commit, fixed salted PBKDF2 representation, dedicated
+cloud transaction route, fresh manage-grant/epoch guards and local Web controls
+implemented. Prior unprotected timed-out requests use read-only receipt probing;
+confirmed receipt is acknowledged, unknown delivery becomes an explicit conflict
+without replaying plaintext. Existing single sync engine owns the queue.
+First platform pass: real Chrome 7 and Android 7 passed. Source has since gained
+new-device fallback, pending hydration fences and predecessor inspection, so a
+final current-source rerun plus full regression and Chrome page reload remain
+pending. M06 stays paused. Native-hook stale lock timeout resolved by retry after
+the previous lock holder exited; no installed SDK/cache/user data was removed.
+
+### Final regression checkpoint (platform runs still in progress)
+
+Backend passed 64 checks (25 native Node cases plus 39 assertions in 4 script
+containers); TypeScript check passed. VM passed 942 with 2 browser-only skips,
+0 failures, after the queue/cloud authorization responsibility split (1m33s).
+Chrome full-page seed/reload phases passed with operations network-disabled.
+Full Chrome and current-source 8-case Chrome/Android integration are pending.
+VM path-provider fixture was repaired using an isolated temporary support path;
+real platform tests continue to use the actual adapter. Root analyzer's native
+bridge dev dependencies were restored offline; ignored generated output is
+excluded. Final analyzer result is pending. M06 stays paused.
+
+Chrome full-suite attempt timed out in the legacy password-management widget
+case; later widget tests inherited a stuck binding, so that failed run was
+stopped and preserved in Temp. The new pending-protection async read is now
+limited to local-first services. Legacy/native panels keep their synchronous
+rendering path. A focused Chrome rerun is in progress before the full rerun.
+Root analyzer now passes after restoring independent bridge dev dependencies
+and excluding the generated QA shim from its own analysis context.
+
+The focused Chrome security rerun passed all 4 cases (42s). Limiting the new
+pending read to local-first panels resolved the legacy widget timeout. The
+complete browser suite is running again; platform acceptance remains pending.
+
+The broad Chrome rerun passed the repaired legacy UI but included 6 native
+filesystem/isolate files by mistake (only VM annotations were filtered).
+All 88 failures were in those native-only files; their VM coverage passed.
+The target filter now also removes dart:io imports, giving the intended 85
+browser-compatible mains (9 VM-only files excluded). A complete compatible
+rerun is in progress; this failed target selection is not platform acceptance.
+
+Complete compatible Chrome acceptance passed: 815 pass, 1 intentional local-AI
+skip, 0 fail; 85 original browser-compatible mains, 1m35s test body. Current
+panel path is included. Root analyzer is clean. Final real-storage integration,
+current-source VM rerun and final-page reload follow before the final checkbox.
+
+Final real Chrome integration passed all 8 module scenarios with actual browser
+secure storage/IndexedDB. Driver returned true and empty failureDetails; its
+completion test adds 1 to the console counter. Android/current-source VM and
+the last offline page-reload pair are still pending.
+
+Current-source full VM rerun passed 942 cases, 2 browser-only skips, 0 failures
+(2m13s). Real Chrome integration is 8/8 (32s, driver completion gives counter9).
+Android integration is now running with --no-uninstall; no source changes are
+planned before final acceptance. M06 stays paused.
+
+Final Android API35 integration passed all 8 scenarios, 0 fail (6m12s test body;
+49s build, 6s install). Real secure storage/file reopen and local-first UI pass;
+legacy unlock/keyboard/layout/change/disable/OTP/Summary regression also passes.
+No uninstall or application-data reset. Final current-source Chrome offline
+seed/reload pair is building, then the checkpoint can be recorded and pushed.
+
+### Final acceptance table — Web local-first correction
+
+| Suite | Final result | Scope |
+| --- | --- | --- |
+| Full VM | 942 pass, 2 browser-only skips, 0 fail (2m13s) | All app tests, including native-only fixtures |
+| Complete compatible Chrome | 815 pass, 1 intentional local-AI skip, 0 fail (1m35s) | 85 original test mains; 9 native/VM-only files excluded |
+| Real Chrome integration | 8/8 pass (32s), driver true and empty failureDetails | Browser secure-storage/IndexedDB; synthetic UI keyboard/gateway |
+| Android API35 integration | 8/8 pass, 0 fail (6m12s) | Real secure-storage/file adapters and emulator rendering; no uninstall/reset |
+| Chrome offline reload | 2/2 phases pass, driver true and empty failureDetails | Full page reload, assets loaded before disabling network; password/storage actions offline |
+| Backend | 64 checks pass, 0 fail | 25 Node cases + 39 assertions in 4 script containers; production policies, AWS/SES/provider doubles |
+| Static | Root Flutter analyzer and TypeScript check pass | Generated QA output excluded; existing bridge dev dependencies resolved offline |
+
+The listed final runs have no observed failures. Failed earlier fixtures/target
+selection and the repaired async panel regression are retained above. Live
+Cognito/DynamoDB/SES/provider deployment is outside these results. Dedicated
+cloud routes must be deployed separately; older servers fail closed and local
+success remains durable. M06 stays paused at M06.1 (9f94237).
+
+Final current-source Chrome seed/reload phases passed with network disabled.
+Six local-first boxes on the actual M05 Implement plan page and the correction
+progress checkbox are ticked. Notion acceptance includes exact counts/limits.
+The earlier recorded in-progress statements above are historical checkpoints.
+Next: push the scoped source/acceptance checkpoint, record verified SHA, restore
+emulator to the current main app. M06 remains paused.

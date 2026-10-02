@@ -5,6 +5,7 @@ import '../../application/sync/pending_mutation.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import 'local_sync_codec_reader.dart';
+import 'protection_sync_codec.dart';
 import 'local_sync_codec_schema.dart';
 
 /// Maps a [PendingMutation] to and from one stored outbox record.
@@ -25,6 +26,8 @@ abstract final class PendingMutationCodec {
       if (entry.ownerId != null) LocalSyncSchema.ownerId: entry.ownerId,
       if (entry.accessRevision != null)
         LocalSyncSchema.accessRevision: entry.accessRevision,
+      if (entry.protectionChange != null)
+        'protectionChange': ProtectionSyncCodec.encode(entry.protectionChange!),
       LocalSyncSchema.operation: entry.operation.name,
       LocalSyncSchema.baseRevision: entry.baseRevision,
       LocalSyncSchema.payload: payload == null
@@ -93,6 +96,9 @@ abstract final class PendingMutationCodec {
         accessRevision: !record.containsField(LocalSyncSchema.accessRevision)
             ? null
             : record.requirePositiveInt(LocalSyncSchema.accessRevision),
+        protectionChange: record.containsField('protectionChange')
+            ? ProtectionSyncCodec.decode(record.rawValue('protectionChange'))
+            : null,
         operation: operation,
         baseRevision: baseRevision,
         payload: payload,

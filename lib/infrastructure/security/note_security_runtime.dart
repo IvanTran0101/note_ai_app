@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../application/auth/current_user_session.dart';
 import '../../application/notes/local_note_vault.dart';
 import '../../application/notes/note_access.dart';
@@ -67,6 +69,7 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
       if (gateway != null) _gateways[account] = gateway;
       final service = NoteSecurityService(
         accountId: account,
+        localFirst: kIsWeb,
         currentUser: session,
         session: session,
         store: store,
@@ -127,7 +130,9 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     if (generation != session.sessionGeneration) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
-    final note = state.notes.where((n) => n.id == mutation.noteId).firstOrNull;
+    final note = state.notes
+        .where((n) => n.identity == mutation.identityFor(account))
+        .firstOrNull;
     if (note == null || !note.contentAvailable) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
     }
@@ -140,9 +145,34 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
       protection: note.protection,
       operation: op,
     );
-    if (!note.protection.enabled) return null;
-    forAccount(account).requireRemote(note.id, note.protection, op);
-    return _gateways[account]!.grantHeader(note.id, note.protection, op);
+    final change =
+        mutation.protectionChange ??
+        state.outbox
+            .where(
+              (m) =>
+                  m.mutation.identityFor(account) == note.identity &&
+                  m.protectionChange != null,
+            )
+            .firstOrNull
+            ?.protectionChange;
+    if (mutation.protectionChange == null &&
+        change != null &&
+        !change.before.enabled &&
+        note.protection.enabled) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.pendingSync);
+    }
+    final remoteProtection = change?.before ?? note.protection;
+    final remoteOperation = mutation.protectionChange == null
+        ? op
+        : NoteOperation.manage;
+    if (!remoteProtection.enabled) return null;
+    forAccount(account)
+        .requireRemote(note.id, remoteProtection, remoteOperation);
+    return _gateways[account]!.grantHeader(
+      note.id,
+      remoteProtection,
+      remoteOperation,
+    );
   }
 
   String? summaryGrant(SummaryRunContext context) {

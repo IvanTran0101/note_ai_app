@@ -134,7 +134,12 @@ final class SyntheticSecurityGateway implements INoteSecurityGateway {
 }
 
 final class SecurityHarness {
-  SecurityHarness(this.account);
+  SecurityHarness(
+    this.account, {
+    this.localFirst = false,
+    this.serverAvailable = true,
+  });
+  final bool localFirst, serverAvailable;
   final String account;
   final session = CurrentUserSession();
   final gateway = SyntheticSecurityGateway();
@@ -142,6 +147,7 @@ final class SecurityHarness {
   late final store = EncryptedSyncStore(account, backing);
   late final security = NoteSecurityService(
     accountId: account,
+    localFirst: localFirst,
     currentUser: session,
     session: session,
     store: store,
@@ -178,7 +184,7 @@ final class SecurityHarness {
     securityEvents: security.changes,
     readAccessGeneration: () => security.accessGeneration,
     readSessionGeneration: () => session.sessionGeneration,
-    serverAvailable: true,
+    serverAvailable: serverAvailable,
   );
   Future<void> initialize() async {
     session.setIdentity(

@@ -11,8 +11,8 @@ extension NoteSecurityActions on NoteSecurityService {
     try {
       final note = await _note(id);
       _live(captured, generation);
-      if (offline) {
-        await vault.unlock(id, password, note.protection);
+      if ((offline || localFirst) &&
+          await _tryLocalUnlock(id, password, note.protection, offline)) {
         _live(captured, generation);
         if (!(await _note(id)).contentAvailable) {
           throw const NoteSecurityFailure(
@@ -29,11 +29,14 @@ extension NoteSecurityActions on NoteSecurityService {
               NoteOperation.edit,
               NoteOperation.delete,
               NoteOperation.summary,
+              if (localFirst) NoteOperation.manage,
+              if (localFirst) NoteOperation.export,
             },
             expiresAt: _now().add(const Duration(minutes: 15)),
           ),
           online: false,
         );
+        if (localFirst && !offline) _launchSync(id, password, password);
         return;
       }
       final p = await gateway.metadata(id);
@@ -63,6 +66,7 @@ extension NoteSecurityActions on NoteSecurityService {
 
   Future<void> enable(String id, String password, String confirmation) async {
     NoteSecurityService._confirm(password, confirmation);
+    if (localFirst) return _enableLocal(id, password);
     final captured = _capture(), generation = _generation;
     await syncNow?.call();
     _live(captured, generation);
@@ -102,6 +106,7 @@ extension NoteSecurityActions on NoteSecurityService {
     String confirmation,
   ) async {
     NoteSecurityService._confirm(newPassword, confirmation);
+    if (localFirst) return _changeLocal(id, currentPassword, newPassword);
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
     requireRemote(id, note.protection, NoteOperation.manage);
@@ -135,6 +140,7 @@ extension NoteSecurityActions on NoteSecurityService {
   }
 
   Future<void> disable(String id, String currentPassword) async {
+    if (localFirst) return _disableLocal(id, currentPassword);
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
     requireRemote(id, note.protection, NoteOperation.manage);

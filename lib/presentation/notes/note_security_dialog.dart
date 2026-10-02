@@ -153,6 +153,8 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
           _password.text,
           _confirmation.text,
         );
+      case NoteSecurityAction.syncProtection:
+        await s.authorizePendingSync(id, _current.text);
       case NoteSecurityAction.lock:
         s.lock(id);
     }
@@ -199,6 +201,7 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.service.localFirst) Text(copy.localFirstHint),
                   if (_recovery) ...[
                     Text(copy.recoveryHint),
                     TextFormField(
@@ -220,9 +223,16 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
                     ),
                   ],
                   if (widget.action == NoteSecurityAction.change ||
-                      widget.action == NoteSecurityAction.disable)
-                    _passwordField(_current, copy.current),
-                  if (widget.action != NoteSecurityAction.disable)
+                      widget.action == NoteSecurityAction.disable ||
+                      widget.action == NoteSecurityAction.syncProtection)
+                    _passwordField(
+                      _current,
+                      widget.action == NoteSecurityAction.syncProtection
+                          ? copy.cloudPassword
+                          : copy.current,
+                    ),
+                  if (widget.action != NoteSecurityAction.disable &&
+                      widget.action != NoteSecurityAction.syncProtection)
                     _passwordField(
                       _password,
                       _newPassword ? copy.next : copy.password,

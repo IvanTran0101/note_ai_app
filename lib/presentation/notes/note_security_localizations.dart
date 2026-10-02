@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_access.dart';
 
-enum NoteSecurityAction { enable, unlock, change, disable, recover, lock }
+enum NoteSecurityAction {
+  enable,
+  unlock,
+  change,
+  disable,
+  recover,
+  lock,
+  syncProtection,
+}
 
 final class NoteSecurityCopy {
   NoteSecurityCopy(BuildContext context)
@@ -17,6 +25,16 @@ final class NoteSecurityCopy {
   String get unavailable => choose(
     'Kết nối dịch vụ để xác minh ghi chú và bật bảo vệ.',
     'Connect to the service to verify this note and enable protection.',
+  );
+  String get localFirstHint => choose(
+    'Thay đổi được lưu trên thiết bị trước. Cloud sẽ đồng bộ khi có kết nối và quyền mở khóa.',
+    'Changes save on this device first. Cloud sync follows when connected and authorized.',
+  );
+  String get cloudPassword =>
+      choose('Mật khẩu hiện tại trên cloud', 'Current cloud password');
+  String get pendingProtection => choose(
+    'Thay đổi bảo vệ đã lưu trên thiết bị, đang chờ đồng bộ cloud.',
+    'Protection changes saved on this device, awaiting cloud sync.',
   );
   String get password => choose('Mật khẩu ghi chú', 'Note password');
   String get current => choose('Mật khẩu hiện tại', 'Current password');
@@ -51,6 +69,10 @@ final class NoteSecurityCopy {
     NoteSecurityAction.recover => choose(
       'Quên mật khẩu / OTP',
       'Forgot password / OTP',
+    ),
+    NoteSecurityAction.syncProtection => choose(
+      'Đồng bộ bảo vệ',
+      'Sync protection',
     ),
     NoteSecurityAction.lock => choose('Khóa ngay', 'Lock now'),
   };

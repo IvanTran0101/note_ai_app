@@ -94,3 +94,15 @@ implemented. Criterion/path mapping and deployment prerequisites are recorded in
 IMPLEMENTATION.md. Automated acceptance and remote checkpoints live in PROGRESS.md and the Notion
 progress page. VM/Chrome, Android and real Web-plugin integration passed. Live
 AWS/SES/provider deployment remains separate; test doubles are identified there.
+
+## Confirmed Web local-first correction — 2026-10-02
+
+User confirmed local operations first, while cloud remains protected on sync.
+Web stores protection/key/ciphertext/outbox atomically in encrypted IndexedDB;
+local success is independent of network/backend availability. Backend accepts the
+fixed salted PBKDF2 representation as well as legacy Argon2id. Owner JWT/fresh
+ACL, pinned before epoch and scoped manage grants enforce later cloud changes.
+New routes fail closed against older deployments. No second sync writer, raw
+password persistence or reset is introduced. LOCAL_FIRST_WEB.md records the
+migration-compatible intent, predecessor receipt/conflict path and QA limits.
+M06 remains paused at M06.1; M09's two visual redesigns remain on its Notion backlog.

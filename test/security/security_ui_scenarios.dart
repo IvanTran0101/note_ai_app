@@ -13,6 +13,7 @@ import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 
 import 'security_fixtures.dart';
+import 'local_first_scenarios.dart';
 import 'security_harness.dart';
 
 Future<void> _settleUntil(WidgetTester tester, bool Function() ready) async {
@@ -99,7 +100,64 @@ Future<void> _confirm(WidgetTester tester) async {
   await tester.pump();
 }
 
-void registerSecurityUiScenarios() {
+void registerSecurityUiScenarios({bool includeLocalFirst = false}) {
+  if (includeLocalFirst) {
+    testWidgets(
+      'local-first UI enables, changes and disables offline without server availability',
+      (tester) async {
+        final h = SecurityHarness(
+          'local-ui-${DateTime.now().microsecondsSinceEpoch}',
+          localFirst: true,
+          serverAvailable: false,
+        );
+        addTearDown(h.dispose);
+        await tester.runAsync(h.initialize);
+        await tester.runAsync(() => h.store.replace(unsynced(h.account)));
+        await _show(tester, h);
+        await _dialog(tester, 'enable');
+        await _passwords(tester, [securityPassword, securityPassword]);
+        await _confirm(tester);
+        await _settleUntil(
+          tester,
+          () => find.byType(AlertDialog).evaluate().isEmpty,
+        );
+        await _idle(tester);
+        expect(h.gateway.enableCalls, 0);
+        expect(
+          find.text(
+            'Protection changes saved on this device, awaiting cloud sync.',
+          ),
+          findsOneWidget,
+        );
+        await _dialog(tester, 'change');
+        await _passwords(tester, [
+          securityPassword,
+          'offline-ui-password',
+          'offline-ui-password',
+        ]);
+        await _confirm(tester);
+        await _settleUntil(
+          tester,
+          () => find.byType(AlertDialog).evaluate().isEmpty,
+        );
+        await _idle(tester);
+        await _dialog(tester, 'disable');
+        await _passwords(tester, ['offline-ui-password']);
+        await _confirm(tester);
+        await _settleUntil(
+          tester,
+          () => find.byType(AlertDialog).evaluate().isEmpty,
+        );
+        await _idle(tester);
+        final note = await tester.runAsync(() => h.app.readNote('alpha'));
+        expect(note!.isProtected, false);
+        expect(note.content, privateBody);
+        expect(h.gateway.enableCalls, 0);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+      timeout: const Timeout(Duration(minutes: 6)),
+    );
+  }
   testWidgets(
     'enable confirmation, wrong password, online unlock and lock scrub private editor',
     (tester) async {

@@ -4,20 +4,28 @@ Scope: M05 only. Updated 2026-10-02. All six milestones are implemented in
 source. Source and automated runtime evidence are recorded below and in PROGRESS.md.
 Live deployed API/mailbox/provider delivery is outside this acceptance.
 
+## Current Web correction — local-first (2026-10-02)
+
+Web password enable/change/disable/unlock now commit local encrypted state before
+background cloud work, including a new unsynced note. The local-first contract,
+wire compatibility and deployment boundary are in LOCAL_FIRST_WEB.md. M06 stays
+paused at M06.1. The table below combines current Web behavior with the retained
+native flow; historical results remain in PROGRESS.md.
+
 ## Rubric mapping
 
 | Criterion | Level | Implementation evidence |
 | --- | --- | --- |
-| SEC-FR-01 Enable protection | M | Security dialog → NoteSecurityActions.enable; local seal before conditional backend protection/feed cutover; completion requires both sides |
-| SEC-FR-02 Per-note password | M | Argon2id verifier and salt per canonical owner/note; random per-note DEK with password wrapping, separate grants and attempt counters |
+| SEC-FR-01 Enable protection | M | Security dialog → NoteSecurityActions.enable; Web local atomic seal/outbox first, then dedicated conditional cloud transaction; native server flow retained |
+| SEC-FR-02 Per-note password | M | Fixed salted PBKDF2 local verifier (Argon2id for legacy server actions) per canonical owner/note; random per-note DEK with password wrapping, separate grants and attempt counters |
 | SEC-FR-03 Unlock before operations | M | NoteApplicationService, live capabilities, repository write guards, scoped mutation/replay/conflict guards, metadata-only feed/list/history; separate authorized content |
-| SEC-FR-04 Correct password unlock | M | Server verifier plus authorized local unwrap/hydration; explicit offline unwrap never creates server authority |
-| SEC-FR-05 Change password | M | Current-password verification, conditional epoch update, local rewrap, old grant invalidation and fresh unlock |
-| SEC-FR-06 Disable protection | M | Current-password and manage scope; server cutover and local vault transition; stale UI reloaded |
-| SEC-FR-07 No plaintext password storage | M | Password strings exist only during calls/forms; persisted server verifier is salted Argon2id; local wrapping stores salt/AEAD packets |
+| SEC-FR-04 Correct password unlock | M | Local correct-password unwrap; absent-key online provisioning remains authorized; offline unwrap never creates server authority |
+| SEC-FR-05 Change password | M | Web local current-password unwrap/rewrap and queued epoch; subsequent conditional cloud update invalidates old grants |
+| SEC-FR-06 Disable protection | M | Web current-password local vault transition/outbox; cloud cutover still requires current manage scope |
+| SEC-FR-07 No plaintext password storage | M | Password strings exist only during calls/forms; persisted verifier is salted Argon2id or fixed PBKDF2; local wrapping stores separate salt/AEAD packets |
 | SEC-FR-08 Backend enforcement | M | Cognito JWT + current ACL + scoped grant/epoch/expiry, conditional writes; no client unlock boolean is authority |
 | SEC-FR-09 Confirmation | P | Enable/change/recovery forms and Application check password confirmation before changes |
-| SEC-FR-10 Current password | P | Change/disable verify the current password server-side; an existing grant alone cannot change it |
+| SEC-FR-10 Current password | P | Web change/disable verify the current local password; protected cloud predecessor still needs fresh manage authorization |
 | SEC-NFR-01 Safe representation/logs | M | Domain/DTO diagnostics redacted, fixed error codes, no password/grant/provider payload logging; random grants persisted as hashes |
 | SEC-NFR-02 No API bypass | M | Direct protected content/mutation/delete/retry/replay/history/conflict/Summary paths enforce current authority; protected generic responses are metadata-only |
 | SEC-NFR-03 Encrypted local cache | P | AES-256-GCM account envelope, password-wrapped per-note DEKs, note/outbox/conflict bundles, bounded v2 cutover, native atomic rename and Web CAS; retained ciphertext on recovery |

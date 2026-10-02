@@ -1,6 +1,8 @@
 /// Client-owned changes sent to the remote note API.
 library;
 
+import 'protection_sync_change.dart';
+
 import '../../domain/notes/note_identity.dart';
 
 enum SyncMutationOperation { create, update, delete }
@@ -31,6 +33,7 @@ final class SyncMutation {
     required this.payload,
     required this.ownerId,
     required this.accessRevision,
+    required this.protectionChange,
   });
 
   factory SyncMutation({
@@ -41,6 +44,7 @@ final class SyncMutation {
     SyncNotePayload? payload,
     String? ownerId,
     int? accessRevision,
+    ProtectionSyncChange? protectionChange,
   }) {
     _requireNonBlank(mutationId, 'mutationId');
     _requireNonBlank(noteId, 'noteId');
@@ -54,6 +58,9 @@ final class SyncMutation {
         'baseRevision',
         'must not be negative',
       );
+    }
+    if (operation == SyncMutationOperation.delete && protectionChange != null) {
+      throw ArgumentError('Protection changes require a content mutation.');
     }
     if (operation != SyncMutationOperation.delete && payload == null) {
       throw ArgumentError.value(
@@ -70,11 +77,13 @@ final class SyncMutation {
       payload: payload,
       ownerId: ownerId,
       accessRevision: accessRevision,
+      protectionChange: protectionChange,
     );
   }
 
   final String? ownerId;
   final int? accessRevision;
+  final ProtectionSyncChange? protectionChange;
   NoteIdentity identityFor(String actorId) =>
       NoteIdentity(ownerId ?? actorId, noteId);
 
@@ -93,7 +102,8 @@ final class SyncMutation {
         other.baseRevision == baseRevision &&
         other.payload == payload &&
         other.ownerId == ownerId &&
-        other.accessRevision == accessRevision;
+        other.accessRevision == accessRevision &&
+        other.protectionChange == protectionChange;
   }
 
   @override
@@ -105,6 +115,7 @@ final class SyncMutation {
     payload,
     ownerId,
     accessRevision,
+    protectionChange,
   );
 }
 

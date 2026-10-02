@@ -8,6 +8,7 @@ import 'note_sync_status.dart';
 import 'pending_mutation.dart';
 import 'sync_conflict.dart';
 import 'sync_mutation.dart';
+import 'protection_sync_change.dart';
 import 'sync_snapshot.dart';
 import '../notes/note_access.dart';
 import '../../domain/notes/note_protection.dart';
@@ -81,6 +82,22 @@ final class SyncConflictResolver {
                 item.mutation.identityFor(accountUserId) != local.identity,
           )
           .toList();
+      final pendingProtection = current.outbox
+          .where(
+            (m) =>
+                m.mutation.identityFor(accountUserId) == local.identity &&
+                m.protectionChange != null,
+          )
+          .lastOrNull
+          ?.protectionChange;
+      if (pendingProtection != null &&
+          choice == SyncConflictChoice.useLocal &&
+          (conflict.remote?.isDeleted == true ||
+              local.isDeleted ||
+              (conflict.remote?.protection.revision ?? 0) >=
+                  pendingProtection.after.revision)) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+      }
       final DateTime timestamp = now();
       final SyncNoteSnapshot? remote = conflict.remote;
       if (local.protection.enabled) {
@@ -123,6 +140,15 @@ final class SyncConflictResolver {
               local: local,
               accountUserId: accountUserId,
               timestamp: timestamp,
+              protectionChange: pendingProtection == null
+                  ? null
+                  : ProtectionSyncChange(
+                      before:
+                          conflict.remote?.protection ??
+                          const NoteProtection.unprotected(),
+                      after: pendingProtection.after,
+                      verifier: pendingProtection.verifier,
+                    ),
             ),
           );
         }
@@ -139,6 +165,15 @@ final class SyncConflictResolver {
               local: local,
               accountUserId: accountUserId,
               timestamp: timestamp,
+              protectionChange: pendingProtection == null
+                  ? null
+                  : ProtectionSyncChange(
+                      before:
+                          conflict.remote?.protection ??
+                          const NoteProtection.unprotected(),
+                      after: pendingProtection.after,
+                      verifier: pendingProtection.verifier,
+                    ),
             ),
           );
         }
@@ -172,6 +207,13 @@ final class SyncConflictResolver {
             id: local.id,
             operation: SyncMutationOperation.update,
             baseRevision: remote.revision,
+            protectionChange: pendingProtection == null
+                ? null
+                : ProtectionSyncChange(
+                    before: remote.protection,
+                    after: pendingProtection.after,
+                    verifier: pendingProtection.verifier,
+                  ),
             local: local,
             accountUserId: accountUserId,
             timestamp: timestamp,
@@ -198,12 +240,14 @@ final class SyncConflictResolver {
     required LocalNoteState local,
     required String accountUserId,
     required DateTime timestamp,
+    ProtectionSyncChange? protectionChange,
   }) => PendingMutation(
     mutationId: generateMutationId(),
     noteId: id,
     ownerId: local.ownerId == accountUserId ? null : local.ownerId,
     accessRevision: local.share?.accessRevision,
     operation: operation,
+    protectionChange: protectionChange,
     baseRevision: baseRevision,
     payload: operation == SyncMutationOperation.delete
         ? null

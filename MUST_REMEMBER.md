@@ -5,6 +5,27 @@ the current `AGENTS.md`, inspect `git status` and the active branch, and confirm
 the codebase-memory index before structural code discovery. Begin the M05
 implementation only within the scope the user has approved below.
 
+## Current instruction - Web local-first (2026-10-02)
+
+The user requested correcting M05 and following local-first on Web from now on,
+per collaborator feedback. Persist note/protection changes locally in IndexedDB
+first; sync cloud afterward. Do not require a successful cloud request or an
+already-synced note before a local password operation can succeed. Store only
+a salted password-derived representation and authenticated encrypted content;
+never persist raw passwords. Local storage is the primary working copy, and the
+existing account-scoped outbox/cursor engine owns later cloud synchronization.
+Preserve DDD, IDs, ciphertext, pending drafts/conflicts and session guards.
+
+M06 implementation is paused at accepted/pushed M06.1 (9f94237), by the user's
+stop request. The active change is M05 Web local-first, with a new acceptance
+batch; earlier M05 acceptance covers the previous server-first action flow.
+Read docs/m05/LOCAL_FIRST_WEB.md and PROGRESS.md before continuing this change.
+User confirmed cloud still protects notes during sync. Backend JWT, fresh ACL,
+protection epoch and scoped grants remain mandatory; local unlock never becomes
+server authorization. Content/protection changes use the same durable outbox and
+an atomic cloud write via a dedicated route that fails closed on older servers. M09 UX backlog on Notion contains
+the two requested sync-status/password-note redesigns and reference images.
+
 ## Approved direction
 
 - Finish **M05 — Note Security** first, using the reviewed baseline
@@ -121,7 +142,7 @@ implementation only within the scope the user has approved below.
 
 - [M06 Sharing & Real-time Collaboration plan](https://app.notion.com/p/3e8f9c7a1aa08193b4f9d1fbf42999ed)
 
-## Active module — M06
+## Paused module — M06 (prior accepted work)
 
 M05 automated acceptance is complete and pushed at 22587a5; 15 Notion rubric
 boxes are ticked. M06 is now authorized. Read docs/m06/CONTRACT.md and PROGRESS.md
@@ -161,5 +182,21 @@ Keep those pages synchronized after every completed M/P or milestone and push.
 
 M06.1 foundation accepted: real Chrome40 and Android40, strict legacy codecs,
 canonical pair queue/conflict/vault, access-first encrypted retained draft and
-legacy reserved-ID authenticated bindings. Next M06.2 backend. Final M06 rubric
+legacy reserved-ID authenticated bindings. M06.2 is paused. Final M06 rubric
 remains pending integration; see docs/m06/PROGRESS.md and CHECKLIST_AUDIT.md.
+
+## Active module boundary after Web correction
+
+The newest instruction is M05 Web local-first only. M06 remains paused at M06.1
+(9f94237); earlier historical text about continuing M06 is not a resume request.
+Use LOCAL_FIRST_WEB.md and the latest PROGRESS.md batch for current acceptance.
+Every future Web operation commits locally before background cloud sync. Cloud
+still requires JWT, fresh ACL, pinned protection revision and scoped grants.
+Keep the single outbox/cursor engine and encrypted account-scoped IndexedDB.
+
+Web local-first correction runtime acceptance now passes: VM942, Chrome815,
+Chrome integration8, Android8, offline page-reload2 phases and backend64 checks.
+Static checks pass. The final source checkpoint is being recorded/pushed;
+consult the newest PROGRESS.md receipt. Six new Notion M05-LF boxes are ticked.
+M06 stays paused. No live backend deployment is claimed; protected cloud sync
+requires the dedicated new routes and keeps independent server authority.

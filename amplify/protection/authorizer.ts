@@ -11,12 +11,12 @@ export class ProtectionAuthorizer implements NoteSecurityAuthority {
   constructor(private readonly store: ProtectionStore, private readonly acl: NoteAcl,
     private readonly now: () => number = Date.now) {}
 
-  async metadata(actor: string, owner: string, noteId: string): Promise<ProtectionMetadata> {
+  async metadata(actor: string, owner: string, noteId: string, allowMissing = false): Promise<ProtectionMetadata> {
     await this.acl.require(actor, owner, identifier(noteId), 'read');
     const note = await this.store.readNote(owner, noteId);
-    if (!note) throw new NoteSecurityError('denied');
+    if (!note && !allowMissing) throw new NoteSecurityError('denied');
     const { enabled, revision } = await this.store.readProtection(owner, noteId);
-    if (note.protected && (!enabled || revision < (note.protectionRevision ?? 0))) {
+    if (note?.protected && (!enabled || revision < (note.protectionRevision ?? 0))) {
       throw new NoteSecurityError('unavailable');
     }
     return { enabled, revision };

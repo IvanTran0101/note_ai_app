@@ -56,7 +56,10 @@ extension _NoteRepositoryMutations on NoteRepository {
       (PendingMutation entry) =>
           entry.noteId == note.id &&
           entry.blocked &&
-          entry.lastError == SyncErrorCode.invalidMutation,
+          entry.lastError == SyncErrorCode.invalidMutation &&
+          !current.outbox.any(
+            (m) => m.noteId == note.id && m.protectionChange != null,
+          ),
     )) {
       // An explicit edit repairs a rejected request with a fresh id and the
       // last acknowledged revision; successors of that request cannot run.
@@ -116,6 +119,9 @@ extension _NoteRepositoryMutations on NoteRepository {
       operation: last.operation,
       baseRevision: last.baseRevision,
       payload: payload,
+      ownerId: last.ownerId,
+      accessRevision: last.accessRevision,
+      protectionChange: last.protectionChange,
       createdAt: last.createdAt,
     );
     return NoteRepository._outboxWithReplacement(
@@ -147,7 +153,7 @@ extension _NoteRepositoryMutations on NoteRepository {
       // The delete is already queued; a second one would be redundant.
       return current.outbox;
     }
-    if (!NoteRepository._isUnsent(last)) {
+    if (!NoteRepository._isUnsent(last) || last.protectionChange != null) {
       return <PendingMutation>[
         ...current.outbox,
         _pendingMutation(

@@ -107,7 +107,11 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     return _classify(() async {
       final http.Response response = await _send(
         method: 'POST',
-        uri: _endpoint(_mutationsPath),
+        uri: _endpoint(
+          mutation.protectionChange == null
+              ? _mutationsPath
+              : 'sync/protected-mutations',
+        ),
         body: encodeSyncMutation(mutation),
         mutation: mutation,
       );
@@ -232,7 +236,18 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     SyncMutation? mutation,
   }) async {
     requireSession?.call();
-    final grant = mutation == null ? null : await mutationGrant?.call(mutation);
+    String? grant;
+    try {
+      grant = mutation == null ? null : await mutationGrant?.call(mutation);
+    } on NoteSecurityFailure catch (failure) {
+      if (failure.code != NoteSecurityFailureCode.pendingSync) rethrow;
+      return _dispatch(
+        method: 'POST',
+        uri: _endpoint('sync/protection-predecessor'),
+        accessToken: accessToken,
+        body: body,
+      );
+    }
     requireSession?.call();
     final http.Request request = http.Request(method, uri);
     request.followRedirects = false;

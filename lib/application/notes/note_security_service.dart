@@ -10,10 +10,12 @@ import '../sync/sync_snapshot.dart';
 import '../sync/pending_mutation.dart';
 import '../sync/sync_failure.dart';
 import 'local_note_vault.dart';
+import 'local_first_note_vault.dart';
 import 'note_access.dart';
 import 'note_security_gateway.dart';
 
 part 'note_security_actions.dart';
+part 'note_security_local_actions.dart';
 
 typedef _LocalAccess = ({
   NoteProtection protection,
@@ -33,6 +35,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     required this.vault,
     required this.gateway,
     this.syncNow,
+    this.localFirst = false,
     this.cancelSummaries,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
@@ -42,6 +45,7 @@ final class NoteSecurityService implements INoteAccessGuard {
   final ILocalSyncStore store;
   final ILocalNoteVault vault;
   final INoteSecurityGateway gateway;
+  final bool localFirst;
   final Future<void> Function()? syncNow;
   final void Function()? cancelSummaries;
   final DateTime Function() _now;
@@ -70,7 +74,7 @@ final class NoteSecurityService implements INoteAccessGuard {
 
   Future<LocalNoteState> _note(String id) async {
     final note = (await store.read()).notes
-        .where((n) => n.id == id && !n.isDeleted)
+        .where((n) => n.id == id && n.ownerId == accountId && !n.isDeleted)
         .firstOrNull;
     if (note == null || note.ownerId != accountId) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
@@ -130,6 +134,9 @@ final class NoteSecurityService implements INoteAccessGuard {
   }
 
   Future<NoteProtection> refreshProtection(String id) async {
+    if (localFirst && await hasPendingProtection(id)) {
+      return (await _note(id)).protection;
+    }
     final captured = _capture(), generation = _generation;
     final p = await gateway.metadata(id);
     _live(captured, generation);
@@ -155,10 +162,19 @@ final class NoteSecurityService implements INoteAccessGuard {
 
   Future<void> observeSnapshot(SyncNoteSnapshot snapshot) async {
     final captured = _capture();
-    final note = (await store.read()).notes
-        .where((n) => n.id == snapshot.id)
+    final state = await store.read();
+    final note = state.notes
+        .where((n) => n.identity == snapshot.identityFor(accountId))
         .firstOrNull;
-    if (note == null) return;
+    if (note == null || note.ownerId != accountId) return;
+    if (state.outbox.any(
+          (m) =>
+              m.mutation.identityFor(accountId) == note.identity &&
+              m.protectionChange != null,
+        ) ||
+        snapshot.protection.revision < note.protection.revision) {
+      return;
+    }
     if (_capture() != captured) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
@@ -169,6 +185,7 @@ final class NoteSecurityService implements INoteAccessGuard {
 
   /// Pull remains metadata-only; hydrate only a currently authorized note.
   Future<void> hydrateSnapshot(SyncNoteSnapshot snapshot) async {
+    if (localFirst && await hasPendingProtection(snapshot.id)) return;
     final captured = _capture(), generation = _generation;
     if (!snapshot.protection.enabled ||
         snapshot.isDeleted ||
@@ -199,6 +216,7 @@ final class NoteSecurityService implements INoteAccessGuard {
         outbox: state.outbox.map(
           (m) =>
               m.noteId == id &&
+                  m.mutation.identityFor(accountId).ownerId == accountId &&
                   m.blocked &&
                   (m.lastError == null ||
                       m.lastError == SyncErrorCode.forbidden)
@@ -263,6 +281,9 @@ final class NoteSecurityService implements INoteAccessGuard {
   static PendingMutation _unblocked(PendingMutation m) => PendingMutation(
     mutationId: m.mutationId,
     noteId: m.noteId,
+    ownerId: m.ownerId,
+    accessRevision: m.accessRevision,
+    protectionChange: m.protectionChange,
     operation: m.operation,
     baseRevision: m.baseRevision,
     payload: m.payload,

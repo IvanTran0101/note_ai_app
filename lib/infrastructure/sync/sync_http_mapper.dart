@@ -16,6 +16,8 @@ library;
 
 import 'dart:convert';
 
+import 'protection_sync_codec.dart';
+
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
@@ -70,6 +72,10 @@ Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
     'noteId': mutation.noteId,
     'operation': mutation.operation.name,
     'baseRevision': mutation.baseRevision,
+    if (mutation.protectionChange != null)
+      'protectionChange': ProtectionSyncCodec.encode(
+        mutation.protectionChange!,
+      ),
   };
   final SyncNotePayload? payload = mutation.payload;
   if (payload != null) {

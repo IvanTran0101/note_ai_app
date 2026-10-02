@@ -14,6 +14,12 @@ export type NoteSnapshot = Readonly<{
   contentAvailable?: boolean;
 }>;
 
+export type ProtectionSyncChange = Readonly<{
+  before: Readonly<{ enabled: boolean; revision: number }>;
+  after: Readonly<{ enabled: boolean; revision: number }>;
+  verifier: string | null;
+}>;
+
 export type SyncOperation = 'create' | 'update' | 'delete';
 
 /** `create` and `update` require this; `delete` ignores it. */
@@ -26,6 +32,7 @@ export type SyncMutation = Readonly<{
   operation: SyncOperation;
   baseRevision: number;
   payload?: MutationPayload;
+  protectionChange?: ProtectionSyncChange;
 }>;
 
 export type AppliedMutation = Readonly<{
@@ -62,7 +69,7 @@ export interface SyncStore {
    *         same request may be sent again.
    */
   applyMutation(ownerId: string, mutation: SyncMutation,
-    authorization?: Readonly<{ actorId: string; grant?: string }>): Promise<ApplyMutationResult>;
+    authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult>;
 
   /**
    * Lists changes above `cursor` in ascending sequence order. A missing cursor
@@ -126,6 +133,7 @@ export type NormalizedMutation = Readonly<{
   operation: SyncOperation;
   baseRevision: number;
   payload: MutationPayload | null;
+  protectionChange?: ProtectionSyncChange;
   fingerprint: string;
 }>;
 

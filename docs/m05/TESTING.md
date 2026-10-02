@@ -6,7 +6,7 @@ existing user's application data. Test keys/passwords in fixtures are synthetic.
 ## Order on Windows
 
 1. Use a short checkout path for native hooks (for example a free SUBST drive).
-   The current session uses R: mapped to the managed worktree. Check the drive
+   The current session uses R: mapped to the primary D: checkout (an alias, not a worktree). Check the drive
    mapping before creating or removing one; never assume a drive is free.
 2. Run backend policies and typecheck.
 3. Run the complete VM suite, then Chrome tests, then Android integration.
@@ -36,9 +36,9 @@ and changes only the two URL handlers to use URI paths. The installed SDK, engin
 compiler, product and Chrome are unchanged. Remove obsolete overlays manually
 only after their processes have finished; no recursive cleanup is automated.
 
-The complete browser-compatible suite excludes eight IO-only test files: native
+The complete browser-compatible suite excludes nine VM-only test files: native
 user-profile/configuration/local-sync storage, native hardware fixtures and the four native AI adapter
-files. Those files run in the VM suite. Browser-only storage tests run on Chrome.
+files, plus the local-first VM file-store fixture. Those files run in the VM suite. Browser-only storage tests run on Chrome.
 Scope counts and any further limitations belong in PROGRESS.md/Notion after the
 actual run, never inferred from file counts or a successful build.
 
@@ -69,3 +69,38 @@ See PROGRESS.md for the latest verified results and pending work. Record a failu
 before changing its behavior, keep a regression assertion, then rerun the relevant
 suites and platforms. Do not tick the Notion acceptance checklist from static
 analysis or build success alone.
+
+## Local-first correction commands
+
+```powershell
+npx.cmd tsx --test amplify/sync/*.test.ts amplify/protection/*.test.ts amplify/ai/*.test.ts
+flutter test --no-pub --reporter expanded
+$browserTargets = @(rg --files test -g '*_test.dart' | Where-Object { (Get-Content -LiteralPath $_ -Raw) -notmatch "@TestOn\(['`"]vm['`"]\)|import ['`"]dart:io['`"]" })
+python -X utf8 tool/run_chrome_tests.py --sdk C:/Users/meow/flutter --aggregate $browserTargets
+flutter build web --debug --target integration_test/m05_local_first_test.dart --output output/m05-local-first-integration --no-pub --no-wasm-dry-run
+flutter test integration_test/m05_local_first_test.dart -d emulator-5554 --no-pub --no-uninstall --reporter expanded
+flutter build web --debug --target integration_test/m05_local_reload_test.dart --output output/m05-local-reload --no-pub --no-wasm-dry-run
+flutter analyze --no-pub
+npm run typecheck
+```
+
+The local-first integration registers 8 scenarios (3 crypto/storage, 4 retained
+security UI cases, 1 local-first UI case). It uses actual Web/Android storage.
+The VM-only first fixture supplies a temporary application-support directory:
+unit tests have no native path-provider plugin. Integration keeps the real
+platform resolver; it does not share that VM seam.
+
+For reload, serve the separate output on localhost. Open `?phase=seed&account=`
+with a unique synthetic account. Wait for the engine/driver, set the browser
+context offline, set `window.m05TestProceed = true`, then request driver data.
+Require `result: true` and empty failureDetails. Restore network to load
+`?phase=reload&account=` with the exact same account, disable network again and
+repeat. This forces a full page reload with persistent encrypted IndexedDB,
+correct/wrong password, offline rotation/disable and durable pending intent.
+Assets are loaded before disabling networking; PWA offline asset boot is outside
+this test. Never clear existing account storage or emulator application data.
+
+Resolve the independent bridge's existing dev dependencies with `dart pub get
+--offline` in `packages/local_llm_bridge` if the analyzer cannot resolve its test
+package. Generated `output/` fixtures are excluded alongside generated build
+artifacts; the old generated QA shim also has its own local analysis exclusion. Logs stay in task Temp/ignored output, never Git.

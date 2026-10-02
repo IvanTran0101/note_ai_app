@@ -1,3 +1,4 @@
+import { verifyLocalPassword } from './pbkdf2_password_verifier';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { argon2idAsync } from '@noble/hashes/argon2.js';
 import type { PasswordHasher } from './password_hasher';
@@ -24,6 +25,7 @@ export class Argon2idPasswordHasher implements PasswordHasher {
 
   async verify(password: string, representation: string): Promise<boolean> {
     requirePassword(password);
+    if (representation.startsWith('pbkdf2-sha256-v1$')) return verifyLocalPassword(password, representation);
     const parts = representation.split('$');
     if (parts.length !== 3 || parts[0] !== 'argon2id-v1') throw new NoteSecurityError('unavailable');
     const salt = Buffer.from(parts[1], 'base64');

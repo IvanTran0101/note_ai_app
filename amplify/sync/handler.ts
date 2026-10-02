@@ -110,6 +110,8 @@ const routeOf = (method: string, path: string): SyncRoute => {
   switch (path) {
     case HEALTH_PATH:
       return matchesMethod('GET', method) ? 'health' : 'unknown';
+    case '/sync/protection-predecessor':
+    case '/sync/protected-mutations':
     case MUTATIONS_PATH:
       return matchesMethod('POST', method) ? 'mutations' : 'unknown';
     case CHANGES_PATH:
@@ -169,14 +171,15 @@ const handleMutation = async (
   event: APIGatewayProxyEventV2WithJWTAuthorizer,
   ownerId: string,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const parsed = parseMutationBody(event.body);
+  const parsed = parseMutationBody(event.body, event.rawPath === '/sync/protected-mutations');
   if (!parsed.ok) {
     logRejected('mutations', parsed.problem);
     return invalidMutationResponse(parsed.problem);
   }
 
   try {
-    const result = await store.applyMutation(ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event) });
+    const result = await store.applyMutation(ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
+      inspectOnly: event.rawPath === '/sync/protection-predecessor' });
     return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
     const mapped = responseForStoreError('mutations', error);

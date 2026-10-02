@@ -29,6 +29,19 @@ final class SyncPageProjection {
         (old?.share?.accessRevision ?? 0)) {
       return;
     }
+    // Own pending password changes win over historical cloud metadata.
+    if (identity.ownerId == state.accountUserId &&
+        outbox.any(
+          (m) =>
+              m.mutation.identityFor(state.accountUserId) == identity &&
+              m.protectionChange != null,
+        )) {
+      _updateConflict(snapshot);
+      return;
+    }
+    if (old != null && snapshot.protection.revision < old.protection.revision) {
+      return;
+    }
     final accessChanged = old != null && snapshot.share != old.share;
     final protectionChanged =
         old != null && snapshot.protection != old.protection;
@@ -92,6 +105,7 @@ final class SyncPageProjection {
         operation: entry.operation,
         baseRevision: entry.baseRevision,
         payload: entry.payload,
+        protectionChange: entry.protectionChange,
         createdAt: entry.createdAt,
         retryCount: entry.retryCount,
         lastError: SyncErrorCode.forbidden,

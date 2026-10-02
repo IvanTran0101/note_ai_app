@@ -14,9 +14,12 @@ final class NoteSecurityPanel extends StatelessWidget {
     required this.retained,
     required this.onAction,
     this.onBack,
+    this.localFirst = false,
+    this.pendingProtection = false,
   });
   final NoteDto note;
   final bool locked, busy, serverAvailable, canManage, retained;
+  final bool localFirst, pendingProtection;
   final ValueChanged<NoteSecurityAction> onAction;
   final VoidCallback? onBack;
   @override
@@ -58,23 +61,32 @@ final class NoteSecurityPanel extends StatelessWidget {
             ),
             if (locked) Text(note.isProtected ? copy.locked : copy.unavailable),
             if (retained) Text(copy.retained),
+            if (pendingProtection) Text(copy.pendingProtection),
             if (busy) const LinearProgressIndicator(),
             Wrap(
               spacing: 8,
               children: [
+                if (localFirst && pendingProtection)
+                  button(
+                    NoteSecurityAction.syncProtection,
+                    enabled: serverAvailable && !locked,
+                  ),
                 if (!note.isProtected)
                   button(
                     NoteSecurityAction.enable,
-                    enabled: serverAvailable && !locked,
+                    enabled: (localFirst || serverAvailable) && !locked,
                   ),
                 if (note.isProtected) ...[
                   if (locked || !canManage) button(NoteSecurityAction.unlock),
                   if (!locked) button(NoteSecurityAction.lock),
                   if (!locked && canManage) ...[
-                    button(NoteSecurityAction.change, enabled: serverAvailable),
+                    button(
+                      NoteSecurityAction.change,
+                      enabled: localFirst || serverAvailable,
+                    ),
                     button(
                       NoteSecurityAction.disable,
-                      enabled: serverAvailable,
+                      enabled: localFirst || serverAvailable,
                     ),
                   ],
                   button(NoteSecurityAction.recover, enabled: serverAvailable),

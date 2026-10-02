@@ -67,7 +67,12 @@ extension EncryptedStateKeys on EncryptedStateCodec {
         } finally {
           bytes.fillRange(0, bytes.length, 0);
         }
-      } on NoteSecurityFailure {
+      } on NoteSecurityFailure catch (failure) {
+        if (failure.code == NoteSecurityFailureCode.storage) {
+          throw const NoteSecurityFailure(
+            NoteSecurityFailureCode.invalidPassword,
+          );
+        }
         rethrow;
       } finally {
         kek.destroy();

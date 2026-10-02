@@ -1,4 +1,5 @@
 import '../../application/notes/note_access.dart';
+import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
 import 'note_security_localizations.dart';
 import 'note_security_panel.dart';

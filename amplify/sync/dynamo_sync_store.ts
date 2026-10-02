@@ -1,3 +1,4 @@
+import { protectionWrite } from './sync_protection_change';
 import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { decodeChangeCursor, encodeChangeCursor } from './cursor';
@@ -32,14 +33,29 @@ export class DynamoSyncStore implements SyncStore {
   }
 
   async applyMutation(ownerId: string, mutation: SyncMutation,
-    authorization?: Readonly<{ actorId: string; grant?: string }>): Promise<ApplyMutationResult> {
+    authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult> {
     const request = normalizeMutation(mutation);
     const ownerKey = ownerKeyOf(ownerId);
+    if (authorization?.inspectOnly) return this.inspectPredecessor(ownerId, ownerKey, request, authorization.actorId);
     const authorize = () => this.security?.authorize(authorization?.actorId ?? ownerId,
-      ownerId, request.noteId, request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+      ownerId, request.noteId, request.protectionChange ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      // A compound replay acknowledges a prior owner write with metadata only.
+      // The old grant was invalidated by that very commit; fresh ACL still applies.
+      if (request.protectionChange) {
+        if (!this.security || (authorization?.actorId ?? ownerId) !== ownerId) throw new NoteSecurityError('denied');
+        const recorded = await this.readMutationRecord(ownerKey, request.mutationId);
+        if (recorded) {
+          const live = await this.security.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
+          if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
+          return { status: 'applied', mutationId: request.mutationId,
+            note: { ...this.metadataProjection(recorded.note, live), title: '', content: '', contentAvailable: false }, replayed: true };
+        }
+      }
       let authority = await authorize();
+      if (request.protectionChange && (!authority || authority.enabled !== request.protectionChange.before.enabled ||
+          authority.revision !== request.protectionChange.before.revision)) throw new NoteSecurityError('staleRevision');
       const [meta, remote, recorded] = await Promise.all([
         this.readMeta(ownerKey),
         this.readNote(ownerKey, request.noteId),
@@ -71,6 +87,11 @@ export class DynamoSyncStore implements SyncStore {
       authority = await authorize();
       const outcome = await this.commit(ownerKey, request, remote, meta.lastSequence, authority);
       if (outcome.kind === 'committed') {
+        if (request.protectionChange) {
+          const live = await this.security!.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
+          return { status: 'applied', mutationId: request.mutationId,
+            note: { ...this.metadataProjection(outcome.note, live), title: '', content: '', contentAvailable: false }, replayed: false };
+        }
         authority = await authorize();
         return { status: 'applied', mutationId: request.mutationId,
           note: this.metadataProjection(outcome.note, authority), replayed: false };
@@ -80,6 +101,23 @@ export class DynamoSyncStore implements SyncStore {
     throw new SyncStorageError('The account was updated too frequently for the note to be saved.', {
       retryable: true,
     });
+  }
+
+  /** Resolve unknown delivery without replaying an unprotected write. No writes. */
+  private async inspectPredecessor(ownerId: string, ownerKey: string,
+      request: NormalizedMutation, actor: string): Promise<ApplyMutationResult> {
+    if (!this.security || actor !== ownerId || request.protectionChange) throw new NoteSecurityError('denied');
+    await this.security.metadata(actor, ownerId, request.noteId, true);
+    const recorded = await this.readMutationRecord(ownerKey, request.mutationId);
+    const remote = recorded ? recorded.note : await this.readNote(ownerKey, request.noteId);
+    const live = await this.security.metadata(actor, ownerId, request.noteId, true);
+    const projection = remote ? { ...this.metadataProjection(remote, live),
+      title: '', content: '', contentAvailable: false } : null;
+    if (recorded) {
+      if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
+      return { status: 'applied', mutationId: request.mutationId, note: projection!, replayed: true };
+    }
+    return { status: 'conflict', mutationId: request.mutationId, remoteNote: projection };
   }
 
   async listChanges(ownerId: string, cursor?: string | null, limit?: number): Promise<ChangesPage> {
@@ -129,11 +167,13 @@ export class DynamoSyncStore implements SyncStore {
   ): Promise<CommitOutcome> {
     const now = new Date().toISOString();
     const next = nextSnapshot(request, remote, now);
-    const note = authority ? { ...next, protected: authority.enabled,
-      protectionRevision: authority.revision } : next;
+    const projection = request.protectionChange?.after ?? authority;
+    const note = projection ? { ...next, protected: projection.enabled,
+      protectionRevision: projection.revision } : next;
     const transactItems = transactItemsFor(this.tableName, ownerKey, request, remote, note, lastSequence, now);
     if (authority) {
-      transactItems?.push({ ConditionCheck: { TableName: this.tableName,
+      if (request.protectionChange) transactItems?.push(protectionWrite(this.tableName, ownerKey, request.noteId, request.protectionChange, authority));
+      else transactItems?.push({ ConditionCheck: { TableName: this.tableName,
         Key: itemKey(ownerKey, `PROTECTION#${request.noteId}`),
         ConditionExpression: authority.revision === 0 ? 'attribute_not_exists(noteId)' : 'revision = :epoch AND enabled = :enabled',
         ...(authority.revision === 0 ? {} : { ExpressionAttributeValues: {
