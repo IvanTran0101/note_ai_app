@@ -6,7 +6,10 @@ extension _NoteRepositoryMutations on NoteRepository {
     Note note,
     DateTime timestamp,
   ) {
-    final LocalNoteState? existing = NoteRepository._findNote(current, note.id);
+    final LocalNoteState? existing = NoteRepository._findNote(
+      current,
+      note.reference,
+    );
     if (existing == null) {
       // A new local note starts unacknowledged and queues one create.
       return NoteRepository._stateWith(
@@ -22,6 +25,7 @@ extension _NoteRepositoryMutations on NoteRepository {
         outbox: <PendingMutation>[
           ...current.outbox,
           _pendingMutation(
+            note: note,
             noteId: note.id,
             operation: SyncMutationOperation.create,
             baseRevision: 0,
@@ -54,20 +58,26 @@ extension _NoteRepositoryMutations on NoteRepository {
     final SyncNotePayload payload = NoteRepository._payloadOf(note);
     if (current.outbox.any(
       (PendingMutation entry) =>
-          entry.noteId == note.id &&
+          entry.mutation.identityFor(current.accountUserId) == note.identity &&
           entry.blocked &&
           entry.lastError == SyncErrorCode.invalidMutation &&
           !current.outbox.any(
-            (m) => m.noteId == note.id && m.protectionChange != null,
+            (m) =>
+                m.mutation.identityFor(current.accountUserId) ==
+                    note.identity &&
+                m.protectionChange != null,
           ),
     )) {
       // An explicit edit repairs a rejected request with a fresh id and the
       // last acknowledged revision; successors of that request cannot run.
       return <PendingMutation>[
         ...current.outbox.where(
-          (PendingMutation entry) => entry.noteId != note.id,
+          (PendingMutation entry) =>
+              entry.mutation.identityFor(current.accountUserId) !=
+              note.identity,
         ),
         _pendingMutation(
+          note: note,
           noteId: note.id,
           operation: existing.serverRevision == 0
               ? SyncMutationOperation.create
@@ -78,12 +88,16 @@ extension _NoteRepositoryMutations on NoteRepository {
         ),
       ];
     }
-    final int index = NoteRepository._lastPendingIndexFor(current, note.id);
+    final int index = NoteRepository._lastPendingIndexFor(
+      current,
+      note.reference,
+    );
     if (index == -1) {
       // Nothing is queued yet: base the update on the acknowledged revision.
       return <PendingMutation>[
         ...current.outbox,
         _pendingMutation(
+          note: note,
           noteId: note.id,
           operation: SyncMutationOperation.update,
           baseRevision: existing.serverRevision,
@@ -103,6 +117,7 @@ extension _NoteRepositoryMutations on NoteRepository {
       return <PendingMutation>[
         ...current.outbox,
         _pendingMutation(
+          note: note,
           noteId: note.id,
           operation: SyncMutationOperation.update,
           baseRevision: last.baseRevision + 1,
@@ -183,6 +198,7 @@ extension _NoteRepositoryMutations on NoteRepository {
   }
 
   PendingMutation _pendingMutation({
+    Note? note,
     required String noteId,
     required SyncMutationOperation operation,
     required int baseRevision,
@@ -196,6 +212,10 @@ extension _NoteRepositoryMutations on NoteRepository {
       baseRevision: baseRevision,
       payload: payload,
       createdAt: timestamp,
+      ownerId: note != null && note.ownerId != _requireActiveAccountUserId()
+          ? note.ownerId
+          : null,
+      accessRevision: note?.share?.accessRevision,
     );
   }
 }

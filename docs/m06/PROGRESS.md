@@ -10,8 +10,8 @@ Current scope: fresh backend ACL/verified recipient + conditional actor/canonica
 sync and Summary, then local-first sharing/UI and durable realtime acceptance.
 M09 is deferred until both collaborators finish and a combined integration/test
 batch precedes a new UI/UX plan. No M09 implementation in this M06 run.
-Next: inspect exact sync/protection/Summary boundaries and implement M06.2 with
-backend role/revoke/replay tests. No new acceptance boxes ticked yet.
+M06.2 backend and M06.3 client source acceptance now pass. Next M06.4 durable
+AppSync relay/session transport, then M06.5 full two-client acceptance.
 
 Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 22587a5954c182c202d07923ec8be1e3060fa42d. Read MUST_REMEMBER.md before coding.
@@ -28,12 +28,13 @@ Updated 2026-10-02. Active scope: M06 only, after M05 accepted and pushed at
 | M06.0 | Complete contract/evidence freeze | Notion decisions and current source inspected; CONTRACT.md |
 | M06.1 | Complete foundation | Canonical pair/role/share policy, strict v3 codecs, encrypted actor storage; Chrome40 + Android40 |
 | M06.2 | Complete backend source/tests | SERVER_CONTRACT.md; 75 backend checks, tsc; AWS live gate remains separate |
-| M06.3 | Planned | Sharing management + Shared With Me, encrypted offline |
+| M06.3 | Complete client source acceptance | CLIENT_CONTRACT.md; Chrome56 + Android56, local encrypted storage/UI/atomic draft review |
 | M06.4 | Planned | Durable AppSync relay and cursor/session recovery |
 | M06.5 | Planned | Full tests + two clients on Web/Android; distinguish live cloud spike |
 
-All 15 SHARE-FR/NFR rubric criteria remain unchecked. No M06 runtime feature is
-claimed implemented or accepted at contract freeze. Update this record DURING
+At contract freeze all criteria were pending. Current accepted criteria: FR05,
+FR06, FR10, NFR04, NFR05 and recipient Shared With Me Done When; backend/live
+realtime and full two-client gates remain explicit. Update this record DURING
 work with files, confirmed failures and the next step; after each completed M06.x
 or M/P criterion, update Notion, explicit-stage commit/push and verify remote SHA.
 
@@ -99,3 +100,30 @@ regressions, real Web/Android integration, review vault compatibility, then chec
   backend/UI/realtime acceptance. M05/M09 actual source checklist audit synchronized
   in CHECKLIST_AUDIT.md. Next M06.2: verified recipient resolver, current ACL stamps,
   actor/canonical mutation idempotency and conditional recipient feed transactions.
+
+
+## M06.2 backend checkpoint
+
+Pushed 08809ede96c37807d3b176dda601be9a1f2d879d, remote SHA verified.
+75 backend checks and TypeScript typecheck passed. See SERVER_CONTRACT.md for
+verified lookup/ACL/atomic actor feed and shared-route evidence and cloud limits.
+
+## M06.3 client acceptance - 2026-10-02
+
+- Chrome real browser56 and Android emulator56 passed. Chrome driver result true,
+  failureDetails empty; real IndexedDB and native secure storage included.
+- VM regression408 (+1skip), editor/UI/repository147, clean scoped analyzer and
+  diff check. CLIENT_CONTRACT.md explains scope and independent live AWS gate.
+- Shared With Me, role/sharer/time, owner recipients/roles/revoke UI, stable lost
+  ACK retry, offline canonical editor outbox, recipient password scope and Summary
+  lineage are connected. Saves compare the selected snapshot atomically and
+  queue both fields together; changed editor requires explicit local/cloud review.
+- Access loss clears private UI/Summary and retains encrypted unsaved evidence;
+  metadata/status/delete/conflict identities cannot collide across owners.
+- Final platform logs: TEMP/m06-ui-final-android.log; Playwright session m06-ui
+  at localhost8773 and request_data true; TEMP/m06-ui-clean-analyze.log.
+  Existing old Web output was excluded; unique output/dart-define used.
+- Row rendering was extracted from list layout to keep the list file bounded;
+  it preserves keys/content/layout and is covered by final UI regression.
+- Tick actual Implement plan criteria FR05/06/10, NFR04/05 and recipient list
+  Done When. No live AWS/AppSync claim, no M09 redesign, no data reset.

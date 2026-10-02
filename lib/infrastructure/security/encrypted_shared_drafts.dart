@@ -2,6 +2,39 @@ part of 'encrypted_state_codec.dart';
 
 /// Access changes keep draft evidence encrypted and stop stale epoch replay.
 extension EncryptedSharedDrafts on EncryptedStateCodec {
+  Future<void> retainEditorEvidence(
+    NoteDto selected,
+    String title,
+    String content,
+  ) async {
+    if (selected.share?.recipientId != namespace.accountUserId ||
+        selected.ownerId == namespace.accountUserId ||
+        !selected.contentAvailable) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    await _ensureDeviceKey();
+    final reference = selected.identity.referenceFor(namespace.accountUserId);
+    _retained[reference] = [
+      ...((_retained[reference] as List?) ?? []),
+      {
+        'kind': 'editorDraft',
+        'accessRevision': selected.share!.accessRevision,
+        'box': await crypto.encryptJson(
+          {
+            'ownerId': selected.ownerId,
+            'noteId': selected.id,
+            'contentRevision': selected.contentRevision,
+            'title': title,
+            'content': content,
+            'capturedAt': DateTime.now().toUtc().toIso8601String(),
+          },
+          _deviceKey!,
+          '$_accountAad/shared-editor/${jsonEncode(reference)}',
+        ),
+      },
+    ];
+  }
+
   Future<LocalSyncState> retainAccessChanges(
     LocalSyncState previous,
     LocalSyncState next,

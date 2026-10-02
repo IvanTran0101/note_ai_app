@@ -32,7 +32,8 @@ final class SummaryNoteLineage {
     }
     final note = context.noteSnapshot;
     return {
-      'ownerId': context.accountUserId,
+      'ownerId': note.ownerId,
+      if (note.share != null) 'accessRevision': note.share!.accessRevision,
       'noteId': note.id,
       'contentRevision': note.contentRevision,
       'protectionRevision': note.protectionRevision,

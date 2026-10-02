@@ -1,11 +1,13 @@
 import 'note_access.dart';
 import 'note_dto.dart';
+import 'note_editor_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
 
 export 'note_dto.dart';
 
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_repository.dart';
 import '../auth/current_user.dart';
 import '../auth/current_user_session.dart';
@@ -13,6 +15,7 @@ import '../note_intelligence/summary_cloud_consent.dart';
 import '../note_intelligence/summary_run_context.dart';
 
 part 'note_application_summary.dart';
+part 'note_application_editor.dart';
 
 /// Creates identifiers for newly created notes.
 typedef NoteIdGenerator = String Function();
@@ -113,6 +116,15 @@ final class NoteApplicationService {
     return notes.map(NoteDto.fromDomain).toList(growable: false);
   }
 
+  Future<List<NoteDto>> listSharedNotes() async {
+    final context = _captureContext();
+    final Object repository = noteRepository;
+    if (repository is! ISharedNoteRepository) return const [];
+    final notes = await repository.findSharedWith(context.userId);
+    _requireContext(context);
+    return notes.map(NoteDto.fromDomain).toList(growable: false);
+  }
+
   Future<NoteDto> readNote(String noteId) async {
     final context = _captureContext();
     final Note note = await _requireOwnedNote(
@@ -124,20 +136,26 @@ final class NoteApplicationService {
   }
 
   NoteAccessCapabilities capabilitiesFor(NoteDto note) {
-    if (currentUser.userId != note.ownerId || !note.contentAvailable) {
+    if (currentUser.userId == null || !note.contentAvailable) {
       return const NoteAccessCapabilities();
     }
     bool allowed(NoteOperation operation) =>
-        security?.allows(
-          ownerId: note.ownerId,
-          noteId: note.id,
-          protection: NoteProtection(
-            enabled: note.isProtected,
-            revision: note.protectionRevision,
-          ),
+        const NoteAccessPolicy().allows(
+          actorId: currentUser.userId!,
+          note: note.identity,
+          share: note.share,
           operation: operation,
-        ) ??
-        !note.isProtected;
+        ) &&
+        (security?.allows(
+              ownerId: note.ownerId,
+              noteId: note.id,
+              protection: NoteProtection(
+                enabled: note.isProtected,
+                revision: note.protectionRevision,
+              ),
+              operation: operation,
+            ) ??
+            !note.isProtected);
     return NoteAccessCapabilities(
       canRead: allowed(NoteOperation.read),
       canEdit: allowed(NoteOperation.edit),
@@ -257,7 +275,13 @@ final class NoteApplicationService {
     if (note == null) {
       throw NoteNotFoundException(noteId);
     }
-    if (note.ownerId != expectedOwnerId) {
+    if (note.ownerId != expectedOwnerId &&
+        !const NoteAccessPolicy().allows(
+          actorId: expectedOwnerId,
+          note: note.identity,
+          share: note.share,
+          operation: operation,
+        )) {
       throw NoteOwnershipException(
         noteId: noteId,
         expectedOwnerId: expectedOwnerId,
@@ -272,8 +296,13 @@ final class NoteApplicationService {
   }
 
   void _requireAccess(Note note, NoteOperation operation) {
-    if (currentUser.userId != note.ownerId) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    if (!const NoteAccessPolicy().allows(
+      actorId: currentUser.userId ?? '',
+      note: note.identity,
+      share: note.share,
+      operation: operation,
+    )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
     }
     if (!note.contentAvailable) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);

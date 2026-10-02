@@ -8,7 +8,7 @@ Tick after verified implementation; keep absent evidence visible.
 | Module | Checked | Pending | Evidence |
 | --- | --- | --- | --- |
 | [M05](https://app.notion.com/p/3e9f9c7a1aa080f8ad30c4119f515b04) | 15 FR/NFR + 4 Done When | Live cloud delivery outside automated acceptance | 22587a5; Chrome797, VM921, real Web12/Android12, backend57 |
-| [M06](https://app.notion.com/p/3e9f9c7a1aa0808abf01d1baa3ab5d77) | None of final rubric yet | 15 FR/NFR + 4 Done When | M06.1 foundation: Chrome40 + Android40, scoped analyzer clean; final backend/UI/realtime pending |
+| [M06](https://app.notion.com/p/3e9f9c7a1aa0808abf01d1baa3ab5d77) | FR05/06/10, NFR04/05 + recipient Done When | 10 FR/NFR + 3 Done When; live cloud gate separate | M06.3 Chrome56 + Android56; UI/local-first/atomic draft review, backend75 source tests |
 | [M09](https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21) | 8 FR/NFR + 3 Done When | 4 FR/NFR + keyboard/mouse Done When | Existing UI tests passed in 22587a5 Chrome suite; M06 UI requires new coverage |
 
 ## M09 verified existing workflow scope
@@ -32,3 +32,7 @@ keyboard and text scale1.6. Done When widths/no major overflow/states checked.
 M09 is not declared complete. No unrelated M09 feature work is implied by this
 tracking audit. M05 Summary gates are accepted for current source; M08 RAG and M06
 sharing require the same protection gates and their own integration regressions.
+
+M06.3 checkpoint updates source criteria only where platform evidence exists.
+M09 is now deferred until both collaborators finish, integrate together and
+replan UI/UX after full tests, per latest user instruction.

@@ -11,6 +11,8 @@ import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_access_policy.dart';
 import '../sync/cognito_access_token_provider.dart';
 import 'http_note_security_gateway.dart';
 import 'unavailable_note_security_gateway.dart';
@@ -95,8 +97,8 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     required NoteProtection protection,
     required NoteOperation operation,
   }) {
-    if (_changes.isClosed || session.userId != ownerId) return false;
-    return _services[ownerId]?.allows(
+    if (_changes.isClosed || session.userId == null) return false;
+    return _services[session.userId]?.allows(
           ownerId: ownerId,
           noteId: noteId,
           protection: protection,
@@ -139,8 +141,18 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     final op = mutation.operation == SyncMutationOperation.delete
         ? NoteOperation.delete
         : NoteOperation.edit;
+    if (!const NoteAccessPolicy().allows(
+          actorId: account,
+          note: note.identity,
+          share: note.share,
+          operation: op,
+        ) ||
+        (note.ownerId != account &&
+            mutation.accessRevision != note.share?.accessRevision)) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
     requireAccess(
-      ownerId: account,
+      ownerId: note.ownerId,
       noteId: note.id,
       protection: note.protection,
       operation: op,
@@ -166,10 +178,13 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
         ? op
         : NoteOperation.manage;
     if (!remoteProtection.enabled) return null;
-    forAccount(account)
-        .requireRemote(note.id, remoteProtection, remoteOperation);
+    forAccount(account).requireRemote(
+      note.referenceFor(account),
+      remoteProtection,
+      remoteOperation,
+    );
     return _gateways[account]!.grantHeader(
-      note.id,
+      note.referenceFor(account),
       remoteProtection,
       remoteOperation,
     );
@@ -189,11 +204,42 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
       operation: NoteOperation.summary,
     );
     if (!p.enabled) return null;
-    forAccount(note.ownerId).requireRemote(note.id, p, NoteOperation.summary);
-    return _gateways[note.ownerId]!.grantHeader(
-      note.id,
+    forAccount(context.accountUserId)
+        .requireRemote(note.reference, p, NoteOperation.summary);
+    return _gateways[context.accountUserId]!.grantHeader(
+      note.reference,
       p,
       NoteOperation.summary,
+    );
+  }
+
+  Future<String?> sharingGrant(NoteIdentity identity) async {
+    final account = session.requiredUserId;
+    requireSession(account);
+    if (identity.ownerId != account) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    final state = await storeForAccount(accountUserId: account).read();
+    requireSession(account);
+    final note = state.notes.where((n) => n.identity == identity).firstOrNull;
+    if (note == null ||
+        state.outbox.any(
+          (m) =>
+              m.mutation.identityFor(account) == identity &&
+              m.protectionChange != null,
+        )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.pendingSync);
+    }
+    if (!note.protection.enabled) return null;
+    forAccount(account).requireRemote(
+      note.referenceFor(account),
+      note.protection,
+      NoteOperation.manage,
+    );
+    return _gateways[account]!.grantHeader(
+      note.referenceFor(account),
+      note.protection,
+      NoteOperation.manage,
     );
   }
 

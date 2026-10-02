@@ -1,6 +1,27 @@
 part of 'note_detail_page.dart';
 
 extension _NoteDetailSecurity on _NoteDetailPageState {
+  void _retainDirtySharedDraft() {
+    final selected = _note;
+    final service = _securityController?.noteSecurity;
+    if (selected?.share == null ||
+        !_isDirty ||
+        service == null ||
+        !selected!.contentAvailable) {
+      return;
+    }
+    final title = _titleController.text, content = _contentController.text;
+    unawaited(
+      service.retainEditorDraft(selected, title, content).catchError((
+        Object _,
+      ) {
+        if (mounted) {
+          _update(() => _error = NoteSecurityCopy(context).unavailable);
+        }
+      }),
+    );
+  }
+
   SecuredNotesController? get _securityController =>
       widget.notesController is SecuredNotesController
       ? widget.notesController as SecuredNotesController
@@ -47,7 +68,10 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
     final changedSession =
         _securitySession != _securityController?.sessionGeneration;
     _securitySession = _securityController?.sessionGeneration;
-    if (changedSession || (note != null && !_canRead)) {
+    if (changedSession ||
+        (note != null &&
+            (!_canRead || (note.share != null && !_canEdit && _isDirty)))) {
+      if (!changedSession) _retainDirtySharedDraft();
       _securityRead++;
       _summaryController.cancelActive(reason: SummaryRunFailureCode.noteLocked);
       _summaryController.clearResult();
@@ -74,10 +98,10 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
     final request = ++_securityRead, generation = controller.accessGeneration;
     _update(() => _securityLoading = true);
     try {
-      final fresh = await controller.readNote(note.id);
+      final fresh = await controller.readNote(note.reference);
       if (!mounted ||
           request != _securityRead ||
-          _note?.id != note.id ||
+          _note?.identity != note.identity ||
           generation != controller.accessGeneration) {
         return;
       }
@@ -111,7 +135,7 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
     if (_isDirty && !await _save()) return;
     if (!mounted) return;
     if (action == NoteSecurityAction.lock) {
-      service.lock(note.id);
+      service.lock(note.reference);
       return;
     }
     _autosaveTimer?.cancel();
@@ -122,7 +146,7 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
       await showNoteSecurityDialog(
         context: context,
         service: service,
-        noteId: note.id,
+        noteId: note.reference,
         action: action,
         serverAvailable: controller.securityServerAvailable,
         sessionEvents: controller.securityChanges,
@@ -144,7 +168,8 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
       busy: _actionBusy,
       serverAvailable: controller?.securityServerAvailable ?? false,
       canManage: _capabilities.canManage,
-      retained: controller?.noteSecurity?.retainedPending(_note!.id) ?? false,
+      retained:
+          controller?.noteSecurity?.retainedPending(_note!.reference) ?? false,
       onBack: !widget.showAppBar && !_canRead
           ? () => unawaited(_handleBack())
           : null,
@@ -152,7 +177,7 @@ extension _NoteDetailSecurity on _NoteDetailPageState {
     );
     if (controller?.noteSecurity?.localFirst != true) return panel(false);
     return FutureBuilder<bool>(
-      future: controller?.noteSecurity?.hasPendingProtection(_note!.id),
+      future: controller?.noteSecurity?.hasPendingProtection(_note!.reference),
       builder: (context, pending) => panel(pending.data ?? false),
     );
   }

@@ -10,16 +10,19 @@ final class SyncMetadataProjection {
   static LocalSyncState state(LocalSyncState source) {
     final protectedIds = <String>{
       for (final n in source.notes)
-        if (n.protection.enabled || !n.contentAvailable) n.id,
+        if (n.protection.enabled || !n.contentAvailable) n.identity.key,
       for (final c in source.conflicts)
-        if (_privateConflict(c)) c.noteId,
+        if (_privateConflict(c)) c.identity.key,
     };
     return LocalSyncState(
       accountUserId: source.accountUserId,
       cursor: source.cursor,
-      notes: source.notes.map((n) => _note(n, protectedIds.contains(n.id))),
+      notes: source.notes.map(
+        (n) => _note(n, protectedIds.contains(n.identity.key)),
+      ),
       outbox: source.outbox.map(
-        (m) => _pending(m, protectedIds.contains(m.noteId)),
+        (m) =>
+            _pending(m, protectedIds.contains(m.keyFor(source.accountUserId))),
       ),
       conflicts: source.conflicts.map(conflict),
     );
@@ -50,6 +53,8 @@ final class SyncMetadataProjection {
               revision: remote.revision,
               deletedAt: remote.deletedAt,
               protection: remote.protection,
+              ownerId: remote.ownerId,
+              share: remote.share,
               contentAvailable: false,
             ),
     );
@@ -68,6 +73,7 @@ final class SyncMetadataProjection {
           deletedAt: n.deletedAt,
           status: n.status,
           protection: n.protection,
+          share: n.share,
           contentAvailable: false,
         );
 
@@ -85,5 +91,8 @@ final class SyncMetadataProjection {
           retryCount: m.retryCount,
           lastError: m.lastError,
           blocked: m.blocked,
+          ownerId: m.ownerId,
+          accessRevision: m.accessRevision,
+          protectionChange: m.protectionChange,
         );
 }

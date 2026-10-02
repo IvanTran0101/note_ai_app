@@ -31,13 +31,25 @@ extension NoteSummaryUseCases on NoteApplicationService {
 
     _requireLiveRun(runScope, userId, generation, accessGeneration);
     if (selectedSnapshot != null &&
-        (selectedSnapshot.id != noteId || selectedSnapshot.ownerId != userId)) {
+        (selectedSnapshot.reference != noteId ||
+            !const NoteAccessPolicy().allows(
+              actorId: userId,
+              note: selectedSnapshot.identity,
+              share: selectedSnapshot.share,
+              operation: NoteOperation.summary,
+            ))) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
     }
 
     final Note? note = await noteRepository.findById(noteId);
     _requireLiveRun(runScope, userId, generation, accessGeneration);
-    if (note == null || note.ownerId != userId) {
+    if (note == null ||
+        !const NoteAccessPolicy().allows(
+          actorId: userId,
+          note: note.identity,
+          share: note.share,
+          operation: NoteOperation.summary,
+        )) {
       // A note owned by another account is reported as missing on the run path.
       if (typedFailure) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);

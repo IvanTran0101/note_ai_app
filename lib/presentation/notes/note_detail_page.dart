@@ -3,6 +3,9 @@ import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
 import 'note_security_localizations.dart';
 import 'note_security_panel.dart';
+import 'sharing_localizations.dart';
+import 'share_management_dialog.dart';
+import '../../application/notes/note_editor_snapshot.dart';
 
 import 'dart:async';
 
@@ -37,6 +40,7 @@ part 'note_detail_actions.dart';
 part 'note_detail_conflicts.dart';
 part 'note_detail_view.dart';
 part 'note_detail_security.dart';
+part 'note_detail_sharing.dart';
 
 /// Focused mobile-first editor for one note.
 ///
@@ -158,7 +162,17 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       final bool sameIdentity =
           incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
       if (!sameIdentity) _summaryController.clearResult();
-      if (!_isDirty || !sameIdentity) {
+      final accessChanged =
+          sameIdentity &&
+          _note?.share != null &&
+          (incoming?.share != _note?.share ||
+              incoming?.contentAvailable != true);
+      if (accessChanged) {
+        _retainDirtySharedDraft();
+        _summaryController.clearResult();
+        _adoptSavedNote(incoming?.metadataOnly());
+        unawaited(_readSecuredNote());
+      } else if (!_isDirty || !sameIdentity) {
         if (incoming?.isProtected == true) {
           _adoptSavedNote(_masked(incoming!));
           unawaited(_readSecuredNote());
@@ -167,6 +181,8 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
         }
       } else {
         _pendingSavedNote = incoming;
+        _autosaveTimer?.cancel();
+        if (incoming?.isProtected == true) unawaited(_readSecuredNote());
       }
     }
     if (oldWidget.notesController != widget.notesController) {
@@ -221,7 +237,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   SyncConflict? get _currentConflict {
-    final String? noteId = _note?.id;
+    final String? noteId = _note?.reference;
     return noteId == null ? null : widget.syncController?.conflictFor(noteId);
   }
 
@@ -240,6 +256,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool get _canSave =>
       !_actionBusy &&
       _canEdit &&
+      !_hasRemoteEditorChange &&
       _currentConflict == null &&
       (_note == null || _isDirty);
 
@@ -362,6 +379,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    if (!_canEdit) _retainDirtySharedDraft();
     _securityRead++;
     unawaited(_securitySubscription?.cancel());
     _summaryController.removeListener(_summaryChanged);

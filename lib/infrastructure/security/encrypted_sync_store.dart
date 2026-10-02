@@ -6,6 +6,8 @@ import '../../application/sync/local_protection_queue.dart';
 import '../../application/sync/protection_sync_change.dart';
 
 import '../../application/notes/local_note_vault.dart';
+import '../../application/notes/local_draft_vault.dart';
+import '../../application/notes/note_dto.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/sync/local_note_state.dart';
 import '../../application/sync/local_sync_state.dart';
@@ -23,7 +25,11 @@ import 'encrypted_state_codec.dart';
 part 'encrypted_local_protection.dart';
 
 class EncryptedSyncStore
-    implements ILocalSyncStore, ILocalNoteVault, ILocalFirstNoteVault {
+    implements
+        ILocalSyncStore,
+        ILocalNoteVault,
+        ILocalFirstNoteVault,
+        ILocalDraftVault {
   EncryptedSyncStore(String accountId, this.backing)
     : codec = EncryptedStateCodec(LocalSyncAccountNamespace(accountId));
   final EncodedAccountStore backing;
@@ -98,6 +104,18 @@ class EncryptedSyncStore
   Future<LocalSyncState> update(
     LocalSyncState Function(LocalSyncState) transform,
   ) => _enqueue(() => _mutate((state) async => transform(state)));
+
+  @override
+  Future<void> retainEditorDraft(
+    NoteDto selected,
+    String title,
+    String content,
+  ) => _enqueue(() async {
+    await _mutate((state) async {
+      await codec.retainEditorEvidence(selected, title, content);
+      return state;
+    });
+  });
 
   @override
   Future<NoteProtection> enableLocal(String id, String password) =>

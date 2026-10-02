@@ -16,9 +16,14 @@ subagents; graph Tier2 exact D root. _agent_ops tools are absent.
 - Backend source checkpoint accepted: 75/75 checks, tsc and diff check pass.
   Regression found intentional owned-route parser contract change (reject shared
   identity); test now asserts refusal. SDK-double union typing fixed.
-  No deployment/live AWS claim. Next: M06.3 pair-aware repository/Application,
-  HTTP shared mappings, recipient protection scope, shared/management UI.
-- Then M06.3 shared UI/offline, M06.4 durable metadata event relay/session
+  Pushed and remote verified at 08809ed. No deployment/live AWS claim.
+- M06.3 source acceptance passed Chrome56 + Android56, VM408 (+1skip),
+  editor/UI/repository147. Atomic compare-and-save and explicit editor review
+  prevent silent local/remote overwrite. Shared With Me/management and encrypted
+  unsaved access-loss evidence are connected. Final analyzer is clean and row
+  regression119 passed. Notion actual FR05/06/10 NFR04/05 + recipient Done When
+  checked. Preparing scoped checkpoint push. No live AWS claim.
+- Next M06.4 durable metadata event relay/session
   subscription, M06.5 two-client Chrome + Android, full regression/fix.
 - Local sharing intents may be durable, but ACTIVE ACL is only server-authorized.
 - M05 encrypted drafts/session/consent/lineage must survive all changes.

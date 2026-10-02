@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
+import '../../domain/notes/note_access_policy.dart';
 import '../auth/current_user.dart';
 import '../auth/current_user_session.dart';
 import '../sync/local_note_state.dart';
@@ -10,6 +13,8 @@ import '../sync/sync_snapshot.dart';
 import '../sync/pending_mutation.dart';
 import '../sync/sync_failure.dart';
 import 'local_note_vault.dart';
+import 'local_draft_vault.dart';
+import 'note_dto.dart';
 import 'local_first_note_vault.dart';
 import 'note_access.dart';
 import 'note_security_gateway.dart';
@@ -50,6 +55,7 @@ final class NoteSecurityService implements INoteAccessGuard {
   final void Function()? cancelSummaries;
   final DateTime Function() _now;
   final _knownProtection = <String, NoteProtection>{};
+  final _knownShares = <String, NoteShareGrant>{};
   final _access = <String, _LocalAccess>{};
   final _timers = <String, Timer>{};
   final _changes = StreamController<void>.broadcast(sync: true);
@@ -74,12 +80,25 @@ final class NoteSecurityService implements INoteAccessGuard {
 
   Future<LocalNoteState> _note(String id) async {
     final note = (await store.read()).notes
-        .where((n) => n.id == id && n.ownerId == accountId && !n.isDeleted)
+        .where((n) => n.referenceFor(accountId) == id && !n.isDeleted)
         .firstOrNull;
-    if (note == null || note.ownerId != accountId) {
+    if (note == null ||
+        !const NoteAccessPolicy().allows(
+          actorId: accountId,
+          note: note.identity,
+          share: note.share,
+          operation: NoteOperation.read,
+        )) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
     }
+    if (note.share != null) _knownShares[id] = note.share!;
     return note;
+  }
+
+  Future<void> _ownerAction(String id) async {
+    if ((await _note(id)).ownerId != accountId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
   }
 
   @override
@@ -89,9 +108,21 @@ final class NoteSecurityService implements INoteAccessGuard {
     required NoteProtection protection,
     required NoteOperation operation,
   }) {
-    if (_disposed || currentUser.userId != accountId || ownerId != accountId) {
+    if (_disposed || currentUser.userId != accountId) {
       return false;
     }
+    final reference = NoteIdentity(ownerId, noteId).referenceFor(accountId);
+    final share = _knownShares[reference];
+    if (share != null &&
+        !const NoteAccessPolicy().allows(
+          actorId: accountId,
+          note: NoteIdentity(ownerId, noteId),
+          share: share,
+          operation: operation,
+        )) {
+      return false;
+    }
+    noteId = reference;
     if (_knownProtection[noteId] != null &&
         _knownProtection[noteId] != protection) {
       return false;
@@ -121,7 +152,8 @@ final class NoteSecurityService implements INoteAccessGuard {
       protection: protection,
       operation: operation,
     )) {
-      if (_access[noteId]?.expiresAt.isAfter(_now()) == false) lock(noteId);
+      final id = NoteIdentity(ownerId, noteId).referenceFor(accountId);
+      if (_access[id]?.expiresAt.isAfter(_now()) == false) lock(id);
       throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
     }
   }
@@ -157,7 +189,25 @@ final class NoteSecurityService implements INoteAccessGuard {
     if (content.protection != p) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
     }
-    await vault.hydrate(content);
+    final note = await _note(id);
+    if (content.id != note.id) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+    }
+    await vault.hydrate(
+      SyncNoteSnapshot(
+        id: content.id,
+        ownerId: note.ownerId,
+        share: note.share,
+        title: content.title,
+        content: content.content,
+        createdAt: content.createdAt,
+        serverUpdatedAt: content.serverUpdatedAt,
+        revision: content.revision,
+        deletedAt: content.deletedAt,
+        protection: content.protection,
+        contentAvailable: content.contentAvailable,
+      ),
+    );
   }
 
   Future<void> observeSnapshot(SyncNoteSnapshot snapshot) async {
@@ -166,7 +216,13 @@ final class NoteSecurityService implements INoteAccessGuard {
     final note = state.notes
         .where((n) => n.identity == snapshot.identityFor(accountId))
         .firstOrNull;
-    if (note == null || note.ownerId != accountId) return;
+    if (note == null) return;
+    final id = note.referenceFor(accountId);
+    if (snapshot.share != null &&
+        (snapshot.share!.accessRevision >= (note.share?.accessRevision ?? 0))) {
+      _knownShares[id] = snapshot.share!;
+      if (snapshot.share != note.share) lock(id);
+    }
     if (state.outbox.any(
           (m) =>
               m.mutation.identityFor(accountId) == note.identity &&
@@ -178,29 +234,26 @@ final class NoteSecurityService implements INoteAccessGuard {
     if (_capture() != captured) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
-    _knownProtection[snapshot.id] = snapshot.protection;
-    if (note.protection != snapshot.protection) lock(snapshot.id);
-    await vault.observeProtection(snapshot.id, snapshot.protection);
+    _knownProtection[id] = snapshot.protection;
+    if (note.protection != snapshot.protection) lock(id);
+    await vault.observeProtection(id, snapshot.protection);
   }
 
   /// Pull remains metadata-only; hydrate only a currently authorized note.
   Future<void> hydrateSnapshot(SyncNoteSnapshot snapshot) async {
-    if (localFirst && await hasPendingProtection(snapshot.id)) return;
+    final id = snapshot.identityFor(accountId).referenceFor(accountId);
+    if (localFirst && await hasPendingProtection(id)) return;
     final captured = _capture(), generation = _generation;
     if (!snapshot.protection.enabled ||
         snapshot.isDeleted ||
-        !gateway.hasAuthority(
-          snapshot.id,
-          snapshot.protection,
-          NoteOperation.read,
-        )) {
+        !gateway.hasAuthority(id, snapshot.protection, NoteOperation.read)) {
       return;
     }
     try {
-      await _hydrateAuthorized(snapshot.id, snapshot.protection);
+      await _hydrateAuthorized(id, snapshot.protection);
       _live(captured, generation);
     } on NoteSecurityFailure catch (failure) {
-      lock(snapshot.id);
+      lock(id);
       if (failure.code == NoteSecurityFailureCode.sessionChanged) rethrow;
     }
   }
@@ -215,8 +268,12 @@ final class NoteSecurityService implements INoteAccessGuard {
         cursor: state.cursor,
         outbox: state.outbox.map(
           (m) =>
-              m.noteId == id &&
-                  m.mutation.identityFor(accountId).ownerId == accountId &&
+              m.mutation.identityFor(accountId).referenceFor(accountId) == id &&
+                  (m.accessRevision == null ||
+                      m.accessRevision == _knownShares[id]?.accessRevision) &&
+                  (_knownShares[id] == null ||
+                      _knownShares[id]!.role.name == 'editor' &&
+                          _knownShares[id]!.isActive) &&
                   m.blocked &&
                   (m.lastError == null ||
                       m.lastError == SyncErrorCode.forbidden)
@@ -263,6 +320,19 @@ final class NoteSecurityService implements INoteAccessGuard {
   }
 
   bool retainedPending(String id) => vault.hasRetainedCiphertext(id);
+  Future<void> retainEditorDraft(
+    NoteDto selected,
+    String title,
+    String content,
+  ) async {
+    _capture();
+    final Object adapter = vault;
+    if (adapter is! ILocalDraftVault) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
+    }
+    await adapter.retainEditorDraft(selected, title, content);
+  }
+
   void dispose() {
     if (_disposed) return;
     lock(null);

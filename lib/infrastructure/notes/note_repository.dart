@@ -11,6 +11,7 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_metadata.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
@@ -34,7 +35,11 @@ part 'note_repository_delete.dart';
 /// The repository never calls the remote data source: it only queues outbox
 /// mutations that a later sync coordinator pushes.
 final class NoteRepository
-    implements domain.INoteRepository, domain.INoteMetadataRepository {
+    implements
+        domain.INoteRepository,
+        domain.INoteMetadataRepository,
+        domain.ISharedNoteRepository,
+        domain.INoteSnapshotRepository {
   /// Creates a repository from the injected account resolver, store factory,
   /// mutation-id generator, and clock.
   NoteRepository({
@@ -92,13 +97,32 @@ final class NoteRepository
       final LocalSyncState state = await _readStateFor(accountUserId);
       return List<Note>.unmodifiable(
         state.notes
-            .where((LocalNoteState note) => !note.isDeleted)
+            .where(
+              (LocalNoteState note) =>
+                  !note.isDeleted && note.ownerId == ownerId,
+            )
             .map(
               (note) => _toDomain(note, metadataOnly: note.protection.enabled),
             ),
       );
     });
   }
+
+  @override
+  Future<List<Note>> findSharedWith(String actorId) => _enqueue(() async {
+    if (actorId != _requireActiveAccountUserId()) return <Note>[];
+    final state = await _readStateFor(actorId);
+    return state.notes
+        .where(
+          (n) =>
+              n.ownerId != actorId &&
+              !n.isDeleted &&
+              n.share?.isActive == true &&
+              n.share?.recipientId == actorId,
+        )
+        .map((n) => _toDomain(n, metadataOnly: n.protection.enabled))
+        .toList(growable: false);
+  });
 
   @override
   Future<NoteMetadata?> findMetadataById(String id) async {
@@ -113,11 +137,16 @@ final class NoteRepository
           .toList(growable: false);
 
   @override
-  Future<void> save(Note note) async {
+  Future<void> save(Note note) => _save(note);
+  @override
+  Future<void> saveSnapshot(Note note, Note expected) =>
+      _save(note, expected: expected);
+
+  Future<void> _save(Note note, {Note? expected}) async {
     final context = _captureWrite();
     return _enqueue<void>(() async {
       final String accountUserId = _requireActiveAccountUserId();
-      if (note.ownerId != accountUserId) {
+      if (note.ownerId != accountUserId && note.share == null) {
         throw ArgumentError.value(
           note.ownerId,
           'note',
@@ -128,13 +157,35 @@ final class NoteRepository
       await store.update((LocalSyncState current) {
         _requireWrite(context);
         if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.noteId == note.id,
+          (SyncConflict conflict) => conflict.identity == note.identity,
         )) {
           throw StateError(
             'Resolve the sync conflict before editing this note.',
           );
         }
-        final LocalNoteState? existing = _findNote(current, note.id);
+        final LocalNoteState? existing = _findNote(current, note.reference);
+        if (expected != null &&
+            (existing == null ||
+                existing.identity != expected.identity ||
+                existing.serverRevision != expected.contentRevision ||
+                existing.updatedAt != expected.updatedAt ||
+                existing.title != expected.title ||
+                existing.content != expected.content ||
+                existing.share != expected.share ||
+                existing.protection != expected.protection ||
+                !existing.contentAvailable)) {
+          throw const domain.NoteSnapshotChanged();
+        }
+        if (!const NoteAccessPolicy().allows(
+              actorId: accountUserId,
+              note: note.identity,
+              share: existing?.share,
+              operation: NoteOperation.edit,
+            ) ||
+            (note.ownerId != accountUserId &&
+                (existing == null || existing.share != note.share))) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+        }
         _requireNoteAccess(
           note.id,
           note.ownerId,
@@ -201,7 +252,7 @@ final class NoteRepository
 
   static LocalNoteState? _findNote(LocalSyncState state, String id) {
     for (final LocalNoteState note in state.notes) {
-      if (note.id == id) {
+      if (note.referenceFor(state.accountUserId) == id) {
         return note;
       }
     }
@@ -211,7 +262,10 @@ final class NoteRepository
   /// Index of the newest outbox entry for [noteId], or -1 when none exists.
   static int _lastPendingIndexFor(LocalSyncState state, String noteId) {
     for (int index = state.outbox.length - 1; index >= 0; index--) {
-      if (state.outbox[index].noteId == noteId) {
+      if (state.outbox[index].mutation
+              .identityFor(state.accountUserId)
+              .referenceFor(state.accountUserId) ==
+          noteId) {
         return index;
       }
     }
@@ -223,7 +277,7 @@ final class NoteRepository
     LocalNoteState replacement,
   ) {
     final int index = notes.indexWhere(
-      (LocalNoteState note) => note.id == replacement.id,
+      (LocalNoteState note) => note.identity == replacement.identity,
     );
     if (index == -1) {
       return <LocalNoteState>[...notes, replacement];
@@ -278,11 +332,15 @@ final class NoteRepository
       status: status,
       protection: note.protection,
       contentAvailable: note.contentAvailable,
+      share: note.share,
     );
   }
 
   static Note _toDomain(LocalNoteState note, {bool metadataOnly = false}) {
-    final bool available = note.contentAvailable && !metadataOnly;
+    final bool available =
+        note.contentAvailable &&
+        !metadataOnly &&
+        (note.share?.isActive ?? true);
     return Note.reconstitute(
       id: note.id,
       ownerId: note.ownerId,
@@ -293,6 +351,7 @@ final class NoteRepository
       protection: note.protection,
       contentAvailable: available,
       contentRevision: note.serverRevision,
+      share: note.share,
     );
   }
 

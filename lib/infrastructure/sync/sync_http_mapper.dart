@@ -9,14 +9,15 @@
 ///
 /// The two frozen routes answer with JSON text; a caller may hand either the
 /// decoded object or the raw body string to the decoders, so JSON parsing lives
-/// in one place. `ownerId` is never encoded: the server derives the account
-/// namespace from the authenticated Cognito `sub`, and a request body is not
-/// authoritative for it.
+/// in one place. Owned routes derive their namespace from the verified actor.
+/// Shared updates carry canonical owner/access epoch on a dedicated route;
+/// these fields never replace JWT actor authority or fall back to owned writes.
 library;
 
 import 'dart:convert';
 
 import 'protection_sync_codec.dart';
+import 'share_wire_codec.dart';
 
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
@@ -64,14 +65,17 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
 /// Encodes one client mutation as a `POST /sync/mutations` request body.
 ///
 /// `payload` is present exactly when the mutation carries one, so a delete
-/// without content omits the key instead of sending `null`. The body never
-/// contains an `ownerId`.
+/// without content omits the key instead of sending `null`. The body includes
+/// `ownerId` only for a canonical shared update.
 Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
   final Map<String, Object?> body = <String, Object?>{
     'mutationId': mutation.mutationId,
     'noteId': mutation.noteId,
     'operation': mutation.operation.name,
     'baseRevision': mutation.baseRevision,
+    if (mutation.ownerId != null) 'ownerId': mutation.ownerId,
+    if (mutation.accessRevision != null)
+      'accessRevision': mutation.accessRevision,
     if (mutation.protectionChange != null)
       'protectionChange': ProtectionSyncCodec.encode(
         mutation.protectionChange!,
@@ -219,8 +223,18 @@ SyncNoteSnapshot _decodeNote(
     throw const FormatException('Invalid note protection metadata.');
   }
   final hasContent = available && (!enabled || authorizedContent);
+  final share = json['share'] == null
+      ? null
+      : ShareWireCodec.decode(json['share']);
+  final owner = share == null ? null : json['ownerId'];
+  if (share != null &&
+      (owner != share.note.ownerId || id != share.note.noteId)) {
+    throw const FormatException('Mismatched canonical sharing metadata.');
+  }
   return SyncNoteSnapshot(
     id: id,
+    ownerId: owner as String?,
+    share: share,
     title: hasContent ? _readString(json, 'title') : '',
     content: hasContent ? _readString(json, 'content') : '',
     protection: NoteProtection(enabled: enabled, revision: epoch),

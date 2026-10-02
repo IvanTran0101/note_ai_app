@@ -49,6 +49,14 @@ extension _NoteDetailActions on _NoteDetailPageState {
       _notifyDirtyChanged();
       persisted = true;
       return true;
+    } on NoteEditorChanged catch (changed) {
+      if (mounted) {
+        _update(() {
+          _pendingSavedNote = changed.current;
+          _error = SharingCopy(context).remoteChanged;
+        });
+      }
+      return false;
     } on Object catch (error) {
       if (!mounted) {
         return false;
@@ -73,6 +81,14 @@ extension _NoteDetailActions on _NoteDetailPageState {
     final String title = _titleController.text;
     final String content = _contentController.text;
     final NoteDto? current = _note;
+    final controller = widget.notesController;
+    if (current != null && controller is SnapshotNotesController) {
+      return (controller as SnapshotNotesController).saveEditorSnapshot(
+        current,
+        title,
+        content,
+      );
+    }
     final NoteDto saved;
     if (current == null) {
       saved = await widget.notesController.createNote(
@@ -83,13 +99,13 @@ extension _NoteDetailActions on _NoteDetailPageState {
       NoteDto updated = current;
       if (title != _savedTitle) {
         updated = await widget.notesController.renameNote(
-          noteId: current.id,
+          noteId: current.reference,
           title: title,
         );
       }
       if (content != _savedContent) {
         updated = await widget.notesController.replaceContent(
-          noteId: current.id,
+          noteId: current.reference,
           content: content,
         );
       }
@@ -240,7 +256,7 @@ extension _NoteDetailActions on _NoteDetailPageState {
       _statusMessage = null;
     });
     try {
-      await widget.notesController.deleteNote(current.id);
+      await widget.notesController.deleteNote(current.reference);
       if (mounted) {
         _pop(reason: NoteDetailExitReason.deleted);
       }

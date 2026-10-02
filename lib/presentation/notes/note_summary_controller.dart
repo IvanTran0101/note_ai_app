@@ -228,12 +228,22 @@ final class NoteSummaryController extends ChangeNotifier {
     if (!_matchesEditor(scope, snapshot, notes)) {
       return false;
     }
-    final List<NoteDto> owned = await notes.listNotes();
+    if (snapshot.isProtected && notes is SecuredNotesController) {
+      final secured = notes as SecuredNotesController;
+      final fresh = await secured.readNote(snapshot.reference);
+      return _matchesEditor(scope, snapshot, notes) &&
+          fresh == snapshot &&
+          secured.capabilitiesFor(fresh).canSummarize;
+    }
+    final List<NoteDto> owned =
+        snapshot.share != null && notes is SharingNotesController
+        ? await (notes as SharingNotesController).listSharedNotes()
+        : await notes.listNotes();
     if (!_matchesEditor(scope, snapshot, notes)) {
       return false;
     }
     for (final NoteDto candidate in owned) {
-      if (candidate.id == snapshot.id) {
+      if (candidate.identity == snapshot.identity) {
         if (candidate == snapshot) return true;
         _recordFailure(
           const SummaryRunFailure(SummaryRunFailureCode.noteChanged),
@@ -299,7 +309,7 @@ final class NoteSummaryController extends ChangeNotifier {
     _notify();
     try {
       final String summary = await notes.summarizeNote(
-        note.id,
+        note.reference,
         selectedSnapshot: note,
         scope: scope,
       );

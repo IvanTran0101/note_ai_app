@@ -9,7 +9,8 @@ extension _NoteRepositoryDelete on NoteRepository {
       await store.update((LocalSyncState current) {
         _requireWrite(context);
         if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.noteId == id,
+          (SyncConflict conflict) =>
+              conflict.identity.referenceFor(accountUserId) == id,
         )) {
           throw StateError(
             'Resolve the sync conflict before deleting this note.',
@@ -20,8 +21,11 @@ extension _NoteRepositoryDelete on NoteRepository {
           // An absent or already tombstoned note is already deleted.
           return current;
         }
+        if (existing.ownerId != accountUserId) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+        }
         _requireNoteAccess(
-          id,
+          existing.id,
           accountUserId,
           existing.protection,
           NoteOperation.delete,
@@ -40,7 +44,9 @@ extension _NoteRepositoryDelete on NoteRepository {
           return NoteRepository._stateWith(
             current,
             notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
+                .where(
+                  (LocalNoteState note) => note.identity != existing.identity,
+                )
                 .toList(growable: false),
             outbox: current.outbox,
           );
@@ -54,7 +60,9 @@ extension _NoteRepositoryDelete on NoteRepository {
           return NoteRepository._stateWith(
             current,
             notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
+                .where(
+                  (LocalNoteState note) => note.identity != existing.identity,
+                )
                 .toList(growable: false),
             outbox: current.outbox
                 .where(

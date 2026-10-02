@@ -7,6 +7,7 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_gateway.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_identity.dart';
 import '../sync/sync_http_mapper.dart';
 import 'note_jwt_subject.dart';
 
@@ -269,7 +270,12 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
         final request = http.Request(
           body == null ? 'GET' : 'POST',
           baseUri.replace(
-            path: '${prefix}notes/${Uri.encodeComponent(id)}/$action',
+            path:
+                '${prefix}notes/${Uri.encodeComponent(NoteIdentity.resolve(id, accountId).noteId)}/$action',
+            queryParameters:
+                NoteIdentity.resolve(id, accountId).ownerId == accountId
+                ? null
+                : {'ownerId': NoteIdentity.resolve(id, accountId).ownerId},
           ),
         );
         request.followRedirects = false;

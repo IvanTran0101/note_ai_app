@@ -9,6 +9,7 @@ import 'note_detail_route_result.dart';
 import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
+import 'sharing_localizations.dart';
 import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 import 'notes_workspace_loading_view.dart';
@@ -17,6 +18,7 @@ import '../sync/sync_presentation_controller.dart';
 import '../sync/sync_widgets.dart';
 
 part 'notes_workspace_view.dart';
+part 'notes_workspace_sharing.dart';
 
 /// Responsive Notes workspace for the shell's Notes destination.
 ///
@@ -59,7 +61,10 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       GlobalKey<State<StatefulWidget>>();
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
+  NoteDto? _unavailableSelection;
   bool _editingNewNote = false;
+  bool _sharedOnly = false;
+  Object? _lastSyncState;
   bool _detailDirty = false;
   Object? _error;
   bool _loading = true;
@@ -67,6 +72,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   StreamSubscription<void>? _securitySubscription;
   int? _securitySession;
   int _loadSequence = 0;
+  void _update(VoidCallback action) => setState(action);
 
   NotesApplicationController get _application {
     final NotesApplicationController? controller = widget.controller;
@@ -86,11 +92,13 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       return null;
     }
     for (final NoteDto note in _notes) {
-      if (note.id == id) {
+      if (note.reference == id) {
         return note;
       }
     }
-    return null;
+    return _unavailableSelection?.reference == id
+        ? _unavailableSelection
+        : null;
   }
 
   Key _detailKeyFor(String identity) {
@@ -141,21 +149,26 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         if (!changed) unawaited(_refreshSecurityList());
       });
     }
+    widget.syncController?.addListener(_workspaceSyncChanged);
     unawaited(reload());
   }
 
   @override
   void dispose() {
     unawaited(_securitySubscription?.cancel());
+    widget.syncController?.removeListener(_workspaceSyncChanged);
     super.dispose();
   }
 
   Future<void> _refreshSecurityList() async {
     final sequence = ++_loadSequence;
     try {
-      final notes = await _application.listNotes();
+      final notes = await _listAllNotes();
       if (mounted && sequence == _loadSequence) {
-        setState(() => _notes = List.unmodifiable(notes));
+        setState(() {
+          _preserveSelection(notes);
+          _notes = List.unmodifiable(notes);
+        });
       }
     } on Object {
       // Keep the already masked projection; retry through the normal list flow.
@@ -186,15 +199,13 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Future<void> _loadNotesInternal() async {
     final sequence = ++_loadSequence;
     try {
-      final List<NoteDto> notes = await _application.listNotes();
+      final List<NoteDto> notes = await _listAllNotes();
       if (!mounted || sequence != _loadSequence) {
         return;
       }
       setState(() {
+        _preserveSelection(notes);
         _notes = List<NoteDto>.unmodifiable(notes);
-        _selectedNoteId = null;
-        _editingNewNote = false;
-        _detailDirty = false;
         _error = null;
         _loading = false;
       });
@@ -215,7 +226,8 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       return;
     }
     setState(() {
-      _selectedNoteId = note.id;
+      _unavailableSelection = null;
+      _selectedNoteId = note.reference;
       _editingNewNote = false;
       _error = null;
     });
@@ -227,7 +239,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       return;
     }
     setState(() {
+      _unavailableSelection = null;
       _selectedNoteId = null;
+      _sharedOnly = false;
       _editingNewNote = true;
     });
   }
@@ -243,7 +257,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       return;
     }
     final List<NoteDto> next = List<NoteDto>.of(_notes);
-    final int index = next.indexWhere((NoteDto item) => item.id == note.id);
+    final int index = next.indexWhere(
+      (NoteDto item) => item.identity == note.identity,
+    );
     if (index == -1) {
       next.add(note);
     } else {
@@ -251,7 +267,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     }
     setState(() {
       _notes = List<NoteDto>.unmodifiable(next);
-      _selectedNoteId = note.id;
+      _selectedNoteId = note.reference;
+      _sharedOnly = note.share != null;
+      _unavailableSelection = null;
       _editingNewNote = false;
       _error = null;
       _loading = false;
@@ -275,7 +293,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       case NoteDetailExitReason.saved:
         if (saved != null) {
           final int index = next.indexWhere(
-            (NoteDto note) => note.id == saved.id,
+            (NoteDto note) => note.identity == saved.identity,
           );
           if (index == -1) {
             next.add(saved);
@@ -285,7 +303,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         }
       case NoteDetailExitReason.deleted:
         if (selectedId != null) {
-          next.removeWhere((NoteDto note) => note.id == selectedId);
+          next.removeWhere((NoteDto note) => note.reference == selectedId);
         }
       case NoteDetailExitReason.discarded:
       case NoteDetailExitReason.cancelled:
@@ -295,6 +313,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     setState(() {
       _notes = List<NoteDto>.unmodifiable(next);
       _selectedNoteId = null;
+      _unavailableSelection = null;
       _editingNewNote = false;
       _detailDirty = false;
       if (result.reason == NoteDetailExitReason.saved ||

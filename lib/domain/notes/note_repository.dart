@@ -1,6 +1,20 @@
 import 'note.dart';
 import 'note_metadata.dart';
 
+/// Recipient projections stay in the actor store with canonical owner intact.
+abstract interface class ISharedNoteRepository {
+  Future<List<Note>> findSharedWith(String actorId);
+}
+
+/// Atomic compare-and-save for editor snapshots, including local concurrency.
+abstract interface class INoteSnapshotRepository {
+  Future<void> saveSnapshot(Note note, Note expected);
+}
+
+final class NoteSnapshotChanged implements Exception {
+  const NoteSnapshotChanged();
+}
+
 /// Persistence contract for the Note aggregate.
 ///
 /// Implementations belong to Infrastructure. This contract does not prescribe

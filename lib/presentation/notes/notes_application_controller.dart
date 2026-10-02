@@ -3,6 +3,20 @@ import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
+import '../../application/notes/note_sharing_app_service.dart';
+
+abstract interface class SharingNotesController {
+  Future<List<NoteDto>> listSharedNotes();
+  NoteSharingAppService? get sharing;
+}
+
+abstract interface class SnapshotNotesController {
+  Future<NoteDto> saveEditorSnapshot(
+    NoteDto selected,
+    String title,
+    String content,
+  );
+}
 
 /// Optional security seam preserves simple non-security controller consumers.
 abstract interface class SecuredNotesController {
@@ -52,7 +66,11 @@ abstract interface class NotesApplicationController {
 /// [NoteApplicationService] directly to [NotesPage], while tests can inject a
 /// [NotesApplicationController] fake.
 final class NoteApplicationServiceController
-    implements NotesApplicationController, SecuredNotesController {
+    implements
+        NotesApplicationController,
+        SecuredNotesController,
+        SharingNotesController,
+        SnapshotNotesController {
   const NoteApplicationServiceController(
     this._service, {
     this.summaryConsent,
@@ -61,6 +79,7 @@ final class NoteApplicationServiceController
     this.readAccessGeneration,
     this.readSessionGeneration,
     this.serverAvailable = false,
+    this.sharingForCurrentAccount,
   });
 
   final NoteSecurityService Function()? securityForCurrentAccount;
@@ -68,6 +87,17 @@ final class NoteApplicationServiceController
   final int Function()? readAccessGeneration;
   final int Function()? readSessionGeneration;
   final bool serverAvailable;
+  final NoteSharingAppService? Function()? sharingForCurrentAccount;
+  @override
+  NoteSharingAppService? get sharing => sharingForCurrentAccount?.call();
+  @override
+  Future<List<NoteDto>> listSharedNotes() => _service.listSharedNotes();
+  @override
+  Future<NoteDto> saveEditorSnapshot(
+    NoteDto selected,
+    String title,
+    String content,
+  ) => _service.saveEditorSnapshot(selected, title, content);
   @override
   Stream<void> get securityChanges => securityEvents;
   @override

@@ -23,10 +23,17 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                 if (widget.syncController
                     case final SyncPresentationController sync)
                   SyncStatusPanel(controller: sync),
+                if (_application is SharingNotesController) _sharingTabs(),
                 Expanded(
                   child: ResponsiveNotesWorkspace(
                     list: NotesListPanel(
-                      notes: _notes,
+                      notes: _notes
+                          .where((n) => (n.share != null) == _sharedOnly)
+                          .toList(),
+                      titleOverride: _sharedOnly
+                          ? SharingCopy(context).sharedWithMe
+                          : null,
+                      allowNewNote: !_sharedOnly,
                       selectedNoteId: _selectedNoteId,
                       error: loadError,
                       actionBusy: false,
@@ -136,7 +143,7 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
     }
     final NoteDto? note = _selectedNote;
     return NoteDetailPage(
-      key: _detailKeyFor(note?.id ?? 'new'),
+      key: _detailKeyFor(note?.reference ?? 'new'),
       notesController: _application,
       note: note,
       provisioningReader: widget.provisioningReader,

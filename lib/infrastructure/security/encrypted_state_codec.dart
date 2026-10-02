@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 
 import '../../application/notes/note_access.dart';
+import '../../application/notes/note_dto.dart';
 import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_note_state.dart';
 import '../../domain/notes/note_protection.dart';

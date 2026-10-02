@@ -79,7 +79,9 @@ final class SyncPresentationController extends ChangeNotifier {
   SyncConflict? conflictFor(String noteId) {
     for (final SyncConflict conflict
         in _localState?.conflicts ?? const <SyncConflict>[]) {
-      if (conflict.noteId == noteId) return conflict;
+      if (conflict.identity.referenceFor(accountUserId) == noteId) {
+        return conflict;
+      }
     }
     return null;
   }
@@ -87,12 +89,15 @@ final class SyncPresentationController extends ChangeNotifier {
   NoteSyncStatus? noteStatusFor(String noteId) {
     final LocalSyncState? state = _localState;
     if (state == null) return null;
-    if (state.conflicts.any((SyncConflict item) => item.noteId == noteId)) {
+    if (state.conflicts.any(
+      (SyncConflict item) =>
+          item.identity.referenceFor(accountUserId) == noteId,
+    )) {
       return NoteSyncStatus.conflict;
     }
     LocalNoteState? note;
     for (final LocalNoteState item in state.notes) {
-      if (item.id == noteId) {
+      if (item.referenceFor(accountUserId) == noteId) {
         note = item;
         break;
       }
@@ -100,7 +105,12 @@ final class SyncPresentationController extends ChangeNotifier {
     if (note == null) return null;
     if (note.status == NoteSyncStatus.failed ||
         state.outbox.any(
-          (entry) => entry.noteId == noteId && entry.lastError != null,
+          (entry) =>
+              entry.mutation
+                      .identityFor(accountUserId)
+                      .referenceFor(accountUserId) ==
+                  noteId &&
+              entry.lastError != null,
         )) {
       return NoteSyncStatus.failed;
     }
@@ -164,7 +174,7 @@ final class SyncPresentationController extends ChangeNotifier {
 
     SyncConflict? current;
     for (final SyncConflict item in latest.conflicts) {
-      if (item.noteId == displayedConflict.noteId) {
+      if (item.identity == displayedConflict.identity) {
         current = item;
         break;
       }

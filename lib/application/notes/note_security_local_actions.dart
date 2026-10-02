@@ -147,6 +147,19 @@ extension LocalNoteSecurityActions on NoteSecurityService {
   ) async {
     final state = await store.read();
     _live(captured, generation);
+    final shared = state.notes
+        .where((n) => n.referenceFor(accountId) == id && n.ownerId != accountId)
+        .firstOrNull;
+    if (shared != null) {
+      if (!shared.share!.isActive || cloudPassword == null) return false;
+      final lease = await gateway.unlock(id, cloudPassword, {
+        NoteOperation.read,
+        NoteOperation.summary,
+        if (shared.share!.role.name == 'editor') NoteOperation.edit,
+      });
+      _live(captured, generation);
+      return lease.protection == shared.protection;
+    }
     final change = state.outbox
         .where(
           (m) =>

@@ -20,6 +20,9 @@ import 'application/note_intelligence/summary_run_context.dart';
 import 'application/note_intelligence/summary_consent_app_service.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
+import 'application/notes/note_sharing_app_service.dart';
+import 'infrastructure/notes/http_share_gateway.dart';
+import 'infrastructure/sync/cognito_access_token_provider.dart';
 import 'application/notes/local_note_vault.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/auth/auth_identity.dart';
@@ -377,6 +380,33 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   final Map<String, ILocalSyncStore> _localSyncStores =
       <String, ILocalSyncStore>{};
   AccountSyncRuntime? _syncRuntime;
+  HttpShareGateway? _sharingGateway;
+  NoteSharingAppService? _sharingService;
+  NoteSharingAppService? _sharingForCurrentAccount() {
+    final actor = _currentUserSession.userId, uri = _syncApiBaseUri();
+    if (_noteFlowAuthMode != 'cognito' || actor == null || uri == null) {
+      return null;
+    }
+    if (_sharingService != null) return _sharingService;
+    final generation = _currentUserSession.sessionGeneration;
+    final gateway = _sharingGateway = HttpShareGateway(
+      baseUri: uri,
+      actorId: actor,
+      tokenProvider: const CognitoAccessTokenProvider().call,
+      isCurrent: () =>
+          !_disposed &&
+          _currentUserSession.userId == actor &&
+          _currentUserSession.sessionGeneration == generation,
+      grantHeader: _noteSecurityRuntime.sharingGrant,
+    );
+    return _sharingService = NoteSharingAppService(
+      notes: _noteApplicationService,
+      gateway: gateway,
+      generateRequestId: _generateMutationId,
+      sessionGeneration: () => _currentUserSession.sessionGeneration,
+    );
+  }
+
   late final NoteSecurityRuntime _noteSecurityRuntime = NoteSecurityRuntime(
     session: _currentUserSession,
     storeForAccount: _localSyncStoreForAccount,
@@ -425,6 +455,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         readAccessGeneration: () => _noteSecurityRuntime.accessGeneration,
         readSessionGeneration: () => _currentUserSession.sessionGeneration,
         serverAvailable: _noteSecurityRuntime.serverAvailable,
+        sharingForCurrentAccount: _sharingForCurrentAccount,
       );
 
   late final SummaryConsentAppService _summaryConsentService =
@@ -580,6 +611,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     if (previous != null && previous != generation) {
       _invalidateSummaryRuns();
       _noteSecurityRuntime.invalidateSession();
+      _sharingGateway?.close();
+      _sharingGateway = null;
+      _sharingService = null;
       final previousSync = _syncRuntime;
       _syncRuntime = null;
       if (previousSync != null) unawaited(previousSync.dispose());
@@ -637,7 +671,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       localStore: localStore,
       coordinator: runtime.coordinatorFor(accountUserId),
       securityEvents: _noteSecurityRuntime.changes,
-      isCurrentSession: () => _currentUserSession.userId == accountUserId &&
+      isCurrentSession: () =>
+          _currentUserSession.userId == accountUserId &&
           _currentUserSession.sessionGeneration == generation,
       conflictResolver: SyncConflictResolver(
         localSyncStore: localStore,
@@ -1187,6 +1222,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       }
     }
     _summaryRuntime?.dispose();
+    _sharingGateway?.close();
     WidgetsBinding.instance.removeObserver(this);
     widget.authController.removeListener(_onAuthenticationChanged);
     _disposeSyncPresentationController();

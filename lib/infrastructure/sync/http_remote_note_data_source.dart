@@ -108,7 +108,9 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       final http.Response response = await _send(
         method: 'POST',
         uri: _endpoint(
-          mutation.protectionChange == null
+          mutation.ownerId != null
+              ? 'sync/shared-mutations'
+              : mutation.protectionChange == null
               ? _mutationsPath
               : 'sync/protected-mutations',
         ),
@@ -123,11 +125,25 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
           _decodeError(response).code == SyncErrorCode.forbidden;
       if (_isSuccess(response.statusCode) ||
           (response.statusCode == 409 && !securityConflict)) {
-        return decodeSyncMutationResponse(
+        final result = decodeSyncMutationResponse(
           statusCode: response.statusCode,
           body: _readBody(response),
           mutationId: mutation.mutationId,
         );
+        if (mutation.ownerId != null) {
+          final snapshot = result.note ?? result.conflictRemote;
+          if (result.mutationId != mutation.mutationId ||
+              (snapshot != null &&
+                  (snapshot.ownerId != mutation.ownerId ||
+                      snapshot.id != mutation.noteId ||
+                      snapshot.share == null ||
+                      (_expectedAccountUserId != null &&
+                          snapshot.share!.recipientId !=
+                              _expectedAccountUserId)))) {
+            throw const SyncFailure(code: SyncErrorCode.forbidden);
+          }
+        }
+        return result;
       }
       throw _decodeError(response);
     });

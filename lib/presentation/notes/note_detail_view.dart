@@ -184,6 +184,8 @@ extension _NoteDetailView on _NoteDetailPageState {
         final minimumHeight = MediaQuery.textScalerOf(context).scale(320);
         final content = Column(
           children: <Widget>[
+            if (_hasRemoteEditorChange) _remoteEditorNotice(),
+            if (_note != null) _sharingPanel(),
             if (_note != null) _securityPanel(),
             if (sync != null && widget.onEmbeddedExit == null)
               SyncStatusPanel(controller: sync),

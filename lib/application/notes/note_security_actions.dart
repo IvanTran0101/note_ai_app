@@ -46,9 +46,10 @@ extension NoteSecurityActions on NoteSecurityService {
       _live(captured, generation);
       final lease = await gateway.unlock(id, password, {
         NoteOperation.read,
-        NoteOperation.edit,
-        NoteOperation.delete,
-        NoteOperation.manage,
+        if (note.ownerId == accountId || note.share?.role.name == 'editor')
+          NoteOperation.edit,
+        if (note.ownerId == accountId) NoteOperation.delete,
+        if (note.ownerId == accountId) NoteOperation.manage,
         NoteOperation.summary,
       });
       _live(captured, generation);
@@ -65,6 +66,7 @@ extension NoteSecurityActions on NoteSecurityService {
   }
 
   Future<void> enable(String id, String password, String confirmation) async {
+    await _ownerAction(id);
     NoteSecurityService._confirm(password, confirmation);
     if (localFirst) return _enableLocal(id, password);
     final captured = _capture(), generation = _generation;
@@ -106,6 +108,7 @@ extension NoteSecurityActions on NoteSecurityService {
     String confirmation,
   ) async {
     NoteSecurityService._confirm(newPassword, confirmation);
+    await _ownerAction(id);
     if (localFirst) return _changeLocal(id, currentPassword, newPassword);
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
@@ -140,6 +143,7 @@ extension NoteSecurityActions on NoteSecurityService {
   }
 
   Future<void> disable(String id, String currentPassword) async {
+    await _ownerAction(id);
     if (localFirst) return _disableLocal(id, currentPassword);
     final captured = _capture(), generation = _generation;
     final note = await _note(id);
@@ -170,6 +174,7 @@ extension NoteSecurityActions on NoteSecurityService {
   }
 
   Future<NoteRecoveryChallenge> requestRecovery(String id) async {
+    await _ownerAction(id);
     final captured = _capture(), generation = _generation;
     final challenge = await gateway.requestRecovery(id);
     _live(captured, generation);
@@ -184,6 +189,7 @@ extension NoteSecurityActions on NoteSecurityService {
     String confirmation,
   ) async {
     NoteSecurityService._confirm(password, confirmation);
+    await _ownerAction(id);
     final captured = _capture(), generation = _generation;
     final lease = await gateway.confirmRecovery(
       id,
