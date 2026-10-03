@@ -64,10 +64,10 @@ final class NoteDetailPage extends StatefulWidget {
   static const Key backKey = ValueKey<String>('note-detail-back');
 
   @override
-  State<NoteDetailPage> createState() => _NoteDetailPageState();
+  NoteDetailPageState createState() => NoteDetailPageState();
 }
 
-final class _NoteDetailPageState extends State<NoteDetailPage>
+final class NoteDetailPageState extends State<NoteDetailPage>
     with WidgetsBindingObserver {
   static const Duration _autosaveDelay = Duration(seconds: 3);
 
@@ -227,6 +227,11 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
 
   bool get _actionBusy =>
       _saving || _deleting || _resolvingConflict || _summaryController.isBusy;
+
+  bool get hasActiveOperation => _actionBusy || _backConfirmationVisible;
+
+  Future<void> requestClose() =>
+      _backConfirmationVisible ? Future<void>.value() : _handleBack();
 
   bool get _canSave =>
       !_actionBusy && _currentConflict == null && (_note == null || _isDirty);
@@ -748,7 +753,13 @@ final class _NoteDetailPageState extends State<NoteDetailPage>
           unawaited(_handleBack());
         }
       },
-      child: content,
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              unawaited(requestClose()),
+        },
+        child: content,
+      ),
     );
   }
 

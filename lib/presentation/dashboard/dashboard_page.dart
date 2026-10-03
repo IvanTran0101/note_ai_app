@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import '../../domain/users/user_preferences.dart';
+import '../common/note_flow_primitives.dart';
 import '../notes/notes_application_controller.dart';
 import '../notes/note_detail_route_result.dart';
 import '../notes/notes_theme_tokens.dart';
@@ -308,6 +309,7 @@ final class DashboardPageState extends State<DashboardPage> {
   Future<void> _showDesktopSearchDialog() async {
     await showDialog<void>(
       context: context,
+      animationStyle: NoteFlowMotion.dialogStyle(context),
       useRootNavigator: true,
       barrierDismissible: true,
       barrierColor: const Color(0x26000000),
@@ -447,12 +449,14 @@ final class DashboardPageState extends State<DashboardPage> {
             ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          return _buildBody(
-            context,
-            constraints,
-            copy,
-            searchOpenOverride: _desktopSearchDialogOpen ? false : null,
-            searchTextOverride: _desktopSearchDialogOpen ? '' : null,
+          return NoteFlowStateTransition(
+            child: _buildBody(
+              context,
+              constraints,
+              copy,
+              searchOpenOverride: _desktopSearchDialogOpen ? false : null,
+              searchTextOverride: _desktopSearchDialogOpen ? '' : null,
+            ),
           );
         },
       ),

@@ -206,6 +206,16 @@ abstract final class NoteFlowRadius {
 abstract final class NoteFlowMotion {
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration standard = Duration(milliseconds: 200);
+
+  static Duration duration(BuildContext context, [Duration value = standard]) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : value;
+
+  static AnimationStyle dialogStyle(BuildContext context) => AnimationStyle(
+    duration: duration(context),
+    reverseDuration: duration(context, fast),
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
 }
 
 /// Notion-inspired surface/text/line tokens for both brightnesses.

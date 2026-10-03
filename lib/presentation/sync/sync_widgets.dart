@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/sync_status.dart';
+import '../common/note_flow_primitives.dart';
 import 'sync_localizations.dart';
 import 'sync_presentation_controller.dart';
 
@@ -40,16 +41,25 @@ final class SyncStatusPanel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: <Widget>[
-                  Icon(_icon, color: colors.primary),
+                  NoteFlowStateTransition(
+                    child: Icon(
+                      _icon,
+                      key: ValueKey<IconData>(_icon),
+                      color: colors.primary,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleSmall,
+                        NoteFlowStateTransition(
+                          child: Text(
+                            title,
+                            key: ValueKey<String>(title),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                         ),
                         for (final String detail in details)
                           Text(
@@ -151,12 +161,15 @@ final class SyncNoteStatusBadge extends StatelessWidget {
         return Semantics(
           key: ValueKey<String>('sync-note-status-$noteId'),
           label: copy.noteStatus(status),
-          child: Chip(
-            visualDensity: VisualDensity.compact,
-            avatar: Icon(_icon(status), size: 16, color: color),
-            label: Text(copy.noteStatus(status)),
-            side: BorderSide(color: color),
-            padding: EdgeInsets.zero,
+          child: NoteFlowStateTransition(
+            child: Chip(
+              key: ValueKey<NoteSyncStatus>(status),
+              visualDensity: VisualDensity.compact,
+              avatar: Icon(_icon(status), size: 16, color: color),
+              label: Text(copy.noteStatus(status)),
+              side: BorderSide(color: color),
+              padding: EdgeInsets.zero,
+            ),
           ),
         );
       },

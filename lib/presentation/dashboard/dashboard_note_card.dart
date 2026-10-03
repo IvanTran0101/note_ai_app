@@ -158,7 +158,7 @@ final class DashboardNoteCard extends StatelessWidget {
               size: 18,
               color: selected ? foreground : tokens.textMuted,
             ),
-            _pinButton(),
+            _pinButton(context),
           ],
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
@@ -191,7 +191,7 @@ final class DashboardNoteCard extends StatelessWidget {
     );
   }
 
-  Widget _pinButton() {
+  Widget _pinButton(BuildContext context) {
     if (onTogglePin == null) return const SizedBox.shrink();
     final bool isPinned = note.pinnedAt != null;
     final String label = isPinned ? copy.unpinNote : copy.pinNote;
@@ -200,7 +200,14 @@ final class DashboardNoteCard extends StatelessWidget {
       tooltip: label,
       onPressed: () => onTogglePin!(note),
       visualDensity: VisualDensity.compact,
-      icon: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined, size: 18),
+      icon: AnimatedSwitcher(
+        duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
+        child: Icon(
+          isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          key: ValueKey<bool>(isPinned),
+          size: 18,
+        ),
+      ),
     );
   }
 
@@ -259,7 +266,7 @@ final class DashboardNoteCard extends StatelessWidget {
             ),
           ),
         ],
-        if (onTogglePin != null) _pinButton(),
+        if (onTogglePin != null) _pinButton(context),
       ],
     );
   }

@@ -210,8 +210,21 @@ class WorkspaceShellState extends State<WorkspaceShell>
         ? 0.035
         : -0.035;
     setState(() => _destination = destination);
-    _pageMotionController.forward(from: 0);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pageMotionController.value = 1;
+    } else {
+      _pageMotionController.forward(from: 0);
+    }
     widget.onDestinationChanged?.call(destination);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pageMotionController.duration = NoteFlowMotion.duration(context);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pageMotionController.value = 1;
+    }
   }
 
   int _destinationIndex(WorkspaceDestination destination) =>
@@ -303,11 +316,28 @@ class WorkspaceShellState extends State<WorkspaceShell>
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          SizedBox(
+                          AnimatedContainer(
+                            duration: NoteFlowMotion.duration(context),
+                            curve: Curves.easeOutCubic,
                             width: navigationWidth,
-                            child: navigation ?? const SizedBox.shrink(),
+                            child: ClipRect(
+                              child: OverflowBox(
+                                alignment: Alignment.centerLeft,
+                                minWidth: medium
+                                    ? WorkspaceShell.navigationRailWidth
+                                    : WorkspaceShell.sidebarWidth,
+                                maxWidth: medium
+                                    ? WorkspaceShell.navigationRailWidth
+                                    : WorkspaceShell.sidebarWidth,
+                                child: NoteFlowStateTransition(
+                                  child: navigation ?? const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
                           ),
-                          SizedBox(
+                          AnimatedContainer(
+                            duration: NoteFlowMotion.duration(context),
+                            curve: Curves.easeOutCubic,
                             width: dividerWidth,
                             child: dividerWidth == 0
                                 ? const SizedBox.shrink()
@@ -602,7 +632,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
             onTap: onPressed,
             child: Center(
               child: AnimatedSwitcher(
-                duration: NoteFlowMotion.fast,
+                duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
                 child: Icon(
                   selected ? activeIcon : icon,
                   key: ValueKey<bool>(selected),
@@ -625,7 +655,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
       barrierDismissible: false,
       barrierLabel: copy.openMenu,
       barrierColor: Colors.black54,
-      transitionDuration: NoteFlowMotion.standard,
+      transitionDuration: NoteFlowMotion.duration(context),
       pageBuilder:
           (
             BuildContext sheetContext,

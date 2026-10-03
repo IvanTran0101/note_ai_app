@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_conflict_resolver.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'sync_localizations.dart';
 
 enum SyncDirtyDraftChoice { saveAsNew, discard, cancel }
@@ -16,6 +17,7 @@ Future<SyncConflictChoice?> showSyncConflictChoices({
   if (compact) {
     return showModalBottomSheet<SyncConflictChoice>(
       context: context,
+      sheetAnimationStyle: NoteFlowMotion.dialogStyle(context),
       isScrollControlled: true,
       builder: (BuildContext context) => SafeArea(
         child: SingleChildScrollView(
@@ -31,6 +33,7 @@ Future<SyncConflictChoice?> showSyncConflictChoices({
   }
   return showDialog<SyncConflictChoice>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
@@ -53,6 +56,7 @@ Future<SyncDirtyDraftChoice?> showSyncDirtyDraftChoices({
   final SyncCopy copy = SyncCopy.of(context);
   return showDialog<SyncDirtyDraftChoice>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) => AlertDialog(
       title: Text(copy.draftConflictTitle),
       content: Text(copy.draftConflictMessage),

@@ -28,6 +28,7 @@ const double _maxContentWidth = _maxDialogWidth - (NoteFlowSpacing.xl * 2);
 Future<bool> showSummaryConsentDialog(BuildContext context) async {
   final bool? allowed = await showDialog<bool>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     barrierDismissible: true,
     builder: _buildSummaryConsentDialog,
   );

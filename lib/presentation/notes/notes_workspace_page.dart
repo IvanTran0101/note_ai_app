@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
@@ -20,9 +21,8 @@ import '../sync/sync_widgets.dart';
 /// Responsive Notes workspace for the shell's Notes destination.
 ///
 /// This page owns only presentation selection state. Note mutations and AI
-/// calls continue to flow through [NotesApplicationController]. Every
-/// breakpoint uses the Notes content area for one surface at a time: the list
-/// or the focused Note Detail page.
+/// calls continue to flow through [NotesApplicationController]. The same editor
+/// opens as a side peek, center peek, or full page according to the canvas.
 final class NotesWorkspacePage extends StatefulWidget {
   const NotesWorkspacePage({
     super.key,
@@ -54,8 +54,8 @@ final class NotesWorkspacePage extends StatefulWidget {
 
 final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   String? _detailKeyIdentity;
-  GlobalKey<State<StatefulWidget>> _detailWidgetKey =
-      GlobalKey<State<StatefulWidget>>();
+  GlobalKey<NoteDetailPageState> _detailWidgetKey =
+      GlobalKey<NoteDetailPageState>();
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
   bool _editingNewNote = false;
@@ -92,17 +92,23 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Key _detailKeyFor(String identity) {
     if (_detailKeyIdentity != identity) {
       _detailKeyIdentity = identity;
-      _detailWidgetKey = GlobalKey<State<StatefulWidget>>(
+      _detailWidgetKey = GlobalKey<NoteDetailPageState>(
         debugLabel: 'notes-workspace-detail-$identity',
       );
     }
     return _detailWidgetKey;
   }
 
-  /// Whether the current inline detail has edits that have not been saved.
-  bool get hasUnsavedChanges => _detailDirty;
+  /// Includes pending work so the host cannot reload away the active editor.
+  bool get hasUnsavedChanges => _detailDirty || _detailBusy;
+
+  bool get _detailBusy =>
+      _detailWidgetKey.currentState?.hasActiveOperation ?? false;
 
   bool get _showDetail => _editingNewNote || _selectedNote != null;
+
+  Future<void> _requestDetailClose() =>
+      _detailWidgetKey.currentState?.requestClose() ?? Future<void>.value();
 
   @override
   void initState() {
@@ -162,6 +168,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _selectNote(NoteDto note) {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
@@ -174,6 +181,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _startNewNote() {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
@@ -189,6 +197,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   /// Selects an existing note in the workspace editor.
   void openNote(NoteDto note) {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
@@ -272,7 +281,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         MediaQuery.sizeOf(context).width <
         ResponsiveNotesWorkspace.compactBreakpoint;
     return Scaffold(
-      appBar: _showDetail || (compact && widget.embeddedInWorkspace)
+      appBar: compact && (_showDetail || widget.embeddedInWorkspace)
           ? null
           : _buildWorkspaceAppBar(copy),
       body: _loading
@@ -283,21 +292,28 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
                     case final SyncPresentationController sync)
                   SyncStatusPanel(controller: sync),
                 Expanded(
-                  child: ResponsiveNotesWorkspace(
-                    list: NotesListPanel(
-                      notes: _notes,
-                      selectedNoteId: _selectedNoteId,
-                      error: loadError,
-                      actionBusy: false,
-                      onNewNote: _startNewNote,
-                      onSelectNote: _selectNote,
-                      onRetry: persistenceUnavailable ? null : reload,
+                  child: CallbackShortcuts(
+                    bindings: <ShortcutActivator, VoidCallback>{
+                      const SingleActivator(LogicalKeyboardKey.escape): () =>
+                          unawaited(_requestDetailClose()),
+                    },
+                    child: ResponsiveNotesWorkspace(
+                      list: NotesListPanel(
+                        notes: _notes,
+                        selectedNoteId: _selectedNoteId,
+                        error: loadError,
+                        actionBusy: false,
+                        onNewNote: _startNewNote,
+                        onSelectNote: _selectNote,
+                        onRetry: persistenceUnavailable ? null : reload,
+                      ),
+                      detail: _buildDetail(
+                        copy,
+                        showAppBar: compact && !widget.embeddedInWorkspace,
+                      ),
+                      hasSelection: _showDetail,
+                      onDismiss: () => unawaited(_requestDetailClose()),
                     ),
-                    detail: _buildDetail(
-                      copy,
-                      showAppBar: compact && !widget.embeddedInWorkspace,
-                    ),
-                    hasSelection: _showDetail,
                   ),
                 ),
               ],
