@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
-import 'amplify_outputs.dart';
+import 'amplify_outputs.dart' as generated_amplify;
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
@@ -76,6 +76,11 @@ import 'presentation/workspace/workspace_shell.dart';
 
 part 'main_realtime.dart';
 
+// Public deployment outputs only; AWS operator credentials never enter Flutter.
+const String amplifyConfig = String.fromEnvironment(
+  'NOTEFLOW_AMPLIFY_OUTPUTS',
+  defaultValue: generated_amplify.amplifyConfig,
+);
 const String _noteFlowAuthMode = String.fromEnvironment(
   'NOTEFLOW_AUTH_MODE',
   defaultValue: 'cognito',

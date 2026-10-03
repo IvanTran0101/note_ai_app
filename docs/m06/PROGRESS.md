@@ -172,3 +172,19 @@ verified lookup/ACL/atomic actor feed and shared-route evidence and cloud limits
   synth is review-only with a fictional account, not an actual stack diff/deploy.
 - Pre-existing macOS registrant, final_project.md, browser logs, ignored output
   and SDK artifacts remain excluded. M09 stays deferred per the user instruction.
+
+## Dev setup source/config follow-up — 2026-10-03
+
+- Prepare code before credentials, matching the collaborator direction supplied
+  by the user. .env.example + DEV_SETUP.md explain local mode and later public
+  Cognito/endpoint selection; main.dart reads NOTEFLOW_AMPLIFY_OUTPUTS with the
+  existing generated fallback. No server authority/storage policy changed.
+- tool/m06_dev_config.py emits public-only build defines under ignored output/.
+  AWS profile/temporary keys are scoped to an explicit backend child; stale
+  parent access keys/profile are cleared when selecting the other method. No auto-deploy.
+- Python13 checks + VM2/Chrome2 default/selected composition runs passed;
+  scoped analyzer clean, formatter/diff pass. This is a scoped follow-up, not
+  another full-suite run or live AWS acceptance. Local .env has blank operator
+  fields, no independent assistant account, and no new actual rubric ticks.
+- Next receipt: scoped push and local-mode main APK restoration on the emulator.
+  Continue to defer M09 and the actual AWS gate until the intended dev environment.

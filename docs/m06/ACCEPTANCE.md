@@ -79,3 +79,17 @@ local sharing requirements except FR07/NFR02/NFR03 and two-editor realtime
 Done When, which await the plan's deployed provider spike. These local receipts cannot establish that the
 entire deployed app is bug-free. Collaborator attachment/routes integration is
 also deferred to the requested combined checkpoint before M09 planning.
+
+## Dev configuration follow-up — 2026-10-03
+
+After source/local checkpoint7fcefac, the composition root now accepts selected
+public Amplify outputs through a build define, retaining the generated fallback.
+.env.example and tool/m06_dev_config.py prepare local defaults/public config and
+scope operator auth to an explicit backend child. See DEV_SETUP.md.
+
+Additional scoped receipt: Python13 checks, VM2 composition runs (default and
+selected outputs), Chrome2 matching runs, scoped analyzer clean and diff/formatter
+checks passed. These are17 additional local cases, not a rerun of the full suites
+in the table above. Fixtures contain only synthetic identities/credentials.
+Private AWS fields never enter generated public defines; no AWS account, provider
+test or deployment was performed. Actual Notion rubric remains15/19.

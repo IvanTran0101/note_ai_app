@@ -5,6 +5,12 @@ ACL and relay code, and synthetic credentials/SDK doubles. It does not prove
 deployed Cognito, API Gateway, DynamoDB Streams/GSI, IAM or AppSync behavior.
 No deployment has occurred. M09 remains deferred.
 
+Code/configuration handoff is prepared separately in [DEV_SETUP.md](DEV_SETUP.md):
+.env.example and the local config helper select public Cognito/endpoints outputs
+without rewriting generated source. Private operator credentials reach only an
+explicit backend child. This preparation does not need AWS credentials or mark
+the live gate complete. The assistant has no independent AWS dev account.
+
 ## Concrete deployment changes to review
 
 The source checkpoint315caf4 adds:

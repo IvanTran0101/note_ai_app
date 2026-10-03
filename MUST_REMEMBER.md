@@ -27,6 +27,15 @@ Android90 and two-client HTTP/socket). Actual rubric is15/19 checked; four
 realtime criteria still require the plan's live Cognito/AppSync gate. Do not
 reimplement accepted milestones or begin M09 from the historical pause notes.
 
+Dev setup follow-up (2026-10-03): prepare code/config before credentials, per
+the collaborator direction supplied by the user. .env.example +
+tool/m06_dev_config.py prepare the public Flutter defines; consult
+docs/m06/DEV_SETUP.md. Keep the default setup local. AWS operator keys stay in
+ignored .env/profile and are scoped only to an explicit backend child, never
+Flutter defines/assets. No independent assistant AWS account or live test is
+implied. Account switching needs public Cognito/endpoints outputs as well as
+operator authentication; local completion does not wait on AWS setup.
+
 Read this file at the start of every turn that may change source code. Then read
 the current `AGENTS.md`, inspect `git status` and the active branch, and confirm
 the codebase-memory index before structural code discovery. Begin the M05

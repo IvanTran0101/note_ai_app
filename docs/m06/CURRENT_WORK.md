@@ -111,6 +111,17 @@ subagents; graph Tier2 exact D root. _agent_ops tools are absent.
   Finish plan/status consistency, explicit-stage checkpoint/push and verify remote;
   then rebuild/install main.dart APK with -r and record final receipts on Notion.
 - Local sharing intents may be durable, but ACTIVE ACL is only server-authorized.
+- Follow-up03/10: user shared collaborator's request to prepare code/config before
+  credentials. Add .env.example and local Python config/child-environment helper,
+  public Amplify outputs override at composition root and scoped boundary tests.
+  Existing backend/realtime code is reused. Prepare local-first config without
+  AWS calls; no own dev account is available and no live criterion is ticked.
+  AWS credentials must never become Flutter defines, assets, logs or Git files.
+  Helper13 checks, default/selected root configuration VM2 and Chrome2 passed;
+  scoped analyzer clean155.7s, formatter/diff pass. DEV_SETUP.md and acceptance/
+  progress records updated. Local ignored .env created with blank operator fields;
+  R alias restored to the primary D checkout. Next: Notion/source checkpoint push,
+  build/install a local-mode main APK from that commit and record its receipt.
 - M05 encrypted drafts/session/consent/lineage must survive all changes.
 - Update/push after accepted milestone/M/P, not after partial preparation.
 
