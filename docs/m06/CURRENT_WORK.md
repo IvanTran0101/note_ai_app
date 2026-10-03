@@ -20,8 +20,9 @@ Android emulator and browser test session closed after completion; AVD data kept
 Graph transport/coverage unavailable; exact source fallback. Ops folder absent.
 MacOS file hash and unrelated untracked files preserved and excluded from staging.
 
-Next: commit true merge and normal push final-tuankiet,
-verify remote SHA, finish Notion delivery checkbox. M03 collaborator should sync
+Source merge commit: `2c0397c688f5573c79fb76a9f66786755edac2b8`, with parents276c749 and aabf229.
+VM delivery1029/2 skip is final; all local receipts complete. Notion records the
+final remote branch SHA after publication. Next: M03 collaborator should sync
 this checkpoint for the named writer/schema4; M09 remains deferred. No provider
 acceptance or attachment byte/scopes completion is implied by this batch.
 Notion: https://app.notion.com/p/3eef9c7a1aa081d2a7c4ee37adefbb38.

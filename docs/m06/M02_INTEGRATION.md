@@ -126,8 +126,9 @@ All application source is staged explicitly; no unmerged paths or conflict
 markers remain. Formatter91 files/0 changes, backend89/typecheck and final
 analyzer clean. The final VM delivery rerun passed1029 tests/2 configured skips in1m29s;
 fixture follow-up analyzer is also clean.
-The merge commit's parents must remain276c749 and aabf229. Push normally to
-refs/heads/final-tuankiet; final remote SHA verification is recorded on Notion.
+Source merge commit: `2c0397c688f5573c79fb76a9f66786755edac2b8`, verified parents276c749 and aabf229.
+The following documentation checkpoint records closure. Delivery is a normal
+push to refs/heads/final-tuankiet; the final branch SHA is recorded on Notion.
 
 ## Continuity closure
 
