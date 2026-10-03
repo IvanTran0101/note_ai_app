@@ -9,11 +9,12 @@ from websockets.sync.server import serve
 CLIENTS = {}
 LOCK = threading.RLock()
 ACTORS = {"m06-owner-20261002", "m06-editor-20261002"}
+TOKEN_MARKER = "fixture"
 
 
 def actor_of(token):
     parts = token.split(".")
-    if len(parts) != 3 or parts[2] != "fixture":
+    if len(parts) != 3 or parts[2] != TOKEN_MARKER:
         raise ValueError("Synthetic credential required")
     claims = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
     actor = claims.get("sub")
@@ -92,9 +93,18 @@ def keepalive():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=ThreadingHTTPServer(("127.0.0.1", 8788), Control).serve_forever,
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--local-dev", action="store_true")
+    options = parser.parse_args()
+    socket_port, control_port = 8787, 8788
+    if options.local_dev:
+        ACTORS = {"m06-dev-owner", "m06-dev-recipient"}
+        socket_port, control_port = 8797, 8798
+        TOKEN_MARKER = "local-dev"
+    threading.Thread(target=ThreadingHTTPServer(("127.0.0.1", control_port), Control).serve_forever,
                      daemon=True).start()
     threading.Thread(target=keepalive, daemon=True).start()
-    print("M06 synthetic socket fixture ready: 8787/8788", flush=True)
-    with serve(websocket, "127.0.0.1", 8787, subprotocols=["aws-appsync-event-ws"]) as server:
+    print(f"M06 synthetic socket fixture ready: {socket_port}/{control_port}", flush=True)
+    with serve(websocket, "127.0.0.1", socket_port, subprotocols=["aws-appsync-event-ws"]) as server:
         server.serve_forever()

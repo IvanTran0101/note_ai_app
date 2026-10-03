@@ -9,6 +9,38 @@ subagents; graph Tier2 exact D root. _agent_ops tools are absent.
 
 ## Current batch
 
+- Active follow-up: user cannot Share with plain flutter run -d chrome.
+  Verified root: plain command uses older generated Cognito configuration;
+  local mode deliberately has no Share gateway. Prior config/startup checks
+  did not prove manual Share. Add an explicit debug-only main_dev entrypoint,
+  two isolated synthetic actors, loopback persisted backend and one launcher.
+  Reuse production application/store/ACL and cursor pipeline. No AWS deployment,
+  credential request, M09 work, real-data reset or live-rubric completion.
+  Next: prove owner Share -> recipient editor -> downgrade/revoke in actual UI.
+- Main dev UI now runs through run_m06_local.py: fixed synthetic actors and
+  debug-only loopback client, encrypted disk SDK-double backend, production
+  store/ACL/password use cases and AppSync protocol fixture. Root token/client/
+  revision collaborators are injectable; Cognito defaults remain intact.
+- Actual browser proved owner creation/share, recipient Shared with me/editor
+  write, explicit stale editor review, owner reply, Viewer update and revoke
+  removal. Offline owner save shows one durable pending change after explicit
+  local review. HTTP10 auth/origin/host/revoked-access/disk checks and Python13
+  config checks pass. Scoped VM15 passes; matching Chrome15 is running.
+- Fixed three observed main UI defects: initialize restored-identity sync before
+  router mount; constrain long page status; clear stale error on Use cloud.
+  Root analyzer passed before the latter two fixes; final analyzer is next.
+  No M09 redesign. Next: online ACK, reload/restart persistence, final fresh
+  main Chrome run, docs/Notion and scoped checkpoint push.
+- Final follow-up accepted locally: online ACK automatic, restart retains
+  revision4/offline content, installed Chrome fresh profile retrieves note.
+  Re-shared the demo as Editor after proving revoke (fresh accessRevision4).
+  VM15/Chrome15/HTTP10/config13 passed; tsc, Python compile, formatter/diff and
+  final analyzer164.2s clean. Notion progress/plan/actual rubric updated with
+  the explicit local runtime distinction; live15/19 status is unchanged.
+  run_m06_local.py launched installed Chrome successfully; helper responsibilities
+  are split into service startup, Flutter launch and owned-service cleanup.
+  Next: verify scoped staged files, commit/push and keep local app running.
+
 - M06.2 source implemented: exact Cognito verified-sub lookup, owner share admin,
   Dynamo ACL/conditional stamps, canonical shared-update-only route, actor/pair
   receipts, actor feed, membership CAS, independent recipient password grants,

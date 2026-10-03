@@ -5,7 +5,58 @@ and a later AWS dev handoff without editing committed account identifiers.
 The assistant has no independent AWS dev account. Real provider acceptance still
 needs the project owner's dev deployment and registered test users.
 
-## Start locally
+## Try Share in the actual Chrome app
+
+From the repository root:
+
+```powershell
+python tool/run_m06_local.py
+```
+
+This starts the loopback HTTP/socket services and `flutter run -d chrome`
+with the explicit `lib/main_dev.dart` target, local auth and fixed web port8776.
+Keep the terminal running. `q` in Flutter, or Ctrl+C, stops this run's services.
+Node/Flutter must be on PATH; backend node_modules and Python `websockets`
+must be installed (they are present in the verified workspace).
+
+1. Owner: http://127.0.0.1:8776/?devUser=owner.
+2. Create a note, wait for its initial sync ACK, open **Manage sharing** and
+   share to `recipient@example.invalid` as Viewer or Editor.
+3. In a second tab open http://127.0.0.1:8776/?devUser=recipient, then
+   **Notes -> Shared with me**. Both tabs use the actual production app UI.
+4. Owner manages role/revoke. Recipient edits only as Editor. Stale dirty
+   editors require an explicit cloud/local choice; local draft/outbox is saved
+   before network delivery. Offline sharing administration cannot activate ACL.
+
+No login/password or AWS key is needed for these **two synthetic demo users**.
+The yellow LOCAL DEV banner identifies the active user. The dedicated actor
+IDs do not read real Cognito/local-user caches. URLs select a demo identity
+only in main_dev; release builds and non-loopback Web hosts are refused.
+
+The backend reuses production note/sharing/protection/ACL use cases with a
+Dynamo SDK double, fixed recipient resolver and synthetic auth. Its AES-GCM
+disk snapshot/key live under ignored `output/m06-local/` and survive restart.
+Do not delete its key or reset its state when restarting. Browser working
+copies retain the existing encrypted account store, outbox and cursor owner.
+Use a loaded app offline; the Flutter debug web shell is not an offline PWA.
+This is a local development environment for demo notes, not Cognito/AWS
+provider acceptance. Email recovery and real-user sharing require the intended
+deployment; no recovery mail is sent by this dev backend.
+
+For a separate service terminal and manual Flutter command:
+
+```powershell
+# Terminal1, keep open:
+python tool/run_m06_local.py --serve-only
+# Terminal2:
+flutter run -d chrome -t lib/main_dev.dart --web-hostname=127.0.0.1 --web-port=8776 --dart-define=NOTEFLOW_AUTH_MODE=local
+```
+
+Plain `flutter run -d chrome` still selects main.dart's generated Cognito
+configuration. It does not automatically load .env or start these local services.
+Do not use it as the reproduction command for this local Share setup.
+
+## Standalone offline notes
 
 From the repository root, copy `.env.example` to the ignored `.env` once. Preserve
 an existing `.env` instead of replacing it. Leave NOTEFLOW_AUTH_MODE=local:
@@ -19,6 +70,7 @@ flutter run -d emulator-5554 --dart-define-from-file=output/m06-dev/dart-defines
 
 The helper uses Python3.10+ standard libraries. It makes no AWS call. Local mode
 emits only NOTEFLOW_AUTH_MODE=local and uses the existing encrypted local store.
+It has no Share gateway. Use the local Share launcher above to try two users.
 It does not grant a cloud recipient or emulate real Cognito authorization.
 
 ## Switch to the intended dev deployment

@@ -36,6 +36,16 @@ Flutter defines/assets. No independent assistant AWS account or live test is
 implied. Account switching needs public Cognito/endpoints outputs as well as
 operator authentication; local completion does not wait on AWS setup.
 
+Manual Share dev follow-up (2026-10-03): plain flutter run -d chrome does not
+load .env/start a backend, and local mode alone has no Share gateway. Use
+python tool/run_m06_local.py for main_dev.dart + loopback services on fixed
+port8776, then owner/recipient demo URLs in docs/m06/DEV_SETUP.md. These two
+isolated synthetic actors exercise real UI/local-first/outbox/ACL paths; they
+are not real Cognito accounts. Keep encrypted output/m06-local state/key on
+restart. Default production Cognito auth and HTTPS/JWT/session guards remain
+in place; dev transports are explicit debug-only composition collaborators.
+Do not claim the earlier main APK startup/config tests proved manual Share.
+
 Read this file at the start of every turn that may change source code. Then read
 the current `AGENTS.md`, inspect `git status` and the active branch, and confirm
 the codebase-memory index before structural code discovery. Begin the M05

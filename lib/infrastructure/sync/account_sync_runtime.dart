@@ -4,6 +4,8 @@ import '../../application/sync/sync_failure.dart';
 
 import 'dart:async';
 
+import 'package:http/http.dart' as http;
+
 import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/sync_coordinator_service.dart';
 import '../../application/sync/sync_report.dart';
@@ -25,9 +27,14 @@ final class AccountSyncRuntime {
     this.hydrateSnapshot,
     this.requireSession,
     this.sessionGeneration,
-  }) : _clock = clock ?? DateTime.now;
+    SyncAccessTokenProvider? tokenProvider,
+    this.client,
+  }) : _clock = clock ?? DateTime.now,
+       tokenProvider = tokenProvider ?? const CognitoAccessTokenProvider().call;
 
   final Uri baseUri;
+  final SyncAccessTokenProvider tokenProvider;
+  final http.Client? client;
   final Future<String?> Function(String account, SyncMutation mutation)?
   mutationGrant;
   final Future<void> Function(String account, SyncNoteSnapshot snapshot)?
@@ -60,7 +67,8 @@ final class AccountSyncRuntime {
 
       final HttpRemoteNoteDataSource remote = HttpRemoteNoteDataSource(
         baseUri: baseUri,
-        tokenProvider: const CognitoAccessTokenProvider().call,
+        tokenProvider: tokenProvider,
+        client: client,
         expectedAccountUserId: accountUserId,
         requireSession: requireLive,
         mutationGrant: (mutation) async =>

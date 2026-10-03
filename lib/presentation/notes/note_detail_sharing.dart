@@ -28,7 +28,10 @@ extension _NoteDetailSharing on _NoteDetailPageState {
                   onPressed: _actionBusy
                       ? null
                       : () {
-                          _update(() => _adoptSavedNote(_pendingSavedNote));
+                          _update(() {
+                            _adoptSavedNote(_pendingSavedNote);
+                            _error = null;
+                          });
                           _notifyDirtyChanged();
                         },
                   child: Text(copy.useCloud),

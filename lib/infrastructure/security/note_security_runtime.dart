@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../../application/auth/current_user_session.dart';
 import '../../application/notes/local_note_vault.dart';
@@ -25,11 +26,15 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     required this.baseUri,
     required this.cancelSummaries,
     required this.syncNow,
-  });
+    Future<String?> Function({required bool forceRefresh})? tokenProvider,
+    this.client,
+  }) : tokenProvider = tokenProvider ?? const CognitoAccessTokenProvider().call;
   final CurrentUserSession session;
   final ILocalSyncStore Function({required String accountUserId})
   storeForAccount;
   final Uri? baseUri;
+  final Future<String?> Function({required bool forceRefresh}) tokenProvider;
+  final http.Client? client;
   final void Function() cancelSummaries;
   final Future<void> Function(String accountId) syncNow;
   final _services = <String, NoteSecurityService>{};
@@ -62,7 +67,8 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
           : HttpNoteSecurityGateway(
               baseUri: uri,
               accountId: account,
-              tokenProvider: const CognitoAccessTokenProvider().call,
+              tokenProvider: tokenProvider,
+              client: client,
               isCurrentSession: () =>
                   !_changes.isClosed &&
                   session.userId == account &&

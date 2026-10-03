@@ -1,5 +1,24 @@
 # M06 — Implementation progress
 
+## Manual Share dev runtime — 2026-10-03
+
+- Explicit launcher `python tool/run_m06_local.py` now runs main_dev.dart on
+  installed Chrome + loopback HTTP/socket. Owner/recipient demo URLs and
+  `recipient@example.invalid` are in DEV_SETUP.md. Plain flutter run does not
+  load .env/start services; local auth alone has no Share gateway.
+- Actual UI create/share/editor edits/explicit stale review/Viewer/revoke,
+  offline pending1 -> automatic online ACK and encrypted backend restart were
+  checked. Fresh installed Chrome retrieved revision4 with the offline edit.
+- VM15, Chrome15, HTTP10 and existing config13 passed; backend tsc/py_compile,
+  root analyzer164.2s and formatter/diff clean. Fixed sync-controller startup,
+  long page status overflow and stale Use cloud error; no M09 redesign.
+- Local acceptance only: synthetic identities + persisted SDK double, no AWS
+  call/deploy/recovery mail. Existing actual rubric15/19 + four live gates remain.
+  Historical full/platform receipts are not reruns in this batch; no Android
+  run in this follow-up. Keep user data and unrelated files unchanged.
+- Ops scripts/protocol are absent; CURRENT_WORK/PROGRESS/ACCEPTANCE/DEV_SETUP
+  and MUST_REMEMBER provide continuity. Next: Notion receipt and scoped push.
+
 ## Current acceptance — 2026-10-03
 
 User resumed M06.2–M06.5 with local-first behavior; all historical pause records

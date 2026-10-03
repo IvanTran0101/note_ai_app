@@ -262,14 +262,16 @@ final class NoteFlowPageHeader extends StatelessWidget {
                   ),
                 ),
                 if (statusLabel != null)
-                  _NoteFlowPageStatus(
-                    key: statusKey,
-                    label: statusLabel!,
-                    busy: statusBusy,
-                    unavailable: statusUnavailable,
-                    dirty: statusDirty,
-                    error: statusError,
-                    draft: statusDraft,
+                  Flexible(
+                    child: _NoteFlowPageStatus(
+                      key: statusKey,
+                      label: statusLabel!,
+                      busy: statusBusy,
+                      unavailable: statusUnavailable,
+                      dirty: statusDirty,
+                      error: statusError,
+                      draft: statusDraft,
+                    ),
                   ),
                 ...actions,
               ],
@@ -340,12 +342,14 @@ final class _NoteFlowPageStatus extends StatelessWidget {
                   children: <Widget>[
                     icon,
                     const SizedBox(width: NoteFlowSpacing.xs),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall
-                          ?.copyWith(color: tokens.textMuted),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: tokens.textMuted),
+                      ),
                     ),
                   ],
                 ),

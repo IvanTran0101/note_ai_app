@@ -43,6 +43,7 @@ import 'infrastructure/auth/amplify_auth_initializer.dart';
 import 'infrastructure/auth/cognito_authentication_service.dart';
 import 'infrastructure/configuration/ai_configuration.dart';
 import 'infrastructure/configuration/ai_configuration_store.dart';
+import 'infrastructure/configuration/note_connection.dart';
 import 'infrastructure/device/device_info_plus_hardware_detection.dart';
 import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/note_intelligence/summary_run_runtime.dart';
@@ -355,6 +356,7 @@ class NoteFlowApp extends StatefulWidget {
     this.localSyncStoreFactory,
     this.localSummarizer,
     this.enableSync = true,
+    this.connection,
   });
 
   final AuthController authController;
@@ -368,6 +370,7 @@ class NoteFlowApp extends StatefulWidget {
 
   /// Offline acceptance roots disable unrelated background synchronization.
   final bool enableSync;
+  final NoteConnection? connection;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
@@ -393,9 +396,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   AccountRealtimeService? _realtimeService;
   HttpShareGateway? _sharingGateway;
   NoteSharingAppService? _sharingService;
+  bool get _remoteEnabled =>
+      widget.connection != null || _noteFlowAuthMode == 'cognito';
   NoteSharingAppService? _sharingForCurrentAccount() {
     final actor = _currentUserSession.userId, uri = _syncApiBaseUri();
-    if (_noteFlowAuthMode != 'cognito' || actor == null || uri == null) {
+    if (!_remoteEnabled || actor == null || uri == null) {
       return null;
     }
     if (_sharingService != null) return _sharingService;
@@ -403,7 +408,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final gateway = _sharingGateway = HttpShareGateway(
       baseUri: uri,
       actorId: actor,
-      tokenProvider: const CognitoAccessTokenProvider().call,
+      tokenProvider:
+          widget.connection?.tokenProvider ??
+          const CognitoAccessTokenProvider().call,
+      client: widget.connection?.client,
       isCurrent: () =>
           !_disposed &&
           _currentUserSession.userId == actor &&
@@ -421,7 +429,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   late final NoteSecurityRuntime _noteSecurityRuntime = NoteSecurityRuntime(
     session: _currentUserSession,
     storeForAccount: _localSyncStoreForAccount,
-    baseUri: _noteFlowAuthMode == 'cognito' ? _syncApiBaseUri() : null,
+    baseUri: _remoteEnabled ? _syncApiBaseUri() : null,
+    tokenProvider: widget.connection?.tokenProvider,
+    client: widget.connection?.client,
     cancelSummaries: () =>
         _summaryRuntime?.cancelActive(reason: SummaryRunFailureCode.noteLocked),
     syncNow: (account) async {
@@ -481,6 +491,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                 ? !kIsWeb
                 : _summaryRunRuntime.configuration.isRemote &&
                       _summaryRunRuntime.configuration.canSummarize &&
+                      widget.connection == null &&
                       _noteFlowAuthMode == 'cognito'),
         cancelActiveRuns: () => _summaryRunRuntime.cancelActive(
           reason: SummaryRunFailureCode.consentRequired,
@@ -493,7 +504,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         session: _currentUserSession,
         localSyncStoreForAccount: _localSyncStoreForAccount,
         amplifyOutputsJson: amplifyConfig,
-        cognitoMode: _noteFlowAuthMode == 'cognito',
+        cognitoMode:
+            widget.connection == null && _noteFlowAuthMode == 'cognito',
         accessGuardForAccount: (_) => _noteSecurityRuntime,
         grantHeaderForRun: _noteSecurityRuntime.summaryGrant,
       );
@@ -542,6 +554,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.authController.addListener(_onAuthenticationChanged);
+    // A restored/local identity must own sync before the router mounts Notes.
+    // Otherwise initialize() can dispose the controller handed to that page.
+    _onAuthenticationChanged();
     _router = createAppRouter(
       authController: widget.authController,
       workspaceBuilder: _buildWorkspace,
@@ -585,6 +600,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   Uri? _syncApiBaseUri() {
+    if (widget.connection != null) return widget.connection!.baseUri;
     final Uri? uri = Uri.tryParse(_syncApiEndpoint());
     if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
       return null;
@@ -597,7 +613,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   AccountSyncRuntime? _accountSyncRuntime() {
-    if (!widget.enableSync || _noteFlowAuthMode != 'cognito') {
+    if (!widget.enableSync || !_remoteEnabled) {
       return null;
     }
     final Uri? baseUri = _syncApiBaseUri();
@@ -606,6 +622,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     }
     return _syncRuntime ??= AccountSyncRuntime(
       baseUri: baseUri,
+      tokenProvider: widget.connection?.tokenProvider,
+      client: widget.connection?.client,
       localSyncStoreFactory: _localSyncStoreForAccount,
       clock: _nowUtc,
       mutationGrant: _noteSecurityRuntime.mutationGrant,

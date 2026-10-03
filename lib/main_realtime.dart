@@ -24,6 +24,22 @@ extension _RealtimeComposition on _NoteFlowAppState {
     if (_disposed || _realtimeService != null) return;
     final runtime = _accountSyncRuntime();
     if (runtime == null) return;
+    final generation = _currentUserSession.sessionGeneration;
+    bool live() =>
+        !_disposed &&
+        _currentUserSession.userId == actor &&
+        _currentUserSession.sessionGeneration == generation;
+    final connection = widget.connection;
+    if (connection != null) {
+      _realtimeService = AccountRealtimeService(
+        source: connection.revisionSourceFor(actor),
+        isCurrentSession: live,
+        synchronize: () async {
+          if (live()) await runtime.syncNow(actor);
+        },
+      )..start();
+      return;
+    }
     final http = Uri.tryParse(
       _eventEndpoint(
         'eventHttpEndpoint',
@@ -42,11 +58,6 @@ extension _RealtimeComposition on _NoteFlowAppState {
         socket.host.isEmpty) {
       return;
     }
-    final generation = _currentUserSession.sessionGeneration;
-    bool live() =>
-        !_disposed &&
-        _currentUserSession.userId == actor &&
-        _currentUserSession.sessionGeneration == generation;
     try {
       _realtimeService = AccountRealtimeService(
         source: AppSyncRevisionSource(

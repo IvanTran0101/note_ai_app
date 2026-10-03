@@ -132,6 +132,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('editor-use-cloud')));
       await tester.pumpAndSettle();
       expect(
+        find.textContaining('This note changed on another device'),
+        findsNothing,
+      );
+      expect(
         tester
             .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
             .controller!

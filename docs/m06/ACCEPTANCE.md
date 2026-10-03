@@ -93,3 +93,39 @@ checks passed. These are17 additional local cases, not a rerun of the full suite
 in the table above. Fixtures contain only synthetic identities/credentials.
 Private AWS fields never enter generated public defines; no AWS account, provider
 test or deployment was performed. Actual Notion rubric remains15/19.
+
+## Manual Share setup follow-up — 2026-10-03
+
+The earlier config/main-APK startup receipt did not prove manual Share. Plain
+flutter run uses generated Cognito settings; local auth mode has no gateway.
+The new explicit `python tool/run_m06_local.py` launcher starts main_dev.dart
+and loopback services, using two isolated synthetic users and production UI,
+application/ACL/store/cursor/protocol paths. See DEV_SETUP.md for exact commands.
+
+Observed browser flow: create owner note -> Share Editor -> recipient's
+Shared with me -> recipient edit -> explicit stale editor review -> owner reply
+-> Viewer update -> revoke removes recipient projection. Offline Chrome saved
+an explicit local review with one durable pending mutation; going online
+automatically ACKed it. Restarting both services retained the canonical note,
+revision4 and the offline edit in the encrypted disk snapshot. A fresh installed
+Chrome profile retrieved the same note through the actual Notes page.
+
+Three main UI defects found by this flow were fixed: restored identity's sync
+startup/controller lifetime, long status overflow and stale error after Use
+cloud. These are functional repairs, with no M09 redesign.
+
+Scoped current receipt: VM15 + real Chrome15, Python config13, HTTP dev server10
+auth/origin/host/revoked read/write/manage/disk checks passed; strict backend tsc
+and py_compile passed. Final root analyzer clean164.2s. Initial browser failures
+exposed the fixed defects; earlier helper/test expectations were corrected for
+Dart URI port normalization and offstage router pages. The Chrome tools overlay
+rebuilt after a file-modified build notice; all15 scoped registrations passed.
+Old debug pages emit DWDS websocket errors when their debug server stops; a
+fresh installed Chrome run on final source had zero errors/warnings at startup.
+Logs/screenshots live in ignored output/playwright and TEMP/m06-local-manual-*.log.
+
+This batch does not rerun historical full971/844/platform90 suites or Android.
+The two-user backend is a persistent SDK double with explicit synthetic auth,
+not deployed Cognito/AppSync validation. Four live criteria remain pending, and
+M09 remains deferred. Real-user sharing/email recovery requires the intended
+deployment; local dev never sends recovery mail.
