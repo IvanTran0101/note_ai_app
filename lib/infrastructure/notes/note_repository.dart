@@ -19,6 +19,7 @@ import '../../domain/notes/note_repository.dart' as domain;
 part 'note_repository_mutations.dart';
 part 'note_repository_access.dart';
 part 'note_repository_delete.dart';
+part 'note_repository_update.dart';
 
 /// Infrastructure implementation of the domain's [domain.INoteRepository].
 ///
@@ -171,6 +172,7 @@ final class NoteRepository
                 existing.updatedAt != expected.updatedAt ||
                 existing.title != expected.title ||
                 existing.content != expected.content ||
+                existing.pinnedAt != expected.pinnedAt ||
                 existing.share != expected.share ||
                 existing.protection != expected.protection ||
                 !existing.contentAvailable)) {
@@ -204,10 +206,28 @@ final class NoteRepository
             'A deleted note cannot be restored with the same id.',
           );
         }
+        if (note.pinnedAt != existing?.pinnedAt) {
+          _authorizeUpdate(note, accountUserId, NoteOperation.manage);
+        }
         return _stateAfterSave(current, note, now());
       });
     });
   }
+
+  @override
+  Future<Note> updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required domain.NoteChange change,
+    required domain.NoteCommitFence canCommit,
+  }) => _updateById(
+    noteId: noteId,
+    ownerId: ownerId,
+    expectedAccountUserId: expectedAccountUserId,
+    change: change,
+    canCommit: canCommit,
+  );
 
   @override
   Future<void> deleteById(String id) => _deleteById(id);
@@ -309,11 +329,18 @@ final class NoteRepository
       outbox: outbox,
       conflicts: current.conflicts,
       cursor: current.cursor,
+      userPreferences: current.userPreferences,
     );
   }
 
-  static SyncNotePayload _payloadOf(Note note) {
-    return SyncNotePayload(title: note.title, content: note.content);
+  static SyncNotePayload _payloadOf(Note note, {bool includePin = false}) {
+    return SyncNotePayload(
+      title: note.title,
+      content: note.content,
+      pinnedAt: note.pinnedAt,
+      includesPinnedAt:
+          note.share == null && (includePin || note.pinnedAt != null),
+    );
   }
 
   static LocalNoteState _toLocalNote(
@@ -328,6 +355,7 @@ final class NoteRepository
       content: note.content,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
+      pinnedAt: note.pinnedAt,
       serverRevision: serverRevision,
       status: status,
       protection: note.protection,
@@ -352,6 +380,7 @@ final class NoteRepository
       contentAvailable: available,
       contentRevision: note.serverRevision,
       share: note.share,
+      pinnedAt: note.pinnedAt,
     );
   }
 

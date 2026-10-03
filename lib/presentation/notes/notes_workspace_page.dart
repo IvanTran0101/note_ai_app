@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
+import 'note_ordering.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
 import 'note_flow_snackbar.dart';
@@ -23,9 +25,8 @@ part 'notes_workspace_sharing.dart';
 /// Responsive Notes workspace for the shell's Notes destination.
 ///
 /// This page owns only presentation selection state. Note mutations and AI
-/// calls continue to flow through [NotesApplicationController]. Every
-/// breakpoint uses the Notes content area for one surface at a time: the list
-/// or the focused Note Detail page.
+/// calls continue to flow through [NotesApplicationController]. The same editor
+/// opens as a side peek, center peek, or full page according to the canvas.
 final class NotesWorkspacePage extends StatefulWidget {
   const NotesWorkspacePage({
     super.key,
@@ -57,8 +58,8 @@ final class NotesWorkspacePage extends StatefulWidget {
 
 final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   String? _detailKeyIdentity;
-  GlobalKey<State<StatefulWidget>> _detailWidgetKey =
-      GlobalKey<State<StatefulWidget>>();
+  GlobalKey<NoteDetailPageState> _detailWidgetKey =
+      GlobalKey<NoteDetailPageState>();
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
   NoteDto? _unavailableSelection;
@@ -104,17 +105,23 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Key _detailKeyFor(String identity) {
     if (_detailKeyIdentity != identity) {
       _detailKeyIdentity = identity;
-      _detailWidgetKey = GlobalKey<State<StatefulWidget>>(
+      _detailWidgetKey = GlobalKey<NoteDetailPageState>(
         debugLabel: 'notes-workspace-detail-$identity',
       );
     }
     return _detailWidgetKey;
   }
 
-  /// Whether the current inline detail has edits that have not been saved.
-  bool get hasUnsavedChanges => _detailDirty;
+  /// Includes pending work so the host cannot reload away the active editor.
+  bool get hasUnsavedChanges => _detailDirty || _detailBusy;
+
+  bool get _detailBusy =>
+      _detailWidgetKey.currentState?.hasActiveOperation ?? false;
 
   bool get _showDetail => _editingNewNote || _selectedNote != null;
+
+  Future<void> _requestDetailClose() =>
+      _detailWidgetKey.currentState?.requestClose() ?? Future<void>.value();
 
   @override
   void initState() {
@@ -163,7 +170,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Future<void> _refreshSecurityList() async {
     final sequence = ++_loadSequence;
     try {
-      final notes = await _listAllNotes();
+      final notes = sortNotes(await _listAllNotes());
       if (mounted && sequence == _loadSequence) {
         setState(() {
           _preserveSelection(notes);
@@ -199,7 +206,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   Future<void> _loadNotesInternal() async {
     final sequence = ++_loadSequence;
     try {
-      final List<NoteDto> notes = await _listAllNotes();
+      final List<NoteDto> notes = sortNotes(await _listAllNotes());
       if (!mounted || sequence != _loadSequence) {
         return;
       }
@@ -221,6 +228,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _selectNote(NoteDto note) {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
@@ -234,6 +242,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _startNewNote() {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
@@ -251,6 +260,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   /// Selects an existing note in the workspace editor.
   void openNote(NoteDto note) {
+    if (_detailBusy) return;
     if (note.isProtected) note = note.metadataOnly();
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
@@ -266,7 +276,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       next[index] = note;
     }
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = note.reference;
       _sharedOnly = note.share != null;
       _unavailableSelection = null;
@@ -311,7 +321,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     }
 
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = null;
       _unavailableSelection = null;
       _editingNewNote = false;

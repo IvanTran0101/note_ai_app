@@ -1,6 +1,6 @@
 part of 'note_detail_page.dart';
 
-extension _NoteDetailSharing on _NoteDetailPageState {
+extension _NoteDetailSharing on NoteDetailPageState {
   bool get _hasRemoteEditorChange {
     final fresh = _pendingSavedNote, old = _note;
     return fresh != null &&

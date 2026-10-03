@@ -26,13 +26,13 @@ void main() {
       expect(decoded.cursor, const SyncCursor('opaque-cursor-1'));
     });
 
-    test('writes exactly the frozen envelope fields at schema version 3', () {
+    test('writes exactly the frozen envelope fields at schema version 4', () {
       final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
         richStateFixture(),
       );
 
-      expect(LocalSyncStateCodec.schemaVersion, 3);
-      expect(LocalSyncSchema.version, 3);
+      expect(LocalSyncStateCodec.schemaVersion, 4);
+      expect(LocalSyncSchema.version, 4);
       expect(envelope.keys.toSet(), <String>{
         'schemaVersion',
         'accountUserId',
@@ -40,13 +40,15 @@ void main() {
         'outbox',
         'cursor',
         'conflicts',
+        'userPreferences',
       });
-      expect(envelope['schemaVersion'], 3);
+      expect(envelope['schemaVersion'], 4);
       expect(envelope['accountUserId'], 'user-1');
       expect(envelope['cursor'], 'opaque-cursor-1');
       expect(envelope['notes'], isA<List<Object?>>());
       expect(envelope['outbox'], isA<List<Object?>>());
       expect(envelope['conflicts'], isA<List<Object?>>());
+      expect(envelope['userPreferences'], isA<Map<String, Object?>>());
     });
 
     test('round-trips an empty account with an explicit null cursor', () {
@@ -115,6 +117,78 @@ void main() {
       );
       expect(tombstoneRemote['deletedAt'], fixtureUpdatedAt.toIso8601String());
     });
+
+    test('migrates schema 2 without changing attempted mutations', () {
+      final LocalSyncState state = richStateFixture();
+      final Map<String, Object?> legacy = LocalSyncStateCodec.encode(state)
+        ..['schemaVersion'] = 2
+        ..remove('userPreferences');
+
+      final List<Object?> oldConflicts = legacy['conflicts']! as List<Object?>;
+      for (int i = 0; i < oldConflicts.length; i++) {
+        final Map<String, Object?> conflict = copyRecord(oldConflicts[i]);
+        final Map<String, Object?> local = copyRecord(conflict['local'])
+          ..remove('pinnedAt')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+        final Object? remoteValue = conflict['remote'];
+        Map<String, Object?>? remote;
+        if (remoteValue != null) {
+          remote = copyRecord(remoteValue)
+            ..remove('pinnedAt')
+            ..remove('protected')
+            ..remove('protectionRevision')
+            ..remove('contentAvailable');
+        }
+        oldConflicts[i] = <String, Object?>{
+          ...conflict,
+          'local': local,
+          'remote': remote,
+        };
+      }
+      final List<Object?> notes = legacy['notes']! as List<Object?>;
+      for (int i = 0; i < notes.length; i++) {
+        notes[i] = copyRecord(notes[i])
+          ..remove('pinnedAt')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+      }
+
+      final LocalSyncState migrated = LocalSyncStateCodec.decode(legacy);
+
+      expect(migrated.outbox, state.outbox);
+      expect(migrated.conflicts, state.conflicts);
+      expect(
+        migrated.notes.every((LocalNoteState note) => note.pinnedAt == null),
+        isTrue,
+      );
+      expect(migrated.userPreferences.noteLayout.name, 'grid');
+      expect(migrated.userPreferences.userId, state.accountUserId);
+    });
+
+    test(
+      'rejects schema 2 records that contain fields from a newer schema',
+      () {
+        final Map<String, Object?> legacy =
+            LocalSyncStateCodec.encode(simpleStateFixture())
+              ..['schemaVersion'] = 2
+              ..remove('userPreferences');
+        final List<Object?> notes = legacy['notes']! as List<Object?>;
+        notes[0] = copyRecord(notes[0])..['unexpected'] = true;
+        notes[0] = copyRecord(notes[0])
+          ..remove('pinnedAt')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+
+        expect(
+          () => LocalSyncStateCodec.decode(legacy),
+          throwsA(isA<LocalSyncCodecException>()),
+        );
+      },
+    );
   });
 
   group('cursor opacity', () {
@@ -211,6 +285,7 @@ void main() {
         'outbox',
         'cursor',
         'conflicts',
+        'userPreferences',
       ]) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           simpleStateFixture(),
@@ -225,24 +300,35 @@ void main() {
       }
     });
 
-    test('rejects versions outside the v2 legacy and v3 current contract', () {
-      // Web numbers erase the int/double distinction for integral values.
-      // A fractional version is invalid on both runtimes.
-      final List<Object?> versions = <Object?>[0, 1, 4, '3', 3.25, null, true];
+    test(
+      'rejects versions outside the v2/v3 legacy and v4 current contract',
+      () {
+        // Web numbers erase the int/double distinction for integral values.
+        // A fractional version is invalid on both runtimes.
+        final List<Object?> versions = <Object?>[
+          0,
+          1,
+          5,
+          '3',
+          3.25,
+          null,
+          true,
+        ];
 
-      for (final Object? version in versions) {
-        final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
-          simpleStateFixture(),
-        )..['schemaVersion'] = version;
+        for (final Object? version in versions) {
+          final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
+            simpleStateFixture(),
+          )..['schemaVersion'] = version;
 
-        final LocalSyncCodecException error = codecFailure(
-          () => LocalSyncStateCodec.decode(envelope),
-        );
+          final LocalSyncCodecException error = codecFailure(
+            () => LocalSyncStateCodec.decode(envelope),
+          );
 
-        expect(error.path, 'localSyncState.schemaVersion');
-        expect(error, isA<LocalSyncCodecException>());
-      }
-    });
+          expect(error.path, 'localSyncState.schemaVersion');
+          expect(error, isA<LocalSyncCodecException>());
+        }
+      },
+    );
 
     test('rejects a wrong-typed or blank account id', () {
       final Map<String, Object?> wrongType = LocalSyncStateCodec.encode(

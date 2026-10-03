@@ -51,7 +51,7 @@ final class SyncCodecObject {
       }
     }
     for (final String field in allowedFields) {
-      if (!values.containsKey(field)) {
+      if (!optionalFields.contains(field) && !values.containsKey(field)) {
         throw LocalSyncCodecException(
           'must contain the field "$field".',
           path: path,
@@ -81,6 +81,9 @@ final class SyncCodecObject {
   Object? rawValue(String field) => _values[field];
   bool containsField(String field) => _values.containsKey(field);
 
+  /// Whether [field] was present in the input object.
+  bool contains(String field) => _values.containsKey(field);
+
   /// Reads a required string field.
   String requireString(String field) {
     final Object? value = _values[field];
@@ -95,6 +98,16 @@ final class SyncCodecObject {
     final String value = requireString(field);
     if (value.trim().isEmpty) {
       fail(field, 'must not be blank.');
+    }
+    return value;
+  }
+
+  /// Reads an optional string field stored explicitly as null when absent.
+  String? requireNullableString(String field) {
+    final Object? value = _values[field];
+    if (value == null) return null;
+    if (value is! String) {
+      fail(field, 'must be a string or null.');
     }
     return value;
   }

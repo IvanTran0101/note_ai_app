@@ -4,11 +4,14 @@ import 'note_editor_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
 
 export 'note_dto.dart';
+export '../../domain/users/user_preferences.dart';
 
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_repository.dart';
+import '../../domain/users/user_preferences.dart';
+import '../../domain/users/user_preferences_repository.dart';
 import '../auth/current_user.dart';
 import '../auth/current_user_session.dart';
 import '../note_intelligence/summary_cloud_consent.dart';
@@ -16,6 +19,8 @@ import '../note_intelligence/summary_run_context.dart';
 
 part 'note_application_summary.dart';
 part 'note_application_editor.dart';
+part 'note_application_mutations.dart';
+part 'note_application_preferences.dart';
 
 /// Creates identifiers for newly created notes.
 typedef NoteIdGenerator = String Function();
@@ -75,12 +80,14 @@ final class NoteApplicationService {
     required this.now,
     required this.summarizeContent,
     this.requestSync,
+    this.userPreferencesRepository,
     this.summarizeRun,
     this.cloudConsent,
     this.sessionGeneration,
     this.security,
   });
 
+  final IUserPreferencesRepository? userPreferencesRepository;
   final INoteRepository noteRepository;
   final ICurrentUser currentUser;
   final NoteIdGenerator generateId;
@@ -180,47 +187,6 @@ final class NoteApplicationService {
       content: content,
       now: now().toUtc(),
     );
-    await noteRepository.save(note);
-    _requireContext(context);
-    _requireAccess(note, NoteOperation.edit);
-    requestSync?.call(userId);
-    return NoteDto.fromDomain(note);
-  }
-
-  /// Renames an owned note and persists the changed aggregate.
-  Future<NoteDto> renameNote({
-    required String noteId,
-    required String title,
-  }) async {
-    final context = _captureContext();
-    final String userId = context.userId;
-    final Note note = await _requireOwnedNote(
-      noteId,
-      context,
-      NoteOperation.edit,
-    );
-    note.rename(title, now().toUtc());
-    await noteRepository.save(note);
-    _requireContext(context);
-    _requireAccess(note, NoteOperation.edit);
-    requestSync?.call(userId);
-    return NoteDto.fromDomain(note);
-  }
-
-  /// Replaces the content of an owned note and persists the changed
-  /// aggregate.
-  Future<NoteDto> replaceContent({
-    required String noteId,
-    required String content,
-  }) async {
-    final context = _captureContext();
-    final String userId = context.userId;
-    final Note note = await _requireOwnedNote(
-      noteId,
-      context,
-      NoteOperation.edit,
-    );
-    note.replaceContent(content, now().toUtc());
     await noteRepository.save(note);
     _requireContext(context);
     _requireAccess(note, NoteOperation.edit);

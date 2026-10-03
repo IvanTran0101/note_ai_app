@@ -1,3 +1,4 @@
+import '../sync/local_note_state.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
@@ -19,6 +20,7 @@ final class NoteDto {
     this.contentAvailable = true,
     this.contentRevision = 0,
     this.share,
+    this.pinnedAt,
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -35,9 +37,27 @@ final class NoteDto {
       contentAvailable: note.contentAvailable,
       contentRevision: note.contentRevision,
       share: note.share,
+      pinnedAt: note.pinnedAt,
     );
   }
 
+  factory NoteDto.fromLocalState(LocalNoteState note) => NoteDto(
+    id: note.id,
+    ownerId: note.ownerId,
+    title: note.contentAvailable ? note.title : '',
+    content: note.contentAvailable ? note.content : '',
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    pinnedAt: note.pinnedAt,
+    isProtected: note.protection.enabled,
+    protectionRevision: note.protection.revision,
+    contentAvailable: note.contentAvailable,
+    contentRevision: note.serverRevision,
+    share: note.share,
+  );
+
+  final DateTime? pinnedAt;
+  bool get isPinned => pinnedAt != null;
   final NoteShareGrant? share;
   NoteIdentity get identity => NoteIdentity(ownerId, id);
   String get reference => identity.referenceFor(share?.recipientId ?? ownerId);
@@ -66,6 +86,7 @@ final class NoteDto {
     contentRevision: contentRevision,
     contentAvailable: false,
     share: share,
+    pinnedAt: pinnedAt,
   );
 
   @override
@@ -81,7 +102,8 @@ final class NoteDto {
         other.protectionRevision == protectionRevision &&
         other.contentAvailable == contentAvailable &&
         other.contentRevision == contentRevision &&
-        other.share == share;
+        other.share == share &&
+        other.pinnedAt == pinnedAt;
   }
 
   @override
@@ -97,6 +119,7 @@ final class NoteDto {
     contentAvailable,
     contentRevision,
     share,
+    pinnedAt,
   );
 
   @override

@@ -55,7 +55,17 @@ extension _NoteRepositoryMutations on NoteRepository {
     LocalNoteState existing,
     DateTime timestamp,
   ) {
-    final SyncNotePayload payload = NoteRepository._payloadOf(note);
+    final SyncNotePayload payload = NoteRepository._payloadOf(
+      note,
+      includePin:
+          existing.pinnedAt != note.pinnedAt ||
+          current.outbox.any(
+            (m) =>
+                m.mutation.identityFor(current.accountUserId) ==
+                    note.identity &&
+                m.payload?.includesPinnedAt == true,
+          ),
+    );
     if (current.outbox.any(
       (PendingMutation entry) =>
           entry.mutation.identityFor(current.accountUserId) == note.identity &&

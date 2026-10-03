@@ -44,6 +44,7 @@ abstract final class LocalProtectionQueue {
     }
     return LocalSyncState(
       accountUserId: state.accountUserId,
+      userPreferences: state.userPreferences,
       notes: sealed.notes.map(
         (n) => n.identity != identity ? n : _markPending(n, timestamp),
       ),
@@ -77,7 +78,12 @@ abstract final class LocalProtectionQueue {
           : last == null
           ? original.serverRevision
           : last.baseRevision + 1,
-      payload: SyncNotePayload(title: note.title, content: note.content),
+      payload: SyncNotePayload(
+        title: note.title,
+        content: note.content,
+        pinnedAt: note.pinnedAt,
+        includesPinnedAt: true,
+      ),
       protectionChange: ProtectionSyncChange(
         before: coalesce
             ? last.protectionChange?.before ?? change.before
@@ -93,6 +99,7 @@ abstract final class LocalProtectionQueue {
   static LocalNoteState _markPending(LocalNoteState n, DateTime timestamp) =>
       LocalNoteState(
         id: n.id,
+        pinnedAt: n.pinnedAt,
         ownerId: n.ownerId,
         title: n.title,
         content: n.content,

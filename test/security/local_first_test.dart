@@ -17,8 +17,7 @@ void main() {
     support = await Directory.systemTemp.createTemp('m05_local_first_vm_');
   });
   tearDown(() async {
-    // Only the fixture directory returned by createTemp is removed.
-    await support.delete(recursive: true);
+    await _removeFixture(support);
   });
   registerLocalFirstScenarios(
     supportPathResolver: () async => support.path,
@@ -26,4 +25,28 @@ void main() {
       '${support.path}/accounts/${LocalSyncAccountNamespace(account).hash}/local_sync_state.json',
     ).readAsString(),
   );
+}
+
+Future<void> _removeFixture(Directory support) async {
+  final resolved = Directory(await support.resolveSymbolicLinks());
+  final root = Directory(await Directory.systemTemp.resolveSymbolicLinks());
+  final name = resolved.path.split(RegExp(r'[/\\]')).last;
+  if (resolved.parent.path.toLowerCase() != root.path.toLowerCase() ||
+      !name.startsWith('m05_local_first_vm_')) {
+    throw StateError('Refusing to remove a non-fixture directory.');
+  }
+  for (var attempt = 0; ; attempt++) {
+    try {
+      await resolved.delete(recursive: true);
+      return;
+    } on FileSystemException catch (error) {
+      if (!Platform.isWindows ||
+          error.osError?.errorCode != 32 ||
+          attempt >= 5) {
+        rethrow;
+      }
+      // Allow a transient Windows file handle to close; other errors still fail.
+      await Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)));
+    }
+  }
 }

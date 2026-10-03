@@ -196,6 +196,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     await vault.hydrate(
       SyncNoteSnapshot(
         id: content.id,
+        pinnedAt: content.pinnedAt,
         ownerId: note.ownerId,
         share: note.share,
         title: content.title,
@@ -263,6 +264,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     await store.update(
       (state) => LocalSyncState(
         accountUserId: state.accountUserId,
+        userPreferences: state.userPreferences,
         notes: state.notes,
         conflicts: state.conflicts,
         cursor: state.cursor,

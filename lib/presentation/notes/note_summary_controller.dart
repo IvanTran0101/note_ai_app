@@ -58,11 +58,14 @@ final class NoteSummaryController extends ChangeNotifier {
 
   bool get hasFailure => _failureCode != null || _untypedFailure;
 
-  bool get canStart =>
-      !_disposed &&
-      !isBusy &&
-      !isCoolingDown &&
-      (_blockedSnapshot == null || _readEditorFacts().note != _blockedSnapshot);
+  bool get canStart {
+    final NoteDto? blocked = _blockedSnapshot;
+    final NoteDto? current = _readEditorFacts().note;
+    return !_disposed &&
+        !isBusy &&
+        !isCoolingDown &&
+        (blocked == null || current == null || current != blocked);
+  }
 
   NoteSummaryAvailability availability({
     required bool hasSavedNote,
@@ -268,7 +271,10 @@ final class NoteSummaryController extends ChangeNotifier {
       return false;
     }
     final NoteSummaryEditorFacts facts = _readEditorFacts();
-    return facts.note == snapshot && !facts.isDirty && !facts.hasConflict;
+    return facts.note != null &&
+        facts.note! == snapshot &&
+        !facts.isDirty &&
+        !facts.hasConflict;
   }
 
   bool _grant(

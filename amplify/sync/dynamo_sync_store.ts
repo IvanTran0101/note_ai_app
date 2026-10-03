@@ -55,7 +55,8 @@ export class DynamoSyncStore implements SyncStore {
     if (authorization?.inspectOnly) return this.inspectPredecessor(ownerId, ownerKey, request, authorization.actorId);
     const authorize = async () => {
       const a = await this.security?.authorize(actor, ownerId, request.noteId,
-        request.protectionChange ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+        request.protectionChange || request.payload && 'pinnedAt' in request.payload
+          ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
       if (actor !== ownerId && a?.access?.accessRevision !== request.accessRevision) throw new NoteSecurityError('denied');
       return a;
     };

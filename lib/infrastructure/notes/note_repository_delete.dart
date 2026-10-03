@@ -75,6 +75,7 @@ extension _NoteRepositoryDelete on NoteRepository {
         final DateTime timestamp = now();
         final LocalNoteState tombstone = LocalNoteState(
           id: existing.id,
+          pinnedAt: existing.pinnedAt,
           ownerId: existing.ownerId,
           title: '',
           content: '',

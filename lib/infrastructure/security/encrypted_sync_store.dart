@@ -191,6 +191,9 @@ class EncryptedSyncStore
       );
       final hydrated = LocalNoteState(
         id: snapshot.id,
+        pinnedAt: pending && current != null
+            ? current.pinnedAt
+            : snapshot.pinnedAt,
         ownerId: identity.ownerId,
         share: snapshot.share,
         title: pending && current?.contentAvailable == true
@@ -212,6 +215,7 @@ class EncryptedSyncStore
       );
       return LocalSyncState(
         accountUserId: state.accountUserId,
+        userPreferences: state.userPreferences,
         notes: [...state.notes.where((n) => n.identity != identity), hydrated],
         outbox: state.outbox,
         conflicts: state.conflicts.map(

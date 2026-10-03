@@ -8,20 +8,32 @@ import '../../domain/notes/note_identity.dart';
 enum SyncMutationOperation { create, update, delete }
 
 final class SyncNotePayload {
-  const SyncNotePayload({required this.title, required this.content});
+  const SyncNotePayload({
+    required this.title,
+    required this.content,
+    this.pinnedAt,
+    this.includesPinnedAt = false,
+  });
 
   final String title;
   final String content;
+  final DateTime? pinnedAt;
+
+  /// False for persisted mutations created before pin was added. Keeping that
+  /// shape avoids changing the idempotency fingerprint of an attempted request.
+  final bool includesPinnedAt;
 
   @override
   bool operator ==(Object other) {
     return other is SyncNotePayload &&
         other.title == title &&
-        other.content == content;
+        other.content == content &&
+        other.pinnedAt == pinnedAt &&
+        other.includesPinnedAt == includesPinnedAt;
   }
 
   @override
-  int get hashCode => Object.hash(title, content);
+  int get hashCode => Object.hash(title, content, pinnedAt, includesPinnedAt);
 }
 
 final class SyncMutation {

@@ -1,6 +1,6 @@
 part of 'note_detail_page.dart';
 
-extension _NoteDetailConflicts on _NoteDetailPageState {
+extension _NoteDetailConflicts on NoteDetailPageState {
   Future<void> _resolveConflict() async {
     final SyncPresentationController? sync = widget.syncController;
     final SyncConflict? conflict = _currentConflict;

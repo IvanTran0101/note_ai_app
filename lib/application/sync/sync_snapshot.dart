@@ -13,6 +13,7 @@ final class SyncNoteSnapshot {
     required this.createdAt,
     required this.serverUpdatedAt,
     required int revision,
+    this.pinnedAt,
     this.deletedAt,
     this.protection = const NoteProtection.unprotected(),
     this.contentAvailable = true,
@@ -43,6 +44,7 @@ final class SyncNoteSnapshot {
   final DateTime createdAt;
   final DateTime serverUpdatedAt;
   final int revision;
+  final DateTime? pinnedAt;
   final DateTime? deletedAt;
   final NoteProtection protection;
   final bool contentAvailable;
@@ -58,6 +60,7 @@ final class SyncNoteSnapshot {
         other.createdAt == createdAt &&
         other.serverUpdatedAt == serverUpdatedAt &&
         other.revision == revision &&
+        other.pinnedAt == pinnedAt &&
         other.deletedAt == deletedAt &&
         other.protection == protection &&
         other.contentAvailable == contentAvailable &&
@@ -73,6 +76,7 @@ final class SyncNoteSnapshot {
     createdAt,
     serverUpdatedAt,
     revision,
+    pinnedAt,
     deletedAt,
     protection,
     contentAvailable,

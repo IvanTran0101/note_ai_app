@@ -1614,10 +1614,10 @@ final class _PasswordRequirements extends StatelessWidget {
       (_PasswordRequirement requirement) => requirement.isMet,
     );
     return AnimatedSize(
-      duration: NoteFlowMotion.standard,
+      duration: NoteFlowMotion.duration(context),
       curve: Curves.easeOut,
       child: AnimatedSwitcher(
-        duration: NoteFlowMotion.fast,
+        duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
         child: password.isEmpty
             ? const SizedBox.shrink(key: ValueKey<String>('password-empty'))
             : allMet
@@ -1671,10 +1671,10 @@ final class _PasswordRequirements extends StatelessWidget {
     _PasswordRequirement requirement,
   ) {
     return AnimatedSize(
-      duration: NoteFlowMotion.standard,
+      duration: NoteFlowMotion.duration(context),
       curve: Curves.easeOut,
       child: AnimatedSwitcher(
-        duration: NoteFlowMotion.fast,
+        duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
         child: requirement.isMet
             ? const SizedBox.shrink(key: ValueKey<String>('met'))
             : _requirement(context, requirement.message),

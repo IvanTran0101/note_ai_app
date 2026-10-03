@@ -85,7 +85,10 @@ abstract final class NoteBundleProjection {
     Map<String, Object?> bundle, {
     bool requireCurrentRevision = false,
   }) {
-    final note = Map<String, Object?>.from(bundle['note'] as Map);
+    final note = <String, Object?>{
+      'pinnedAt': null,
+      ...Map<String, Object?>.from(bundle['note'] as Map),
+    };
     final id = reference(state, note);
     final currentNote = notes(state)
         .where((n) => reference(state, n) == id)
@@ -144,12 +147,18 @@ abstract final class NoteBundleProjection {
         final newRemote = current['remote'] as Map?;
         return {
           ...original,
+          'local': {
+            'pinnedAt': null,
+            ...Map<String, Object?>.from(original['local'] as Map),
+          },
           'remote':
               newRemote != null &&
                   (newRemote['revision'] as int) >
                       ((oldRemote?['revision'] as int?) ?? 0)
-              ? newRemote
-              : oldRemote,
+              ? {'pinnedAt': null, ...newRemote}
+              : oldRemote == null
+              ? null
+              : {'pinnedAt': null, ...oldRemote},
         };
       }).toList();
     }

@@ -1,5 +1,25 @@
 # MUST REMEMBER
 
+## Active checkpoint — M02 integrated with M05/M06 (2026-10-04)
+
+User authorized integrating final-TanMinh M02, fixing conflicts, testing and
+pushing final-tuankiet. Source from aabf229 is combined with276c749 via a true
+merge; read docs/m06/M02_INTEGRATION.md for the current receipt, superseding the
+historical review-only checkpoint below. Preserve local-first on Web and native,
+canonical access, encrypted data/drafts and the single durable writer/outbox.
+Local inner schema4 accepts both published v3 shapes; encrypted packet/AAD3 and
+existing keys stay intact. M03 must consume the named canonical owner/note/actor
+writer and preserve pin/preferences/security/access in its next migration.
+
+Current fresh local receipts: full VM1029/2 configured skips, Chrome902/1 skip
+across98 compatible targets, actual Chrome100 and Android100 platform scenarios,
+backend89 checks, tsc/analyzer clean, owned formatter91/0 changes. Provider/network
+collaborators inside platform tests are doubles; deployed AWS acceptance remains
+in LIVE_GATE.md. Historical separate-branch receipts are not integration proof.
+M09 remains deferred; this batch does not implement M03 attachments or M04.
+Notion receipt: https://app.notion.com/p/3eef9c7a1aa081d2a7c4ee37adefbb38.
+Keep this file as the first read before each coding turn.
+
 ## Latest collaboration check — M02 fetch/review (2026-10-04)
 
 The user requested fetching final-TanMinh and checking M02 compatibility with

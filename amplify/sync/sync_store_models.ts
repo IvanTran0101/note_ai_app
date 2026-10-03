@@ -9,6 +9,7 @@ export type NoteSnapshot = Readonly<{
   revision: number;
   createdAt: string;
   serverUpdatedAt: string;
+  pinnedAt?: string | null;
   deletedAt: string | null;
   protected?: boolean;
   protectionRevision?: number;
@@ -28,7 +29,7 @@ export type ProtectionSyncChange = Readonly<{
 export type SyncOperation = 'create' | 'update' | 'delete';
 
 /** `create` and `update` require this; `delete` ignores it. */
-export type MutationPayload = Readonly<{ title: string; content: string }>;
+export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null }>;
 
 /** One client mutation, already stripped of transport concerns. */
 export type SyncMutation = Readonly<{

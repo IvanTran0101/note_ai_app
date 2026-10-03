@@ -26,6 +26,7 @@ abstract final class LocalNoteStateCodec {
       LocalSyncSchema.content: note.content,
       LocalSyncSchema.createdAt: note.createdAt.toIso8601String(),
       LocalSyncSchema.updatedAt: note.updatedAt.toIso8601String(),
+      LocalSyncSchema.pinnedAt: note.pinnedAt?.toIso8601String(),
       LocalSyncSchema.serverRevision: note.serverRevision,
       LocalSyncSchema.deletedAt: note.deletedAt?.toIso8601String(),
       LocalSyncSchema.status: note.status.name,
@@ -60,6 +61,9 @@ abstract final class LocalNoteStateCodec {
     final DateTime updatedAt = record.requireTimestamp(
       LocalSyncSchema.updatedAt,
     );
+    final DateTime? pinnedAt = record.requireNullableTimestamp(
+      LocalSyncSchema.pinnedAt,
+    );
     final int serverRevision = record.requireNonNegativeInt(
       LocalSyncSchema.serverRevision,
     );
@@ -79,6 +83,7 @@ abstract final class LocalNoteStateCodec {
         content: content,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        pinnedAt: pinnedAt,
         serverRevision: serverRevision,
         deletedAt: deletedAt,
         status: status,

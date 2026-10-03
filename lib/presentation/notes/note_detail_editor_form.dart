@@ -96,6 +96,8 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
+    final bool animateSummary =
+        isSummarizing && !MediaQuery.disableAnimationsOf(context);
     final TextStyle contentStyle =
         bodyStyle?.copyWith(color: tokens.textPrimary, height: 1.5) ??
         TextStyle(color: tokens.textPrimary, height: 1.5);
@@ -181,7 +183,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
                     : NoteFlowLayout.editorTextMaxWidth,
               ),
               child: _SummaryContentMotion(
-                active: isSummarizing,
+                active: animateSummary,
                 controller: contentController,
                 textStyle: contentStyle,
                 child: TextField(
@@ -193,10 +195,10 @@ final class NoteDetailEditorForm extends StatelessWidget {
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
                   textCapitalization: TextCapitalization.sentences,
-                  style: isSummarizing
+                  style: animateSummary
                       ? contentStyle.copyWith(color: Colors.transparent)
                       : contentStyle,
-                  cursorColor: isSummarizing
+                  cursorColor: animateSummary
                       ? Colors.transparent
                       : tokens.textPrimary,
                   decoration: InputDecoration(
@@ -356,19 +358,21 @@ final class _SummaryContentMotionState extends State<_SummaryContentMotion>
   );
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.active) {
-      _controller.repeat(reverse: true);
-    }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
   }
 
   @override
   void didUpdateWidget(covariant _SummaryContentMotion oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) {
-      _controller.repeat(reverse: true);
-    } else if (!widget.active && oldWidget.active) {
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    if (widget.active && !MediaQuery.disableAnimationsOf(context)) {
+      if (!_controller.isAnimating) _controller.repeat(reverse: true);
+    } else {
       _controller.stop();
       _controller.value = 1;
     }
@@ -382,7 +386,7 @@ final class _SummaryContentMotionState extends State<_SummaryContentMotion>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.active) {
+    if (!widget.active || MediaQuery.disableAnimationsOf(context)) {
       return widget.child;
     }
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);

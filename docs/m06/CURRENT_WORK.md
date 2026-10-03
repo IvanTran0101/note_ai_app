@@ -1,5 +1,31 @@
 # M06 current work
 
+## Latest active integration — 2026-10-04
+
+M02 aabf229 integrated with M05/M06 on final-tuankiet, starting276c749.
+True merge parents preserved; isolated source delta after6ce2afe used to resolve
+historical overlap while retaining our newer Summary/security implementation.
+Read M02_INTEGRATION.md. Real defects fixed: Summary final-read session check,
+shared role labels in animation, null pending unpin hydration, legacy shared pin
+bypass and queued same-user preference fence. Inner schema4/outer crypto packet3.
+
+Fresh receipts: VM1029/2 configured skips; Chrome902/1 skip over98 targets;
+real Chrome100 (valid driver true/no failures) and Android100 (383.2s build,
+5m25s tests, --no-uninstall), backend89, tsc/final analyzer clean, formatter91/0.
+Final VM delivery rerun1029/2 skip passed after the last header transition;
+Windows errno32 fixture teardown has bounded path-checked retry, scoped analyzer
+clean. Application source stayed unchanged after platform acceptance;
+source staged explicitly, no conflict marker/unmerged paths/secrets signature.
+Android emulator and browser test session closed after completion; AVD data kept.
+Graph transport/coverage unavailable; exact source fallback. Ops folder absent.
+MacOS file hash and unrelated untracked files preserved and excluded from staging.
+
+Next: commit true merge and normal push final-tuankiet,
+verify remote SHA, finish Notion delivery checkbox. M03 collaborator should sync
+this checkpoint for the named writer/schema4; M09 remains deferred. No provider
+acceptance or attachment byte/scopes completion is implied by this batch.
+Notion: https://app.notion.com/p/3eef9c7a1aa081d2a7c4ee37adefbb38.
+
 ## Latest batch — M02 compatibility review (2026-10-04)
 
 User authorized pulling/checking final-TanMinh against M05/M06 for the M03

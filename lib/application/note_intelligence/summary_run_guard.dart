@@ -71,18 +71,7 @@ final class SummaryRunGuard {
           state.conflicts.any((conflict) => conflict.noteId == note.id)) {
         throw const SummaryRunFailure(SummaryRunFailureCode.conflict);
       }
-      final NoteDto persisted = NoteDto(
-        id: note.id,
-        ownerId: note.ownerId,
-        title: note.title,
-        content: note.content,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt,
-        contentRevision: note.serverRevision,
-        isProtected: note.protection.enabled,
-        protectionRevision: note.protection.revision,
-        contentAvailable: note.contentAvailable,
-      );
+      final NoteDto persisted = NoteDto.fromLocalState(note);
       if (persisted != context.noteSnapshot) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
       }

@@ -1,13 +1,10 @@
-import 'note_security_localizations.dart';
-import 'sharing_localizations.dart';
-
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
 import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 
-part 'notes_list_row.dart';
+import 'animated_note_list.dart';
 
 /// Displays the saved Note projections and the list-level actions.
 ///
@@ -248,29 +245,11 @@ final class NotesListPanel extends StatelessWidget {
                                     ],
                                   ),
                                 )
-                        : ListView(
-                            padding: const EdgeInsets.only(
-                              top: NoteFlowSpacing.xs,
-                              bottom: NoteFlowSpacing.xxxl,
-                            ),
-                            children: <Widget>[
-                              ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                itemCount: notes.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: NoteFlowSpacing.md),
-                                itemBuilder: (BuildContext context, int index) {
-                                  return _buildNoteRow(
-                                    context,
-                                    notes[index],
-                                    copy,
-                                    tokens,
-                                  );
-                                },
-                              ),
-                            ],
+                        : AnimatedNoteList(
+                            notes: notes,
+                            selectedNoteId: selectedNoteId,
+                            actionBusy: actionBusy,
+                            onSelectNote: onSelectNote,
                           ),
                   ),
                 ],
@@ -280,11 +259,6 @@ final class NotesListPanel extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _preview(String content, NotesCopy copy) {
-    final String normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return normalized.isEmpty ? copy.noContent : normalized;
   }
 
   Widget _buildCompactErrorState(

@@ -90,7 +90,14 @@ extension NoteSummaryUseCases on NoteApplicationService {
       _requireCurrentConsent(consent);
     }
     if (typedFailure) {
-      await _requireSavedRevision(noteId, selectedSnapshot ?? revision);
+      await _requireSavedRevision(
+        noteId,
+        selectedSnapshot ?? revision,
+        runScope,
+        userId,
+        generation,
+        accessGeneration,
+      );
       _requireLiveRun(runScope, userId, generation, accessGeneration);
     }
     if (dispatchesRun) {
@@ -133,8 +140,16 @@ extension NoteSummaryUseCases on NoteApplicationService {
     }
   }
 
-  Future<void> _requireSavedRevision(String noteId, NoteDto expected) async {
+  Future<void> _requireSavedRevision(
+    String noteId,
+    NoteDto expected,
+    SummaryRunScope scope,
+    String userId,
+    int generation,
+    int accessGeneration,
+  ) async {
     final Note? current = await noteRepository.findById(noteId);
+    _requireLiveRun(scope, userId, generation, accessGeneration);
     if (current == null) {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
     }

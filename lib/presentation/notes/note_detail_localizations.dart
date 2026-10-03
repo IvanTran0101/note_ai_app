@@ -80,7 +80,8 @@ final class NoteDetailCopy {
       ? 'Ghi chú này sẽ bị xóa khỏi thiết bị.'
       : 'This note will be deleted from this device.';
   String get deleted => _isVietnamese ? 'Đã xóa ghi chú.' : 'Note deleted.';
-  String get saved => _isVietnamese ? 'Đã lưu ghi chú.' : 'Note saved.';
+  String get saved =>
+      _isVietnamese ? 'Đã lưu trên thiết bị.' : 'Saved locally.';
   String get summarized => _isVietnamese ? 'Đã tạo tóm tắt.' : 'Summary ready.';
   String get saveError => _isVietnamese
       ? 'Không thể lưu ghi chú. Vui lòng thử lại.'

@@ -81,7 +81,11 @@ final class EncryptedStateCodec {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
     }
     final document = Map<String, Object?>.from(jsonDecode(encoded) as Map);
-    if (document['schemaVersion'] == 2) return _migrate(document);
+    if (document['schemaVersion'] == 2 ||
+        (document['schemaVersion'] == 3 &&
+            !document.containsKey('algorithm'))) {
+      return _migrate(document);
+    }
     if (document['schemaVersion'] != 3 ||
         document['algorithm'] != 'AES-256-GCM' ||
         document.length != 4) {

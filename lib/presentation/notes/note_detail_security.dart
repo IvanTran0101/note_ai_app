@@ -1,6 +1,6 @@
 part of 'note_detail_page.dart';
 
-extension _NoteDetailSecurity on _NoteDetailPageState {
+extension _NoteDetailSecurity on NoteDetailPageState {
   void _retainDirtySharedDraft() {
     final selected = _note;
     final service = _securityController?.noteSecurity;

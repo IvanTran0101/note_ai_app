@@ -4,6 +4,7 @@ import 'package:note_ai_app/application/note_intelligence/summary_consent_app_se
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -343,41 +344,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'expanded workspace opens the detail as a full page with a back path',
-    (WidgetTester tester) async {
-      final _FakeNotesController controller = _FakeNotesController(
-        notes: <NoteDto>[buildNote()],
-      );
-      await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+  testWidgets('expanded workspace opens a side peek with a guarded back path', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
 
-      expect(
-        find.byKey(const ValueKey<String>('responsive-notes-expanded-surface')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
-      await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('responsive-notes-expanded-surface')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey<String>('note-detail-content-field')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('responsive-notes-list-pane')),
-        findsNothing,
-      );
-      expect(find.byKey(NoteDetailPage.backKey), findsOneWidget);
-      await tester.tap(find.byKey(NoteDetailPage.backKey));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('note-detail-content-field')),
-        findsNothing,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-content-field')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('responsive-notes-list-pane')),
+      findsOneWidget,
+    );
+    expect(find.byKey(NoteDetailPage.backKey), findsOneWidget);
+    await tester.tap(find.byKey(NoteDetailPage.backKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-content-field')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('wide editor back keeps dirty changes behind confirmation', (
     WidgetTester tester,
@@ -686,6 +686,49 @@ void main() {
     // One shared request still delivers the fresh data to both callers.
     expect(controller.listNotesCalls, callsBefore + 1);
     expect(find.byKey(const ValueKey<String>('note-note-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('center peek backdrop and Escape preserve dirty-close choices', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpWorkspace(tester, controller, size: const Size(700, 800));
+    await tester.tap(find.byKey(const ValueKey<String>('note-note-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Keep my draft',
+    );
+    await tester.pump();
+    await tester.tapAt(const Offset(8, 100));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.titleFieldKey))
+          .controller!
+          .text,
+      'Keep my draft',
+    );
+    await tester.tap(find.byKey(NoteDetailPage.titleFieldKey));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
+    expect(controller.notes.single.title, 'First note');
     expect(tester.takeException(), isNull);
   });
 }

@@ -79,10 +79,11 @@ final class NoteDetailPage extends StatefulWidget {
   static const Key backKey = ValueKey<String>('note-detail-back');
 
   @override
-  State<NoteDetailPage> createState() => _NoteDetailPageState();
+  NoteDetailPageState createState() => NoteDetailPageState();
 }
 
-final class _NoteDetailPageState extends State<NoteDetailPage> {
+final class NoteDetailPageState extends State<NoteDetailPage>
+    with WidgetsBindingObserver {
   static const Duration _autosaveDelay = Duration(seconds: 3);
 
   final TextEditingController _titleController = TextEditingController();
@@ -107,6 +108,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   String? _error;
   String? _statusMessage;
   bool _saving = false;
+  bool _saveFailed = false;
   bool _deleting = false;
   bool _didPersist = false;
   bool _lastReportedDirty = false;
@@ -114,6 +116,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
+  int _draftRevision = 0;
 
   /// Owns the whole Summary lifecycle for this page: scope, consent capture,
   /// revalidation, result, typed failure, and the rate-limit countdown.
@@ -130,6 +133,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _note = widget.note;
     _savedTitle = widget.note?.title ?? '';
     _savedContent = widget.note?.content ?? '';
@@ -142,6 +146,19 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _summaryController.addListener(_summaryChanged);
     widget.syncController?.addListener(_syncStateChanged);
     _listenSecurity();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached) &&
+        _isDirty &&
+        _currentConflict == null) {
+      _autosaveTimer?.cancel();
+      _autosaveTimer = null;
+      unawaited(_save(automatic: true));
+    }
   }
 
   @override
@@ -161,6 +178,15 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       final NoteDto? incoming = widget.note;
       final bool sameIdentity =
           incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
+      final NoteDto? previous = oldWidget.note;
+      final bool sameText =
+          previous != null && incoming != null && previous == incoming;
+      if (!sameText) {
+        _summaryController.cancelActive(
+          reason: SummaryRunFailureCode.noteChanged,
+        );
+        _summaryController.markStaleIfResult();
+      }
       if (!sameIdentity) _summaryController.clearResult();
       final accessChanged =
           sameIdentity &&
@@ -253,6 +279,11 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       _securityBusy ||
       _securityLoading;
 
+  bool get hasActiveOperation => _actionBusy || _backConfirmationVisible;
+
+  Future<void> requestClose() =>
+      _backConfirmationVisible ? Future<void>.value() : _handleBack();
+
   bool get _canSave =>
       !_actionBusy &&
       _canEdit &&
@@ -279,6 +310,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   void _editorChanged() {
     if (!mounted) return;
+    _draftRevision++;
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
       _summaryController.markStaleIfResult();
@@ -379,6 +411,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (!_canEdit) _retainDirtySharedDraft();
     _securityRead++;
     unawaited(_securitySubscription?.cancel());

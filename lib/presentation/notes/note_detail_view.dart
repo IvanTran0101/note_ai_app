@@ -1,6 +1,6 @@
 part of 'note_detail_page.dart';
 
-extension _NoteDetailView on _NoteDetailPageState {
+extension _NoteDetailView on NoteDetailPageState {
   Widget _buildDetail(BuildContext context) {
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
     final String currentTitle = _titleController.text.trim();
@@ -34,7 +34,13 @@ extension _NoteDetailView on _NoteDetailPageState {
           unawaited(_handleBack());
         }
       },
-      child: content,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              unawaited(requestClose()),
+        },
+        child: content,
+      ),
     );
   }
 
@@ -146,11 +152,15 @@ extension _NoteDetailView on _NoteDetailPageState {
       onRegenerateSummary: _canSummarize ? () => unawaited(_summarize()) : null,
       copySummaryLabel: copy.copySummary,
       regenerateSummaryLabel: copy.regenerate,
-      onErrorRetry: summaryFailure == null
+      onErrorRetry: _saveFailed
+          ? () => unawaited(_save())
+          : summaryFailure == null
           ? null
           : () => unawaited(_summarize()),
-      errorRetryLabel: summaryFailure?.retryLabel,
-      errorRetryEnabled: summaryFailure?.retryEnabled ?? false,
+      errorRetryLabel: _saveFailed ? copy.retry : summaryFailure?.retryLabel,
+      errorRetryEnabled: _saveFailed
+          ? !_actionBusy
+          : summaryFailure?.retryEnabled ?? false,
       summaryAvailability: _summaryAvailability,
       summaryCloud:
           widget.notesController.summaryConsent?.requiresCloudConsent ?? false,

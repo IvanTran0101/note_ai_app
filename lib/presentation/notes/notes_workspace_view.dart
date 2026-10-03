@@ -25,27 +25,34 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                   SyncStatusPanel(controller: sync),
                 if (_application is SharingNotesController) _sharingTabs(),
                 Expanded(
-                  child: ResponsiveNotesWorkspace(
-                    list: NotesListPanel(
-                      notes: _notes
-                          .where((n) => (n.share != null) == _sharedOnly)
-                          .toList(),
-                      titleOverride: _sharedOnly
-                          ? SharingCopy(context).sharedWithMe
-                          : null,
-                      allowNewNote: !_sharedOnly,
-                      selectedNoteId: _selectedNoteId,
-                      error: loadError,
-                      actionBusy: false,
-                      onNewNote: _startNewNote,
-                      onSelectNote: _selectNote,
-                      onRetry: persistenceUnavailable ? null : reload,
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.escape): () =>
+                          unawaited(_requestDetailClose()),
+                    },
+                    child: ResponsiveNotesWorkspace(
+                      list: NotesListPanel(
+                        notes: _notes
+                            .where((n) => (n.share != null) == _sharedOnly)
+                            .toList(),
+                        titleOverride: _sharedOnly
+                            ? SharingCopy(context).sharedWithMe
+                            : null,
+                        allowNewNote: !_sharedOnly,
+                        selectedNoteId: _selectedNoteId,
+                        error: loadError,
+                        actionBusy: _detailBusy,
+                        onNewNote: _startNewNote,
+                        onSelectNote: _selectNote,
+                        onRetry: persistenceUnavailable ? null : reload,
+                      ),
+                      detail: _buildDetail(
+                        copy,
+                        showAppBar: compact && !widget.embeddedInWorkspace,
+                      ),
+                      hasSelection: _showDetail,
+                      onDismiss: () => unawaited(_requestDetailClose()),
                     ),
-                    detail: _buildDetail(
-                      copy,
-                      showAppBar: compact && !widget.embeddedInWorkspace,
-                    ),
-                    hasSelection: _showDetail,
                   ),
                 ),
               ],

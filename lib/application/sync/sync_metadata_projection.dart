@@ -16,6 +16,7 @@ final class SyncMetadataProjection {
     };
     return LocalSyncState(
       accountUserId: source.accountUserId,
+      userPreferences: source.userPreferences,
       cursor: source.cursor,
       notes: source.notes.map(
         (n) => _note(n, protectedIds.contains(n.identity.key)),
@@ -46,6 +47,7 @@ final class SyncMetadataProjection {
           ? remote
           : SyncNoteSnapshot(
               id: remote.id,
+              pinnedAt: remote.pinnedAt,
               title: '',
               content: '',
               createdAt: remote.createdAt,
@@ -64,6 +66,7 @@ final class SyncMetadataProjection {
       ? n
       : LocalNoteState(
           id: n.id,
+          pinnedAt: n.pinnedAt,
           ownerId: n.ownerId,
           title: '',
           content: '',

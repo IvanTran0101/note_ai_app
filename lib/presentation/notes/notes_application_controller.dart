@@ -60,6 +60,22 @@ abstract interface class NotesApplicationController {
   });
 }
 
+/// Optional Module 02 operations used by the production editor and dashboard.
+/// The older test seam remains usable without implementing the new flows.
+abstract interface class NotesModule02Controller {
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  });
+
+  Future<NoteDto> setPinned({required String noteId, required bool pinned});
+
+  Future<NoteLayoutPreference> getNoteLayout();
+
+  Future<void> setNoteLayout(NoteLayoutPreference layout);
+}
+
 /// Presentation adapter for the Application service.
 ///
 /// It intentionally contains no Infrastructure knowledge. The root can pass
@@ -68,6 +84,7 @@ abstract interface class NotesApplicationController {
 final class NoteApplicationServiceController
     implements
         NotesApplicationController,
+        NotesModule02Controller,
         SecuredNotesController,
         SharingNotesController,
         SnapshotNotesController {
@@ -146,6 +163,24 @@ final class NoteApplicationServiceController
   }) {
     return _service.replaceContent(noteId: noteId, content: content);
   }
+
+  @override
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) => _service.updateNote(noteId: noteId, title: title, content: content);
+
+  @override
+  Future<NoteDto> setPinned({required String noteId, required bool pinned}) =>
+      _service.setPinned(noteId: noteId, pinned: pinned);
+
+  @override
+  Future<NoteLayoutPreference> getNoteLayout() => _service.getNoteLayout();
+
+  @override
+  Future<void> setNoteLayout(NoteLayoutPreference layout) =>
+      _service.setNoteLayout(layout);
 
   @override
   Future<void> deleteNote(String noteId) => _service.deleteNote(noteId);

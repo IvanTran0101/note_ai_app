@@ -4,6 +4,9 @@ enum AppThemePreference { system, light, dark }
 /// Note editor font-size choices understood by NoteFlow.
 enum NoteFontSizePreference { small, medium, large }
 
+/// Persisted notes-workspace layout choices.
+enum NoteLayoutPreference { grid, list }
+
 /// Persisted user preferences owned by NoteFlow.
 final class UserPreferences {
   UserPreferences._(
@@ -11,6 +14,7 @@ final class UserPreferences {
     this._theme,
     this._noteFontSize,
     this._noteColorKey,
+    this._noteLayout,
   );
 
   /// Creates preferences from the supplied domain-neutral values.
@@ -19,14 +23,14 @@ final class UserPreferences {
     required AppThemePreference theme,
     required NoteFontSizePreference noteFontSize,
     String? noteColorKey,
-  }) {
-    return UserPreferences._(
-      _requireUserId(userId),
-      theme,
-      noteFontSize,
-      _normalizeColorKey(noteColorKey),
-    );
-  }
+    NoteLayoutPreference noteLayout = NoteLayoutPreference.grid,
+  }) => UserPreferences._(
+    _requireUserId(userId),
+    theme,
+    noteFontSize,
+    _normalizeColorKey(noteColorKey),
+    noteLayout,
+  );
 
   /// Restores preferences from persistence data.
   factory UserPreferences.reconstitute({
@@ -34,46 +38,59 @@ final class UserPreferences {
     required AppThemePreference theme,
     required NoteFontSizePreference noteFontSize,
     String? noteColorKey,
-  }) {
-    return UserPreferences._(
-      _requireUserId(userId),
-      theme,
-      noteFontSize,
-      _normalizeColorKey(noteColorKey),
-    );
-  }
+    NoteLayoutPreference noteLayout = NoteLayoutPreference.grid,
+  }) => UserPreferences._(
+    _requireUserId(userId),
+    theme,
+    noteFontSize,
+    _normalizeColorKey(noteColorKey),
+    noteLayout,
+  );
 
   final String _userId;
   AppThemePreference _theme;
   NoteFontSizePreference _noteFontSize;
   String? _noteColorKey;
+  NoteLayoutPreference _noteLayout;
 
-  /// User identity associated with these preferences.
   String get userId => _userId;
-
-  /// Current theme preference.
   AppThemePreference get theme => _theme;
-
-  /// Current note font-size preference.
   NoteFontSizePreference get noteFontSize => _noteFontSize;
-
-  /// Platform-neutral note color key, or `null` for the default color.
   String? get noteColorKey => _noteColorKey;
+  NoteLayoutPreference get noteLayout => _noteLayout;
 
-  /// Changes the theme preference.
-  void changeTheme(AppThemePreference theme) {
-    _theme = theme;
-  }
+  void changeTheme(AppThemePreference theme) => _theme = theme;
 
-  /// Changes the note font-size preference.
-  void changeNoteFontSize(NoteFontSizePreference noteFontSize) {
-    _noteFontSize = noteFontSize;
-  }
+  void changeNoteFontSize(NoteFontSizePreference noteFontSize) =>
+      _noteFontSize = noteFontSize;
 
-  /// Changes or clears the platform-neutral note color key.
-  void changeNoteColor(String? noteColorKey) {
-    _noteColorKey = _normalizeColorKey(noteColorKey);
-  }
+  void changeNoteColor(String? noteColorKey) =>
+      _noteColorKey = _normalizeColorKey(noteColorKey);
+
+  void changeNoteLayout(NoteLayoutPreference noteLayout) =>
+      _noteLayout = noteLayout;
+
+  /// Returns a detached copy for an immutable persistence snapshot.
+  UserPreferences copy() => UserPreferences.reconstitute(
+    userId: userId,
+    theme: theme,
+    noteFontSize: noteFontSize,
+    noteColorKey: noteColorKey,
+    noteLayout: noteLayout,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is UserPreferences &&
+      other.userId == userId &&
+      other.theme == theme &&
+      other.noteFontSize == noteFontSize &&
+      other.noteColorKey == noteColorKey &&
+      other.noteLayout == noteLayout;
+
+  @override
+  int get hashCode =>
+      Object.hash(userId, theme, noteFontSize, noteColorKey, noteLayout);
 }
 
 String _requireUserId(String value) {

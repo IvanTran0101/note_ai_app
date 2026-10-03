@@ -194,6 +194,33 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
   }
 }
 
+/// Short fades for display state only; never wrap a live note editor here.
+final class NoteFlowStateTransition extends StatelessWidget {
+  const NoteFlowStateTransition({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (Widget? current, List<Widget> outgoing) => Stack(
+        alignment: Alignment.centerLeft,
+        children: <Widget>[
+          for (final Widget previous in outgoing)
+            ExcludeFocus(
+              child: ExcludeSemantics(child: IgnorePointer(child: previous)),
+            ),
+          ?current,
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
 /// Top bar for a page surface: optional back button, breadcrumb, actions.
 final class NoteFlowPageHeader extends StatelessWidget {
   const NoteFlowPageHeader({
@@ -263,14 +290,17 @@ final class NoteFlowPageHeader extends StatelessWidget {
                 ),
                 if (statusLabel != null)
                   Flexible(
-                    child: _NoteFlowPageStatus(
+                    child: NoteFlowStateTransition(
                       key: statusKey,
-                      label: statusLabel!,
-                      busy: statusBusy,
-                      unavailable: statusUnavailable,
-                      dirty: statusDirty,
-                      error: statusError,
-                      draft: statusDraft,
+                      child: _NoteFlowPageStatus(
+                        key: ValueKey<String>('$statusLabel-$statusBusy'),
+                        label: statusLabel!,
+                        busy: statusBusy,
+                        unavailable: statusUnavailable,
+                        dirty: statusDirty,
+                        error: statusError,
+                        draft: statusDraft,
+                      ),
                     ),
                   ),
                 ...actions,

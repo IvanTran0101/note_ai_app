@@ -59,12 +59,22 @@ final class _NoteDetailSummaryState extends State<NoteDetailSummary> {
     }
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 360),
+      duration: NoteFlowMotion.duration(context),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (Widget? current, List<Widget> outgoing) => Stack(
+        alignment: Alignment.topLeft,
+        children: <Widget>[
+          for (final Widget previous in outgoing)
+            ExcludeFocus(
+              child: ExcludeSemantics(child: IgnorePointer(child: previous)),
+            ),
+          ?current,
+        ],
+      ),
       transitionBuilder: (Widget child, Animation<double> animation) {
         final Animation<Offset> position = Tween<Offset>(
-          begin: const Offset(1, 0),
+          begin: const Offset(0, 0.025),
           end: Offset.zero,
         ).animate(animation);
         return ClipRect(
@@ -224,6 +234,12 @@ final class _SummaryTypewriterTextState extends State<_SummaryTypewriterText>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) _controller.value = 1;
+  }
+
+  @override
   void didUpdateWidget(covariant _SummaryTypewriterText oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text == widget.text) {
@@ -232,6 +248,7 @@ final class _SummaryTypewriterTextState extends State<_SummaryTypewriterText>
     _controller.dispose();
     _tokens = _wordTokens(widget.text);
     _createController();
+    if (MediaQuery.disableAnimationsOf(context)) _controller.value = 1;
   }
 
   @override

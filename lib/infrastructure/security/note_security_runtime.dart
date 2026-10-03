@@ -146,6 +146,8 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     }
     final op = mutation.operation == SyncMutationOperation.delete
         ? NoteOperation.delete
+        : mutation.payload?.includesPinnedAt == true
+        ? NoteOperation.manage
         : NoteOperation.edit;
     if (!const NoteAccessPolicy().allows(
           actorId: account,

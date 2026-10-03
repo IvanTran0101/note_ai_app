@@ -41,6 +41,23 @@ function fixture({ replay = false, conflict = false, failSecond = false } = {}) 
   return { store, writes, reads: () => reads, checks: () => checks };
 }
 
+test('pin payload requires owner manage capability before storage reads', async () => {
+  let reads = 0;
+  const security: NoteSecurityAuthority = {
+    async metadata() { return { enabled: true, revision: 1 }; },
+    async authorize(_actor, _owner, _note, operation) {
+      assert.equal(operation, 'manage');
+      throw new NoteSecurityError('locked');
+    },
+  };
+  const documentClient = { async send() { reads++; return {}; } } as unknown as DynamoDBDocumentClient;
+  const store = new DynamoSyncStore({ tableName: 'test', documentClient, security });
+  await assert.rejects(store.applyMutation('owner', {
+    ...mutation, payload: { ...mutation.payload!, pinnedAt: null },
+  }, { actorId: 'owner', grant: 'edit-only' }), e => e instanceof NoteSecurityError);
+  assert.equal(reads, 0);
+});
+
 test('currently protected historical feed is always metadata-only', async () => {
   const { store } = fixture();
   const page = await store.listChanges('owner');

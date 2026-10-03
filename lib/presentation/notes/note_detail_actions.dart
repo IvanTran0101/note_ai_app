@@ -1,6 +1,6 @@
 part of 'note_detail_page.dart';
 
-extension _NoteDetailActions on _NoteDetailPageState {
+extension _NoteDetailActions on NoteDetailPageState {
   Future<bool> _save({bool automatic = false}) async {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
@@ -16,9 +16,11 @@ extension _NoteDetailActions on _NoteDetailPageState {
     if (_currentConflict != null || !_canEdit) return false;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
+    final savingDraftRevision = _draftRevision;
     bool persisted = false;
     _update(() {
       _saving = true;
+      _saveFailed = false;
       _error = null;
       _statusMessage = null;
     });
@@ -43,7 +45,9 @@ extension _NoteDetailActions on _NoteDetailPageState {
         _savedTitle = saved.title;
         _savedContent = saved.content;
         _summaryController.clearFailure();
-        _statusMessage = copy.saved;
+        _statusMessage = _draftRevision == savingDraftRevision
+            ? copy.saved
+            : copy.autoSavePending;
         _didPersist = true;
       });
       _notifyDirtyChanged();
@@ -62,6 +66,7 @@ extension _NoteDetailActions on _NoteDetailPageState {
         return false;
       }
       _update(() {
+        _saveFailed = error is! UnsupportedError;
         _error = error is UnsupportedError
             ? copy.persistenceUnavailable
             : copy.saveError;

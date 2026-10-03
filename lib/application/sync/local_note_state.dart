@@ -21,6 +21,7 @@ final class LocalNoteState {
     required this.content,
     required this.createdAt,
     required this.updatedAt,
+    this.pinnedAt,
     int serverRevision = 0,
     this.deletedAt,
     this.status = NoteSyncStatus.synced,
@@ -58,6 +59,9 @@ final class LocalNoteState {
   /// When the note content last changed, locally or remotely.
   final DateTime updatedAt;
 
+  /// Owner pin time, or null when the note is unpinned.
+  final DateTime? pinnedAt;
+
   /// The last revision acknowledged by the server; 0 before the first apply.
   final int serverRevision;
 
@@ -79,6 +83,7 @@ final class LocalNoteState {
         other.content == content &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
+        other.pinnedAt == pinnedAt &&
         other.serverRevision == serverRevision &&
         other.deletedAt == deletedAt &&
         other.status == status &&
@@ -95,6 +100,7 @@ final class LocalNoteState {
     content,
     createdAt,
     updatedAt,
+    pinnedAt,
     serverRevision,
     deletedAt,
     status,

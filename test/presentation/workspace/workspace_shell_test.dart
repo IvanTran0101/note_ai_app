@@ -23,6 +23,7 @@ void main() {
     Locale locale = const Locale('en'),
     Widget? dashboardPage,
     Widget? notesPage,
+    bool disableAnimations = false,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -30,6 +31,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (BuildContext context, Widget? child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: disableAnimations),
+          child: child!,
+        ),
         locale: locale,
         supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
         localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
@@ -419,6 +425,13 @@ void main() {
     expect(find.byKey(WorkspaceShell.sidebarKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final double movingWidth = tester
+        .getSize(find.byKey(_dashboardPageKey))
+        .width;
+    expect(movingWidth, greaterThan(1200 - WorkspaceShell.sidebarWidth - 1));
+    expect(movingWidth, lessThan(1200));
     await tester.pumpAndSettle();
 
     expect(find.byKey(WorkspaceShell.sidebarKey), findsNothing);
@@ -465,6 +478,21 @@ void main() {
     await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
     await tester.pumpAndSettle();
     expect(find.text('Notes page').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('reduce motion collapses sidebar immediately', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(
+      tester,
+      size: const Size(1200, 900),
+      disableAnimations: true,
+    );
+    await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pump();
+    expect(tester.getSize(find.byKey(_dashboardPageKey)).width, 1200);
+    expect(find.byKey(WorkspaceShell.sidebarKey), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('compact shell keeps secondary actions in navigation menu', (

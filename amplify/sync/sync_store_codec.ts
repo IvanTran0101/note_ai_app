@@ -30,6 +30,22 @@ export const MAX_ATTEMPTS = 4;
 export const MAX_PAYLOAD_BYTES = 300_000;
 export const MAX_IDENTIFIER_LENGTH = 128;
 export const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+const UTC_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/;
+const isUtcTimestamp = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const parts = UTC_TIMESTAMP.exec(value);
+  if (parts === null) return false;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) &&
+    parsed.getUTCFullYear() === Number(parts[1]) &&
+    parsed.getUTCMonth() + 1 === Number(parts[2]) &&
+    parsed.getUTCDate() === Number(parts[3]) &&
+    parsed.getUTCHours() === Number(parts[4]) &&
+    parsed.getUTCMinutes() === Number(parts[5]) &&
+    parsed.getUTCSeconds() === Number(parts[6]);
+};
+
+
 export const UTF8 = new TextEncoder();
 
 /** Provider-neutral note state; `deletedAt` set means a tombstone. */
@@ -100,13 +116,35 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown): Mu
     throw new SyncInvalidMutationError('PAYLOAD_REQUIRED', 'create and update need a title and content payload.');
   }
   const { title, content } = payload;
-  if (typeof title !== 'string' || typeof content !== 'string') {
+  if (
+    typeof title !== 'string' ||
+    typeof content !== 'string' ||
+    title.trim().length === 0 ||
+    content.trim().length === 0
+  ) {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'A payload needs a string title and content.');
   }
-  if (UTF8.encode(title).length + UTF8.encode(content).length > MAX_PAYLOAD_BYTES) {
+  const hasPinnedAt = Object.prototype.hasOwnProperty.call(payload, 'pinnedAt');
+  const pinnedAt = payload.pinnedAt;
+  if (
+    hasPinnedAt &&
+    pinnedAt !== null && !isUtcTimestamp(pinnedAt)
+  ) {
+    throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'A payload needs a valid pinnedAt timestamp or null.');
+  }
+  if (
+    UTF8.encode(title).length +
+      UTF8.encode(content).length +
+      (typeof pinnedAt === 'string' ? UTF8.encode(pinnedAt).length : 0) >
+    MAX_PAYLOAD_BYTES
+  ) {
     throw new SyncInvalidMutationError('PAYLOAD_TOO_LARGE', 'The note payload is too large to store.');
   }
-  return { title, content };
+  return {
+    title,
+    content,
+    ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}),
+  };
 };
 
 /**
@@ -145,6 +183,9 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid shared mutation.');
   }
 
+  if (ownerId && payload && Object.hasOwn(payload, 'pinnedAt')) {
+    throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Shared text writes cannot organize notes.');
+  }
   return {
     mutationId,
     noteId,
@@ -160,6 +201,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         baseRevision,
         payload?.title ?? null,
         payload?.content ?? null,
+        ...(payload && Object.hasOwn(payload, 'pinnedAt') ? [payload.pinnedAt] : []),
         ...(protectionChange ? [protectionChange] : []),
         ...(ownerId ? [ownerId, accessRevision] : []),
       ])}`,
@@ -175,6 +217,7 @@ export const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unkno
   revision: snapshot.revision,
   createdAt: snapshot.createdAt,
   serverUpdatedAt: snapshot.serverUpdatedAt,
+  pinnedAt: snapshot.pinnedAt ?? null,
   deletedAt: snapshot.deletedAt,
   protected: snapshot.protected ?? false,
   protectionRevision: snapshot.protectionRevision ?? 0,
@@ -194,6 +237,8 @@ export const stringFieldOf = (item: Record<string, unknown>, name: string): stri
 export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
   const revision = item.revision;
   const deletedAt = item.deletedAt;
+  const pinnedAt = item.pinnedAt;
+  if (pinnedAt !== undefined && pinnedAt !== null && !isUtcTimestamp(pinnedAt)) throw corruptData();
   if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1) {
     throw corruptData();
   }
@@ -211,6 +256,7 @@ export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
     revision,
     createdAt: stringFieldOf(item, 'createdAt'),
     serverUpdatedAt: stringFieldOf(item, 'serverUpdatedAt'),
+    pinnedAt: pinnedAt === undefined ? null : pinnedAt,
     deletedAt: deletedAt === undefined ? null : deletedAt,
     protected: item.protected === true,
     protectionRevision,
@@ -290,6 +336,8 @@ export const nextSnapshot = (
   revision: request.baseRevision + 1,
   createdAt: remote?.createdAt ?? now,
   serverUpdatedAt: now,
+  pinnedAt: request.payload && Object.hasOwn(request.payload, 'pinnedAt')
+    ? request.payload.pinnedAt ?? null : remote?.pinnedAt ?? null,
   deletedAt: request.operation === 'delete' ? now : null,
   protected: remote?.protected ?? false,
   protectionRevision: remote?.protectionRevision ?? 0,

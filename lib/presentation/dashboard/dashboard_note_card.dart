@@ -22,6 +22,7 @@ final class DashboardNoteCard extends StatelessWidget {
     required this.onTap,
     required this.copy,
     required this.layout,
+    this.onTogglePin,
     this.selected = false,
     this.showPreview = true,
     this.listHorizontalInset = NoteFlowSpacing.md,
@@ -36,6 +37,9 @@ final class DashboardNoteCard extends StatelessWidget {
 
   /// Localized Dashboard copy supplied by the parent.
   final DashboardCopy copy;
+
+  /// Called when the owner toggles this note's pin state.
+  final ValueChanged<NoteDto>? onTogglePin;
 
   /// Layout context used to tune the preview without changing its data.
   final DashboardNoteCardLayout layout;
@@ -76,8 +80,12 @@ final class DashboardNoteCard extends StatelessWidget {
       button: true,
       selected: selected,
       label: showPreview
-          ? copy.noteSemantics(title: title, preview: preview)
-          : title,
+          ? copy.noteSemantics(
+              title: title,
+              preview: preview,
+              pinned: note.pinnedAt != null,
+            )
+          : (note.pinnedAt == null ? title : '$title, ${copy.pinned}'),
       child: Card(
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
@@ -149,13 +157,18 @@ final class DashboardNoteCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Icon(
-            note.isProtected ? Icons.lock_outline : Icons.description_outlined,
-            size: 18,
-            color: selected ? foreground : tokens.textMuted,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(
+              note.isProtected
+                  ? Icons.lock_outline
+                  : Icons.description_outlined,
+              size: 18,
+              color: selected ? foreground : tokens.textMuted,
+            ),
+            _pinButton(context),
+          ],
         ),
         const SizedBox(height: NoteFlowSpacing.sm),
         Text(
@@ -184,6 +197,29 @@ final class DashboardNoteCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _pinButton(BuildContext context) {
+    if (onTogglePin == null) return const SizedBox.shrink();
+    final bool isPinned = note.pinnedAt != null;
+    final String label = isPinned ? copy.unpinNote : copy.pinNote;
+    return IconButton(
+      key: ValueKey<String>('dashboard-note-pin-${note.id}'),
+      tooltip: label,
+      onPressed:
+          note.share != null || !note.contentAvailable || note.isProtected
+          ? null
+          : () => onTogglePin!(note),
+      visualDensity: VisualDensity.compact,
+      icon: AnimatedSwitcher(
+        duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
+        child: Icon(
+          isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          key: ValueKey<bool>(isPinned),
+          size: 18,
+        ),
+      ),
     );
   }
 
@@ -242,6 +278,7 @@ final class DashboardNoteCard extends StatelessWidget {
             ),
           ),
         ],
+        if (onTogglePin != null) _pinButton(context),
       ],
     );
   }
