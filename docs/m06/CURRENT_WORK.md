@@ -1,5 +1,19 @@
 # M06 current work
 
+## Latest batch — M02 compatibility review (2026-10-04)
+
+User authorized pulling/checking final-TanMinh against M05/M06 for the M03
+handoff. Fetched fixed aabf229; app source still fcb4a54, no MERGE_HEAD or index
+conflicts. Ordinary merge-tree96 paths; isolated M02 delta against6ce2afe25.
+Exact source + executed parser probe confirm pin is dropped and writer/schema/
+access/Summary integration remains pending M02.4-M02.6. See
+M02_COMPATIBILITY_REVIEW.md for evidence, paths, commands and continuation gates.
+Graph transport unavailable; source fallback used. No integrated platform PASS.
+Review is published and re-fetched on Notion M02 and the collab2 index; existing
+milestone/runtime boxes stay pending. Scoped docs checkpoint preserves unrelated
+macOS/untracked files. Next source step is M02.4-M02.6 conflict resolution and
+integrated regression; that implementation is not complete in this review.
+
 User resumed 2026-10-02. Primary D checkout, final-tuankiet@c3436d5 baseline.
 Active scope M06.2–M06.5, local-first; M09 deferred until both collabs finish,
 their work is integrated/tested together and a new UI/UX plan is prepared.

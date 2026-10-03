@@ -1,5 +1,20 @@
 # MUST REMEMBER
 
+## Latest collaboration check — M02 fetch/review (2026-10-04)
+
+The user requested fetching final-TanMinh and checking M02 compatibility with
+M05/M06 before the collaborator continues M03. This explicitly supersedes the
+earlier no-collaborator-pull rule for this named branch. Fetched aabf229;
+application baseline remains fcb4a54. Ordinary merge-tree has96 conflicting
+paths; diagnostic M02-only source delta against6ce2afe has25. No application
+source merge was performed or accepted. Read docs/m06/M02_COMPATIBILITY_REVIEW.md.
+The current backend parser accepts but discards M02 pinnedAt. Writer, v3 format,
+access/editor and Summary integration correspond to pending M02.4-M02.6; preserve
+single writer, encrypted drafts/data and scoped authority. Do not treat a fetch,
+text auto-merge or historical separate-branch tests as integrated acceptance.
+M03 design A/A/A stays settled; foundation can continue behind its contract,
+full shared/protected attachment flow needs the integrated core. M09 deferred.
+
 ## Latest active instruction — M06 resumed, M09 deferred (2026-10-02)
 
 The user explicitly resumed M06 from M06.2 through acceptance, with local-first
