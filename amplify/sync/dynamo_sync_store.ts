@@ -1,4 +1,6 @@
 import { protectionWrite } from './sync_protection_change';
+import { labelSnapshot } from '../labels/label_models';
+import { projectNoteLabels } from '../labels/note_label_projection';
 import { stableDigest } from './cursor';
 import { ActorFeed } from '../sharing/actor_feed';
 import { aclCondition, DynamoNoteAcl } from '../sharing/dynamo_note_acl';
@@ -60,8 +62,15 @@ export class DynamoSyncStore implements SyncStore {
       if (actor !== ownerId && a?.access?.accessRevision !== request.accessRevision) throw new NoteSecurityError('denied');
       return a;
     };
-    const project = async (n: NoteSnapshot, a?: ProtectionMetadata) => actor !== ownerId
-      ? recipientProjection(actor, ownerId, n, this.acl!, this.security!) : this.metadataProjection(n, a);
+    const project = async (n: NoteSnapshot, a?: ProtectionMetadata) => {
+      const projected = actor !== ownerId
+        ? await recipientProjection(actor, ownerId, n, this.acl!, this.security!) : this.metadataProjection(n, a);
+      if (request.wireVersion !== 2) return projected;
+      const labeled = await projectNoteLabels(this.documentClient, this.tableName, ownerId, projected, actor !== ownerId);
+      if (actor !== ownerId) return recipientProjection(actor, ownerId, labeled, this.acl!, this.security!);
+      const live = await authorize();
+      return this.metadataProjection(labeled, live);
+    };
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       // A compound replay acknowledges a prior owner write with metadata only.
@@ -143,7 +152,7 @@ export class DynamoSyncStore implements SyncStore {
     return { status: 'conflict', mutationId: request.mutationId, remoteNote: projection };
   }
 
-  async listChanges(ownerId: string, cursor?: string | null, limit?: number): Promise<ChangesPage> {
+  async listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion: 1 | 2 = 1): Promise<ChangesPage> {
     const after = decodeChangeCursor(cursor, ownerId);
     const pageSize = pageSizeOf(limit);
     const ownerKey = ownerKeyOf(ownerId);
@@ -175,18 +184,22 @@ export class DynamoSyncStore implements SyncStore {
     const catchUpPending = foundGap || Boolean(committed && committed.lastSequence > lastVisible);
 
     return {
-      items: await Promise.all(page.map(async (row) => {
+      items: await Promise.all(page.filter(row => row.entityType !== 'label').map(async (row) => {
         const snapshot = toNoteSnapshot(row);
         if (snapshot.ownerId && snapshot.ownerId !== ownerId) {
           if (!this.acl || !this.security) throw new NoteSecurityError('denied');
-          return recipientProjection(ownerId, snapshot.ownerId, snapshot, this.acl, this.security);
+          const projected = await recipientProjection(ownerId, snapshot.ownerId, snapshot, this.acl, this.security);
+          const labeled = wireVersion === 2 ? await projectNoteLabels(this.documentClient, this.tableName, snapshot.ownerId, projected, true) : projected;
+          return recipientProjection(ownerId, snapshot.ownerId, labeled, this.acl, this.security);
         }
         const protection = await this.security?.metadata(ownerId, ownerId, snapshot.id);
-        return this.metadataProjection(snapshot, protection);
+        const projected = this.metadataProjection(snapshot, protection);
+        return wireVersion === 2 ? projectNoteLabels(this.documentClient, this.tableName, ownerId, projected) : projected;
       })),
       nextCursor: encodeChangeCursor(ownerId, page.length === 0 ? after : sequenceOf(page[page.length - 1])),
       hasMore,
       ...(catchUpPending ? { catchUpPending: true } : {}),
+      ...(wireVersion === 2 ? {wireVersion: 2, labels: page.filter(row => row.entityType === 'label').map(row => labelSnapshot(row, ownerId))} : {}),
     };
   }
 
@@ -205,6 +218,16 @@ export class DynamoSyncStore implements SyncStore {
     const note = projection ? { ...next, protected: projection.enabled,
       protectionRevision: projection.revision } : next;
     const transactItems = transactItemsFor(this.tableName, ownerKey, request, remote, note, lastSequence, now);
+    const addedLabels = (request.payload?.labelIds ?? []).filter(id => !(remote?.labelIds ?? []).includes(id));
+    for (const id of addedLabels) {
+      const row = await this.readItem(ownerKey, `LABEL#${id}`);
+      if (!row || row.deletedAt !== null) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label is not active.');
+      const label = labelSnapshot(row, ownerKey.slice('OWNER#'.length));
+      transactItems?.push({ConditionCheck: {TableName: this.tableName,
+        Key: itemKey(ownerKey, `LABEL#${id}`),
+        ConditionExpression: 'revision = :revision AND deletedAt = :active',
+        ExpressionAttributeValues: {':revision': label.revision, ':active': null}}});
+    }
     if (receiptKey !== ownerKey && transactItems?.[3]?.Put) {
       transactItems[3].Put.Item = { ...transactItems[3].Put.Item, ...itemKey(receiptKey, `MUTATION#${receiptId}`) };
     }
@@ -242,7 +265,7 @@ export class DynamoSyncStore implements SyncStore {
     const enabled = authority?.enabled ?? note.protected ?? false;
     return { ...note, protected: enabled,
       protectionRevision: authority?.revision ?? note.protectionRevision ?? 0,
-      ...(enabled ? { title: '', content: '', contentAvailable: false } : { contentAvailable: true }) };
+      ...(enabled ? { title: '', content: '', labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
   }
 
   private async readItem(ownerKey: string, sortKey: string): Promise<Record<string, unknown> | null> {

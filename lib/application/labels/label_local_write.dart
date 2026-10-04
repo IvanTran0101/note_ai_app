@@ -34,7 +34,7 @@ import 'local_label_state.dart';
       return (state: state, label: old, changed: false);
     }
   }
-  final label = LocalLabelState(
+  var label = LocalLabelState(
     id: resource,
     ownerId: actor,
     name: domain.name,
@@ -44,7 +44,18 @@ import 'local_label_state.dart';
     serverRevision: old?.serverRevision ?? 0,
     status: NoteSyncStatus.pending,
   );
-  final outbox = queueLabelWrite(state, label, old, timestamp, mutationId);
+  final requests = state.outbox
+      .where((m) => m.isLabel && m.noteId == resource)
+      .toList();
+  final canceledCreate =
+      deleting &&
+      old?.serverRevision == 0 &&
+      requests.isNotEmpty &&
+      requests.every((m) => m.retryCount == 0 && !m.blocked);
+  final outbox = canceledCreate
+      ? state.outbox.where((m) => !m.isLabel || m.noteId != resource).toList()
+      : queueLabelWrite(state, label, old, timestamp, mutationId);
+  if (canceledCreate) label = label.withStatus(NoteSyncStatus.synced);
   return (
     state: LocalSyncState(
       accountUserId: actor,

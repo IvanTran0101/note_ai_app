@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../labels/normalize_label_dispatch.dart';
+
 import 'local_sync_state.dart';
 import 'local_sync_store.dart';
 import 'pending_mutation.dart';
@@ -168,9 +170,12 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           final List<PendingMutation> outbox = List<PendingMutation>.of(
             current.outbox,
           );
+          final normalized = labelsEnabled
+              ? normalizeLabelDispatch(current, outbox[index])
+              : outbox[index];
           outbox[index] = _reconciliation.copyEntry(
-            outbox[index],
-            retryCount: outbox[index].retryCount + 1,
+            normalized,
+            retryCount: normalized.retryCount + 1,
           );
           return _reconciliation.copyState(current, outbox: outbox);
         });

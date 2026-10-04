@@ -19,6 +19,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../application/sync/remote_note_data_source.dart';
+import '../../application/sync/shared_label_projection_source.dart';
+import '../../application/sync/local_note_state.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
@@ -42,7 +44,8 @@ typedef SyncAccessTokenProvider = Future<String?> Function({
 ///
 /// Routes: `POST /sync/mutations` (one mutation per request, idempotent by
 /// `mutationId`) and `GET /sync/changes` (opaque cursor paging).
-final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
+final class HttpRemoteNoteDataSource
+    implements IRemoteNoteDataSource, ISharedLabelProjectionSource {
   /// Creates the adapter over [baseUri], for example
   /// `https://abc123.execute-api.ap-southeast-1.amazonaws.com/prod`.
   ///
@@ -58,6 +61,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     String? expectedAccountUserId,
     Future<String?> Function(SyncMutation)? mutationGrant,
     void Function()? requireSession,
+    bool labelsEnabled = false,
+    String? Function(LocalNoteState)? projectionGrant,
   }) {
     return HttpRemoteNoteDataSource._(
       baseUri: baseUri,
@@ -68,6 +73,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       expectedAccountUserId: expectedAccountUserId,
       mutationGrant: mutationGrant,
       requireSession: requireSession,
+      labelsEnabled: labelsEnabled,
+      projectionGrant: projectionGrant,
     );
   }
 
@@ -82,6 +89,8 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
     required this._expectedAccountUserId,
     required this.mutationGrant,
     required this.requireSession,
+    required this.labelsEnabled,
+    required this.projectionGrant,
   });
 
   /// Async mutation route.
@@ -101,6 +110,76 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
   final String? _expectedAccountUserId;
   final Future<String?> Function(SyncMutation)? mutationGrant;
   final void Function()? requireSession;
+  final bool labelsEnabled;
+  final String? Function(LocalNoteState)? projectionGrant;
+
+  @override
+  Future<List<SyncNoteSnapshot>> refreshLabels(
+    Iterable<LocalNoteState> notes,
+  ) => _classify(() async {
+    final refs = notes
+        .where(
+          (n) =>
+              !n.isDeleted &&
+              n.contentAvailable &&
+              (n.share?.isActive == true || n.protection.enabled),
+        )
+        .toList();
+    final snapshots = <SyncNoteSnapshot>[];
+    for (var offset = 0; offset < refs.length; offset += 50) {
+      requireSession?.call();
+      final batch = refs.skip(offset).take(50).toList();
+      final request = <Map<String, Object?>>[];
+      for (final note in batch) {
+        String? grant;
+        try {
+          grant = projectionGrant?.call(note);
+        } on NoteSecurityFailure {
+          continue;
+        }
+        request.add({
+          'ownerId': note.ownerId,
+          'noteId': note.id,
+          'grant': ?grant,
+        });
+      }
+      if (request.isEmpty) continue;
+      final response = await _send(
+        method: 'POST',
+        uri: _endpoint('sync/v2/label-projections'),
+        body: {'wireVersion': 2, 'notes': request},
+      );
+      if (!_isSuccess(response.statusCode)) throw _decodeError(response);
+      final page = decodeChangesPage(
+        _readBody(response),
+        authorizedContent: true,
+      );
+      if (page.wireVersion != 2 || page.labels.isNotEmpty) {
+        throw const FormatException('Scoped Note response required.');
+      }
+      for (final snapshot in page.snapshots) {
+        final ref = request
+            .where(
+              (r) =>
+                  r['ownerId'] == snapshot.ownerId &&
+                  r['noteId'] == snapshot.id,
+            )
+            .firstOrNull;
+        final note = batch
+            .where((n) => n.ownerId == snapshot.ownerId && n.id == snapshot.id)
+            .firstOrNull;
+        if (ref == null || note == null || !snapshot.includesLabels) {
+          throw const SyncFailure(code: SyncErrorCode.forbidden);
+        }
+        // A local lock during HTTP must invalidate even an authorized response.
+        if (projectionGrant?.call(note) != ref['grant']) {
+          throw const SyncFailure(code: SyncErrorCode.forbidden);
+        }
+      }
+      snapshots.addAll(page.snapshots);
+    }
+    return snapshots;
+  });
 
   @override
   Future<SyncMutationResult> push(SyncMutation mutation) {
@@ -108,7 +187,13 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       final http.Response response = await _send(
         method: 'POST',
         uri: _endpoint(
-          mutation.ownerId != null
+          mutation.isLabel || mutation.payload?.includesLabels == true
+              ? mutation.ownerId != null
+                    ? 'sync/v2/shared-mutations'
+                    : mutation.protectionChange != null
+                    ? 'sync/v2/protected-mutations'
+                    : 'sync/v2/mutations'
+              : mutation.ownerId != null
               ? 'sync/shared-mutations'
               : mutation.protectionChange == null
               ? _mutationsPath
@@ -130,6 +215,15 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
           body: _readBody(response),
           mutationId: mutation.mutationId,
         );
+        if (mutation.isLabel && result.label == null && result.isApplied ||
+            !mutation.isLabel && result.label != null) {
+          throw const FormatException('Entity outcome mismatch.');
+        }
+        if (mutation.payload?.includesLabels == true &&
+            result.note?.includesLabels != true &&
+            result.isApplied) {
+          throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+        }
         if (mutation.ownerId != null) {
           final snapshot = result.note ?? result.conflictRemote;
           if (result.mutationId != mutation.mutationId ||
@@ -155,7 +249,7 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       final http.Response response = await _send(
         method: 'GET',
         uri: _endpoint(
-          _changesPath,
+          labelsEnabled ? 'sync/v2/changes' : _changesPath,
           query: <String, String>{
             // The cursor is opaque: it is forwarded exactly as the caller
             // stored it, never parsed, rebuilt, or truncated here.
@@ -169,7 +263,11 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       }
       // The page is returned untouched, so a final page keeps the server's
       // `nextCursor` together with `hasMore == false`.
-      return decodeChangesPage(_readBody(response));
+      final page = decodeChangesPage(_readBody(response));
+      if (labelsEnabled && page.wireVersion != 2) {
+        throw const FormatException('V2 negotiation failed.');
+      }
+      return page;
     });
   }
 
@@ -259,7 +357,11 @@ final class HttpRemoteNoteDataSource implements IRemoteNoteDataSource {
       if (failure.code != NoteSecurityFailureCode.pendingSync) rethrow;
       return _dispatch(
         method: 'POST',
-        uri: _endpoint('sync/protection-predecessor'),
+        uri: _endpoint(
+          mutation?.payload?.includesLabels == true
+              ? 'sync/v2/protection-predecessor'
+              : 'sync/protection-predecessor',
+        ),
         accessToken: accessToken,
         body: body,
       );

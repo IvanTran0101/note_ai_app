@@ -86,3 +86,18 @@ Native M03 picker fix976505c unit16/16 PASS; actual APK retest pending.
 Next: finish scoped shared label refresh, wire cache/query/UI with actor/session
 fences and dirty editor preservation, then actual Chrome/Android acceptance.
 Preserve backend state/key, Web profile, emulator and unrelated files.
+
+## Continuation — 2026-10-05
+
+M04.3 c911b0b pushed and Notion checked. M04.4 backend51 Node nodes PASS,
+Label12/12 included, tsc clean; new App/query/HTTP26/26; widget3/3 PASS. Widget
+fixture must initialize serial FakeLocalSyncStore inside testWidgets fake zone
+and unmount before closing broadcast stream. No product workaround was needed.
+UI composition/query/CRUD/filter/chips/dialog actor fences and dirty ACK rebase
+are implemented, acceptance pending actual flows. Primary analyzer had four
+curly infos, narrow fixes applied. Full VM running with1134 PASS/2 skips so far.
+Current main_dev APK built58.6s and install-r succeeded with data preserved.
+Backend restarted with owned session67568; Web18316 hot restarted; browser m04-owner
+reopened with persistent output profile. Android owner created QA-M04-Android;
+Chrome manager/name dialog open creating QA-M04-Web. Continue actual QA and
+privacy/draft/filter/reconnect, preserve state/key/profile and AVD data.

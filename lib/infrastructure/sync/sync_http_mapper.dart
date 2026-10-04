@@ -191,7 +191,10 @@ SyncMutationResult decodeSyncMutationResponse({
 /// position rather than only a request for another page. A page that claims
 /// `hasMore` without a cursor is malformed: the caller would have no way to ask
 /// for the next page.
-SyncChangesPage decodeChangesPage(Object? body) {
+SyncChangesPage decodeChangesPage(
+  Object? body, {
+  bool authorizedContent = false,
+}) {
   final Map<String, Object?> json = _asJsonObject(body, 'changes page');
 
   final Object? items = json['items'];
@@ -211,7 +214,12 @@ SyncChangesPage decodeChangesPage(Object? body) {
       continue;
     }
     if (row['entityType'] == 'note') {
-      snapshots.add(_decodeNote(_asJsonObject(row['note'], 'note')));
+      snapshots.add(
+        _decodeNote(
+          _asJsonObject(row['note'], 'note'),
+          authorizedContent: authorizedContent,
+        ),
+      );
     } else if (row['entityType'] == 'label') {
       labels.add(LabelCodec.decodeWire(row['label']));
     } else {

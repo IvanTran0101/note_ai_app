@@ -1,6 +1,7 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { NoteSecurityAuthority } from '../protection/protection_store';
 import type { ShareRecord } from '../sharing/share_models';
+import type { LabelSnapshot } from '../labels/label_models';
 
 export type NoteSnapshot = Readonly<{
   id: string;
@@ -18,6 +19,8 @@ export type NoteSnapshot = Readonly<{
   share?: ShareRecord;
   /** Internal membership CAS; never exposed by transport. */
   sharingRevision?: number;
+  labelIds?: readonly string[];
+  labelProjections?: readonly Readonly<{id: string; name: string}>[];
 }>;
 
 export type ProtectionSyncChange = Readonly<{
@@ -29,10 +32,11 @@ export type ProtectionSyncChange = Readonly<{
 export type SyncOperation = 'create' | 'update' | 'delete';
 
 /** `create` and `update` require this; `delete` ignores it. */
-export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null }>;
+export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null; labelIds?: readonly string[] }>;
 
 /** One client mutation, already stripped of transport concerns. */
 export type SyncMutation = Readonly<{
+  wireVersion?: 2;
   mutationId: string;
   noteId: string;
   operation: SyncOperation;
@@ -61,6 +65,8 @@ export type ConflictedMutation = Readonly<{
 export type ApplyMutationResult = AppliedMutation | ConflictedMutation;
 
 export type ChangesPage = Readonly<{
+  wireVersion?: 2;
+  labels?: readonly LabelSnapshot[];
   items: readonly NoteSnapshot[];
   /** Always minted: the caller stores it and sends it back on the next poll. */
   nextCursor: string;
@@ -90,7 +96,7 @@ export interface SyncStore {
    * @throws SyncInvalidCursorError when the cursor is not this account's.
    * @throws SyncStorageError when storage failed.
    */
-  listChanges(ownerId: string, cursor?: string | null, limit?: number): Promise<ChangesPage>;
+  listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion?: 1 | 2): Promise<ChangesPage>;
 }
 
 export type InvalidMutationReason =
@@ -140,6 +146,7 @@ export type DynamoSyncStoreOptions = Readonly<{
 }>;
 
 export type NormalizedMutation = Readonly<{
+  wireVersion?: 2;
   mutationId: string;
   noteId: string;
   operation: SyncOperation;

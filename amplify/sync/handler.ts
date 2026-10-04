@@ -1,5 +1,8 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoLabelStore } from '../labels/dynamo_label_store';
+import { parseLabelMutation } from '../labels/label_models';
+import { labelProjectionResponse } from '../labels/label_projection_handler';
 import type {
   APIGatewayProxyEventV2WithJWTAuthorizer,
   APIGatewayProxyHandlerV2WithJWTAuthorizer,
@@ -29,6 +32,7 @@ import {
   invalidChangesResponse,
   invalidMutationResponse,
   jsonResponse,
+  noteV2MutationResponse,
   notFoundResponse,
   storageFailureResponse,
   unauthorizedResponse,
@@ -99,6 +103,7 @@ const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NA
   new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
   Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
 const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true });
+const labels = new DynamoLabelStore(NOTES_TABLE_NAME, documentClient);
 const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
   new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
 const recoveryMailbox = new CognitoRecoveryMailbox();
@@ -114,12 +119,13 @@ const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
 const matchesMethod = (expected: string, method: string): boolean => method === '' || method === expected;
 
 const routeOf = (method: string, path: string): SyncRoute => {
-  switch (path) {
+  switch (path.replace('/sync/v2/', '/sync/')) {
     case HEALTH_PATH:
       return matchesMethod('GET', method) ? 'health' : 'unknown';
     case '/sync/protection-predecessor':
     case '/sync/protected-mutations':
     case '/sync/shared-mutations':
+    case '/sync/label-projections':
     case MUTATIONS_PATH:
       return matchesMethod('POST', method) ? 'mutations' : 'unknown';
     case CHANGES_PATH:
@@ -179,7 +185,23 @@ const handleMutation = async (
   event: APIGatewayProxyEventV2WithJWTAuthorizer,
   ownerId: string,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const parsed = parseMutationBody(event.body, event.rawPath === '/sync/protected-mutations', event.rawPath === '/sync/shared-mutations');
+  const v2 = event.rawPath.startsWith('/sync/v2/');
+  if (v2 && event.rawPath === '/sync/v2/mutations') {
+    try {
+      const body = JSON.parse(event.body ?? 'null');
+      if (body?.entityType === 'label') {
+        const result = await labels.apply(ownerId, parseLabelMutation(body));
+        return jsonResponse(result.status === 'applied' ? 200 : 409, result);
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) return invalidMutationResponse('BODY_MALFORMED');
+      const mapped = responseForStoreError('mutations', error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  }
+  const path = event.rawPath.replace('/sync/v2/', '/sync/');
+  const parsed = parseMutationBody(event.body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', v2 ? 2 : 1);
   if (!parsed.ok) {
     logRejected('mutations', parsed.problem);
     return invalidMutationResponse(parsed.problem);
@@ -187,8 +209,8 @@ const handleMutation = async (
 
   try {
     const result = await store.applyMutation(parsed.mutation.ownerId ?? ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
-      inspectOnly: event.rawPath === '/sync/protection-predecessor' });
-    return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+      inspectOnly: path === '/sync/protection-predecessor' });
+    return v2 ? noteV2MutationResponse(result) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
     const mapped = responseForStoreError('mutations', error);
     if (mapped !== undefined) {
@@ -209,7 +231,7 @@ const handleChanges = async (
   }
 
   try {
-    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit));
+    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit, event.rawPath.startsWith('/sync/v2/') ? 2 : 1));
   } catch (error) {
     const mapped = responseForStoreError('changes', error);
     if (mapped !== undefined) {
@@ -244,6 +266,9 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
     if (ownerId === undefined) {
       // Only reachable when the authorizer was bypassed (a direct invoke).
       return unauthorizedResponse();
+    }
+    if (event.rawPath === '/sync/v2/label-projections' && methodOf(event) === 'POST') {
+      return await labelProjectionResponse(ownerId, JSON.parse(event.body ?? 'null'), NOTES_TABLE_NAME, documentClient, security);
     }
 
     return route === 'mutations' ? await handleMutation(event, ownerId) : await handleChanges(event, ownerId);

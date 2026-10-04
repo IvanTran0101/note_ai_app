@@ -31,6 +31,9 @@ final class LabelApplication {
   final void Function(String actor) requestSync;
   final _events = StreamController<void>.broadcast(sync: true);
   Stream<void> get changes => _events.stream;
+  void notifyChanged() {
+    if (!_events.isClosed) _events.add(null);
+  }
 
   ({String actor, int epoch}) _capture() {
     final actor = currentActor();

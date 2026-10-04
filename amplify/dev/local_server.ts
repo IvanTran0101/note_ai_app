@@ -1,5 +1,9 @@
 /** Local dev ONLY: fixed synthetic users, production use cases, no AWS clients. */
 import { createServer, type IncomingMessage } from 'node:http';
+import { DynamoLabelStore } from '../labels/dynamo_label_store';
+import { parseLabelMutation } from '../labels/label_models';
+import { labelProjectionResponse } from '../labels/label_projection_handler';
+import { noteV2MutationResponse } from '../sync/sync_response';
 import { DynamoSyncStore, SyncInvalidCursorError, SyncInvalidMutationError } from '../sync/dynamo_sync_store';
 import { DynamoNoteAcl } from '../sharing/dynamo_note_acl';
 import { DynamoShareStore } from '../sharing/dynamo_share_store';
@@ -42,6 +46,7 @@ const shares = new ShareUseCases(new DynamoShareStore('local-dev', db.client), {
   },
 }, security);
 const sync = new DynamoSyncStore({ tableName: 'local-dev', documentClient: db.client, security, sharing: true });
+const labels = new DynamoLabelStore('local-dev', db.client);
 const relay = new RevisionRelay(new DynamoRelayStore('local-dev', db.client), {
   async read(actor, owner, note) { const s = await acl.read(actor, owner, note); return s?.status === 'active' ? s.accessRevision : null; },
 }, { async publish(actor, signal) {
@@ -65,23 +70,35 @@ function serialized<T>(work: () => Promise<T>): Promise<T> {
 }
 
 async function dispatch(req: IncomingMessage, url: URL, actor: string, body: string) {
+  const v2 = url.pathname.startsWith('/sync/v2/');
+  const path = url.pathname.replace('/sync/v2/', '/sync/');
   const event = { rawPath: url.pathname, body,
     headers: req.headers, queryStringParameters: Object.fromEntries(url.searchParams),
     requestContext: { http: { method: req.method } } } as unknown as Event;
   if (url.pathname.startsWith('/notes/')) return url.pathname.endsWith('/shares')
     ? handleShares(event, actor, shares)
     : handleProtection(event, actor, security, async () => { throw new NoteSecurityError('unavailable'); });
-  if (req.method === 'GET' && url.pathname === '/sync/changes') {
+  if (req.method === 'POST' && url.pathname === '/sync/v2/label-projections') {
+    return labelProjectionResponse(actor, JSON.parse(body), 'local-dev', db.client, security);
+  }
+  if (req.method === 'GET' && path === '/sync/changes') {
     const parsed = parseChangesQuery(event.queryStringParameters);
-    return parsed.ok ? changesResponse(await sync.listChanges(actor, parsed.cursor, parsed.limit))
+    return parsed.ok ? changesResponse(await sync.listChanges(actor, parsed.cursor, parsed.limit, v2 ? 2 : 1))
       : jsonResponse(422, { code: 'INVALID_REQUEST', retryable: false });
   }
-  if (req.method === 'POST' && ['/sync/mutations', '/sync/shared-mutations', '/sync/protected-mutations', '/sync/protection-predecessor'].includes(url.pathname)) {
-    const parsed = parseMutationBody(body, url.pathname === '/sync/protected-mutations', url.pathname === '/sync/shared-mutations');
+  if (req.method === 'POST' && ['/sync/mutations', '/sync/shared-mutations', '/sync/protected-mutations', '/sync/protection-predecessor'].includes(path)) {
+    if (v2 && path === '/sync/mutations') {
+      const decoded = JSON.parse(body);
+      if (decoded?.entityType === 'label') {
+        const result = await labels.apply(actor, parseLabelMutation(decoded));
+        return jsonResponse(result.status === 'applied' ? 200 : 409, result);
+      }
+    }
+    const parsed = parseMutationBody(body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', v2 ? 2 : 1);
     if (!parsed.ok) return jsonResponse(422, { code: 'INVALID_REQUEST', retryable: false });
     const result = await sync.applyMutation(parsed.mutation.ownerId ?? actor, parsed.mutation,
-      { actorId: actor, grant: unlockGrantOf(event), inspectOnly: url.pathname === '/sync/protection-predecessor' });
-    return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+      { actorId: actor, grant: unlockGrantOf(event), inspectOnly: path === '/sync/protection-predecessor' });
+    return v2 ? noteV2MutationResponse(result) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   }
   return jsonResponse(404, { code: 'NOT_FOUND', retryable: false });
 }

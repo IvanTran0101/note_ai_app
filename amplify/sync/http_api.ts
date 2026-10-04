@@ -102,6 +102,11 @@ export const createSyncHttpApi = ({
   api.addRoutes({ path: '/sync/protected-mutations', methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: '/sync/shared-mutations', methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: CHANGES_PATH, methods: [HttpMethod.GET], integration, authorizer });
+  for (const path of [MUTATIONS_PATH, '/sync/protection-predecessor', '/sync/protected-mutations', '/sync/shared-mutations']) {
+    api.addRoutes({path: path.replace('/sync/', '/sync/v2/'), methods: [HttpMethod.POST], integration, authorizer});
+  }
+  api.addRoutes({path: '/sync/v2/changes', methods: [HttpMethod.GET], integration, authorizer});
+  api.addRoutes({path: '/sync/v2/label-projections', methods: [HttpMethod.POST], integration, authorizer});
   api.addRoutes({ path: '/notes/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
 
   return { api, authorizer };

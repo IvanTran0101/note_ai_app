@@ -157,6 +157,9 @@ final class SyncStateReconciliation {
         !snapshot.includesAttachments) {
       throw const SyncFailure(code: SyncErrorCode.invalidMutation);
     }
+    if (requested.payload?.includesLabels == true && !snapshot.includesLabels) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(

@@ -19,6 +19,7 @@
  */
 
 import { parseProtectionChange } from './sync_protection_change';
+import { labelIds } from '../labels/label_models';
 import type { InvalidMutationReason, SyncMutation, SyncOperation } from './dynamo_sync_store';
 
 /** Contract defaults for `GET /sync/changes`; the store clamps to the same window. */
@@ -96,7 +97,7 @@ const readBaseRevision = (value: unknown): number | null =>
  * Unknown fields are ignored, so a later additive contract change does not
  * break older servers.
  */
-export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false): MutationParseResult => {
+export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false, wireVersion: 1 | 2 = 1): MutationParseResult => {
   if (typeof body !== 'string' || body.length === 0) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
@@ -110,6 +111,8 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   if (!isRecord(decoded)) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
+  if (wireVersion === 2 ? decoded.wireVersion !== 2 || decoded.entityType !== 'note' :
+      'wireVersion' in decoded || 'entityType' in decoded) return {ok: false, problem: 'PAYLOAD_INVALID'};
   const ownerId = readIdentifier(decoded.ownerId);
   const accessRevision = decoded.accessRevision;
   if (sharedRoute ? !ownerId || typeof accessRevision !== 'number' || !Number.isSafeInteger(accessRevision) ||
@@ -144,7 +147,7 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
 
   if (operation === 'delete') {
     if (protectionChange) return { ok: false, problem: 'PAYLOAD_INVALID' };
-    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision } };
+    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision, ...(wireVersion === 2 ? {wireVersion: 2} : {}) } };
   }
 
   const payload = decoded.payload;
@@ -153,6 +156,11 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   }
 
   const { title, content } = payload;
+  let ids: readonly string[] | undefined;
+  if (Object.hasOwn(payload, 'labelIds')) {
+    if (wireVersion !== 2 || sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
+    try { ids = labelIds(payload.labelIds); } catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
+  }
   // The verified-object association transaction is not deployed in this
   // checkpoint. Never accept and silently discard a feature-aware manifest.
   if (Object.hasOwn(payload, 'attachments')) {
@@ -180,7 +188,8 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}) },
+    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}) },
+      ...(wireVersion === 2 ? {wireVersion: 2} : {}),
       ...(sharedRoute ? { ownerId: ownerId!, accessRevision: accessRevision as number } : {}),
       ...(protectionChange ? { protectionChange } : {}) },
   };

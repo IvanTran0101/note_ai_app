@@ -1,4 +1,5 @@
 import { parseProtectionChange } from './sync_protection_change';
+import { labelIds } from '../labels/label_models';
 import { decodeShare } from '../sharing/share_models';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
@@ -108,7 +109,7 @@ export const cleanIdentifier = (
   return value;
 };
 
-export const normalizePayload = (operation: SyncOperation, payload: unknown): MutationPayload | null => {
+export const normalizePayload = (operation: SyncOperation, payload: unknown, version = 1): MutationPayload | null => {
   if (operation === 'delete') {
     return null;
   }
@@ -116,6 +117,9 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown): Mu
     throw new SyncInvalidMutationError('PAYLOAD_REQUIRED', 'create and update need a title and content payload.');
   }
   const { title, content } = payload;
+  const hasLabels = Object.hasOwn(payload, 'labelIds');
+  if (hasLabels && version !== 2) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label-aware route required.');
+  const ids = hasLabels ? labelIds(payload.labelIds) : undefined;
   if (Object.hasOwn(payload, 'attachments')) {
     throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified attachment association is required.');
   }
@@ -147,6 +151,7 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown): Mu
     title,
     content,
     ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}),
+    ...(ids ? { labelIds: ids } : {}),
   };
 };
 
@@ -174,7 +179,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
   if (typeof baseRevision !== 'number' || !Number.isSafeInteger(baseRevision) || baseRevision < 0) {
     throw new SyncInvalidMutationError('BASE_REVISION_INVALID', 'baseRevision must be a non-negative whole number.');
   }
-  const payload = normalizePayload(operation, mutation?.payload);
+  const payload = normalizePayload(operation, mutation?.payload, mutation?.wireVersion ?? 1);
   const protectionChange = mutation?.protectionChange === undefined ? undefined : parseProtectionChange(mutation.protectionChange);
   if (protectionChange && operation === 'delete') {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Protection changes require content.');
@@ -186,11 +191,12 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid shared mutation.');
   }
 
-  if (ownerId && payload && Object.hasOwn(payload, 'pinnedAt')) {
+  if (ownerId && payload && (Object.hasOwn(payload, 'pinnedAt') || Object.hasOwn(payload, 'labelIds'))) {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Shared text writes cannot organize notes.');
   }
   return {
     mutationId,
+    ...(mutation.wireVersion === 2 ? {wireVersion: 2} : {}),
     noteId,
     operation,
     baseRevision,
@@ -207,6 +213,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         ...(payload && Object.hasOwn(payload, 'pinnedAt') ? [payload.pinnedAt] : []),
         ...(protectionChange ? [protectionChange] : []),
         ...(ownerId ? [ownerId, accessRevision] : []),
+        ...(mutation.wireVersion === 2 ? [2, 'note', payload?.labelIds ?? null] : []),
       ])}`,
     ),
   };
@@ -227,6 +234,7 @@ export const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unkno
   ...(snapshot.ownerId ? { canonicalOwnerId: snapshot.ownerId } : {}),
   ...(snapshot.share ? { share: snapshot.share } : {}),
   ...(snapshot.sharingRevision !== undefined ? { sharingRevision: snapshot.sharingRevision } : {}),
+  ...(snapshot.labelIds !== undefined ? { labelIds: snapshot.labelIds } : {}),
 });
 
 export const stringFieldOf = (item: Record<string, unknown>, name: string): string => {
@@ -271,6 +279,7 @@ export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
     ...(typeof item.canonicalOwnerId === 'string' ? { ownerId: item.canonicalOwnerId } : {}),
     ...(item.share !== undefined ? { share: decodeShare(item) } : {}),
     ...(item.sharingRevision !== undefined ? { sharingRevision: membershipRevision(item) } : {}),
+    ...(Object.hasOwn(item, 'labelIds') ? {labelIds: labelIds(item.labelIds)} : {}),
   };
 };
 
@@ -349,6 +358,7 @@ export const nextSnapshot = (
   protected: remote?.protected ?? false,
   protectionRevision: remote?.protectionRevision ?? 0,
   ...(remote?.sharingRevision !== undefined ? { sharingRevision: remote.sharingRevision } : {}),
+  labelIds: request.payload?.labelIds ?? remote?.labelIds ?? [],
 });
 
 export function membershipRevision(row: Record<string, unknown>): number {

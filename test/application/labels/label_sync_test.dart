@@ -217,8 +217,9 @@ void main() {
       );
       final r = Remote()
         ..onPush = (m) async {
-          if (m.entityType == SyncEntityType.label)
+          if (m.entityType == SyncEntityType.label) {
             throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+          }
           return SyncMutationResult.applied(
             mutationId: m.mutationId,
             note: snapshot(m),

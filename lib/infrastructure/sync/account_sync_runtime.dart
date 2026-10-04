@@ -1,4 +1,5 @@
 import '../../application/sync/sync_mutation.dart';
+import '../../application/sync/local_note_state.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../../application/sync/sync_failure.dart';
 
@@ -29,10 +30,16 @@ final class AccountSyncRuntime {
     this.sessionGeneration,
     SyncAccessTokenProvider? tokenProvider,
     this.client,
+    this.labelsEnabled = false,
+    this.projectionGrant,
+    this.onCatalogChanged,
   }) : _clock = clock ?? DateTime.now,
        tokenProvider = tokenProvider ?? const CognitoAccessTokenProvider().call;
 
   final Uri baseUri;
+  final bool labelsEnabled;
+  final void Function(String actor)? onCatalogChanged;
+  final String? Function(String account, LocalNoteState note)? projectionGrant;
   final SyncAccessTokenProvider tokenProvider;
   final http.Client? client;
   final Future<String?> Function(String account, SyncMutation mutation)?
@@ -67,6 +74,8 @@ final class AccountSyncRuntime {
 
       final HttpRemoteNoteDataSource remote = HttpRemoteNoteDataSource(
         baseUri: baseUri,
+        labelsEnabled: labelsEnabled,
+        projectionGrant: (note) => projectionGrant?.call(accountUserId, note),
         tokenProvider: tokenProvider,
         client: client,
         expectedAccountUserId: accountUserId,
@@ -77,6 +86,7 @@ final class AccountSyncRuntime {
       _remoteDataSources[accountUserId] = remote;
       return SyncCoordinatorService(
         accountUserId: accountUserId,
+        labelsEnabled: labelsEnabled,
         localStore: localSyncStoreFactory(accountUserId: accountUserId),
         remote: remote,
         clock: _clock,
@@ -97,8 +107,11 @@ final class AccountSyncRuntime {
   }
 
   /// Exposes a manual/run-to-completion path for future sync UI and tests.
-  Future<SyncReport> syncNow(String accountUserId) {
-    return coordinatorFor(accountUserId).syncNow();
+  Future<SyncReport> syncNow(String accountUserId) async {
+    final report = await coordinatorFor(accountUserId).syncNow();
+    requireSession?.call(accountUserId);
+    if (labelsEnabled) onCatalogChanged?.call(accountUserId);
+    return report;
   }
 
   Future<void> _syncBestEffort(String accountUserId) async {

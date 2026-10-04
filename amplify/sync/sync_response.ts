@@ -51,6 +51,8 @@ export type NoteBody = Readonly<{
   deletedAt: string | null;
   ownerId?: string;
   share?: NoteSnapshot['share'];
+  labelIds?: readonly string[];
+  labelProjections?: NoteSnapshot['labelProjections'];
 }>;
 
 export type AppliedMutationBody = Readonly<{
@@ -112,7 +114,7 @@ const errorResponse = (statusCode: number, body: SyncErrorBody): APIGatewayProxy
   jsonResponse(statusCode, body);
 
 /** Projects a stored snapshot onto the wire shape, so storage fields cannot leak. */
-export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false): NoteBody => ({
+export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false, labels = false): NoteBody => ({
   id: note.id,
   ...((!note.protected || authorizedContent) && note.contentAvailable !== false ? { title: note.title, content: note.content } : {}),
   ...(note.protected || note.protectionRevision ? { protected: note.protected ?? false,
@@ -126,6 +128,8 @@ export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false): NoteB
   serverUpdatedAt: note.serverUpdatedAt,
   pinnedAt: note.pinnedAt ?? null,
   deletedAt: note.deletedAt,
+  ...(labels ? {labelIds: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelIds ?? [] : [],
+    labelProjections: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelProjections ?? [] : []} : {}),
 });
 
 /**
@@ -170,7 +174,18 @@ export const conflictResponse = (result: ConflictedMutation): APIGatewayProxyStr
   jsonResponse(409, conflictBody(result));
 
 export const changesResponse = (page: ChangesPage): APIGatewayProxyStructuredResultV2 =>
-  jsonResponse(200, changesPageBody(page));
+  jsonResponse(200, page.wireVersion === 2 ? {wireVersion: 2,
+    items: [...page.items.map(note => ({entityType: 'note', note: noteBodyOf(note, false, true)})),
+      ...(page.labels ?? []).map(label => ({entityType: 'label', label}))],
+    nextCursor: page.nextCursor, hasMore: page.hasMore,
+    ...(page.catchUpPending ? {catchUpPending: true} : {})} : changesPageBody(page));
+
+export function noteV2MutationResponse(result: AppliedMutation | ConflictedMutation): APIGatewayProxyStructuredResultV2 {
+  return jsonResponse(result.status === 'applied' ? 200 : 409,
+    result.status === 'applied' ? {wireVersion: 2, entityType: 'note', status: 'applied', mutationId: result.mutationId,
+      note: noteBodyOf(result.note, false, true)} : {wireVersion: 2, entityType: 'note', code: 'REVISION_CONFLICT',
+      retryable: false, mutationId: result.mutationId, remoteNote: result.remoteNote ? noteBodyOf(result.remoteNote, false, true) : null});
+}
 
 /**
  * Reached only when the authorizer was bypassed: the deployed API rejects an

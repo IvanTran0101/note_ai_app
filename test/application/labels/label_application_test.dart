@@ -59,6 +59,13 @@ void main() {
     return NoteDto.fromDomain(n);
   }
 
+  test('never-sent create deleted offline keeps tombstone but cancels catalog upload', () async {
+    final row = await labels.create('Transient');
+    await labels.delete(row.id);
+    final state = await store.read();
+    expect(state.labels.single.isDeleted, true);
+    expect(state.outbox, isEmpty);
+  });
   test(
     'catalog CRUD persists locally with typed outbox; duplicates and no-op',
     () async {
