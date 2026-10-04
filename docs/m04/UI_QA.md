@@ -5,6 +5,12 @@ Chrome persistent owner profile and Android emulator-5554; installed/encrypted
 data preserved. This receipt covers observed UI flows, separate from source
 tests and deployed AWS acceptance.
 
+Latest reproduced defect: recipient Viewer retains a blocked old-grant draft.
+After owner association advanced the Note revision, scoped HTTP returned the
+correct label while the client suppressed its chip. Shared metadata refresh is
+now passes98 focused Label/sync tests, including current Editor draft and stale
+snapshot rejection. Actual clients and M04.7 are being retested.
+
 ## Accepted observations so far
 
 - Chrome/Android each created a Label through Manage labels; the other client

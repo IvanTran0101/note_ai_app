@@ -87,11 +87,14 @@ final class SyncPageProjection {
         !snapshot.includesLabels ||
         !snapshot.contentAvailable ||
         !old.contentAvailable ||
-        snapshot.revision != old.serverRevision ||
+        (snapshot.revision != old.serverRevision &&
+            (old.share == null || snapshot.revision < old.serverRevision)) ||
         snapshot.protection != old.protection ||
         snapshot.share != old.share) {
       return;
     }
+    // Shared membership is server-owned metadata even while a text draft is
+    // pending. Refresh it without changing the draft's content/base revision.
     final ids = old.share == null ? old.labelIds : snapshot.labelIds;
     final projections = snapshot.labelProjections;
     if (sameLabelIds(ids, old.labelIds) &&

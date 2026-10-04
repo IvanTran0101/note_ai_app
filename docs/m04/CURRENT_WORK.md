@@ -89,11 +89,22 @@ Preserve backend state/key, Web profile, emulator and unrelated files.
 
 ## Continuation — 2026-10-05
 
+Current QA found shared label metadata suppressed behind a blocked old-grant
+draft when the owner association advanced the Note revision. Actual recipient
+HTTP returned one label, but the chip stayed absent. Regression reproduced
+Expected current/Actual previous before the fix. Shared metadata now accepts
+same/newer revisions with identical current ACL/protection; body/base/outbox
+remain unchanged. Focused Label/sync98/98 PASS, including Viewer blocked old
+grant, current Editor draft and older snapshot rejection. Actual retest and
+final M04.7/.8 receipt pending. Keep encrypted
+profiles/state/AVD; do not replay the blocked old grant. Previous source8b5637a
+passed VM1148/2 skips, analyzer clean, backend64/tsc and dev config14/14.
+
 Search/copy QA fix pushed04886fa. Android protected reconnect exposed owned
 projection ownerId omission incorrectly classified as forbidden. New regression
 failed before and passed after actor-bound implicit-owner matching; HTTP39/39.
 Full VM31230 running m04-final-regression-v2.log. Old Gradle42346 interrupted
-because it stalled concurrently with Flutter generation; no APK acceptance.
+after source changed during generation; no APK acceptance from that attempt.
 Next cold restart Web/build APK sequentially after suite, retest actual unlock/
 refresh and offline query, then complete M04.7/.8 Notion + handoff. Data retained.
 
