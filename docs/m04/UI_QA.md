@@ -94,3 +94,14 @@ M09 and live AWS deployment remain outside this implementation batch.
 
 Final rebuilt Android search geometry, protected reconnect and final handoff
 receipt remain; do not treat this running journal as completed actual QA.
+
+### Protected reconnect defect — reproduced and fixed
+
+Actual Android online unlock restored the offline edit and Label, but manual
+sync reported forbidden. The owned scoped projection legitimately omits ownerId;
+the new HTTP refresh compared that null directly against the explicit request.
+Resolve missing owner only from the adapter's authenticated expected actor,
+never from an arbitrary requested owner. Explicit foreign responses remain denied.
+Regression failed before the fix with SyncFailure(forbidden); after the fix,
+HTTP Label/general adapter39/39 PASS. Full regression and rebuilt actual clients
+are being repeated; do not count the interrupted Gradle build as a final APK.

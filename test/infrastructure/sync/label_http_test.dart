@@ -190,6 +190,61 @@ void main() {
       throwsA(isA<SyncFailure>()),
     );
   });
+
+  test(
+    'owned protected projection accepts the server implicit actor owner',
+    () async {
+      final remote = adapter(
+        MockClient(
+          (r) async => http.Response(
+            jsonEncode({
+              'wireVersion': 2,
+              'items': [
+                {
+                  'entityType': 'note',
+                  'note': wireNote(protected: true)..remove('ownerId'),
+                },
+              ],
+              'hasMore': false,
+            }),
+            200,
+          ),
+        ),
+        grant: (_) => 'transient',
+      );
+      final notes = await remote.refreshLabels([localProtected()]);
+      expect(notes.single.identityFor('owner'), localProtected().identity);
+      expect(notes.single.labelProjections.single.name, 'Label');
+    },
+  );
+
+  test(
+    'an explicit foreign owner cannot match an owned projection request',
+    () async {
+      final remote = adapter(
+        MockClient(
+          (r) async => http.Response(
+            jsonEncode({
+              'wireVersion': 2,
+              'items': [
+                {
+                  'entityType': 'note',
+                  'note': wireNote(protected: true)..['ownerId'] = 'foreign',
+                },
+              ],
+              'hasMore': false,
+            }),
+            200,
+          ),
+        ),
+        grant: (_) => 'transient',
+      );
+      await expectLater(
+        remote.refreshLabels([localProtected()]),
+        throwsA(isA<SyncFailure>()),
+      );
+    },
+  );
 }
 
 LocalNoteState localProtected() => LocalNoteState(

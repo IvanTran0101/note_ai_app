@@ -158,15 +158,14 @@ final class HttpRemoteNoteDataSource
         throw const FormatException('Scoped Note response required.');
       }
       for (final snapshot in page.snapshots) {
+        // Owned wire snapshots use the authenticated actor as implicit owner.
+        // Never infer a missing owner from the requested resource itself.
+        final owner = snapshot.ownerId ?? _expectedAccountUserId;
         final ref = request
-            .where(
-              (r) =>
-                  r['ownerId'] == snapshot.ownerId &&
-                  r['noteId'] == snapshot.id,
-            )
+            .where((r) => r['ownerId'] == owner && r['noteId'] == snapshot.id)
             .firstOrNull;
         final note = batch
-            .where((n) => n.ownerId == snapshot.ownerId && n.id == snapshot.id)
+            .where((n) => n.ownerId == owner && n.id == snapshot.id)
             .firstOrNull;
         if (ref == null || note == null || !snapshot.includesLabels) {
           throw const SyncFailure(code: SyncErrorCode.forbidden);

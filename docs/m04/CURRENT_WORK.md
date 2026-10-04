@@ -89,6 +89,14 @@ Preserve backend state/key, Web profile, emulator and unrelated files.
 
 ## Continuation — 2026-10-05
 
+Search/copy QA fix pushed04886fa. Android protected reconnect exposed owned
+projection ownerId omission incorrectly classified as forbidden. New regression
+failed before and passed after actor-bound implicit-owner matching; HTTP39/39.
+Full VM31230 running m04-final-regression-v2.log. Old Gradle42346 interrupted
+because it stalled concurrently with Flutter generation; no APK acceptance.
+Next cold restart Web/build APK sequentially after suite, retest actual unlock/
+refresh and offline query, then complete M04.7/.8 Notion + handoff. Data retained.
+
 Current source full1146/2 skips and analyzer clean61s, geometry widgets5/5;
 confirmed Web search semantics bounds fixed and real physical pointer/keyboard
 No matching notes observed. Access-lost copy corrected with regression. Committing
