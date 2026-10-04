@@ -1,4 +1,7 @@
 import 'infrastructure/security/note_security_runtime.dart';
+import 'infrastructure/security/encrypted_sync_store.dart';
+import 'infrastructure/attachments/attachment_runtime.dart';
+import 'infrastructure/attachments/flutter_attachment_picker.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -476,6 +479,19 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         requestSync: _requestSyncForAccount,
         security: _noteSecurityRuntime,
       );
+  late final _attachmentRuntime = AttachmentRuntime(
+    security: _noteSecurityRuntime,
+    notes: _noteRepository,
+    storeForAccount: (actor) {
+      final store = _localSyncStoreForAccount(accountUserId: actor);
+      if (store is! EncryptedSyncStore) {
+        throw StateError('Attachments require the encrypted account store.');
+      }
+      return store;
+    },
+    requestSync: _requestSyncForAccount,
+  );
+  late final _attachmentPicker = FlutterAttachmentPicker();
   late final NotesApplicationController _notesController =
       NoteApplicationServiceController(
         _noteApplicationService,
@@ -487,6 +503,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         readSessionGeneration: () => _currentUserSession.sessionGeneration,
         serverAvailable: _noteSecurityRuntime.serverAvailable,
         sharingForCurrentAccount: _sharingForCurrentAccount,
+        attachmentsForCurrentAccount: () {
+          if (_currentUserSession.userId == null) return null;
+          final store = _localSyncStoreForAccount(
+            accountUserId: _currentUserSession.requiredUserId,
+          );
+          return store is EncryptedSyncStore
+              ? _attachmentRuntime.forCurrentAccount()
+              : null;
+        },
+        attachmentPicker: _attachmentPicker.pick,
       );
 
   late final SummaryConsentAppService _summaryConsentService =

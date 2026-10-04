@@ -1,5 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
+import 'package:note_ai_app/application/notes/note_security_service.dart';
+import 'package:note_ai_app/presentation/notes/attachment_editor_panel.dart';
+import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/attachments/attachment_application.dart';
 import 'package:note_ai_app/application/attachments/attachment_binding.dart';
@@ -82,6 +89,44 @@ final class _Drafts implements AttachmentDraftStore {
   @override
   Future<void> cancelLocal(AttachmentBinding binding, String id) async {
     queued = false;
+  }
+}
+
+final class _PanelAttachments implements AttachmentNotesController {
+  _PanelAttachments(this.attachments);
+  @override
+  final AttachmentApplicationService attachments;
+  @override
+  Future<List<AttachmentInput>> pickAttachments(
+    AttachmentSource source,
+  ) async => [];
+}
+
+final class _PanelSecurity implements SecuredNotesController {
+  final events = StreamController<void>.broadcast(sync: true);
+  bool allowed = true;
+  @override
+  NoteSecurityService? get noteSecurity => null;
+  @override
+  Stream<void> get securityChanges => events.stream;
+  @override
+  int get accessGeneration => allowed ? 0 : 1;
+  @override
+  int get sessionGeneration => 1;
+  @override
+  bool get securityServerAvailable => false;
+  @override
+  Future<NoteDto> readNote(String id) async => throw UnimplementedError();
+  @override
+  NoteAccessCapabilities capabilitiesFor(NoteDto note) =>
+      NoteAccessCapabilities(
+        canRead: allowed,
+        canManage: allowed,
+        canExport: allowed,
+      );
+  void invalidate() {
+    allowed = false;
+    events.add(null);
   }
 }
 
@@ -239,6 +284,113 @@ void main() {
       expect(uploads, 1);
       expect(store.state.outbox.length, count);
       expect(drafts.linked, isTrue);
+    },
+  );
+
+  test('picker result is rejected after authority changes', () async {
+    final selected = Completer<List<AttachmentInput>>();
+    final started = Completer<void>();
+    final work = service.pickAndStage('note', () {
+      started.complete();
+      return selected.future;
+    });
+    await started.future;
+    allowed = false;
+    selected.complete([
+      AttachmentInput(
+        fileName: 'hello.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 5,
+        openRead: ([start, end]) => Stream.value([104, 101, 108, 108, 111]),
+      ),
+    ]);
+    await expectLater(work, throwsStateError);
+    expect(drafts.queued, isFalse);
+    expect(uploads, 0);
+    expect(store.state.outbox, isEmpty);
+  });
+
+  test('cancelled picker creates no pending data or note mutation', () async {
+    await service.pickAndStage('note', () async => []);
+    expect(drafts.queued, isFalse);
+    expect(store.state.outbox, isEmpty);
+  });
+
+  test('local reader rechecks authority at stream completion', () async {
+    await stage();
+    final work = service.readLocal('note', draft.cacheId).listen((chunk) {
+      expect(chunk, [104, 101, 108, 108, 111]);
+      allowed = false;
+    }).asFuture<void>();
+    await expectLater(work, throwsStateError);
+    expect(uploads, 0);
+    expect(store.state.outbox, isEmpty);
+    expect(drafts.queued, isTrue);
+  });
+
+  testWidgets(
+    'Pending editor retry retains draft; lock clears preview and names',
+    (tester) async {
+      Future<void> settlePanel() async {
+        // The repository fake schedules a zero-delay timer for each read.
+        // Flush those timers even while the idle panel has no scheduled frame.
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 10));
+        }
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpAndSettle();
+      }
+
+      await tester.runAsync(stage);
+      transport = (_, _, _) async =>
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+      final security = _PanelSecurity();
+      addTearDown(security.events.close);
+      final domainNote = await tester.runAsync(
+        () => repository.findById('note'),
+      );
+      final note = NoteDto.fromDomain(domainNote!);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentEditorPanel(
+              note: note,
+              controller: _PanelAttachments(service),
+              security: security,
+              enabled: true,
+            ),
+          ),
+        ),
+      );
+      await settlePanel();
+      expect(
+        find.text('hello.txt'),
+        findsOneWidget,
+        reason: tester
+            .widgetList<Text>(find.byType(Text))
+            .map((text) => text.data)
+            .join(' | '),
+      );
+      expect(find.textContaining('Pending on this device'), findsOneWidget);
+      await tester.tap(find.byTooltip('Retry upload'));
+      await settlePanel();
+      expect(
+        find.textContaining('Cloud attachments are unavailable'),
+        findsOneWidget,
+      );
+      expect(drafts.queued, isTrue);
+      expect(store.state.outbox, isEmpty);
+      await tester.tap(find.text('hello.txt'));
+      await settlePanel();
+      expect(find.text('hello'), findsOneWidget);
+      allowed = false;
+      security.invalidate();
+      await settlePanel();
+      expect(find.text('hello'), findsNothing);
+      expect(find.text('hello.txt'), findsNothing);
+      expect(drafts.queued, isTrue);
     },
   );
 

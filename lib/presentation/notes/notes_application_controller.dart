@@ -1,9 +1,16 @@
+import '../../application/attachments/attachment_application.dart';
+import '../../application/attachments/attachment_input.dart';
 import '../../application/notes/note_application.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import '../../application/notes/note_sharing_app_service.dart';
+
+abstract interface class AttachmentNotesController {
+  AttachmentApplicationService? get attachments;
+  Future<List<AttachmentInput>> pickAttachments(AttachmentSource source);
+}
 
 abstract interface class SharingNotesController {
   Future<List<NoteDto>> listSharedNotes();
@@ -87,7 +94,8 @@ final class NoteApplicationServiceController
         NotesModule02Controller,
         SecuredNotesController,
         SharingNotesController,
-        SnapshotNotesController {
+        SnapshotNotesController,
+        AttachmentNotesController {
   const NoteApplicationServiceController(
     this._service, {
     this.summaryConsent,
@@ -97,7 +105,24 @@ final class NoteApplicationServiceController
     this.readSessionGeneration,
     this.serverAvailable = false,
     this.sharingForCurrentAccount,
+    this.attachmentsForCurrentAccount,
+    this.attachmentPicker,
   });
+
+  final AttachmentApplicationService? Function()? attachmentsForCurrentAccount;
+  final Future<List<AttachmentInput>> Function(AttachmentSource)?
+  attachmentPicker;
+  @override
+  AttachmentApplicationService? get attachments =>
+      attachmentsForCurrentAccount?.call();
+  @override
+  Future<List<AttachmentInput>> pickAttachments(AttachmentSource source) async {
+    final pick = attachmentPicker;
+    if (pick == null) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+    }
+    return pick(source);
+  }
 
   final NoteSecurityService Function()? securityForCurrentAccount;
   final Stream<void> securityEvents;

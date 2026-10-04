@@ -141,6 +141,19 @@ extension _NoteDetailView on NoteDetailPageState {
       statusMessage: _statusMessage,
       actionBusy: _actionBusy,
       readOnly: _securityBusy || _securityLoading || !_canEdit,
+      attachments:
+          _note != null && widget.notesController is AttachmentNotesController
+          ? AttachmentEditorPanel(
+              key: ValueKey(_note!.identity),
+              note: _note!,
+              controller: widget.notesController as AttachmentNotesController,
+              security: _securityController,
+              enabled:
+                  !_securityBusy &&
+                  !_securityLoading &&
+                  _capabilities.canManage,
+            )
+          : null,
       provisioningReader: widget.provisioningReader,
       onProvisioningRetry: _note == null ? null : _summarize,
       onProvisioningCancel: widget.onProvisioningCancel,

@@ -113,6 +113,41 @@ final class AttachmentApplicationService {
     return draft;
   }
 
+  /// Capture authority BEFORE opening a platform picker. A result from an old
+  /// account/lock session must never be staged under a freshly captured actor.
+  Future<void> pickAndStage(
+    String noteId,
+    Future<List<AttachmentInput>> Function() pick,
+  ) async {
+    final binding = await _capture(noteId);
+    await _fresh(binding);
+    final selected = await pick();
+    _requireOwner(binding);
+    for (final input in selected) {
+      final note = await _fresh(binding);
+      await drafts.stage(binding, input, existing: note.attachments);
+      _requireOwner(binding);
+    }
+  }
+
+  /// Bounded local preview; no raw key, grant or filesystem path reaches UI.
+  /// The original authority is rechecked for every chunk and at completion.
+  Stream<List<int>> readLocal(
+    String noteId,
+    String cacheId, {
+    int? end,
+  }) async* {
+    final binding = await _capture(noteId);
+    await _fresh(binding);
+    final draft = await drafts.load(binding, cacheId);
+    _requireOwner(binding);
+    await for (final chunk in drafts.read(binding, draft, end: end)) {
+      _requireOwner(binding);
+      yield chunk;
+    }
+    _requireOwner(binding);
+  }
+
   Future<List<LocalAttachmentDraft>> pending(String noteId) async {
     final binding = await _capture(noteId);
     await _fresh(binding);

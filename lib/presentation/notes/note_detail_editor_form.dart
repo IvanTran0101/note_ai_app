@@ -31,6 +31,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.showSaveState = true,
     required this.actionBusy,
     this.readOnly = false,
+    this.attachments,
     this.isSummarizing = false,
     this.showBusyIndicator = true,
     required this.provisioningReader,
@@ -64,6 +65,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool showSaveState;
   final bool actionBusy;
   final bool readOnly;
+  final Widget? attachments;
   final bool isSummarizing;
   final bool showBusyIndicator;
   final IModelProvisioningReader? provisioningReader;
@@ -167,6 +169,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
           copyLabel: copySummaryLabel,
           regenerateLabel: regenerateSummaryLabel,
         ),
+        ?attachments,
         Container(
           key: contentFieldContextKey,
           child: Align(
