@@ -1,5 +1,23 @@
 # MUST REMEMBER
 
+## Active request — M03 incoming + M04 implementation (2026-10-04)
+
+User authorized integrating the new partial M03 from final-TanMinh, implementing
+M04 from the collaborator's Notion plan, running regression and actual Chrome/
+Android UI QA, fixing bugs and updating/pushing final-tuankiet per milestone.
+M03 incoming is03b5326 on baselineb5ecc64. Merge text is clean but runtime QA is
+pending. Preserve every accepted M02/M05/M06/UI QA fix and unrelated dirty file.
+Do not finish/deploy the remaining M03 cloud routes for the collaborator; current
+Pending attachment flow intentionally fails closed against the legacy backend.
+Read docs/m04/CURRENT_WORK.md for active continuity and Notion progress URL.
+User approved M04 A/A/A: duplicate names with stable IDs,64 Unicode code points
+per name and32 labels/note; coordinated schema/typed two-way sync with legacy
+preservation; recipient labels only for currently readable shared notes.
+ALL+keyword, pin-first and owner-only organize are already settled.
+Local-first, one encrypted store/writer/outbox/cursor and
+full pin/attachments/protection/share/draft preservation remain mandatory.
+M09 stays deferred. Actual QA page now lives under final flutter on Notion.
+
 ## Latest actual UI QA — 2026-10-04
 
 Read docs/m06/UI_QA.md for the Chrome/Android manual receipt and standalone
