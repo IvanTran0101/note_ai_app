@@ -1,5 +1,19 @@
 # MUST REMEMBER
 
+## Latest actual UI QA — 2026-10-04
+
+Read docs/m06/UI_QA.md for the Chrome/Android manual receipt and standalone
+Notion journal. Six presentation defects and one local socket-fixture defect
+were fixed/retested; newest focused widgets103/103, fixture3/3 and analyzer
+clean. These counts are separate from historical full integration suites below.
+Web offline password administration and native offline cached unlock/edit were
+verified; native password administration was tested online. AWS/SES/PWA cold
+offline/inactivity timing remain separate unverified gates. Preserve encrypted
+revoked drafts: a new share grant must not silently replay the old grant's draft.
+Emulator host crashes0xc0000005 interrupted retries; final native conflict,
+Use cloud, diagnostics and logout passed using the launch flags in UI_QA.md.
+M09 remains deferred. Keep this file the first read before each coding turn.
+
 ## Active checkpoint — M02 integrated with M05/M06 (2026-10-04)
 
 User authorized integrating final-TanMinh M02, fixing conflicts, testing and

@@ -1,5 +1,49 @@
 # M06 current work
 
+## Active user UI QA — 2026-10-04
+
+User requests actual Chrome browser and Android emulator UI testing of every
+current M02/M05/M06 feature, fixing/retesting confirmed bugs. Previous automated
+platform receipts are supplemental, not a replacement. Start baseline b5ecc64.
+Standalone Notion journal outside the main page:
+https://app.notion.com/p/3eef9c7a1aa0818d85c4ebdfdcca2015.
+Use main_dev actual UI and synthetic QA-20261004 notes/two dev actors. Preserve
+old notes, encrypted state/key, AVD data and unrelated dirty macOS/untracked files.
+No M09 redesign, attachment implementation or deployment. Graph Transport closed;
+source fallback and bounded evidence; generation2026-10-02 is stale. _agent_ops
+unavailable. UI/source fixes committed at7b1b0bd; fixture/test atb9a662e.
+All final UI checks in UI_QA.md are complete. Publication and verified remote
+SHA are recorded in the standalone Notion receipt; do not count old automated
+suites as this manual QA evidence.
+
+### UI QA continuation checkpoint
+
+Final focused widget suite103/103 and analyzer clean156.7s; fixture3/3 passes.
+QA-04 refreshes Home after account note notifications; QA-05 removes compact
+sidebar overflow. QA-06 fixes multiple same-actor connections in the local socket
+fixture. QA-07 retains a stable semantics boundary around animated save status:
+actual accessible Chrome typing now keeps focus/full text on two saved notes.
+Final owner APK built54.4s and installed with -r, retaining AVD data. Recipient
+UI checked all earlier fixes; QA-07 applies to Chrome accessibility.
+Actual native Keep local and Chrome Use cloud, offline revoke/masked draft,
+new-grant replay fence, owned queue independence, positive delete and logout
+passed. Web password administration works offline; native cached unlock/edit
+works offline, native password administration was checked online only. Whitespace
+Save is rejected; native Cancel retains draft and Discard leaves no note.
+Three additional native Use cloud attempts were interrupted by host QEMU
+crashes0xc0000005 (Windows event1000); those attempts are excluded. Same AVD
+with host GPU/Vulkan disabled completed actual native conflict→Use cloud→
+All synced with correct text. Final native diagnostics/Back/logout and Web
+recovery unavailable guard/logout also passed. See UI_QA.md for platform matrix,
+evidence, exact commands and limits; new standalone Notion checklist is verified.
+Final native title-only/empty-body Save is rejected; valid title+body Back→Save
+creates the expected note and reaches All synced.
+Code/APK source is unchanged after103-test pass. Next scope: collaborator M03
+can consume the integrated core; deployed provider gates remain in LIVE_GATE.md.
+M09 waits for both collaborators, combined integration/testing and a new plan.
+Responsive screenshot review confirms center1000px/full390px retain selection;
+fresh Chrome console0 errors/0 warnings. External AWS/SES remains unverified.
+
 ## Latest active integration — 2026-10-04
 
 M02 aabf229 integrated with M05/M06 on final-tuankiet, starting276c749.
