@@ -35,10 +35,24 @@ export class AttachmentUseCases {
       if (old.actorId !== actor || JSON.stringify(fileMetadata(old)) !== JSON.stringify(m)) throw new AttachmentError('invalid');
       // Owner's fresh authority can continue the same immutable payload after
       // password administration. Linked/unlinked objects are never rebound.
-      if ((old.protectionRevision !== a.revision || old.protected !== a.enabled) &&
-          ['uploading', 'verifying', 'verified'].includes(old.phase) && !n.attachments?.some(x => x.id === id)) {
-        await this.attempts.save(old, {...old, protected: a.enabled, protectionRevision: a.revision,
-          phase: old.phase === 'verifying' ? 'uploading' : old.phase, generation: old.generation + 1}, a, n.revision);
+      if (['uploading', 'verifying', 'verified'].includes(old.phase) && !n.attachments?.some(x => x.id === id)) {
+        let next = old;
+        if (old.protectionRevision !== a.revision || old.protected !== a.enabled) {
+          next = {...next, protected: a.enabled, protectionRevision: a.revision,
+            phase: old.phase === 'verifying' ? 'uploading' : old.phase};
+        }
+        // A staging lifecycle expiry cannot strand a durable local draft.
+        // Inspect pinned versions in bounded batches; transient storage failure
+        // keeps the existing ACKs, while proven absence restarts the same payload.
+        if (next.phase === 'uploading' || next.phase === 'verifying') {
+          for (let offset = 0; offset < next.chunks.length; offset += 10) {
+            const exists = await Promise.all(next.chunks.slice(offset, offset + 10).map((chunk, i) =>
+              this.objects.hasVersion(stagingKey(next, offset + i), chunk.version)));
+            await this.authority(actor, owner, note, 'attachmentWrite', grant);
+            if (exists.some(x => !x)) {next = {...next, phase: 'uploading', chunks: []}; break;}
+          }
+        }
+        if (next !== old) await this.attempts.save(old, {...next, generation: old.generation + 1}, a, n.revision);
       }
       return this.status(actor, owner, note, id, grant);
     }

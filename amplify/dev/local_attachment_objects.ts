@@ -73,6 +73,9 @@ export class LocalAttachmentObjects implements AttachmentObjectStore {
       finally { p.fill(0); }
     }
   }
+  async hasVersion(key: string, version: string) {
+    return existsSync(this.name(key, key.startsWith('staging/') ? version : `${version}-manifest`));
+  }
   async finalize(key: string, m: FileMetadata, chunks: AsyncIterable<Uint8Array>) {
     const head = this.name(key, 'head');
     if (existsSync(head)) {

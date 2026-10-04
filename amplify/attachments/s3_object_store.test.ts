@@ -35,6 +35,20 @@ test('signed PUT is fixed256KiB staging, checksum/encryption-bound and120s; no G
   await assert.rejects(() => adapter.uploadUrl('staging/x', CHUNK_BYTES + 1, 'b'.repeat(64)));
   s3.destroy();
 });
+
+test('pinned version existence distinguishes expiry from transient S3 failure', async () => {
+  let state = 'exists';
+  const client = {send: async (c: HeadObjectCommand) => {
+    assert.equal(c.input.VersionId, 'pinned');
+    if (state === 'expired') throw Object.assign(Error(), {name: 'NoSuchVersion'});
+    if (state === 'offline') throw Object.assign(Error(), {name: 'TimeoutError'});
+    return {VersionId: 'pinned'};
+  }} as unknown as S3Client;
+  const adapter = new S3AttachmentObjects('b', client);
+  assert.equal(await adapter.hasVersion('staging/x', 'pinned'), true);
+  state = 'expired'; assert.equal(await adapter.hasVersion('staging/x', 'pinned'), false);
+  state = 'offline'; await assert.rejects(() => adapter.hasVersion('staging/x', 'pinned'));
+});
 test('S3 final assembly buffers bounded5MiB parts; exact version Range and unknown Complete ACK reuse', async () => {
   const bytes = Buffer.alloc(5 * 1024 * 1024 + 19, 65), sha256 = createHash('sha256').update(bytes).digest('hex');
   const parts: Buffer[] = [], commands: any[] = []; let version: string | null = null;

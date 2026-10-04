@@ -38,6 +38,15 @@ export class S3AttachmentObjects implements AttachmentObjectStore {
     }
     if (n !== end - start) throw new AttachmentError('invalid');
   }
+  async hasVersion(key: string, version: string) {
+    try {
+      const h = await this.client.send(new HeadObjectCommand({Bucket: this.bucket, Key: key, VersionId: version}));
+      return h.VersionId === version;
+    } catch (e) {
+      if (['NotFound', 'NoSuchKey', 'NoSuchVersion'].includes((e as Error).name)) return false;
+      throw new AttachmentError('unavailable');
+    }
+  }
   async finalize(key: string, m: FileMetadata, chunks: AsyncIterable<Uint8Array>) {
     if (!key.startsWith('final/')) throw new AttachmentError('invalid');
     // Unknown Complete ACK: stable server-generated key can be inspected. Full

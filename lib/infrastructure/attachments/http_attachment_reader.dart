@@ -10,6 +10,7 @@ import '../../application/notes/note_access.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
 import '../security/note_jwt_subject.dart';
+import 'attachment_http_request.dart';
 import '../sync/http_remote_note_data_source.dart';
 
 /// Authenticated REST content route, never a public/presigned GET. Every
@@ -144,85 +145,80 @@ final class HttpAttachmentReader {
     int start,
     int end,
   ) async {
-    _require(binding, attachment);
-    Future<http.StreamedResponse> send({required bool refresh}) async {
-      final token = await tokenProvider(forceRefresh: refresh).timeout(timeout);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      _require(binding, attachment);
+      final token = await tokenProvider(forceRefresh: attempt == 1)
+          .timeout(timeout);
       _require(binding, attachment);
       if (token == null || noteJwtSubject(token) != binding.actorId) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
       }
       final grant = grantHeader(binding, NoteOperation.attachmentRead);
-      _require(binding, attachment);
       if (binding.protection.enabled &&
           (grant == null || !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(grant))) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
       }
-      final request = http.Request('GET', _endpoint(binding, attachment))
-        ..followRedirects = false
-        ..maxRedirects = 0;
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-        'Range': 'bytes=$start-${end - 1}',
-        'Accept': attachment.mimeType,
-        'X-Note-Unlock-Grant': ?grant,
-      });
-      return _client.send(request).timeout(timeout);
-    }
-
-    var response = await send(refresh: false);
-    try {
-      _require(binding, attachment);
-    } catch (_) {
-      await response.stream.listen((_) {}).cancel();
-      rethrow;
-    }
-    if (response.statusCode == 401) {
-      // Cancel/discard the unauthorized body, never echo provider text.
-      await response.stream.listen((_) {}).cancel();
-      response = await send(refresh: true);
-      try {
-        _require(binding, attachment);
-      } catch (_) {
-        await response.stream.listen((_) {}).cancel();
-        rethrow;
-      }
-    }
-    if (response.statusCode != 206 ||
-        response.headers['content-range'] !=
-            'bytes $start-${end - 1}/${attachment.sizeBytes}' ||
-        response.headers['content-type']?.split(';').first.trim() !=
-            attachment.mimeType ||
-        response.contentLength != null &&
-            response.contentLength != end - start) {
-      await response.stream.listen((_) {}).cancel();
-      throw NoteSecurityFailure(
-        response.statusCode == 401 || response.statusCode == 403
-            ? NoteSecurityFailureCode.denied
-            : NoteSecurityFailureCode.unavailable,
+      final result = await attachmentHttpRequest<Uint8List?>(
+        client: _client,
+        method: 'GET',
+        uri: _endpoint(binding, attachment),
+        timeout: timeout,
+        requireAccess: () => _require(binding, attachment),
+        discard: (bytes) => bytes?.fillRange(0, bytes.length, 0),
+        configure: (request) => request.headers.addAll({
+          'Authorization': 'Bearer $token',
+          'Range': 'bytes=$start-${end - 1}',
+          'Accept': attachment.mimeType,
+          'X-Note-Unlock-Grant': ?grant,
+        }),
+        consume: (response) async {
+          if (response.statusCode == 401 && attempt == 0) {
+            await response.stream.listen((_) {}).cancel();
+            return null;
+          }
+          if (response.statusCode != 206 ||
+              response.headers['content-range'] !=
+                  'bytes $start-${end - 1}/${attachment.sizeBytes}' ||
+              response.headers['content-type']?.split(';').first.trim() !=
+                  attachment.mimeType ||
+              response.contentLength != null &&
+                  response.contentLength != end - start) {
+            await response.stream.listen((_) {}).cancel();
+            throw NoteSecurityFailure(
+              response.statusCode == 401 || response.statusCode == 403
+                  ? NoteSecurityFailureCode.denied
+                  : NoteSecurityFailureCode.unavailable,
+            );
+          }
+          final bytes = Uint8List(end - start);
+          var written = 0;
+          try {
+            await for (final chunk in response.stream.timeout(timeout)) {
+              _require(binding, attachment);
+              if (written + chunk.length > bytes.length) {
+                throw const NoteSecurityFailure(
+                  NoteSecurityFailureCode.unavailable,
+                );
+              }
+              bytes.setRange(written, written + chunk.length, chunk);
+              written += chunk.length;
+            }
+            _require(binding, attachment);
+            if (written != bytes.length) {
+              throw const NoteSecurityFailure(
+                NoteSecurityFailureCode.unavailable,
+              );
+            }
+            return bytes;
+          } on Object {
+            bytes.fillRange(0, bytes.length, 0);
+            rethrow;
+          }
+        },
       );
+      if (result != null) return result;
     }
-    // Fixed-size allocation bounds a dishonest/oversized response and lets us
-    // wipe all transient bytes if lock/revoke/expiry occurs mid-response.
-    final bytes = Uint8List(end - start);
-    var written = 0;
-    try {
-      await for (final chunk in response.stream.timeout(timeout)) {
-        _require(binding, attachment);
-        if (written + chunk.length > bytes.length) {
-          throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
-        }
-        bytes.setRange(written, written + chunk.length, chunk);
-        written += chunk.length;
-      }
-      _require(binding, attachment);
-      if (written != bytes.length) {
-        throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
-      }
-      return bytes;
-    } catch (_) {
-      bytes.fillRange(0, bytes.length, 0);
-      rethrow;
-    }
+    throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
   }
 
   void close() {

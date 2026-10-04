@@ -15,20 +15,22 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
       _serialized(() async {
         _require(binding, NoteOperation.attachmentWrite);
         checkedAttachmentRecordKey('$id-meta');
+        var chunks = 0;
         await store.updateIndex((index) {
           _require(binding, NoteOperation.attachmentWrite);
           final record = index[id];
           if (record is! Map ||
               record['scope'] != _scope(binding) ||
-              record['phase'] == 'linked') {
+              !{'queued', 'remoteCancelling'}.contains(record['phase'])) {
             throw StateError('Invalid cancellation.');
           }
+          chunks = record['chunkCount'] as int;
           return {
             ...index,
             id: {...record, 'phase': 'remoteCancelling'},
           };
         });
-        for (var chunk = 0; chunk < 200; chunk++) {
+        for (var chunk = 0; chunk < chunks; chunk++) {
           await store.removeChunk(_chunk(id, chunk));
         }
         await store.removeChunk('$id-meta');
@@ -58,7 +60,7 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
             entry['phase'] != 'remoteCancelling') {
           throw StateError('Invalid cancellation ACK.');
         }
-        await _removeStaging(id, 200);
+        await _removeStaging(id, entry['chunkCount'] as int);
         _require(binding, NoteOperation.attachmentWrite);
       });
   Stream<List<int>> readAssociatedChunks(
@@ -110,6 +112,8 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         };
       }),
     );
+    final digest = _DigestSink();
+    final hasher = crypto.sha256.startChunkedConversion(digest);
     for (
       var i = start ~/ AttachmentPolicy.chunkBytes;
       i * AttachmentPolicy.chunkBytes < stop;
@@ -168,6 +172,7 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         if (bytes.length != chunkEnd - base) {
           throw StateError('Invalid cached byte range.');
         }
+        if (start == 0 && stop == attachment.sizeBytes) hasher.add(bytes);
         yield Uint8List.fromList(
           bytes.sublist(
             (start - base).clamp(0, bytes.length),
@@ -179,6 +184,12 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
       }
     }
     _require(binding, NoteOperation.attachmentRead);
+    hasher.close();
+    if (start == 0 &&
+        stop == attachment.sizeBytes &&
+        digest.value.toString() != attachment.sha256) {
+      throw const FormatException('Attachment checksum does not match.');
+    }
   }
 }
 

@@ -1,6 +1,9 @@
 part of 'encrypted_attachment_cache.dart';
 
 extension _AttachmentCacheCleanup on EncryptedAttachmentCache {
+  int _maxChunks(Map record) =>
+      ((record['sizeBytes'] as int) + AttachmentPolicy.chunkBytes - 1) ~/
+      AttachmentPolicy.chunkBytes;
   Future<void> _upgradeLegacyPackets(
     AttachmentBinding binding,
   ) => _serialized(() async {

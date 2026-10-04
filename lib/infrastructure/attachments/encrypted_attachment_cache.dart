@@ -91,10 +91,17 @@ final class EncryptedAttachmentCache
         throw StateError('Binary staging identity collision.');
       }
       var used = 0, noteBytes = 0, noteCount = 0;
-      for (final raw in index.values) {
-        final entry = Map<String, Object?>.from(raw as Map);
+      for (final raw in index.entries) {
+        final entry = Map<String, Object?>.from(raw.value as Map);
         used += entry['sizeBytes'] as int;
-        if (entry['scope'] == scope && entry['phase'] != 'linked') {
+        if (entry['scope'] == scope &&
+            {
+              'staging',
+              'queued',
+              'cancelling',
+              'remoteCancelling',
+            }.contains(entry['phase']) &&
+            !saved.any((attachment) => attachment.id == raw.key)) {
           noteBytes += entry['sizeBytes'] as int;
           noteCount++;
         }
@@ -326,7 +333,7 @@ final class EncryptedAttachmentCache
           final record = index[id];
           if (record is! Map ||
               record['scope'] != _scope(binding) ||
-              !{'queued', 'linked'}.contains(record['phase'])) {
+              !{'queued', 'linked', 'remote'}.contains(record['phase'])) {
             throw StateError('A complete local attachment is required.');
           }
           return {
@@ -351,7 +358,7 @@ final class EncryptedAttachmentCache
           }
           _require(binding, NoteOperation.attachmentWrite);
           await _markCancelling(entry.key, _scope(binding), binding: binding);
-          await _removeStaging(entry.key, 200);
+          await _removeStaging(entry.key, _maxChunks(record));
           _require(binding, NoteOperation.attachmentWrite);
         }
       });
@@ -375,7 +382,7 @@ final class EncryptedAttachmentCache
     await _markCancelling(id, _scope(binding), binding: binding);
     // Bound cleanup to one validated draft, including partial staging writes.
     // The durable marker prevents reads if a chunk deletion fails midway.
-    await _removeStaging(id, 200);
+    await _removeStaging(id, _maxChunks(record));
   }
 
   @override

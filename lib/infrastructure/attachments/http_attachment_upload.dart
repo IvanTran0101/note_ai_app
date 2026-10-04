@@ -15,6 +15,7 @@ import '../../domain/notes/note_protection.dart';
 import '../security/note_jwt_subject.dart';
 import '../sync/http_remote_note_data_source.dart';
 import 'attachment_codec.dart';
+import 'attachment_http_request.dart';
 
 /// Bounded upload with durable server ACK/recovery. No plaintext/URL in outbox.
 final class HttpAttachmentUpload {
@@ -42,6 +43,7 @@ final class HttpAttachmentUpload {
   final bool allowLocalDev;
   final void Function(AttachmentProgress)? onProgress;
   final http.Client _client;
+  final _aborts = <String, Completer<void>>{};
   bool _local(Uri u) =>
       allowLocalDev &&
       u.scheme == 'http' &&
@@ -62,50 +64,63 @@ final class HttpAttachmentUpload {
     String action, [
     Map<String, Object?>? body,
   ]) async {
-    requireAccess(b, NoteOperation.attachmentWrite);
-    final token = await tokenProvider(forceRefresh: false);
-    requireAccess(b, NoteOperation.attachmentWrite);
-    if (token == null || noteJwtSubject(token) != b.actorId) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
-    }
-    final grant = grantHeader(b, NoteOperation.attachmentWrite);
-    if (b.protection.enabled && grant == null) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
-    }
-    final request =
-        http.Request(body == null ? 'GET' : 'POST', _endpoint(b, id, action))
-          ..followRedirects = false
-          ..maxRedirects = 0;
-    request.headers.addAll({
-      'authorization': 'Bearer $token',
-      'content-type': 'application/json',
-      'x-note-unlock-grant': ?grant,
-    });
-    if (body != null) request.body = jsonEncode(body);
-    final response = await _client
-        .send(request)
-        .timeout(const Duration(seconds: 30));
-    final result = BytesBuilder();
-    await for (final chunk in response.stream.timeout(
-      const Duration(seconds: 30),
-    )) {
+    for (var attempt = 0; attempt < 2; attempt++) {
       requireAccess(b, NoteOperation.attachmentWrite);
-      if (result.length + chunk.length > 16384) {
-        throw const FormatException('Attachment response is too large.');
+      final token = await tokenProvider(forceRefresh: attempt == 1)
+          .timeout(const Duration(seconds: 30));
+      requireAccess(b, NoteOperation.attachmentWrite);
+      if (token == null || noteJwtSubject(token) != b.actorId) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
       }
-      result.add(chunk);
-    }
-    requireAccess(b, NoteOperation.attachmentWrite);
-    if (response.statusCode != 200) {
-      throw NoteSecurityFailure(
-        response.statusCode == 403 || response.statusCode == 423
-            ? NoteSecurityFailureCode.denied
-            : NoteSecurityFailureCode.network,
+      final grant = grantHeader(b, NoteOperation.attachmentWrite);
+      if (b.protection.enabled && grant == null) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+      }
+      final result = await attachmentHttpRequest<Map<String, dynamic>?>(
+        client: _client,
+        method: body == null ? 'GET' : 'POST',
+        uri: _endpoint(b, id, action),
+        requireAccess: () => requireAccess(b, NoteOperation.attachmentWrite),
+        cancel: action == 'cancel' ? null : _aborts[id]?.future,
+        configure: (request) {
+          request.headers.addAll({
+            'authorization': 'Bearer $token',
+            'content-type': 'application/json',
+            'x-note-unlock-grant': ?grant,
+          });
+          if (body != null) request.body = jsonEncode(body);
+        },
+        consume: (response) async {
+          if (response.statusCode == 401 && attempt == 0) {
+            await response.stream.listen((_) {}).cancel();
+            return null;
+          }
+          final bytes = BytesBuilder();
+          await for (final chunk in response.stream.timeout(
+            const Duration(seconds: 30),
+          )) {
+            requireAccess(b, NoteOperation.attachmentWrite);
+            if (bytes.length + chunk.length > 16384) {
+              throw const FormatException('Attachment response is too large.');
+            }
+            bytes.add(chunk);
+          }
+          requireAccess(b, NoteOperation.attachmentWrite);
+          if (response.statusCode != 200) {
+            throw NoteSecurityFailure(
+              response.statusCode == 403 || response.statusCode == 423
+                  ? NoteSecurityFailureCode.denied
+                  : NoteSecurityFailureCode.network,
+            );
+          }
+          return Map<String, dynamic>.from(
+            jsonDecode(utf8.decode(bytes.takeBytes())) as Map,
+          );
+        },
       );
+      if (result != null) return result;
     }
-    return Map<String, dynamic>.from(
-      jsonDecode(utf8.decode(result.takeBytes())) as Map,
-    );
+    throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
   }
 
   Future<Attachment> upload(
@@ -114,6 +129,11 @@ final class HttpAttachmentUpload {
     Stream<List<int>> Function() openRead,
   ) async {
     final id = draft.cacheId;
+    if (_aborts.containsKey(id)) {
+      throw StateError('Attachment transfer is already running.');
+    }
+    final abort = Completer<void>();
+    _aborts[id] = abort;
     void progress(String phase, int completed) => onProgress?.call(
       AttachmentProgress(id, phase, completed, draft.sizeBytes),
     );
@@ -161,6 +181,7 @@ final class HttpAttachmentUpload {
                   Uri.parse(target['url'] as String),
                   Map<String, String>.from(target['headers'] as Map),
                   bytes,
+                  abort.future,
                 );
                 await _call(b, id, 'chunk-ack', {
                   'index': index,
@@ -195,6 +216,9 @@ final class HttpAttachmentUpload {
     } on Object {
       progress('Retry needed', 0);
       rethrow;
+    } finally {
+      _aborts.remove(id);
+      if (!abort.isCompleted) abort.complete();
     }
   }
 
@@ -203,6 +227,7 @@ final class HttpAttachmentUpload {
     Uri url,
     Map<String, String> headers,
     Uint8List bytes,
+    Future<void> cancel,
   ) async {
     final s3 =
         url.scheme == 'https' &&
@@ -221,22 +246,29 @@ final class HttpAttachmentUpload {
       throw const FormatException('Invalid staging upload destination.');
     }
     requireAccess(b, NoteOperation.attachmentWrite);
-    final request = http.Request('PUT', url)
-      ..followRedirects = false
-      ..maxRedirects = 0
-      ..bodyBytes = bytes;
-    request.headers.addAll(headers); // Never forwards JWT or M05 grants to S3.
-    final response = await _client
-        .send(request)
-        .timeout(const Duration(seconds: 30));
-    await response.stream.listen((_) {}).cancel();
-    requireAccess(b, NoteOperation.attachmentWrite);
-    if (response.statusCode != 200) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.network);
-    }
+    await attachmentHttpRequest<void>(
+      client: _client,
+      method: 'PUT',
+      uri: url,
+      cancel: cancel,
+      requireAccess: () => requireAccess(b, NoteOperation.attachmentWrite),
+      configure: (request) {
+        request.bodyBytes = bytes;
+        request.headers.addAll(headers);
+      }, // Never forwards JWT or M05 grants to S3.
+      consume: (response) async {
+        await response.stream.listen((_) {}).cancel();
+        requireAccess(b, NoteOperation.attachmentWrite);
+        if (response.statusCode != 200) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.network);
+        }
+      },
+    );
   }
 
   Future<void> cancel(AttachmentBinding b, String id) async {
+    final abort = _aborts[id];
+    if (abort != null && !abort.isCompleted) abort.complete();
     await _call(b, id, 'cancel', const {});
   }
 

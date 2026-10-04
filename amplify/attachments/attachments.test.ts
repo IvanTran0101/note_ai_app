@@ -29,6 +29,7 @@ class Objects implements AttachmentObjectStore {
     if (!b || b.length !== size || hash(b) !== sha256) throw new AttachmentError('invalid');
     return {version, sizeBytes: size, sha256};
   }
+  async hasVersion(key: string, version: string) { return this.values.has(`${key}@${version}`); }
   async *read(key: string, version: string, start: number, end: number) {
     this.onRead?.(); const b = this.values.get(`${key}@${version}`)!;
     for (let i = start; i < end; i += 4096) yield Uint8Array.from(b.subarray(i, Math.min(i + 4096, end)));
@@ -237,4 +238,22 @@ test('fresh owner protection epoch continues immutable pending bytes, but old gr
     revision: 2, operations: ['attachmentWrite'], issuedAt: Date.now(), expiresAt: Date.now() + 60000} as any);
   await f.service.cancel('owner', 'owner', 'n', id, fresh);
   assert.equal((await f.attempts.read('owner', 'n', id))!.phase, 'cancelled');
+});
+
+test('proven staging expiry restarts stable attempt without duplicate quota or changed payload', async () => {
+  const f = await fixture(); const original = await f.staged();
+  f.objects.values.delete(`${stagingKey(original, 0)}@${original.chunks[0].version}`);
+  const status = await f.service.begin('owner', 'owner', 'n', f.m);
+  assert.equal(status.completedChunks, 0); assert.equal(status.phase, 'uploading');
+  const reset = (await f.attempts.read('owner', 'n', id))!;
+  assert.equal(reset.finalKey, original.finalKey); assert.equal(reset.sha256, original.sha256);
+  assert.equal(f.db.get('owner', 'ATTACHMENT_QUOTA#n')!.count, 1);
+  await f.staged(); assert.equal((await f.service.verify('owner', 'owner', 'n', id)).phase, 'verified');
+});
+
+test('transient staging lookup failure preserves pinned ACKs for later retry', async () => {
+  const f = await fixture(); const original = await f.staged();
+  f.objects.hasVersion = async () => {throw new AttachmentError('unavailable');};
+  await assert.rejects(() => f.service.begin('owner', 'owner', 'n', f.m));
+  assert.deepEqual((await f.attempts.read('owner', 'n', id))!.chunks, original.chunks);
 });

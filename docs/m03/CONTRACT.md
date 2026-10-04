@@ -68,6 +68,15 @@ immutable metadata/chunks/final key. Old protected grants cannot authorize this.
 Cancellation uses fresh current authority; linked attempts require canonical
 remove, never cancellation or speculative final deletion.
 
+Retry inspects pinned staging versions in batches of at most10. Proven absence
+restarts the same stable immutable attempt from local ciphertext without another
+quota reservation. A transient storage lookup failure keeps prior ACKs intact.
+HTTP adapters use abortable requests for timeout/cancel/access loss, including
+while waiting for headers. Each cached read checks current Note association and
+scope; full reads verify SHA-256 before a collected preview is released. Note
+quota counts pending reservations once; associated sparse cache is not counted
+again as another attachment.
+
 ## Technical sources
 
 - S3 part minimum5MiB, last part exemption:

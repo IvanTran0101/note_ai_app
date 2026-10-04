@@ -52,7 +52,23 @@ extension _AttachmentApplicationRead on AttachmentApplicationService {
           )
         : (remoteRead ?? missing)(b, attachment, start: start, end: end);
     await for (final chunk in source) {
-      requireAccess(b, NoteOperation.attachmentRead);
+      try {
+        final current = await _readBinding(reference, attachment);
+        if (current.actorId != b.actorId ||
+            current.note != b.note ||
+            current.sessionGeneration != b.sessionGeneration ||
+            current.accessGeneration != b.accessGeneration ||
+            current.protection != b.protection ||
+            current.accessRevision != b.accessRevision) {
+          throw const NoteSecurityFailure(
+            NoteSecurityFailureCode.sessionChanged,
+          );
+        }
+        requireAccess(b, NoteOperation.attachmentRead);
+      } on Object {
+        chunk.fillRange(0, chunk.length, 0);
+        rethrow;
+      }
       yield chunk;
     }
     requireAccess(b, NoteOperation.attachmentRead);
