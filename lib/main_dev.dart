@@ -81,6 +81,7 @@ class _LocalDevRootState extends State<_LocalDevRoot> {
             authController: widget.controller,
             currentUserSession: widget.session,
             connection: connection,
+            enableLabels: true,
           ),
         ),
       ],

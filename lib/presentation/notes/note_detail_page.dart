@@ -1,3 +1,4 @@
+import '../labels/note_label_editor.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
@@ -40,6 +41,7 @@ import '../sync/sync_widgets.dart';
 part 'note_detail_actions.dart';
 part 'note_detail_conflicts.dart';
 part 'note_detail_view.dart';
+part 'note_detail_labels.dart';
 part 'note_detail_security.dart';
 part 'note_detail_sharing.dart';
 

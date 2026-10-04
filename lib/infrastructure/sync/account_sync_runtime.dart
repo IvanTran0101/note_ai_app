@@ -88,6 +88,10 @@ final class AccountSyncRuntime {
         accountUserId: accountUserId,
         labelsEnabled: labelsEnabled,
         localStore: localSyncStoreFactory(accountUserId: accountUserId),
+        onStateChanged: () {
+          requireLive();
+          if (labelsEnabled) onCatalogChanged?.call(accountUserId);
+        },
         remote: remote,
         clock: _clock,
         requireSession: requireLive,
@@ -108,10 +112,7 @@ final class AccountSyncRuntime {
 
   /// Exposes a manual/run-to-completion path for future sync UI and tests.
   Future<SyncReport> syncNow(String accountUserId) async {
-    final report = await coordinatorFor(accountUserId).syncNow();
-    requireSession?.call(accountUserId);
-    if (labelsEnabled) onCatalogChanged?.call(accountUserId);
-    return report;
+    return coordinatorFor(accountUserId).syncNow();
   }
 
   Future<void> _syncBestEffort(String accountUserId) async {

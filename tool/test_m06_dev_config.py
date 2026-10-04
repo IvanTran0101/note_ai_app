@@ -61,6 +61,22 @@ class DevConfigTest(unittest.TestCase):
         self.assertNotIn("never-emitted", json.dumps(result))
         self.assertFalse(set(config.KEYS) & set(result))
 
+    def test_labels_rollout_is_explicit_public_boolean(self):
+        for mode in ("local", "cognito"):
+            values = {"NOTEFLOW_AUTH_MODE": mode}
+            if mode == "cognito":
+                self.outputs()
+                values["NOTEFLOW_AMPLIFY_OUTPUTS_FILE"] = "outputs.json"
+            self.assertNotIn("NOTEFLOW_LABELS_ENABLED", config.public_defines(values, self.root))
+            values["NOTEFLOW_LABELS_ENABLED"] = "true"
+            self.assertEqual(config.public_defines(values, self.root)["NOTEFLOW_LABELS_ENABLED"], "true")
+            values["NOTEFLOW_LABELS_ENABLED"] = "false"
+            self.assertNotIn("NOTEFLOW_LABELS_ENABLED", config.public_defines(values, self.root))
+            for invalid in ("TRUE", "1", "yes", ""):
+                values["NOTEFLOW_LABELS_ENABLED"] = invalid
+                with self.assertRaises(ValueError):
+                    config.public_defines(values, self.root)
+
     def test_cognito_requires_intended_outputs_and_complete_m06_endpoints(self):
         self.outputs()
         with self.assertRaises(ValueError):

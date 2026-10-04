@@ -1,3 +1,5 @@
+import '../labels/notes_query_panel.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
@@ -22,10 +24,14 @@ final class NotesListPanel extends StatelessWidget {
     required this.onRetry,
     this.titleOverride,
     this.allowNewNote = true,
+    this.readable,
+    this.queryEnabled = true,
   });
 
   final String? titleOverride;
   final bool allowNewNote;
+  final bool Function(NoteDto)? readable;
+  final bool queryEnabled;
   final List<NoteDto> notes;
   final String? selectedNoteId;
   final String? error;
@@ -36,6 +42,7 @@ final class NotesListPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (queryEnabled) return NotesQueryPanel(panel: this);
     final NotesCopy copy = NotesCopy.of(context);
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final bool compact =
@@ -247,6 +254,7 @@ final class NotesListPanel extends StatelessWidget {
                                 )
                         : AnimatedNoteList(
                             notes: notes,
+                            readable: readable,
                             selectedNoteId: selectedNoteId,
                             actionBusy: actionBusy,
                             onSelectNote: onSelectNote,

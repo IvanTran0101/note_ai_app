@@ -28,6 +28,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     this.hydrateSnapshot,
     this.requireSession,
     this.labelsEnabled = false,
+    this.onStateChanged,
     DateTime Function()? clock,
     Future<void> Function(Duration)? delay,
   }) : _reconciliation = SyncStateReconciliation(
@@ -43,6 +44,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   final Future<void> Function(SyncNoteSnapshot)? hydrateSnapshot;
   final void Function()? requireSession;
   final bool labelsEnabled;
+  final void Function()? onStateChanged;
   final SyncStateReconciliation _reconciliation;
   final Future<void> Function(Duration) _delay;
   final StreamController<SyncStatusSnapshot> _statuses =
@@ -331,6 +333,14 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   void _publish(SyncStatusSnapshot status) {
     _status = status;
     if (!_disposed) _statuses.add(status);
+    if (!_disposed && status.status != SyncStatus.syncing) {
+      try {
+        requireSession?.call();
+        onStateChanged?.call();
+      } on Object {
+        // Observers must not turn a durable sync result into another failure.
+      }
+    }
   }
 
   bool _dependenciesReady(LocalSyncState state, PendingMutation entry) {

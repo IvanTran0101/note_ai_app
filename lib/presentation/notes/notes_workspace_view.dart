@@ -32,6 +32,12 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                     },
                     child: ResponsiveNotesWorkspace(
                       list: NotesListPanel(
+                        readable: (note) =>
+                            _application is SecuredNotesController
+                            ? (_application as SecuredNotesController)
+                                  .capabilitiesFor(note)
+                                  .canRead
+                            : !note.isProtected && note.contentAvailable,
                         notes: _notes
                             .where((n) => (n.share != null) == _sharedOnly)
                             .toList(),

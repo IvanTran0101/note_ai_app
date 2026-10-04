@@ -1,3 +1,7 @@
+import '../../application/labels/note_query.dart';
+import '../labels/label_catalog_scope.dart';
+import '../labels/label_filter_bar.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../application/dashboard/dashboard_overview.dart';
@@ -37,6 +41,9 @@ final class DashboardContent extends StatelessWidget {
     this.onCloseSearch,
     this.dockCompactSearch = false,
     this.searchOverlay = false,
+    this.selectedLabels = const {},
+    this.onLabelsChanged,
+    this.readable,
   });
 
   final List<NoteDto> notes;
@@ -63,21 +70,46 @@ final class DashboardContent extends StatelessWidget {
   final bool dockCompactSearch;
   final bool searchOverlay;
 
+  final Set<LabelSelection> selectedLabels;
+  final ValueChanged<Set<LabelSelection>>? onLabelsChanged;
+  final bool Function(NoteDto)? readable;
+  bool _readable(NoteDto n) =>
+      readable?.call(n) ?? (!n.isProtected && n.contentAvailable);
+
   List<NoteDto> get visibleNotes {
-    final String query = searchText.trim().toLowerCase();
-    final Iterable<NoteDto> result = notes.where((NoteDto note) {
-      if (query.isEmpty) {
-        return true;
-      }
-      return note.title.toLowerCase().contains(query) ||
-          note.content.toLowerCase().contains(query);
-    });
-    return sortNotes(result, byCreatedAt: sort == DashboardSort.created);
+    return sortNotes(
+      queryNotes(
+        notes,
+        keyword: searchText,
+        readable: _readable,
+        labelsFor: (_) => const [],
+      ),
+      byCreatedAt: sort == DashboardSort.created,
+    );
+  }
+
+  List<NoteDto> _filtered(BuildContext context) {
+    final scope = LabelCatalogScope.maybeOf(context);
+    return sortNotes(
+      queryNotes(
+        notes,
+        keyword: searchText,
+        selected: selectedLabels,
+        readable: _readable,
+        labelsFor: (n) => visibleLabels(
+          n,
+          scope?.labels ?? const [],
+          actor: scope?.actor ?? '',
+          readable: _readable(n),
+        ),
+      ),
+      byCreatedAt: sort == DashboardSort.created,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<NoteDto> filteredNotes = visibleNotes;
+    final List<NoteDto> filteredNotes = _filtered(context);
     final double viewportWidth = MediaQuery.sizeOf(context).width;
     final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
     final bool showingDesktopSearchHistory =
@@ -119,6 +151,13 @@ final class DashboardContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+                    if (onLabelsChanged != null)
+                      LabelFilterBar(
+                        notes: notes,
+                        selected: selectedLabels,
+                        onChanged: onLabelsChanged!,
+                        readable: _readable,
+                      ),
                     if (searchOpen) ...<Widget>[
                       if (searchOverlay && !compact)
                         Row(
@@ -692,6 +731,7 @@ final class DashboardContent extends StatelessWidget {
             DashboardNoteCard(
               key: ValueKey<String>('dashboard-note-${items[index].id}'),
               note: items[index],
+              readable: _readable(items[index]),
               copy: copy,
               layout: DashboardNoteCardLayout.list,
               selected: items[index].id == selectedNoteId,
@@ -722,6 +762,7 @@ final class DashboardContent extends StatelessWidget {
                 child: DashboardNoteCard(
                   key: ValueKey<String>('dashboard-note-${note.id}'),
                   note: note,
+                  readable: _readable(note),
                   copy: copy,
                   layout: DashboardNoteCardLayout.grid,
                   selected: note.id == selectedNoteId,
@@ -797,6 +838,7 @@ final class DashboardContent extends StatelessWidget {
                 'dashboard-note-${section.value[index].id}',
               ),
               note: section.value[index],
+              readable: _readable(section.value[index]),
               copy: copy,
               layout: DashboardNoteCardLayout.list,
               selected: section.value[index].id == selectedNoteId,

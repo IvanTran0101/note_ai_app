@@ -89,6 +89,18 @@ Preserve backend state/key, Web profile, emulator and unrelated files.
 
 ## Continuation — 2026-10-05
 
+Fresh graph connection recovered; generation2026-10-02T16:47:30Z is stale for
+current candidate (metadata_changed/not_tracked/partial121). Read exact changed
+source; do not infer current coverage from old graph. M04.4 f7b4fe4 pushed.
+Actual QA record is UI_QA.md. Chrome clean cold server session28609/backend67568;
+native picker and local preview PASS. Query filtered-empty and manual sync cache
+observer fixed; widget/coordinator10/10 and dev config14/14 PASS. Current full
+VM62593/analyzer87047 running. Dashboard actor filter reset added. Native ADB
+8796/8797 reverse removed and wifi/data disabled for offline QA; restore after
+test. Chrome m04-owner context offline, synthetic QAAndroid edited/labels changed.
+Keep profiles/state/key/AVD. Next finish source M04.5 commit, actual CRUD/privacy
+and offline/reopen, rebuild stable APK; final ticks remain pending.
+
 M04.3 c911b0b pushed and Notion checked. M04.4 backend51 Node nodes PASS,
 Label12/12 included, tsc clean; new App/query/HTTP26/26; widget3/3 PASS. Widget
 fixture must initialize serial FakeLocalSyncStore inside testWidgets fake zone

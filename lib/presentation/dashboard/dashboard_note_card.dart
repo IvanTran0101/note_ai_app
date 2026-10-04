@@ -1,3 +1,4 @@
+import '../labels/note_label_chips.dart';
 import '../notes/note_security_localizations.dart';
 
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ final class DashboardNoteCard extends StatelessWidget {
     required this.layout,
     this.onTogglePin,
     this.selected = false,
+    this.readable,
     this.showPreview = true,
     this.listHorizontalInset = NoteFlowSpacing.md,
     this.listIconGap = NoteFlowSpacing.md,
@@ -46,6 +48,9 @@ final class DashboardNoteCard extends StatelessWidget {
 
   /// Whether the card is the current selection in an expanded layout.
   final bool selected;
+  final bool? readable;
+  bool get _readable =>
+      readable ?? (!note.isProtected && note.contentAvailable);
 
   /// Home can use a compact Notion-style title row/card while other callers
   /// may keep the original preview treatment.
@@ -61,10 +66,10 @@ final class DashboardNoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final securityCopy = NoteSecurityCopy(context);
-    final String title = note.isProtected
+    final String title = !_readable
         ? securityCopy.protectedNote
         : (note.title.trim().isEmpty ? copy.untitled : note.title);
-    final String preview = note.isProtected
+    final String preview = !_readable
         ? securityCopy.locked
         : _preview(note.content);
     final String updatedDate = MaterialLocalizations.of(context)
@@ -178,6 +183,7 @@ final class DashboardNoteCard extends StatelessWidget {
           style: Theme.of(context).textTheme.titleSmall
               ?.copyWith(fontWeight: FontWeight.w600, color: foreground),
         ),
+        NoteLabelChips(note: note, readable: _readable),
         if (showPreview) ...<Widget>[
           const SizedBox(height: 4),
           Text(
@@ -253,6 +259,7 @@ final class DashboardNoteCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w500, color: foreground),
               ),
+              NoteLabelChips(note: note, readable: _readable),
               if (showPreview) ...<Widget>[
                 const SizedBox(height: 2),
                 Text(

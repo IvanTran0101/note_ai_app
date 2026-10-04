@@ -1,3 +1,5 @@
+import 'application/labels/label_application.dart';
+import 'presentation/labels/label_catalog_scope.dart';
 import 'infrastructure/security/note_security_runtime.dart';
 import 'infrastructure/security/encrypted_sync_store.dart';
 import 'infrastructure/attachments/attachment_runtime.dart';
@@ -362,6 +364,7 @@ class NoteFlowApp extends StatefulWidget {
     this.localSyncStoreFactory,
     this.localSummarizer,
     this.enableSync = true,
+    this.enableLabels = const bool.fromEnvironment('NOTEFLOW_LABELS_ENABLED'),
     this.connection,
   });
 
@@ -376,6 +379,7 @@ class NoteFlowApp extends StatefulWidget {
 
   /// Offline acceptance roots disable unrelated background synchronization.
   final bool enableSync;
+  final bool enableLabels;
   final NoteConnection? connection;
 
   @override
@@ -454,8 +458,18 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         generateMutationId: _generateMutationId,
         now: _nowUtc,
         accessGuard: _noteSecurityRuntime,
+        labelsEnabled: widget.enableLabels,
         sessionGeneration: () => _currentUserSession.sessionGeneration,
       );
+  late final LabelApplication _labelApplication = LabelApplication(
+    currentActor: () => _currentUserSession.userId ?? '',
+    generation: () => _currentUserSession.sessionGeneration,
+    storeFor: (actor) => _localSyncStoreForAccount(accountUserId: actor),
+    notes: _noteRepository,
+    generateId: _generateNoteId,
+    now: _nowUtc,
+    requestSync: _requestSyncForAccount,
+  );
   late final IUserPreferencesRepository _userPreferencesRepository =
       user_preferences_infrastructure.createLocalUserPreferencesRepository(
         currentAccountUserId: () => _currentUserSession.userId ?? '',
@@ -658,6 +672,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     }
     return _syncRuntime ??= AccountSyncRuntime(
       baseUri: baseUri,
+      labelsEnabled: widget.enableLabels,
+      projectionGrant: _noteSecurityRuntime.labelProjectionGrant,
+      onCatalogChanged: (_) => _labelApplication.notifyChanged(),
       tokenProvider: widget.connection?.tokenProvider,
       client: widget.connection?.client,
       localSyncStoreFactory: _localSyncStoreForAccount,
@@ -1197,6 +1214,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'NoteFlow',
+      builder: (context, child) => LabelCatalogHost(
+        application: widget.enableLabels ? _labelApplication : null,
+        securityChanges: _noteSecurityRuntime.changes,
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: _buildNoteFlowTheme(Brightness.light),
       darkTheme: _buildNoteFlowTheme(Brightness.dark),
       themeMode: _themeMode,
@@ -1287,6 +1309,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   void dispose() {
     _stopRealtime();
     _noteSecurityRuntime.dispose();
+    if (widget.enableLabels) unawaited(_labelApplication.dispose());
     _disposed = true;
     for (final store in _localSyncStores.values) {
       if (store is ILocalNoteVault) {

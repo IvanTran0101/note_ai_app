@@ -1,3 +1,4 @@
+import '../labels/note_label_chips.dart';
 import 'note_security_localizations.dart';
 
 import 'package:flutter/material.dart';
@@ -15,9 +16,11 @@ final class AnimatedNoteList extends StatefulWidget {
     required this.selectedNoteId,
     required this.actionBusy,
     required this.onSelectNote,
+    this.readable,
   });
 
   final List<NoteDto> notes;
+  final bool Function(NoteDto)? readable;
   final String? selectedNoteId;
   final bool actionBusy;
   final ValueChanged<NoteDto> onSelectNote;
@@ -97,7 +100,7 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final bool selected = note.reference == widget.selectedNoteId;
     final bool masked =
-        note.isProtected ||
+        !(widget.readable?.call(note) ?? !note.isProtected) ||
         !note.contentAvailable ||
         outgoing && note.share != null;
     final String title = masked
@@ -153,14 +156,20 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
                   color: tokens.textPrimary,
                 ),
               ),
-              subtitle: Text(
-                note.share == null || outgoing
-                    ? preview
-                    : '$preview\n${SharingCopy(context).metadata(note.share!)}',
-                maxLines: note.share == null ? 1 : 3,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: tokens.textMuted),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  NoteLabelChips(note: note, readable: !masked),
+                  Text(
+                    note.share == null || outgoing
+                        ? preview
+                        : '$preview\n${SharingCopy(context).metadata(note.share!)}',
+                    maxLines: note.share == null ? 1 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.textMuted),
+                  ),
+                ],
               ),
               onTap: outgoing || widget.actionBusy
                   ? null

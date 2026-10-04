@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ("NOTEFLOW_SYNC_API", "NOTEFLOW_EVENT_HTTP", "NOTEFLOW_EVENT_SOCKET")
 KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 ALLOWED = {*PUBLIC, *KEYS, "NOTEFLOW_AUTH_MODE", "NOTEFLOW_AMPLIFY_OUTPUTS_FILE",
-           "AWS_PROFILE", "AWS_REGION"}
+           "AWS_PROFILE", "AWS_REGION", "NOTEFLOW_LABELS_ENABLED"}
 SECRET_FIELDS = {"awsaccesskeyid", "awssecretaccesskey", "awssessiontoken",
                  "accesskeyid", "secretaccesskey", "sessiontoken", "password",
                  "token", "authorization", "unlockgrant", "privatekey", "apikey"}
@@ -74,6 +74,11 @@ def public_defines(values, env_directory):
     if mode not in ("local", "cognito"):
         raise ValueError("NOTEFLOW_AUTH_MODE must be local or cognito")
     result = {"NOTEFLOW_AUTH_MODE": mode}
+    labels = values.get("NOTEFLOW_LABELS_ENABLED", "false")
+    if labels not in ("true", "false"):
+        raise ValueError("NOTEFLOW_LABELS_ENABLED must be true or false")
+    if labels == "true":
+        result["NOTEFLOW_LABELS_ENABLED"] = "true"
     if mode == "local":
         return result
     source = values.get("NOTEFLOW_AMPLIFY_OUTPUTS_FILE", "")

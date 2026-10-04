@@ -94,6 +94,36 @@ final class Remote implements IRemoteNoteDataSource {
 }
 
 void main() {
+  test(
+    'direct coordinator sync notifies catalog after success AND failure',
+    () async {
+      final store = FakeLocalSyncStore(accountUserId: 'owner');
+      final remote = Remote();
+      var notifications = 0;
+      final coordinator = SyncCoordinatorService(
+        accountUserId: 'owner',
+        localStore: store,
+        remote: remote,
+        labelsEnabled: true,
+        onStateChanged: () => notifications++,
+      );
+      await coordinator.syncNow();
+      expect(notifications, 1);
+      await store.replace(
+        LocalSyncState(
+          accountUserId: 'owner',
+          labels: [label()],
+          outbox: [pending(catalog: true)],
+        ),
+      );
+      remote.onPush = (_) async =>
+          throw const SyncFailure(code: SyncErrorCode.unexpected);
+      await expectLater(coordinator.syncNow(), throwsA(isA<SyncFailure>()));
+      expect(notifications, 2);
+      await coordinator.dispose();
+    },
+  );
+
   FakeLocalSyncStore store() => FakeLocalSyncStore(
     accountUserId: 'owner',
     initial: LocalSyncState(

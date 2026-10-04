@@ -6,6 +6,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/labels/label_application.dart';
+import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
+import 'package:note_ai_app/presentation/labels/label_catalog_scope.dart';
+
+import '../../infrastructure/notes/note_repository_test_support.dart';
 
 import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
@@ -50,6 +55,58 @@ void main() {
   });
 
   group('DashboardPage', () {
+    testWidgets(
+      'actor change clears Home label filter without a catalog cascade',
+      (tester) async {
+        final actor = ValueNotifier('local-user');
+        final store = FakeLocalSyncStore(accountUserId: actor.value);
+        final repository = NoteRepository(
+          currentAccountUserId: () => actor.value,
+          localSyncStoreFactory: ({required accountUserId}) => store,
+          generateMutationId: () => 'mutation',
+          now: () => _baseTime,
+        );
+        final app = LabelApplication(
+          currentActor: () => actor.value,
+          generation: () => 1,
+          storeFor: (_) => store,
+          notes: repository,
+          generateId: () => 'private-label',
+          now: () => _baseTime,
+          requestSync: (_) {},
+        );
+        final label = await app.create('Private filter');
+        final notes = [_buildNote()];
+        await _pumpDashboard(
+          tester,
+          dashboardController: DashboardController(
+            query: _FakeDashboardQuery(_overview(notes: notes)),
+          ),
+          notesController: _FakeNotesController(notes: notes),
+          wrap: (child) => ValueListenableBuilder<String>(
+            valueListenable: actor,
+            builder: (_, value, _) => LabelCatalogScope(
+              application: app,
+              actor: value,
+              labels: [label],
+              child: child,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Private filter'));
+        await tester.pumpAndSettle();
+        expect(find.byType(DashboardNoteCard), findsNothing);
+        actor.value = 'other';
+        await tester.pumpAndSettle();
+        expect(find.byType(DashboardNoteCard), findsWidgets);
+        expect(find.text('Private filter'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await app.dispose();
+        actor.dispose();
+      },
+    );
     testWidgets('durable changes refresh Home without navigating away', (
       tester,
     ) async {
@@ -1384,6 +1441,7 @@ Future<void> _pumpDashboard(
   double textScale = 1.0,
   ValueChanged<bool>? onSearchVisibilityChanged,
   Listenable? noteChanges,
+  Widget Function(Widget)? wrap,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -1394,6 +1452,7 @@ Future<void> _pumpDashboard(
 
   await tester.pumpWidget(
     MaterialApp(
+      builder: wrap == null ? null : (_, child) => wrap(child!),
       locale: locale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         DashboardCopy.delegate,

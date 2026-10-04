@@ -1,3 +1,6 @@
+import '../../application/labels/note_query.dart';
+import '../labels/label_catalog_scope.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -122,6 +125,8 @@ final class DashboardPageState extends State<DashboardPage> {
   bool _searchOpen = false;
   bool _desktopSearchDialogOpen = false;
   String _searchText = '';
+  Set<LabelSelection> _selectedLabels = {};
+  String? _labelActor;
   DashboardLayout _layout = DashboardLayout.grid;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
@@ -134,6 +139,19 @@ final class DashboardPageState extends State<DashboardPage> {
     widget.dashboardController.addListener(_onOverviewStateChanged);
     widget.noteChanges?.addListener(_notesChanged);
     unawaited(reload());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final actor = LabelCatalogScope.maybeOf(context)?.application
+        ?.currentActor();
+    if (_labelActor != actor) {
+      _labelActor = actor;
+      _selectedLabels = {};
+      _searchText = '';
+      _searchController.clear();
+    }
   }
 
   @override
@@ -518,6 +536,16 @@ final class DashboardPageState extends State<DashboardPage> {
     }
 
     return DashboardContent(
+      selectedLabels: _selectedLabels,
+      onLabelsChanged: (next) {
+        setState(() => _selectedLabels = next);
+        dialogSetState?.call(() {});
+      },
+      readable: (note) => widget.notesController is SecuredNotesController
+          ? (widget.notesController as SecuredNotesController)
+                .capabilitiesFor(note)
+                .canRead
+          : !note.isProtected && note.contentAvailable,
       notes: _notes,
       overview: widget.dashboardController.state.overview,
       copy: copy,
