@@ -1,4 +1,5 @@
 import '../../domain/notes/note_role.dart';
+import '../../domain/labels/label.dart';
 import 'local_note_state.dart';
 import 'local_sync_state.dart';
 import 'note_sync_status.dart';
@@ -38,6 +39,7 @@ final class SyncPageProjection {
     if (identity.ownerId == state.accountUserId &&
         outbox.any(
           (m) =>
+              !m.isLabel &&
               m.mutation.identityFor(state.accountUserId) == identity &&
               m.protectionChange != null,
         )) {
@@ -57,9 +59,11 @@ final class SyncPageProjection {
       changed = true;
       return;
     }
+    _refreshLabels(snapshot, old, index);
     if (_updateConflict(snapshot)) return;
     if (outbox.any(
-      (m) => m.mutation.identityFor(state.accountUserId) == identity,
+      (m) =>
+          !m.isLabel && m.mutation.identityFor(state.accountUserId) == identity,
     )) {
       return;
     }
@@ -70,6 +74,50 @@ final class SyncPageProjection {
     } else {
       notes[index] = incoming;
     }
+    pulled++;
+    changed = true;
+  }
+
+  void _refreshLabels(
+    SyncNoteSnapshot snapshot,
+    LocalNoteState? old,
+    int index,
+  ) {
+    if (old == null ||
+        !snapshot.includesLabels ||
+        !snapshot.contentAvailable ||
+        !old.contentAvailable ||
+        snapshot.revision != old.serverRevision ||
+        snapshot.protection != old.protection ||
+        snapshot.share != old.share) {
+      return;
+    }
+    final ids = old.share == null ? old.labelIds : snapshot.labelIds;
+    final projections = snapshot.labelProjections;
+    if (sameLabelIds(ids, old.labelIds) &&
+        projections.length == old.labelProjections.length &&
+        Iterable<int>.generate(projections.length)
+            .every((i) => projections[i] == old.labelProjections[i])) {
+      return;
+    }
+    notes[index] = LocalNoteState(
+      id: old.id,
+      ownerId: old.ownerId,
+      title: old.title,
+      content: old.content,
+      createdAt: old.createdAt,
+      updatedAt: old.updatedAt,
+      pinnedAt: old.pinnedAt,
+      attachments: old.attachments,
+      deletedAt: old.deletedAt,
+      serverRevision: old.serverRevision,
+      status: old.status,
+      protection: old.protection,
+      contentAvailable: old.contentAvailable,
+      share: old.share,
+      labelIds: ids,
+      labelProjections: projections,
+    );
     pulled++;
     changed = true;
   }
@@ -96,7 +144,8 @@ final class SyncPageProjection {
     final identity = snapshot.identityFor(state.accountUserId);
     for (var i = 0; i < outbox.length; i++) {
       final entry = outbox[i];
-      if (entry.mutation.identityFor(state.accountUserId) != identity ||
+      if (entry.isLabel ||
+          entry.mutation.identityFor(state.accountUserId) != identity ||
           entry.accessRevision == snapshot.share?.accessRevision &&
               snapshot.share?.isActive == true &&
               snapshot.share?.role == NoteRole.editor) {

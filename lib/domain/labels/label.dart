@@ -88,8 +88,9 @@ String requireLabelId(String id) {
 
 List<String> freezeLabelIds(Iterable<String> values) {
   final ids = values.map(requireLabelId).toSet().toList()..sort();
-  if (ids.length > 32)
+  if (ids.length > 32) {
     throw ArgumentError('A note can have at most 32 labels.');
+  }
   return List.unmodifiable(ids);
 }
 

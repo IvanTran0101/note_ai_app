@@ -208,7 +208,9 @@ class EncryptedSyncStore
           .where((n) => n.identity == identity)
           .firstOrNull;
       final pending = state.outbox.any(
-        (m) => m.mutation.identityFor(state.accountUserId) == identity,
+        (m) =>
+            !m.isLabel &&
+            m.mutation.identityFor(state.accountUserId) == identity,
       );
       if (!snapshot.includesAttachments &&
           (current?.attachments.isNotEmpty ?? false) &&
@@ -222,6 +224,15 @@ class EncryptedSyncStore
         attachments: pending && current?.contentAvailable == true
             ? current!.attachments
             : snapshot.attachments,
+        labelIds:
+            (pending || !snapshot.includesLabels) &&
+                current?.contentAvailable == true
+            ? current!.labelIds
+            : snapshot.labelIds,
+        labelProjections:
+            !snapshot.includesLabels && current?.contentAvailable == true
+            ? current!.labelProjections
+            : snapshot.labelProjections,
         pinnedAt: pending && current != null
             ? current.pinnedAt
             : snapshot.pinnedAt,
@@ -246,6 +257,8 @@ class EncryptedSyncStore
       );
       return LocalSyncState(
         accountUserId: state.accountUserId,
+        labels: state.labels,
+        syncWireVersion: state.syncWireVersion,
         userPreferences: state.userPreferences,
         notes: [...state.notes.where((n) => n.identity != identity), hydrated],
         outbox: state.outbox,

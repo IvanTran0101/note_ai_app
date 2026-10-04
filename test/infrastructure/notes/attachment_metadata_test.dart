@@ -1,3 +1,5 @@
+import '../../support/legacy_label_fields.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/domain/notes/attachment.dart';
 import 'package:note_ai_app/domain/notes/note.dart';
@@ -214,9 +216,11 @@ void main() {
       ],
     );
     final old = LocalSyncStateCodec.encode(state)..['schemaVersion'] = 3;
+    stripM04Fields(old);
     (old['notes'] as List).single.remove('attachments');
     final migrated = LocalSyncStateCodec.decode(old);
-    expect(migrated, state);
+    expect(migrated.notes, state.notes);
+    expect(migrated.syncWireVersion, 1);
     expect(migrated.notes.single.attachments, isEmpty);
   });
 

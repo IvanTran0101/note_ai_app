@@ -8,6 +8,7 @@ import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 import 'note_share_grant_codec.dart';
 import '../attachments/attachment_codec.dart';
+import '../labels/label_codec.dart';
 
 /// Maps a [LocalNoteState] to and from one stored record.
 ///
@@ -25,6 +26,8 @@ abstract final class LocalNoteStateCodec {
       LocalSyncSchema.ownerId: note.ownerId,
       LocalSyncSchema.title: note.title,
       LocalSyncSchema.content: note.content,
+      'labelIds': note.labelIds,
+      'labelProjections': LabelCodec.projections(note.labelProjections),
       LocalSyncSchema.attachments: note.attachments
           .map(AttachmentCodec.encode)
           .toList(),
@@ -85,6 +88,10 @@ abstract final class LocalNoteStateCodec {
         share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
+        labelIds: LabelCodec.ids(record.rawValue('labelIds')),
+        labelProjections: LabelCodec.decodeProjections(
+          record.rawValue('labelProjections'),
+        ),
         attachments: AttachmentCodec.decodeList(
           record.rawValue(LocalSyncSchema.attachments),
           noteId: id,

@@ -96,6 +96,7 @@ void main() {
       expect(record.keys.toSet(), {
         ...LocalSyncSchema.snapshotFields,
         'includesAttachments',
+        'includesLabels',
       });
       expect(record['serverUpdatedAt'], fixtureUpdatedAt.toIso8601String());
       expect(record['deletedAt'], isNull);

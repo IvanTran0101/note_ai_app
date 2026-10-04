@@ -1,3 +1,5 @@
+import '../support/legacy_label_fields.dart';
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -45,6 +47,7 @@ void registerPlatformStoreScenarios() {
         securityState(account, pending: true),
       );
       legacy['schemaVersion'] = 2;
+      stripM04Fields(legacy);
       for (final note in legacy['notes'] as List) {
         note.remove('attachments');
       }

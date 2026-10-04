@@ -236,8 +236,9 @@ final class EncryptedStateCodec {
         r['pendingIds'] = state.outbox
             .where(
               (m) =>
+                  !m.isLabel &&
                   m.mutation.identityFor(namespace.accountUserId) ==
-                  note.identity,
+                      note.identity,
             )
             .map((m) => m.mutationId)
             .toList();

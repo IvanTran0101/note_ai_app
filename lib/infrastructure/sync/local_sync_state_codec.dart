@@ -15,6 +15,7 @@ import 'local_sync_schema_migration.dart';
 import 'pending_mutation_codec.dart';
 import 'sync_conflict_codec.dart';
 import 'sync_cursor_codec.dart';
+import '../labels/label_codec.dart';
 
 abstract final class LocalSyncStateCodec {
   static const int schemaVersion = LocalSyncSchema.version;
@@ -38,9 +39,11 @@ abstract final class LocalSyncStateCodec {
         SyncConflictCodec.encode(conflict),
     ],
     LocalSyncSchema.userPreferences: _encodePreferences(state.userPreferences),
+    LocalSyncSchema.labels: state.labels.map(LabelCodec.encode).toList(),
+    LocalSyncSchema.syncWireVersion: state.syncWireVersion,
   };
 
-  /// Decodes schema 5, migrating supported schema 2/3/4 envelopes in memory.
+  /// Decodes schema 6, migrating supported schema 2/3/4/5 envelopes in memory.
   /// Existing attempted mutations retain their old payload shape and ID.
   static LocalSyncState decode(Object? data) {
     final Map<String, Object?> raw = _asObject(data, _rootPath);
@@ -69,6 +72,7 @@ abstract final class LocalSyncStateCodec {
     }
     if (version == 3) return _decodeCurrent(migrateLocalSyncV3(raw));
     if (version == 4) return _decodeCurrent(migrateLocalSyncV4(raw));
+    if (version == 5) return _decodeCurrent(migrateLocalSyncV5(raw));
     if (version != schemaVersion) {
       throw LocalSyncCodecException(
         'must be schemaVersion $schemaVersion or a supported older version.',
@@ -153,6 +157,10 @@ abstract final class LocalSyncStateCodec {
 
     return buildCodecModel(
       () => LocalSyncState(
+        labels: envelope
+            .requireObjectList('labels', LabelCodec.fields)
+            .map(LabelCodec.decodeRecord),
+        syncWireVersion: envelope.requireInt('syncWireVersion'),
         accountUserId: accountUserId,
         notes: notes,
         outbox: outbox,

@@ -3,6 +3,8 @@ import '../../domain/notes/note.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
 import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label_membership.dart';
+import '../../domain/labels/label_projection.dart';
 
 /// A read-only application projection of the Note aggregate.
 ///
@@ -23,6 +25,8 @@ final class NoteDto {
     this.share,
     this.pinnedAt,
     this.attachmentManifest = const AttachmentManifest.empty(),
+    this.labelMembership = const LabelMembership.empty(),
+    this.labelProjections = const [],
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -40,6 +44,12 @@ final class NoteDto {
       contentRevision: note.contentRevision,
       share: note.share,
       pinnedAt: note.pinnedAt,
+      labelMembership: LabelMembership(
+        note.contentAvailable ? note.labelIds : const [],
+      ),
+      labelProjections: note.contentAvailable
+          ? note.labelProjections
+          : const [],
       attachmentManifest: AttachmentManifest(
         note.contentAvailable ? note.attachments : const [],
       ),
@@ -54,6 +64,10 @@ final class NoteDto {
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     pinnedAt: note.pinnedAt,
+    labelMembership: LabelMembership(
+      note.contentAvailable ? note.labelIds : const [],
+    ),
+    labelProjections: note.contentAvailable ? note.labelProjections : const [],
     isProtected: note.protection.enabled,
     protectionRevision: note.protection.revision,
     contentAvailable: note.contentAvailable,
@@ -65,6 +79,9 @@ final class NoteDto {
   );
 
   final DateTime? pinnedAt;
+  final LabelMembership labelMembership;
+  List<String> get labelIds => labelMembership.values;
+  final List<LabelProjection> labelProjections;
   final AttachmentManifest attachmentManifest;
   List<Attachment> get attachments => attachmentManifest.values;
   bool get isPinned => pinnedAt != null;
@@ -114,7 +131,9 @@ final class NoteDto {
         other.contentRevision == contentRevision &&
         other.share == share &&
         other.pinnedAt == pinnedAt &&
-        other.attachmentManifest == attachmentManifest;
+        other.attachmentManifest == attachmentManifest &&
+        other.labelMembership == labelMembership &&
+        _sameLabels(other.labelProjections, labelProjections);
   }
 
   @override
@@ -132,6 +151,8 @@ final class NoteDto {
     share,
     pinnedAt,
     attachmentManifest,
+    labelMembership,
+    Object.hashAll(labelProjections),
   );
 
   @override
@@ -140,6 +161,10 @@ final class NoteDto {
         'content: <redacted>, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }
+
+bool _sameLabels(List<LabelProjection> a, List<LabelProjection> b) =>
+    a.length == b.length &&
+    Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
 /// Raised when an application operation targets a note that does not exist.
 final class NoteNotFoundException implements Exception {

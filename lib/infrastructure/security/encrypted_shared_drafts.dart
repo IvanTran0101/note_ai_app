@@ -60,6 +60,7 @@ extension EncryptedSharedDrafts on EncryptedStateCodec {
       if (losesWrite &&
           previous.outbox.any(
             (m) =>
+                !m.isLabel &&
                 m.mutation.identityFor(namespace.accountUserId) == old.identity,
           )) {
         await _retainSharedDraft(previous, old, reference);
@@ -90,6 +91,7 @@ extension EncryptedSharedDrafts on EncryptedStateCodec {
     final pendingIds = previous.outbox
         .where(
           (m) =>
+              !m.isLabel &&
               m.mutation.identityFor(namespace.accountUserId) == note.identity,
         )
         .map((m) => m.mutationId)

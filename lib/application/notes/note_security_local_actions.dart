@@ -75,6 +75,7 @@ extension LocalNoteSecurityActions on NoteSecurityService {
       (await store.read()).outbox.any(
         (m) =>
             m.noteId == id &&
+            !m.isLabel &&
             m.mutation.identityFor(accountId).ownerId == accountId &&
             m.protectionChange != null,
       );
@@ -95,6 +96,7 @@ extension LocalNoteSecurityActions on NoteSecurityService {
         .where(
           (m) =>
               m.noteId == id &&
+              !m.isLabel &&
               m.mutation.identityFor(accountId).ownerId == accountId &&
               m.protectionChange != null,
         )
@@ -165,6 +167,7 @@ extension LocalNoteSecurityActions on NoteSecurityService {
         .where(
           (m) =>
               m.noteId == id &&
+              !m.isLabel &&
               m.mutation.identityFor(accountId).ownerId == accountId &&
               m.protectionChange != null,
         )

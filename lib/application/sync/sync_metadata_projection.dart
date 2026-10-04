@@ -16,6 +16,8 @@ final class SyncMetadataProjection {
     };
     return LocalSyncState(
       accountUserId: source.accountUserId,
+      labels: source.labels,
+      syncWireVersion: source.syncWireVersion,
       userPreferences: source.userPreferences,
       cursor: source.cursor,
       notes: source.notes.map(

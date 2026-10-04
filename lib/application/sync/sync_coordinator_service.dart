@@ -4,6 +4,7 @@ import 'local_sync_state.dart';
 import 'local_sync_store.dart';
 import 'pending_mutation.dart';
 import 'remote_note_data_source.dart';
+import 'shared_label_projection_source.dart';
 import 'sync_conflict.dart';
 import 'sync_coordinator.dart';
 import 'sync_cursor.dart';
@@ -13,6 +14,7 @@ import 'sync_result.dart';
 import 'sync_snapshot.dart';
 import 'sync_state_reconciliation.dart';
 import 'sync_status.dart';
+import 'label_sync_reconciliation.dart';
 
 /// Runs account-bound synchronization against the local store and remote API.
 final class SyncCoordinatorService implements ISyncCoordinator {
@@ -23,6 +25,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     this.observeSnapshot,
     this.hydrateSnapshot,
     this.requireSession,
+    this.labelsEnabled = false,
     DateTime Function()? clock,
     Future<void> Function(Duration)? delay,
   }) : _reconciliation = SyncStateReconciliation(
@@ -37,6 +40,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   final Future<void> Function(SyncNoteSnapshot)? observeSnapshot;
   final Future<void> Function(SyncNoteSnapshot)? hydrateSnapshot;
   final void Function()? requireSession;
+  final bool labelsEnabled;
   final SyncStateReconciliation _reconciliation;
   final Future<void> Function(Duration) _delay;
   final StreamController<SyncStatusSnapshot> _statuses =
@@ -110,6 +114,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     int applied = 0;
     int pulled = 0;
     int conflicts = 0;
+    SyncFailure? invalidEntityFailure;
     final Set<String> stoppedNotes = <String>{
       ...state.outbox
           .where((PendingMutation item) => item.blocked)
@@ -135,6 +140,7 @@ final class SyncCoordinatorService implements ISyncCoordinator {
             (PendingMutation? item) =>
                 item != null &&
                 !item.blocked &&
+                _dependenciesReady(state, item) &&
                 !stoppedNotes.contains(item.keyFor(accountUserId)) &&
                 !attempted.contains(item.mutationId),
             orElse: () => null,
@@ -151,10 +157,12 @@ final class SyncCoordinatorService implements ISyncCoordinator {
                 item.mutationId == entry.mutationId && !item.blocked,
           );
           if (index < 0 ||
-              current.conflicts.any(
-                (SyncConflict item) =>
-                    item.identity == entry.mutation.identityFor(accountUserId),
-              )) {
+              !entry.isLabel &&
+                  current.conflicts.any(
+                    (SyncConflict item) =>
+                        item.identity ==
+                        entry.mutation.identityFor(accountUserId),
+                  )) {
             return current;
           }
           final List<PendingMutation> outbox = List<PendingMutation>.of(
@@ -171,10 +179,12 @@ final class SyncCoordinatorService implements ISyncCoordinator {
         );
         if (sendingIndex < 0 ||
             state.outbox[sendingIndex].blocked ||
-            state.conflicts.any(
-              (SyncConflict item) =>
-                  item.identity == entry.mutation.identityFor(accountUserId),
-            )) {
+            !entry.isLabel &&
+                state.conflicts.any(
+                  (SyncConflict item) =>
+                      item.identity ==
+                      entry.mutation.identityFor(accountUserId),
+                )) {
           continue pushQueue;
         }
         final PendingMutation prepared = state.outbox[sendingIndex];
@@ -186,7 +196,11 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           tries++;
           if (!failure.retryable || tries >= 2) {
             await _reconciliation.recordPushFailure(entry.mutationId, failure);
-            if (failure.code == SyncErrorCode.forbidden) {
+            if (failure.code == SyncErrorCode.forbidden ||
+                failure.code == SyncErrorCode.invalidMutation) {
+              if (failure.code == SyncErrorCode.invalidMutation) {
+                invalidEntityFailure ??= failure;
+              }
               stoppedNotes.add(entry.keyFor(accountUserId));
               continue pushQueue;
             }
@@ -198,6 +212,18 @@ final class SyncCoordinatorService implements ISyncCoordinator {
 
       if (result.mutationId != entry.mutationId) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
+      }
+      if (entry.isLabel) {
+        if (await LabelSyncReconciliation(_reconciliation)
+            .apply(entry, result)) {
+          if (result.isConflict) {
+            stoppedNotes.add(entry.keyFor(accountUserId));
+            conflicts++;
+          } else {
+            applied++;
+          }
+        }
+        continue;
       }
       if (result.isConflict) {
         if (result.conflictRemote case final snapshot?) {
@@ -223,7 +249,14 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     while (true) {
       state = await _reconciliation.read();
       final String? requestCursor = state.cursor?.value;
-      final SyncChangesPage page = await remote.pull(cursor: requestCursor);
+      final SyncChangesPage page = await remote.pull(
+        cursor: labelsEnabled && state.syncWireVersion == 1
+            ? null
+            : requestCursor,
+      );
+      if (labelsEnabled && page.wireVersion != 2) {
+        throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+      }
       requireSession?.call();
       if (page.hasMore && page.nextCursor == requestCursor) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
@@ -254,13 +287,33 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     if (state.outbox.any(
       (m) =>
           !m.blocked &&
+          _dependenciesReady(state, m) &&
           !stoppedNotes.contains(m.keyFor(accountUserId)) &&
           !attempted.contains(m.mutationId) &&
-          !state.conflicts.any(
-            (c) => c.identity == m.mutation.identityFor(accountUserId),
-          ),
+          (m.isLabel ||
+              !state.conflicts.any(
+                (c) => c.identity == m.mutation.identityFor(accountUserId),
+              )),
     )) {
       _rerun = true;
+    }
+    if (invalidEntityFailure != null) throw invalidEntityFailure;
+    if (labelsEnabled && remote is ISharedLabelProjectionSource) {
+      final refreshed = await (remote as ISharedLabelProjectionSource)
+          .refreshLabels(state.notes);
+      requireSession?.call();
+      for (final snapshot in refreshed) {
+        await observeSnapshot?.call(snapshot);
+        requireSession?.call();
+      }
+      await _reconciliation.applyPage(
+        SyncChangesPage(
+          snapshots: refreshed,
+          wireVersion: 2,
+          nextCursor: state.cursor?.value,
+        ),
+        expectedCursor: state.cursor?.value,
+      );
     }
     return SyncReport(
       applied: applied,
@@ -273,5 +326,24 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   void _publish(SyncStatusSnapshot status) {
     _status = status;
     if (!_disposed) _statuses.add(status);
+  }
+
+  bool _dependenciesReady(LocalSyncState state, PendingMutation entry) {
+    if (entry.isLabel) {
+      return !state.labels.any(
+        (l) => l.id == entry.noteId && l.status.name == 'conflict',
+      );
+    }
+    for (final id in entry.payload?.labelIds ?? const <String>[]) {
+      if (state.labels.any(
+            (l) => l.id == id && l.serverRevision == 0 && !l.isDeleted,
+          ) ||
+          state.outbox.any(
+            (m) => m.isLabel && m.noteId == id && m.operation.name == 'create',
+          )) {
+        return false;
+      }
+    }
+    return true;
   }
 }

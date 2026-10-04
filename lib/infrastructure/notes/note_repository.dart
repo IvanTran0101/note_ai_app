@@ -12,6 +12,8 @@ import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_membership.dart';
 import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_metadata.dart';
 import '../../domain/notes/note_protection.dart';
@@ -51,6 +53,7 @@ final class NoteRepository
     required this.now,
     this.accessGuard,
     this.sessionGeneration,
+    this.labelsEnabled = false,
   });
 
   /// Resolves the account the next operation acts on.
@@ -67,6 +70,7 @@ final class NoteRepository
   final DateTime Function() now;
   final INoteAccessGuard? accessGuard;
   final int Function()? sessionGeneration;
+  final bool labelsEnabled;
 
   /// One store instance per account, created on first use and reused after.
   final Map<String, ILocalSyncStore> _storesByAccount =
@@ -228,6 +232,12 @@ final class NoteRepository
         )) {
           _authorizeUpdate(note, accountUserId, NoteOperation.attachmentWrite);
         }
+        _validateLabels(
+          note,
+          existing?.labelIds ?? const [],
+          current,
+          accountUserId,
+        );
         return _stateAfterSave(current, note, now());
       });
     });
@@ -301,6 +311,7 @@ final class NoteRepository
   /// Index of the newest outbox entry for [noteId], or -1 when none exists.
   static int _lastPendingIndexFor(LocalSyncState state, String noteId) {
     for (int index = state.outbox.length - 1; index >= 0; index--) {
+      if (state.outbox[index].isLabel) continue;
       if (state.outbox[index].mutation
               .identityFor(state.accountUserId)
               .referenceFor(state.accountUserId) ==
@@ -344,6 +355,8 @@ final class NoteRepository
   }) {
     return LocalSyncState(
       accountUserId: current.accountUserId,
+      labels: current.labels,
+      syncWireVersion: current.syncWireVersion,
       notes: notes,
       outbox: outbox,
       conflicts: current.conflicts,
@@ -352,7 +365,7 @@ final class NoteRepository
     );
   }
 
-  static SyncNotePayload _payloadOf(
+  SyncNotePayload _payloadOf(
     Note note, {
     bool includePin = false,
     bool includeAttachments = false,
@@ -361,6 +374,8 @@ final class NoteRepository
       title: note.title,
       content: note.content,
       attachmentManifest: AttachmentManifest(note.attachments, noteId: note.id),
+      labelMembership: LabelMembership(note.labelIds),
+      includesLabels: labelsEnabled && note.share == null,
       includesAttachments:
           note.share == null &&
           (includeAttachments || note.attachments.isNotEmpty),
@@ -385,6 +400,8 @@ final class NoteRepository
       pinnedAt: note.pinnedAt,
       serverRevision: serverRevision,
       attachments: note.attachments,
+      labelIds: note.labelIds,
+      labelProjections: note.labelProjections,
       status: status,
       protection: note.protection,
       contentAvailable: note.contentAvailable,
@@ -402,6 +419,8 @@ final class NoteRepository
       ownerId: note.ownerId,
       title: available ? note.title : '',
       attachments: available ? note.attachments : const [],
+      labelIds: available ? note.labelIds : const [],
+      labelProjections: available ? note.labelProjections : const [],
       content: available ? note.content : '',
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
@@ -435,6 +454,7 @@ domain.INoteRepository createNoteRepository({
   required DateTime Function() now,
   INoteAccessGuard? accessGuard,
   int Function()? sessionGeneration,
+  bool labelsEnabled = false,
 }) {
   return NoteRepository(
     currentAccountUserId: currentAccountUserId,
@@ -443,5 +463,6 @@ domain.INoteRepository createNoteRepository({
     now: now,
     accessGuard: accessGuard,
     sessionGeneration: sessionGeneration,
+    labelsEnabled: labelsEnabled,
   );
 }

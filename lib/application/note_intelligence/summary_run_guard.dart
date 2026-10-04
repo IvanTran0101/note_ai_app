@@ -45,7 +45,7 @@ final class SummaryRunGuard {
       throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
     }
     for (final LocalNoteState note in state.notes) {
-      if (note.id != context.noteSnapshot.id) continue;
+      if (note.identity != context.noteSnapshot.identity) continue;
       if (note.isDeleted) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteNotFound);
       }
@@ -64,7 +64,12 @@ final class SummaryRunGuard {
       }
       if (requireConsent &&
           (note.serverRevision < 1 ||
-              state.outbox.any((m) => m.noteId == note.id))) {
+              state.outbox.any(
+                (m) =>
+                    !m.isLabel &&
+                    m.mutation.identityFor(state.accountUserId) ==
+                        note.identity,
+              ))) {
         throw const SummaryRunFailure(SummaryRunFailureCode.noteChanged);
       }
       if (note.status == NoteSyncStatus.conflict ||

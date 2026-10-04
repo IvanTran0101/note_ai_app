@@ -8,6 +8,7 @@ import 'sync_cursor.dart';
 import 'sync_mutation.dart';
 import '../../domain/notes/note_role.dart';
 import '../../domain/users/user_preferences.dart';
+import '../labels/local_label_state.dart';
 
 /// Immutable snapshot of everything the local store holds for one account.
 ///
@@ -27,6 +28,8 @@ final class LocalSyncState {
     Iterable<SyncConflict> conflicts = const <SyncConflict>[],
     this.cursor,
     UserPreferences? userPreferences,
+    Iterable<LocalLabelState> labels = const [],
+    this.syncWireVersion = 2,
   }) : accountUserId = _requireNonBlank(accountUserId, 'accountUserId'),
        _userPreferences =
            (userPreferences ??
@@ -38,7 +41,13 @@ final class LocalSyncState {
                .copy(),
        notes = List<LocalNoteState>.unmodifiable(notes),
        outbox = List<PendingMutation>.unmodifiable(outbox),
-       conflicts = List<SyncConflict>.unmodifiable(conflicts) {
+       conflicts = List<SyncConflict>.unmodifiable(conflicts),
+       labels = List<LocalLabelState>.unmodifiable(labels) {
+    if (syncWireVersion != 1 && syncWireVersion != 2 ||
+        this.labels.any((l) => l.ownerId != accountUserId)) {
+      throw ArgumentError('Catalog and wire version must belong to the actor.');
+    }
+    _requireUniqueIds(this.labels.map((l) => l.id), 'labels', 'label id');
     if (_userPreferences.userId != this.accountUserId) {
       throw ArgumentError.value(
         _userPreferences.userId,
@@ -68,6 +77,7 @@ final class LocalSyncState {
   }
 
   void _requireActorMutation(PendingMutation entry) {
+    if (entry.isLabel) return;
     final identity = entry.mutation.identityFor(accountUserId);
     if (identity.ownerId == accountUserId) return;
     final note = notes.where((n) => n.identity == identity).firstOrNull;
@@ -87,6 +97,8 @@ final class LocalSyncState {
 
   /// The account this state belongs to.
   final String accountUserId;
+  final List<LocalLabelState> labels;
+  final int syncWireVersion;
 
   final UserPreferences _userPreferences;
 
@@ -107,13 +119,16 @@ final class LocalSyncState {
   final SyncCursor? cursor;
 
   /// True when the account has no notes, no outbox entries, and no conflicts.
-  bool get isEmpty => notes.isEmpty && outbox.isEmpty && conflicts.isEmpty;
+  bool get isEmpty =>
+      notes.isEmpty && outbox.isEmpty && conflicts.isEmpty && labels.isEmpty;
 
   @override
   bool operator ==(Object other) {
     return other is LocalSyncState &&
         other.accountUserId == accountUserId &&
         other._userPreferences == _userPreferences &&
+        _listEquals(other.labels, labels) &&
+        other.syncWireVersion == syncWireVersion &&
         _listEquals(other.notes, notes) &&
         _listEquals(other.outbox, outbox) &&
         _listEquals(other.conflicts, conflicts) &&
@@ -128,6 +143,8 @@ final class LocalSyncState {
     Object.hashAll(outbox),
     Object.hashAll(conflicts),
     cursor,
+    Object.hashAll(labels),
+    syncWireVersion,
   );
 
   @override

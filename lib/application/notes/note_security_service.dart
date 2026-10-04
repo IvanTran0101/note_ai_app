@@ -198,6 +198,8 @@ final class NoteSecurityService implements INoteAccessGuard {
         id: content.id,
         pinnedAt: content.pinnedAt,
         attachments: content.attachments,
+        labelIds: content.labelIds,
+        labelProjections: content.labelProjections,
         ownerId: note.ownerId,
         share: note.share,
         title: content.title,
@@ -227,6 +229,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     }
     if (state.outbox.any(
           (m) =>
+              !m.isLabel &&
               m.mutation.identityFor(accountId) == note.identity &&
               m.protectionChange != null,
         ) ||
@@ -265,13 +268,17 @@ final class NoteSecurityService implements INoteAccessGuard {
     await store.update(
       (state) => LocalSyncState(
         accountUserId: state.accountUserId,
+        labels: state.labels,
+        syncWireVersion: state.syncWireVersion,
         userPreferences: state.userPreferences,
         notes: state.notes,
         conflicts: state.conflicts,
         cursor: state.cursor,
         outbox: state.outbox.map(
           (m) =>
-              m.mutation.identityFor(accountId).referenceFor(accountId) == id &&
+              !m.isLabel &&
+                  m.mutation.identityFor(accountId).referenceFor(accountId) ==
+                      id &&
                   (m.accessRevision == null ||
                       m.accessRevision == _knownShares[id]?.accessRevision) &&
                   (_knownShares[id] == null ||

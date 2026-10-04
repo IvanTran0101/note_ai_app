@@ -36,6 +36,8 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
       allowedFields: fields.difference({
         'pinnedAt',
         'attachments',
+        'labelIds',
+        'labelProjections',
         if (!hasSecurity) ...security,
       }),
       optionalFields: {...optional, 'pinnedAt'},
@@ -46,6 +48,9 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
       'contentAvailable': true,
       'pinnedAt': null,
       'attachments': <Object?>[],
+      'labelIds': <Object?>[],
+      'labelProjections': <Object?>[],
+      if (remote) 'includesLabels': false,
       if (remote) 'includesAttachments': false,
       ...record,
     };
@@ -55,6 +60,8 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
   return {
     ...data,
     'schemaVersion': LocalSyncSchema.version,
+    'labels': <Object?>[],
+    'syncWireVersion': 1,
     'notes': records('notes').map((n) => note(n, false)).toList(),
     'conflicts': records('conflicts').map((raw) {
       if (raw is! Map) {
@@ -87,7 +94,10 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
   final envelope = SyncCodecObject.from(
     data,
     path: 'legacy.v4',
-    allowedFields: LocalSyncSchema.envelopeFields,
+    allowedFields: LocalSyncSchema.envelopeFields.difference({
+      'labels',
+      'syncWireVersion',
+    }),
   );
   void validate(Object? raw, bool remote) {
     SyncCodecObject.from(
@@ -95,7 +105,7 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
       path: 'legacy.v4.note',
       allowedFields:
           (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
-              .difference({'attachments'}),
+              .difference({'attachments', 'labelIds', 'labelProjections'}),
       optionalFields: remote
           ? LocalSyncSchema.snapshotOptionalFields
           : LocalSyncSchema.noteOptionalFields,
@@ -104,7 +114,11 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
 
   envelope.requireObjectList(
     'notes',
-    LocalSyncSchema.noteFields.difference({'attachments'}),
+    LocalSyncSchema.noteFields.difference({
+      'attachments',
+      'labelIds',
+      'labelProjections',
+    }),
     optionalFields: LocalSyncSchema.noteOptionalFields,
   );
   for (final record in envelope.requireObjectList(
@@ -117,4 +131,60 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
     }
   }
   return migrateLocalSyncV3(data);
+}
+
+/// Published M03 schema5: preserve cursor and all attempted wire bytes.
+Map<String, Object?> migrateLocalSyncV5(Map<String, Object?> data) {
+  final envelope = SyncCodecObject.from(
+    data,
+    path: 'legacy.v5',
+    allowedFields: LocalSyncSchema.envelopeFields.difference({
+      'labels',
+      'syncWireVersion',
+    }),
+  );
+  Map<String, Object?> note(Object? raw, bool remote) {
+    final record = SyncCodecObject.from(
+      raw,
+      path: 'legacy.v5.note',
+      allowedFields:
+          (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
+              .difference({'labelIds', 'labelProjections'}),
+      optionalFields:
+          (remote
+                  ? LocalSyncSchema.snapshotOptionalFields
+                  : LocalSyncSchema.noteOptionalFields)
+              .difference({'includesLabels'}),
+    );
+    record.requireString('id');
+    return {
+      ...Map<String, Object?>.from(raw as Map),
+      'labelIds': <Object?>[],
+      'labelProjections': <Object?>[],
+      if (remote) 'includesLabels': false,
+    };
+  }
+
+  final notes = envelope.rawValue('notes'),
+      conflicts = envelope.rawValue('conflicts');
+  if (notes is! List || conflicts is! List) {
+    throw const LocalSyncCodecException('Invalid legacy collections.');
+  }
+  return {
+    ...data,
+    'schemaVersion': 6,
+    'labels': <Object?>[],
+    'syncWireVersion': 1,
+    'notes': notes.map((n) => note(n, false)).toList(),
+    'conflicts': conflicts.map((c) {
+      if (c is! Map) {
+        throw const LocalSyncCodecException('Invalid legacy conflict.');
+      }
+      return {
+        ...Map<String, Object?>.from(c),
+        'local': note(c['local'], false),
+        'remote': c['remote'] == null ? null : note(c['remote'], true),
+      };
+    }).toList(),
+  };
 }

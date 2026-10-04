@@ -1,3 +1,5 @@
+import '../../application/sync/local_note_state.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -133,6 +135,7 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
 
   Future<String?> mutationGrant(String account, SyncMutation mutation) async {
     requireSession(account);
+    if (mutation.isLabel) return null;
     final generation = session.sessionGeneration;
     final state = await storeForAccount(accountUserId: account).read();
     requireSession(account);
@@ -171,6 +174,7 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
         state.outbox
             .where(
               (m) =>
+                  !m.isLabel &&
                   m.mutation.identityFor(account) == note.identity &&
                   m.protectionChange != null,
             )
@@ -249,6 +253,25 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     );
   }
 
+  String? labelProjectionGrant(String account, LocalNoteState note) {
+    requireSession(account);
+    requireAccess(
+      ownerId: note.ownerId,
+      noteId: note.id,
+      protection: note.protection,
+      operation: NoteOperation.read,
+    );
+    if (!note.protection.enabled) return null;
+    final reference = note.referenceFor(account);
+    forAccount(account)
+        .requireRemote(reference, note.protection, NoteOperation.read);
+    return _gateways[account]!.grantHeader(
+      reference,
+      note.protection,
+      NoteOperation.read,
+    );
+  }
+
   Future<String?> sharingGrant(NoteIdentity identity) async {
     final account = session.requiredUserId;
     requireSession(account);
@@ -261,6 +284,7 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     if (note == null ||
         state.outbox.any(
           (m) =>
+              !m.isLabel &&
               m.mutation.identityFor(account) == identity &&
               m.protectionChange != null,
         )) {

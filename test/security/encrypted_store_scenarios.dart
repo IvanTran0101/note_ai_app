@@ -1,3 +1,5 @@
+import '../support/legacy_label_fields.dart';
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -122,6 +124,7 @@ void registerEncryptedStoreScenarios() {
       securityState('security-migration', pending: true),
     );
     original['schemaVersion'] = 2;
+    stripM04Fields(original);
     for (final note in original['notes'] as List) {
       note.remove('attachments');
     }

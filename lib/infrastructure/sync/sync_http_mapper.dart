@@ -19,12 +19,16 @@ import 'dart:convert';
 import 'protection_sync_codec.dart';
 import 'share_wire_codec.dart';
 import '../attachments/attachment_codec.dart';
+import '../labels/label_codec.dart';
+import '../../application/labels/local_label_state.dart';
 
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
+
+part 'sync_note_wire_mapper.dart';
 
 /// The `status` value of an applied mutation response.
 const String _appliedStatus = 'applied';
@@ -72,7 +76,22 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
 /// without content omits the key instead of sending `null`. The body includes
 /// `ownerId` only for a canonical shared update.
 Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
+  if (mutation.isLabel) {
+    return {
+      'wireVersion': 2,
+      'entityType': 'label',
+      'mutationId': mutation.mutationId,
+      'labelId': mutation.noteId,
+      'operation': mutation.operation.name,
+      'baseRevision': mutation.baseRevision,
+      if (mutation.labelName != null) 'payload': {'name': mutation.labelName},
+    };
+  }
   final Map<String, Object?> body = <String, Object?>{
+    if (mutation.payload?.includesLabels == true) ...{
+      'wireVersion': 2,
+      'entityType': 'note',
+    },
     'mutationId': mutation.mutationId,
     'noteId': mutation.noteId,
     'operation': mutation.operation.name,
@@ -90,6 +109,7 @@ Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
     body['payload'] = <String, Object?>{
       'title': payload.title,
       'content': payload.content,
+      if (payload.includesLabels) 'labelIds': payload.labelIds,
       if (payload.includesAttachments)
         'attachments': payload.attachments.map(AttachmentCodec.encode).toList(),
       if (payload.includesPinnedAt)
@@ -118,6 +138,26 @@ SyncMutationResult decodeSyncMutationResponse({
   String? mutationId,
 }) {
   final Map<String, Object?> json = _asJsonObject(body, 'mutation response');
+  if (json['entityType'] == 'label') {
+    if (json['wireVersion'] != 2) {
+      throw const FormatException('Label wire version required.');
+    }
+    if (statusCode == 409) {
+      return SyncMutationResult.labelConflict(
+        mutationId: _readMutationId(json, mutationId),
+        remote: json['remoteLabel'] == null
+            ? null
+            : LabelCodec.decodeWire(json['remoteLabel']),
+      );
+    }
+    if (statusCode < 200 || statusCode >= 300 || json['status'] != 'applied') {
+      throw const FormatException('Invalid Label outcome.');
+    }
+    return SyncMutationResult.labelApplied(
+      mutationId: _readMutationId(json, mutationId),
+      label: LabelCodec.decodeWire(json['label']),
+    );
+  }
 
   if (statusCode == 409) {
     return SyncMutationResult.conflict(
@@ -158,10 +198,26 @@ SyncChangesPage decodeChangesPage(Object? body) {
   if (items is! List<Object?>) {
     throw const FormatException('Changes page "items" must be an array.');
   }
-  final List<SyncNoteSnapshot> snapshots = <SyncNoteSnapshot>[
-    for (final Object? item in items)
-      _decodeNote(_asJsonObject(item, 'changes page item')),
-  ];
+  final version = json['wireVersion'] ?? 1;
+  if (version != 1 && version != 2) {
+    throw const FormatException('Unsupported sync version.');
+  }
+  final snapshots = <SyncNoteSnapshot>[];
+  final labels = <LocalLabelState>[];
+  for (final item in items) {
+    final row = _asJsonObject(item, 'changes page item');
+    if (version == 1) {
+      snapshots.add(_decodeNote(row));
+      continue;
+    }
+    if (row['entityType'] == 'note') {
+      snapshots.add(_decodeNote(_asJsonObject(row['note'], 'note')));
+    } else if (row['entityType'] == 'label') {
+      labels.add(LabelCodec.decodeWire(row['label']));
+    } else {
+      throw const FormatException('Typed entity required.');
+    }
+  }
 
   final String? nextCursor = _readOptionalCursor(json);
   final Object? hasMore = json['hasMore'];
@@ -180,6 +236,8 @@ SyncChangesPage decodeChangesPage(Object? body) {
   }
   return SyncChangesPage(
     snapshots: snapshots,
+    labels: labels,
+    wireVersion: version as int,
     nextCursor: nextCursor,
     hasMore: hasMorePages,
     catchUpPending: catchUpPending == true,
@@ -216,158 +274,6 @@ SyncNoteSnapshot decodeSyncNoteSnapshot(
   _asJsonObject(data, 'note snapshot'),
   authorizedContent: authorizedContent,
 );
-
-SyncNoteSnapshot _decodeNote(
-  Map<String, Object?> json, {
-  bool authorizedContent = false,
-}) {
-  final Object? id = json['id'];
-  final securityFields = [
-    'protected',
-    'protectionRevision',
-    'contentAvailable',
-  ];
-  if (securityFields.any(json.containsKey) &&
-      !securityFields.every(json.containsKey)) {
-    throw const FormatException('Incomplete note protection metadata.');
-  }
-  if (id is! String || id.trim().isEmpty) {
-    throw const FormatException('Note "id" must be a non-blank string.');
-  }
-  final enabled = json['protected'] ?? false;
-  final epoch = json['protectionRevision'] ?? 0;
-  final available = json['contentAvailable'] ?? (enabled == false);
-  if (enabled is! bool ||
-      epoch is! int ||
-      epoch < 0 ||
-      (enabled && epoch == 0) ||
-      available is! bool) {
-    throw const FormatException('Invalid note protection metadata.');
-  }
-  final hasContent = available && (!enabled || authorizedContent);
-  final share = json['share'] == null
-      ? null
-      : ShareWireCodec.decode(json['share']);
-  final owner = share == null && !json.containsKey('protected')
-      ? null
-      : json['ownerId'];
-  if (share != null &&
-      (owner != share.note.ownerId || id != share.note.noteId)) {
-    throw const FormatException('Mismatched canonical sharing metadata.');
-  }
-  return SyncNoteSnapshot(
-    id: id,
-    ownerId: owner as String?,
-    share: share,
-    title: hasContent ? _readString(json, 'title') : '',
-    content: hasContent ? _readString(json, 'content') : '',
-    attachments:
-        hasContent &&
-            json['deletedAt'] == null &&
-            json.containsKey('attachments')
-        ? AttachmentCodec.decodeList(json['attachments'], noteId: id)
-        : const [],
-    includesAttachments: json.containsKey('attachments'),
-    protection: NoteProtection(enabled: enabled, revision: epoch),
-    contentAvailable: hasContent,
-    createdAt: _readTimestamp(json, 'createdAt'),
-    serverUpdatedAt: _readTimestamp(json, 'serverUpdatedAt'),
-    revision: _readPositiveRevision(json),
-    pinnedAt: _readOptionalUtcTimestamp(json, 'pinnedAt'),
-    deletedAt: _readOptionalTimestamp(json, 'deletedAt'),
-  );
-}
-
-/// Reads a required string field, or throws when it is missing or not a string.
-String _readString(Map<String, Object?> json, String fieldName) {
-  if (!json.containsKey(fieldName)) {
-    throw FormatException('Missing required note field "$fieldName".');
-  }
-  final Object? value = json[fieldName];
-  if (value is! String) {
-    throw FormatException('Note field "$fieldName" must be a string.');
-  }
-  return value;
-}
-
-/// Reads a required ISO-8601 field, or throws when it cannot be parsed.
-///
-/// Anything present must parse, so a malformed timestamp can never become a
-/// silently wrong `DateTime`.
-DateTime _readTimestamp(Map<String, Object?> json, String fieldName) {
-  final DateTime? timestamp = _tryTimestamp(json[fieldName]);
-  if (timestamp == null) {
-    throw FormatException(
-      'Note field "$fieldName" must be a valid ISO-8601 timestamp.',
-    );
-  }
-  return timestamp;
-}
-
-/// Reads the optional tombstone marker: an absent or `null` field means the
-/// note is alive, and anything present must parse.
-DateTime? _readOptionalTimestamp(Map<String, Object?> json, String fieldName) {
-  final Object? value = json[fieldName];
-  if (value == null) {
-    return null;
-  }
-  final DateTime? timestamp = _tryTimestamp(value);
-  if (timestamp == null) {
-    throw FormatException(
-      'Note field "$fieldName" must be null or a valid ISO-8601 timestamp.',
-    );
-  }
-  return timestamp;
-}
-
-DateTime? _readOptionalUtcTimestamp(
-  Map<String, Object?> json,
-  String fieldName,
-) {
-  final Object? value = json[fieldName];
-  if (value == null) return null;
-  if (value is! String) {
-    throw FormatException(
-      'Note field "$fieldName" must be null or a valid UTC timestamp.',
-    );
-  }
-  final Match? parts = _utcTimestampPattern.firstMatch(value);
-  final DateTime? timestamp = DateTime.tryParse(value);
-  if (parts == null ||
-      timestamp == null ||
-      !timestamp.isUtc ||
-      timestamp.year != int.parse(parts[1]!) ||
-      timestamp.month != int.parse(parts[2]!) ||
-      timestamp.day != int.parse(parts[3]!) ||
-      timestamp.hour != int.parse(parts[4]!) ||
-      timestamp.minute != int.parse(parts[5]!) ||
-      timestamp.second != int.parse(parts[6]!)) {
-    throw FormatException(
-      'Note field "$fieldName" must be null or a valid UTC timestamp.',
-    );
-  }
-  return timestamp;
-}
-
-/// Parses a non-empty ISO-8601 string, or returns `null` when it cannot.
-DateTime? _tryTimestamp(Object? value) {
-  if (value is! String || value.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(value);
-}
-
-/// Reads the note revision, which the Application contract requires positive.
-int _readPositiveRevision(Map<String, Object?> json) {
-  final Object? value = json['revision'];
-  if (value is! int) {
-    throw const FormatException('Note field "revision" must be an integer.');
-  }
-  if (value <= 0) {
-    throw const FormatException('Note field "revision" must be positive.');
-  }
-  return value;
-}
 
 /// Reads the opaque paging cursor, treating an empty string as absent.
 String? _readOptionalCursor(Map<String, Object?> json) {

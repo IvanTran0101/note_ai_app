@@ -1,3 +1,5 @@
+import '../../support/legacy_label_fields.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
@@ -17,6 +19,7 @@ void main() {
       final state = richStateFixture();
       final encoded = LocalSyncStateCodec.encode(state);
       encoded['schemaVersion'] = 4;
+      stripM04Fields(encoded);
       for (final raw in encoded['notes']! as List<Object?>) {
         (raw! as Map<String, Object?>).remove('attachments');
       }
@@ -28,7 +31,11 @@ void main() {
         remote?.remove('includesAttachments');
       }
       final migrated = LocalSyncStateCodec.decode(encoded);
-      expect(migrated, state);
+      expect(migrated.notes, state.notes);
+      expect(migrated.outbox, state.outbox);
+      expect(migrated.conflicts, state.conflicts);
+      expect(migrated.cursor, state.cursor);
+      expect(migrated.syncWireVersion, 1);
       expect(LocalSyncStateCodec.encode(migrated)['outbox'], encoded['outbox']);
       expect(migrated.userPreferences, state.userPreferences);
     },
@@ -50,14 +57,14 @@ void main() {
     });
 
     test(
-      'writes exactly the frozen envelope fields at inner schema version 5',
+      'writes exactly the frozen envelope fields at inner schema version 6',
       () {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           richStateFixture(),
         );
 
-        expect(LocalSyncStateCodec.schemaVersion, 5);
-        expect(LocalSyncSchema.version, 5);
+        expect(LocalSyncStateCodec.schemaVersion, 6);
+        expect(LocalSyncSchema.version, 6);
         expect(envelope.keys.toSet(), <String>{
           'schemaVersion',
           'accountUserId',
@@ -66,8 +73,10 @@ void main() {
           'cursor',
           'conflicts',
           'userPreferences',
+          'labels',
+          'syncWireVersion',
         });
-        expect(envelope['schemaVersion'], 5);
+        expect(envelope['schemaVersion'], 6);
         expect(envelope['accountUserId'], 'user-1');
         expect(envelope['cursor'], 'opaque-cursor-1');
         expect(envelope['notes'], isA<List<Object?>>());
@@ -136,6 +145,7 @@ void main() {
       expect(liveRemote.keys.toSet(), {
         ...LocalSyncSchema.snapshotFields,
         'includesAttachments',
+        'includesLabels',
       });
       expect(liveRemote['revision'], 5);
       expect(liveRemote['serverUpdatedAt'], fixtureUpdatedAt.toIso8601String());
@@ -152,6 +162,7 @@ void main() {
       final Map<String, Object?> legacy = LocalSyncStateCodec.encode(state)
         ..['schemaVersion'] = 2
         ..remove('userPreferences');
+      stripM04Fields(legacy);
 
       final List<Object?> oldConflicts = legacy['conflicts']! as List<Object?>;
       for (int i = 0; i < oldConflicts.length; i++) {
@@ -210,6 +221,7 @@ void main() {
             LocalSyncStateCodec.encode(simpleStateFixture())
               ..['schemaVersion'] = 2
               ..remove('userPreferences');
+        stripM04Fields(legacy);
         final List<Object?> notes = legacy['notes']! as List<Object?>;
         notes[0] = copyRecord(notes[0])..['unexpected'] = true;
         notes[0] = copyRecord(notes[0])
@@ -323,6 +335,8 @@ void main() {
         'cursor',
         'conflicts',
         'userPreferences',
+        'labels',
+        'syncWireVersion',
       ]) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           simpleStateFixture(),
@@ -338,14 +352,14 @@ void main() {
     });
 
     test(
-      'rejects versions outside v2/v3/v4 legacy and v5 current contract',
+      'rejects versions outside v2/v3/v4/v5 legacy and v6 current contract',
       () {
         // Web numbers erase the int/double distinction for integral values.
         // A fractional version is invalid on both runtimes.
         final List<Object?> versions = <Object?>[
           0,
           1,
-          6,
+          7,
           '3',
           3.25,
           null,

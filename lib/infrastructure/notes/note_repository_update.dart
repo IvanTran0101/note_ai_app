@@ -39,10 +39,12 @@ extension _NoteRepositoryUpdate on NoteRepository {
         }
         fence();
         _validateUpdatedNote(fresh, existing, expectedAccountUserId);
+        _validateLabels(fresh, existing.labelIds, state, expectedAccountUserId);
         result = fresh;
         if (fresh.title == existing.title &&
             fresh.content == existing.content &&
             sameAttachments(fresh.attachments, existing.attachments) &&
+            sameLabelIds(fresh.labelIds, existing.labelIds) &&
             fresh.pinnedAt == existing.pinnedAt) {
           return state;
         }
@@ -89,5 +91,22 @@ extension _NoteRepositoryUpdate on NoteRepository {
         throw ArgumentError('Note text must not be blank.');
       }
     }
+  }
+
+  void _validateLabels(
+    Note note,
+    List<String> old,
+    LocalSyncState state,
+    String actor,
+  ) {
+    if (!sameLabelIds(note.labelIds, old)) {
+      _authorizeUpdate(note, actor, NoteOperation.manage);
+    }
+    requireLabelAssociations(
+      ownerId: note.ownerId,
+      before: old,
+      after: note.labelIds,
+      catalog: state.labels.map((l) => l.toDomain()),
+    );
   }
 }

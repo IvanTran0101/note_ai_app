@@ -9,6 +9,8 @@ import 'protection_sync_codec.dart';
 import 'local_sync_codec_schema.dart';
 import '../attachments/attachment_codec.dart';
 import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label_membership.dart';
+import '../labels/label_codec.dart';
 
 /// Maps a [PendingMutation] to and from one stored outbox record.
 ///
@@ -25,6 +27,9 @@ abstract final class PendingMutationCodec {
     return <String, Object?>{
       LocalSyncSchema.mutationId: entry.mutationId,
       LocalSyncSchema.noteId: entry.noteId,
+      if (entry.isLabel) 'entityType': 'label',
+      if (entry.mutation.labelName != null)
+        'labelName': entry.mutation.labelName,
       if (entry.ownerId != null) LocalSyncSchema.ownerId: entry.ownerId,
       if (entry.accessRevision != null)
         LocalSyncSchema.accessRevision: entry.accessRevision,
@@ -66,7 +71,15 @@ abstract final class PendingMutationCodec {
       LocalSyncSchema.baseRevision,
     );
     final SyncNotePayload? payload = _decodePayload(record);
-    if (operation != SyncMutationOperation.delete && payload == null) {
+    final isLabel =
+        record.containsField('entityType') &&
+        record.rawValue('entityType') == 'label';
+    if (record.containsField('entityType') && !isLabel) {
+      record.fail('entityType', 'Unsupported entity type.');
+    }
+    if (!isLabel &&
+        operation != SyncMutationOperation.delete &&
+        payload == null) {
       record.fail(
         LocalSyncSchema.payload,
         'is required for create and update.',
@@ -99,6 +112,10 @@ abstract final class PendingMutationCodec {
         operation: operation,
         baseRevision: baseRevision,
         payload: payload,
+        entityType: isLabel ? SyncEntityType.label : SyncEntityType.note,
+        labelName: record.containsField('labelName')
+            ? record.requireString('labelName')
+            : null,
         createdAt: createdAt,
         retryCount: retryCount,
         lastError: lastError,
@@ -115,6 +132,7 @@ abstract final class PendingMutationCodec {
       optionalFields: <String>{
         LocalSyncSchema.pinnedAt,
         LocalSyncSchema.attachments,
+        'labelIds',
       },
     );
     if (payload == null) {
@@ -123,6 +141,10 @@ abstract final class PendingMutationCodec {
     return SyncNotePayload(
       title: payload.requireString(LocalSyncSchema.title),
       content: payload.requireString(LocalSyncSchema.content),
+      labelMembership: payload.contains('labelIds')
+          ? LabelMembership(LabelCodec.ids(payload.rawValue('labelIds')))
+          : const LabelMembership.empty(),
+      includesLabels: payload.contains('labelIds'),
       pinnedAt: payload.requireNullableTimestamp(LocalSyncSchema.pinnedAt),
       includesPinnedAt: payload.contains(LocalSyncSchema.pinnedAt),
       includesAttachments: payload.contains(LocalSyncSchema.attachments),
@@ -141,6 +163,7 @@ abstract final class PendingMutationCodec {
       <String, Object?>{
         LocalSyncSchema.title: payload.title,
         LocalSyncSchema.content: payload.content,
+        if (payload.includesLabels) 'labelIds': payload.labelIds,
         if (payload.includesAttachments)
           LocalSyncSchema.attachments: payload.attachments
               .map(AttachmentCodec.encode)

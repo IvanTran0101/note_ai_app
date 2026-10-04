@@ -2,6 +2,7 @@
 library;
 
 import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label_membership.dart';
 
 import 'local_note_state.dart';
 import 'local_sync_state.dart';
@@ -81,12 +82,14 @@ final class SyncConflictResolver {
       final List<PendingMutation> outbox = current.outbox
           .where(
             (PendingMutation item) =>
+                item.isLabel ||
                 item.mutation.identityFor(accountUserId) != local.identity,
           )
           .toList();
       final pendingProtection = current.outbox
           .where(
             (m) =>
+                !m.isLabel &&
                 m.mutation.identityFor(accountUserId) == local.identity &&
                 m.protectionChange != null,
           )
@@ -144,6 +147,7 @@ final class SyncConflictResolver {
               local: local,
               accountUserId: accountUserId,
               timestamp: timestamp,
+              includeLabels: conflict.pending.payload?.includesLabels == true,
               protectionChange: pendingProtection == null
                   ? null
                   : ProtectionSyncChange(
@@ -169,6 +173,7 @@ final class SyncConflictResolver {
               local: local,
               accountUserId: accountUserId,
               timestamp: timestamp,
+              includeLabels: conflict.pending.payload?.includesLabels == true,
               protectionChange: pendingProtection == null
                   ? null
                   : ProtectionSyncChange(
@@ -196,6 +201,8 @@ final class SyncConflictResolver {
           updatedAt: timestamp,
           pinnedAt: local.pinnedAt,
           attachments: local.attachments,
+          labelIds: local.labelIds,
+          labelProjections: local.labelProjections,
           status: NoteSyncStatus.pending,
         );
         notes
@@ -209,6 +216,7 @@ final class SyncConflictResolver {
             local: replacement,
             accountUserId: accountUserId,
             timestamp: timestamp,
+            includeLabels: conflict.pending.payload?.includesLabels == true,
           ),
         );
       } else {
@@ -228,6 +236,7 @@ final class SyncConflictResolver {
             local: local,
             accountUserId: accountUserId,
             timestamp: timestamp,
+            includeLabels: conflict.pending.payload?.includesLabels == true,
           ),
         );
       }
@@ -236,6 +245,8 @@ final class SyncConflictResolver {
         ..removeAt(conflictIndex);
       return LocalSyncState(
         accountUserId: current.accountUserId,
+        labels: current.labels,
+        syncWireVersion: current.syncWireVersion,
         notes: notes,
         outbox: outbox,
         conflicts: conflicts,
@@ -253,6 +264,7 @@ final class SyncConflictResolver {
     required String accountUserId,
     required DateTime timestamp,
     ProtectionSyncChange? protectionChange,
+    bool includeLabels = false,
   }) => PendingMutation(
     mutationId: generateMutationId(),
     noteId: id,
@@ -266,10 +278,15 @@ final class SyncConflictResolver {
         : SyncNotePayload(
             title: local.title,
             content: local.content,
+            labelMembership: LabelMembership(local.labelIds),
+            includesLabels:
+                local.share == null &&
+                (local.labelIds.isNotEmpty || includeLabels),
             pinnedAt: local.pinnedAt,
             includesPinnedAt: local.share == null,
             attachmentManifest: AttachmentManifest(local.attachments),
-            includesAttachments: local.share == null,
+            includesAttachments:
+                local.share == null && local.attachments.isNotEmpty,
           ),
     createdAt: timestamp,
   );
@@ -295,6 +312,8 @@ LocalNoteState _pendingNote(
   updatedAt: note.updatedAt,
   pinnedAt: note.pinnedAt,
   attachments: note.attachments,
+  labelIds: note.labelIds,
+  labelProjections: note.labelProjections,
   serverRevision: serverRevision,
   deletedAt: note.deletedAt,
   status: NoteSyncStatus.pending,
@@ -320,6 +339,16 @@ LocalNoteState _fromRemote(
       : note.includesAttachments
       ? note.attachments
       : previous?.attachments ?? const [],
+  labelIds: !note.contentAvailable || note.isDeleted
+      ? const []
+      : note.includesLabels
+      ? note.labelIds
+      : previous?.labelIds ?? const [],
+  labelProjections: !note.contentAvailable || note.isDeleted
+      ? const []
+      : note.includesLabels
+      ? note.labelProjections
+      : previous?.labelProjections ?? const [],
   serverRevision: note.revision,
   deletedAt: note.deletedAt,
   status: NoteSyncStatus.synced,

@@ -64,5 +64,25 @@ clean88.7s, VM193/193 and backend21 test nodes+typecheck passed. Actual M03 UI
 QA pending under rebuilt Web and Android. M04.1 contract freezes answered A/A/A
 and next schema6/v2 rollout. Next implement Domain lifecycle/association, then
 full metadata factories and same encrypted store atomic local catalog.
-Actual UI acceptance follows compiled Web and Android, retaining encrypted
+M04 source in progress: domain Label/LabelMembership/LabelProjection and Note
+attach/detach implemented; focused domain tests passed (domain.log).
+Application LocalLabelState, typed mutation/queue discriminator and schema/state
+metadata are being wired; not accepted or pushed. Complete clone factories now
+preserve catalog/wire version. Continue codecs/migration then atomic use cases.
+Android partial M03 APK compiled796.9s; installing with data preserved. Chrome
+Pending pick, text preview and fail-closed retry observed. Double selection in
+the test harness triggered file-selector Future completed; retest single upload
+before classifying. Actual UI acceptance follows compiled Web and Android, retaining encrypted
 state/key/profiles/AVD data. Android launches host GPU/Vulkan disabled per UI_QA.md.
+
+## Latest checkpoint
+
+M04.1 pushed56c60a6; M04.2 pushed1cf15be with Domain28/28.
+M04.3 local foundation accepted:325 PASS/1 configured skip; Label application+
+typed coordinator13/13 (included), separate M05/M03 crypto regression12/12,
+core analyzer clean. LOCAL_ACCEPTANCE.md records scope. Committing/pushing the
+local milestone now; HTTP/runtime/backend v2 and Presentation remain pending.
+Native M03 picker fix976505c unit16/16 PASS; actual APK retest pending.
+Next: finish scoped shared label refresh, wire cache/query/UI with actor/session
+fences and dirty editor preservation, then actual Chrome/Android acceptance.
+Preserve backend state/key, Web profile, emulator and unrelated files.

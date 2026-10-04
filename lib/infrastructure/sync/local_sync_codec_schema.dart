@@ -3,7 +3,7 @@ library;
 
 abstract final class LocalSyncSchema {
   /// The only schema version this codec reads or writes.
-  static const int version = 5;
+  static const int version = 6;
 
   static const String schemaVersion = 'schemaVersion';
   static const String accountUserId = 'accountUserId';
@@ -12,6 +12,8 @@ abstract final class LocalSyncSchema {
   static const String cursor = 'cursor';
   static const String conflicts = 'conflicts';
   static const String userPreferences = 'userPreferences';
+  static const String labels = 'labels';
+  static const String syncWireVersion = 'syncWireVersion';
 
   static const String id = 'id';
   static const String ownerId = 'ownerId';
@@ -34,11 +36,14 @@ abstract final class LocalSyncSchema {
     ownerId,
     accessRevision,
     'protectionChange',
+    'entityType',
+    'labelName',
   };
   static const Set<String> snapshotOptionalFields = {
     ownerId,
     share,
     'includesAttachments',
+    'includesLabels',
   };
 
   static const String mutationId = 'mutationId';
@@ -71,6 +76,8 @@ abstract final class LocalSyncSchema {
     cursor,
     conflicts,
     userPreferences,
+    labels,
+    syncWireVersion,
   };
   static const Set<String> noteFields = <String>{
     protected,
@@ -84,6 +91,8 @@ abstract final class LocalSyncSchema {
     updatedAt,
     pinnedAt,
     attachments,
+    'labelIds',
+    'labelProjections',
     serverRevision,
     deletedAt,
     status,
@@ -93,6 +102,7 @@ abstract final class LocalSyncSchema {
     content,
     pinnedAt,
     attachments,
+    'labelIds',
   };
   static const Set<String> payloadFieldsV2 = <String>{title, content};
   static const Set<String> mutationFields = <String>{
@@ -119,6 +129,8 @@ abstract final class LocalSyncSchema {
     revision,
     pinnedAt,
     attachments,
+    'labelIds',
+    'labelProjections',
     deletedAt,
   };
   static const Set<String> conflictFields = <String>{

@@ -7,6 +7,7 @@ import 'package:note_ai_app/application/notes/note_access.dart';
 import 'package:note_ai_app/application/notes/note_security_service.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
+import 'package:note_ai_app/application/labels/local_label_state.dart';
 import 'package:note_ai_app/domain/notes/note_identity.dart';
 import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/attachments/attachment_chunk_cipher.dart';
@@ -28,6 +29,15 @@ void main() {
     await store.replace(
       LocalSyncState(
         accountUserId: 'user-1',
+        labels: [
+          LocalLabelState(
+            id: 'label-1',
+            ownerId: 'user-1',
+            name: 'Private label',
+            createdAt: time,
+            updatedAt: time,
+          ),
+        ],
         notes: [
           LocalNoteState(
             id: 'note-1',
@@ -39,6 +49,7 @@ void main() {
             serverRevision: 1,
             pinnedAt: time,
             attachments: [descriptor()],
+            labelIds: ['label-1'],
           ),
         ],
       ),
@@ -61,6 +72,7 @@ void main() {
     expect(await cipher.open(binding, 'a' * 64, 0, packet), [1, 2, 3]);
     store.lock('note-1');
     expect((await store.read()).notes.single.attachments, isEmpty);
+    expect((await store.read()).notes.single.labelIds, isEmpty);
     await expectLater(
       cipher.open(binding, 'a' * 64, 0, packet),
       throwsA(isA<NoteSecurityFailure>()),
@@ -72,10 +84,13 @@ void main() {
     final restored = await store.read();
     expect(restored.notes.single.attachments, [descriptor()]);
     expect(restored.notes.single.pinnedAt, time);
+    expect(restored.notes.single.labelIds, ['label-1']);
+    expect(restored.labels.single.name, 'Private label');
     expect(await cipher.open(binding, 'a' * 64, 0, packet), [1, 2, 3]);
     expect(jsonDecode(backing.encoded!)['schemaVersion'], 3);
-    expect(LocalSyncStateCodec.encode(restored)['schemaVersion'], 5);
+    expect(LocalSyncStateCodec.encode(restored)['schemaVersion'], 6);
     expect(backing.encoded, isNot(contains('file.txt')));
+    expect(backing.encoded, isNot(contains('Private label')));
   });
 
   test(

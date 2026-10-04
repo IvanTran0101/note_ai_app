@@ -9,6 +9,9 @@ abstract final class NoteBundleProjection {
     String idField = 'id',
   }) {
     final actor = state['accountUserId'] as String;
+    if (record['entityType'] == 'label') {
+      return 'label:$actor:${record[idField]}';
+    }
     return NoteIdentity(
       (record['ownerId'] as String?) ?? actor,
       record[idField] as String,
@@ -73,6 +76,8 @@ abstract final class NoteBundleProjection {
     'title': '',
     'content': '',
     'attachments': <Object?>[],
+    'labelIds': <Object?>[],
+    'labelProjections': <Object?>[],
     'contentAvailable': false,
   };
   static Map<String, Object?> _pending(Map<String, Object?> m) => {
@@ -89,6 +94,8 @@ abstract final class NoteBundleProjection {
     final note = <String, Object?>{
       'pinnedAt': null,
       'attachments': <Object?>[],
+      'labelIds': <Object?>[],
+      'labelProjections': <Object?>[],
       ...Map<String, Object?>.from(bundle['note'] as Map),
     };
     final id = reference(state, note);

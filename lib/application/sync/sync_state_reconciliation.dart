@@ -9,6 +9,8 @@ import 'sync_failure.dart';
 import 'sync_result.dart';
 import 'sync_snapshot.dart';
 import 'sync_page_projection.dart';
+import '../labels/local_label_state.dart';
+import 'label_sync_reconciliation.dart';
 
 /// Applies remote outcomes to fresh local state inside store transactions.
 final class SyncStateReconciliation {
@@ -61,13 +63,23 @@ final class SyncStateReconciliation {
           ? current.notes
                 .map(
                   (LocalNoteState note) =>
-                      note.identity == entry.mutation.identityFor(accountUserId)
+                      !entry.isLabel &&
+                          note.identity ==
+                              entry.mutation.identityFor(accountUserId)
                       ? withStatus(note, NoteSyncStatus.failed)
                       : note,
                 )
                 .toList()
           : current.notes;
-      return copyState(current, outbox: outbox, notes: notes);
+      final labels = current.labels
+          .map(
+            (label) =>
+                entry.isLabel && label.id == entry.noteId && !failure.retryable
+                ? label.withStatus(NoteSyncStatus.failed)
+                : label,
+          )
+          .toList();
+      return copyState(current, outbox: outbox, notes: notes, labels: labels);
     });
   }
 
@@ -160,6 +172,7 @@ final class SyncStateReconciliation {
       }
       final bool later = current.outbox.any(
         (PendingMutation item) =>
+            !item.isLabel &&
             item.mutation.identityFor(accountUserId) ==
                 requested.mutation.identityFor(accountUserId) &&
             item.mutationId != requested.mutationId,
@@ -191,12 +204,15 @@ final class SyncStateReconciliation {
               updatedAt: local.updatedAt,
               pinnedAt: local.pinnedAt,
               attachments: local.attachments,
+              labelIds: local.labelIds,
+              labelProjections: local.labelProjections,
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
               status: later ? local.status : NoteSyncStatus.synced,
               protection:
                   outbox.any(
                     (m) =>
+                        !m.isLabel &&
                         m.mutation.identityFor(accountUserId) ==
                             local.identity &&
                         m.protectionChange != null,
@@ -221,6 +237,8 @@ final class SyncStateReconciliation {
     final LocalSyncState updated = await update((current) {
       if (current.cursor?.value != expectedCursor) return current;
       final projection = SyncPageProjection(current, fromRemote);
+      final labels = LabelSyncReconciliation(this)
+          .mergePage(current, page.labels);
       for (final snapshot in page.snapshots) {
         projection.apply(snapshot);
       }
@@ -229,7 +247,12 @@ final class SyncStateReconciliation {
       final SyncCursor? cursor = page.nextCursor == null
           ? current.cursor
           : SyncCursor(page.nextCursor);
-      if (!changed && cursor == current.cursor) {
+      if (!changed &&
+          cursor == current.cursor &&
+          labels.length == current.labels.length &&
+          Iterable<int>.generate(labels.length)
+              .every((i) => labels[i] == current.labels[i]) &&
+          (page.wireVersion != 2 || current.syncWireVersion == 2)) {
         return current;
       }
       return copyState(
@@ -238,6 +261,8 @@ final class SyncStateReconciliation {
         outbox: projection.outbox,
         conflicts: projection.conflicts,
         cursor: cursor,
+        labels: labels,
+        syncWireVersion: page.wireVersion == 2 ? 2 : current.syncWireVersion,
       );
     });
     final bool cursorMatched =
@@ -255,8 +280,12 @@ final class SyncStateReconciliation {
     Iterable<PendingMutation>? outbox,
     Iterable<SyncConflict>? conflicts,
     SyncCursor? cursor,
+    Iterable<LocalLabelState>? labels,
+    int? syncWireVersion,
   }) => LocalSyncState(
     accountUserId: current.accountUserId,
+    labels: labels ?? current.labels,
+    syncWireVersion: syncWireVersion ?? current.syncWireVersion,
     notes: notes ?? current.notes,
     outbox: outbox ?? current.outbox,
     conflicts: conflicts ?? current.conflicts,
@@ -278,6 +307,8 @@ final class SyncStateReconciliation {
     baseRevision: entry.baseRevision,
     payload: entry.payload,
     protectionChange: entry.protectionChange,
+    entityType: entry.mutation.entityType,
+    labelName: entry.mutation.labelName,
     createdAt: entry.createdAt,
     retryCount: retryCount ?? entry.retryCount,
     lastError: lastError ?? entry.lastError,
@@ -295,6 +326,8 @@ final class SyncStateReconciliation {
         updatedAt: note.updatedAt,
         pinnedAt: note.pinnedAt,
         attachments: note.attachments,
+        labelIds: note.labelIds,
+        labelProjections: note.labelProjections,
         serverRevision: note.serverRevision,
         deletedAt: note.deletedAt,
         status: status,
@@ -320,6 +353,16 @@ final class SyncStateReconciliation {
         : snapshot.includesAttachments
         ? snapshot.attachments
         : previous?.attachments ?? const [],
+    labelIds: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesLabels
+        ? snapshot.labelIds
+        : previous?.labelIds ?? const [],
+    labelProjections: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesLabels
+        ? snapshot.labelProjections
+        : previous?.labelProjections ?? const [],
     serverRevision: snapshot.revision,
     deletedAt: snapshot.deletedAt,
     status: status,

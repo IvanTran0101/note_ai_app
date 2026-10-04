@@ -1,4 +1,5 @@
 import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label_membership.dart';
 import '../notes/note_access.dart';
 import 'local_note_state.dart';
 import 'local_sync_state.dart';
@@ -23,7 +24,8 @@ abstract final class LocalProtectionQueue {
     }
     final entries = List<PendingMutation>.of(sealed.outbox);
     final index = entries.lastIndexWhere(
-      (m) => m.mutation.identityFor(state.accountUserId) == identity,
+      (m) =>
+          !m.isLabel && m.mutation.identityFor(state.accountUserId) == identity,
     );
     final last = index < 0 ? null : entries[index];
     if (last?.operation == SyncMutationOperation.delete) {
@@ -45,6 +47,8 @@ abstract final class LocalProtectionQueue {
     }
     return LocalSyncState(
       accountUserId: state.accountUserId,
+      labels: state.labels,
+      syncWireVersion: state.syncWireVersion,
       userPreferences: state.userPreferences,
       notes: sealed.notes.map(
         (n) => n.identity != identity ? n : _markPending(n, timestamp),
@@ -82,6 +86,9 @@ abstract final class LocalProtectionQueue {
       payload: SyncNotePayload(
         title: note.title,
         content: note.content,
+        labelMembership: LabelMembership(note.labelIds),
+        includesLabels:
+            note.labelIds.isNotEmpty || last?.payload?.includesLabels == true,
         pinnedAt: note.pinnedAt,
         includesPinnedAt: true,
         attachmentManifest: AttachmentManifest(note.attachments),
@@ -106,6 +113,8 @@ abstract final class LocalProtectionQueue {
         id: n.id,
         pinnedAt: n.pinnedAt,
         attachments: n.attachments,
+        labelIds: n.labelIds,
+        labelProjections: n.labelProjections,
         ownerId: n.ownerId,
         title: n.title,
         content: n.content,

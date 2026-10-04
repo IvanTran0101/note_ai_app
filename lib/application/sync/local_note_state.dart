@@ -1,6 +1,9 @@
 /// Locally persisted state of one note.
 library;
 
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_projection.dart';
+
 import 'note_sync_status.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
@@ -30,8 +33,12 @@ final class LocalNoteState {
     this.contentAvailable = true,
     this.share,
     Iterable<Attachment> attachments = const [],
+    Iterable<String> labelIds = const [],
+    Iterable<LabelProjection> labelProjections = const [],
   }) : id = _requireNonBlank(id, 'id'),
        attachments = freezeAttachments(attachments, noteId: id),
+       labelIds = freezeLabelIds(labelIds),
+       labelProjections = List.unmodifiable(labelProjections),
        ownerId = _requireNonBlank(ownerId, 'ownerId'),
        serverRevision = _requireNonNegative(serverRevision, 'serverRevision') {
     if (share != null && share!.note != identity) {
@@ -40,7 +47,9 @@ final class LocalNoteState {
     if (!contentAvailable &&
         (title.isNotEmpty ||
             content.isNotEmpty ||
-            this.attachments.isNotEmpty)) {
+            this.attachments.isNotEmpty ||
+            this.labelIds.isNotEmpty ||
+            this.labelProjections.isNotEmpty)) {
       throw ArgumentError('Unavailable content must be redacted.');
     }
   }
@@ -60,6 +69,8 @@ final class LocalNoteState {
   /// The current content.
   final String content;
   final List<Attachment> attachments;
+  final List<String> labelIds;
+  final List<LabelProjection> labelProjections;
   final NoteProtection protection;
   final bool contentAvailable;
 
@@ -92,6 +103,8 @@ final class LocalNoteState {
         other.title == title &&
         other.content == content &&
         sameAttachments(other.attachments, attachments) &&
+        sameLabelIds(other.labelIds, labelIds) &&
+        _sameLabels(other.labelProjections, labelProjections) &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
         other.pinnedAt == pinnedAt &&
@@ -119,6 +132,8 @@ final class LocalNoteState {
     protection,
     contentAvailable,
     share,
+    Object.hashAll(labelIds),
+    Object.hashAll(labelProjections),
   );
 
   @override
@@ -128,6 +143,10 @@ final class LocalNoteState {
         'status: ${status.name})';
   }
 }
+
+bool _sameLabels(List<LabelProjection> a, List<LabelProjection> b) =>
+    a.length == b.length &&
+    Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
 String _requireNonBlank(String value, String fieldName) {
   if (value.trim().isEmpty) {

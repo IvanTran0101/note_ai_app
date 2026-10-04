@@ -5,6 +5,10 @@ import 'protection_sync_change.dart';
 import '../../domain/notes/attachment.dart';
 
 import '../../domain/notes/note_identity.dart';
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_membership.dart';
+
+enum SyncEntityType { note, label }
 
 enum SyncMutationOperation { create, update, delete }
 
@@ -16,6 +20,8 @@ final class SyncNotePayload {
     this.includesPinnedAt = false,
     this.attachmentManifest = const AttachmentManifest.empty(),
     this.includesAttachments = false,
+    this.labelMembership = const LabelMembership.empty(),
+    this.includesLabels = false,
   });
 
   final String title;
@@ -23,6 +29,9 @@ final class SyncNotePayload {
   final AttachmentManifest attachmentManifest;
   List<Attachment> get attachments => attachmentManifest.values;
   final bool includesAttachments;
+  final LabelMembership labelMembership;
+  List<String> get labelIds => labelMembership.values;
+  final bool includesLabels;
   final DateTime? pinnedAt;
 
   /// False for persisted mutations created before pin was added. Keeping that
@@ -37,7 +46,9 @@ final class SyncNotePayload {
         other.attachmentManifest == attachmentManifest &&
         other.includesAttachments == includesAttachments &&
         other.pinnedAt == pinnedAt &&
-        other.includesPinnedAt == includesPinnedAt;
+        other.includesPinnedAt == includesPinnedAt &&
+        other.labelMembership == labelMembership &&
+        other.includesLabels == includesLabels;
   }
 
   @override
@@ -48,6 +59,8 @@ final class SyncNotePayload {
     includesPinnedAt,
     attachmentManifest,
     includesAttachments,
+    labelMembership,
+    includesLabels,
   );
 }
 
@@ -61,6 +74,8 @@ final class SyncMutation {
     required this.ownerId,
     required this.accessRevision,
     required this.protectionChange,
+    required this.entityType,
+    required this.labelName,
   });
 
   factory SyncMutation({
@@ -72,6 +87,8 @@ final class SyncMutation {
     String? ownerId,
     int? accessRevision,
     ProtectionSyncChange? protectionChange,
+    SyncEntityType entityType = SyncEntityType.note,
+    String? labelName,
   }) {
     _requireNonBlank(mutationId, 'mutationId');
     _requireNonBlank(noteId, 'noteId');
@@ -89,7 +106,23 @@ final class SyncMutation {
     if (operation == SyncMutationOperation.delete && protectionChange != null) {
       throw ArgumentError('Protection changes require a content mutation.');
     }
-    if (operation != SyncMutationOperation.delete && payload == null) {
+    if (entityType == SyncEntityType.label) {
+      if (ownerId != null ||
+          accessRevision != null ||
+          protectionChange != null ||
+          payload != null) {
+        throw ArgumentError('Label catalog mutations are actor-owned.');
+      }
+      if (operation != SyncMutationOperation.delete) {
+        requireLabelName(labelName ?? '');
+      }
+    }
+    if (entityType == SyncEntityType.note && labelName != null) {
+      throw ArgumentError('Note mutations cannot carry catalog names.');
+    }
+    if (entityType == SyncEntityType.note &&
+        operation != SyncMutationOperation.delete &&
+        payload == null) {
       throw ArgumentError.value(
         payload,
         'payload',
@@ -105,12 +138,19 @@ final class SyncMutation {
       ownerId: ownerId,
       accessRevision: accessRevision,
       protectionChange: protectionChange,
+      entityType: entityType,
+      labelName: labelName == null ? null : requireLabelName(labelName),
     );
   }
 
   final String? ownerId;
   final int? accessRevision;
   final ProtectionSyncChange? protectionChange;
+  final SyncEntityType entityType;
+  final String? labelName;
+  bool get isLabel => entityType == SyncEntityType.label;
+  String keyFor(String actorId) =>
+      isLabel ? 'label:$actorId:$noteId' : identityFor(actorId).key;
   NoteIdentity identityFor(String actorId) =>
       NoteIdentity(ownerId ?? actorId, noteId);
 
@@ -130,7 +170,9 @@ final class SyncMutation {
         other.payload == payload &&
         other.ownerId == ownerId &&
         other.accessRevision == accessRevision &&
-        other.protectionChange == protectionChange;
+        other.protectionChange == protectionChange &&
+        other.entityType == entityType &&
+        other.labelName == labelName;
   }
 
   @override
@@ -143,6 +185,8 @@ final class SyncMutation {
     ownerId,
     accessRevision,
     protectionChange,
+    entityType,
+    labelName,
   );
 }
 

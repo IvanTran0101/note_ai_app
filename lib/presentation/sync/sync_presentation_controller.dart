@@ -106,6 +106,7 @@ final class SyncPresentationController extends ChangeNotifier {
     if (note.status == NoteSyncStatus.failed ||
         state.outbox.any(
           (entry) =>
+              !entry.isLabel &&
               entry.mutation
                       .identityFor(accountUserId)
                       .referenceFor(accountUserId) ==

@@ -26,6 +26,8 @@ final class PendingMutation {
     String? ownerId,
     int? accessRevision,
     ProtectionSyncChange? protectionChange,
+    SyncEntityType entityType = SyncEntityType.note,
+    String? labelName,
     required this.createdAt,
     int retryCount = 0,
     this.lastError,
@@ -39,6 +41,8 @@ final class PendingMutation {
          ownerId: ownerId,
          accessRevision: accessRevision,
          protectionChange: protectionChange,
+         entityType: entityType,
+         labelName: labelName,
        ),
        retryCount = _requireNonNegative(retryCount, 'retryCount');
 
@@ -65,7 +69,8 @@ final class PendingMutation {
   String? get ownerId => mutation.ownerId;
   int? get accessRevision => mutation.accessRevision;
   ProtectionSyncChange? get protectionChange => mutation.protectionChange;
-  String keyFor(String actorId) => mutation.identityFor(actorId).key;
+  bool get isLabel => mutation.isLabel;
+  String keyFor(String actorId) => mutation.keyFor(actorId);
 
   /// The operation to push.
   SyncMutationOperation get operation => mutation.operation;

@@ -29,7 +29,7 @@ extension _NoteRepositoryMutations on NoteRepository {
             noteId: note.id,
             operation: SyncMutationOperation.create,
             baseRevision: 0,
-            payload: NoteRepository._payloadOf(note),
+            payload: _payloadOf(note),
             timestamp: timestamp,
           ),
         ],
@@ -55,12 +55,13 @@ extension _NoteRepositoryMutations on NoteRepository {
     LocalNoteState existing,
     DateTime timestamp,
   ) {
-    final SyncNotePayload payload = NoteRepository._payloadOf(
+    final SyncNotePayload payload = _payloadOf(
       note,
       includeAttachments:
           !sameAttachments(existing.attachments, note.attachments) ||
           current.outbox.any(
             (m) =>
+                !m.isLabel &&
                 m.mutation.identityFor(current.accountUserId) ==
                     note.identity &&
                 m.payload?.includesAttachments == true,
@@ -69,6 +70,7 @@ extension _NoteRepositoryMutations on NoteRepository {
           existing.pinnedAt != note.pinnedAt ||
           current.outbox.any(
             (m) =>
+                !m.isLabel &&
                 m.mutation.identityFor(current.accountUserId) ==
                     note.identity &&
                 m.payload?.includesPinnedAt == true,
@@ -76,11 +78,13 @@ extension _NoteRepositoryMutations on NoteRepository {
     );
     if (current.outbox.any(
       (PendingMutation entry) =>
+          !entry.isLabel &&
           entry.mutation.identityFor(current.accountUserId) == note.identity &&
           entry.blocked &&
           entry.lastError == SyncErrorCode.invalidMutation &&
           !current.outbox.any(
             (m) =>
+                !m.isLabel &&
                 m.mutation.identityFor(current.accountUserId) ==
                     note.identity &&
                 m.protectionChange != null,
@@ -91,8 +95,9 @@ extension _NoteRepositoryMutations on NoteRepository {
       return <PendingMutation>[
         ...current.outbox.where(
           (PendingMutation entry) =>
+              entry.isLabel ||
               entry.mutation.identityFor(current.accountUserId) !=
-              note.identity,
+                  note.identity,
         ),
         _pendingMutation(
           note: note,

@@ -1,3 +1,5 @@
+import '../support/legacy_label_fields.dart';
+
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +27,7 @@ void main() {
     for (final field in ['notes', 'conflicts']) {
       final old = LocalSyncStateCodec.encode(f.harness().store.state);
       old['schemaVersion'] = 3;
+      stripM04Fields(old);
       old[field] = 'private corrupt content';
       expect(
         () => LocalSyncStateCodec.decode(old),
@@ -113,6 +116,7 @@ void main() {
       final h = f.harness();
       final old = LocalSyncStateCodec.encode(h.store.state);
       old['schemaVersion'] = 3;
+      stripM04Fields(old);
       old.remove('userPreferences');
       for (final note in old['notes'] as List) {
         note.remove('pinnedAt');
@@ -122,7 +126,7 @@ void main() {
       expect(decoded.notes.last.share, h.store.state.notes.last.share);
       expect(decoded.notes.last.serverRevision, 7);
       expect(decoded.userPreferences.userId, 'actor');
-      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 5);
+      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 6);
     },
   );
 
@@ -132,6 +136,7 @@ void main() {
       jsonEncode(LocalSyncStateCodec.encode(h.store.state)),
     ) as Map<String, dynamic>;
     old['schemaVersion'] = 3;
+    stripM04Fields(old);
     old['notes'] = [(old['notes'] as List).first];
     for (final note in old['notes'] as List) {
       note.remove('attachments');

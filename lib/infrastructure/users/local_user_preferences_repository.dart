@@ -54,6 +54,8 @@ final class LocalUserPreferencesRepository
       }
       return LocalSyncState(
         accountUserId: current.accountUserId,
+        labels: current.labels,
+        syncWireVersion: current.syncWireVersion,
         notes: current.notes,
         outbox: current.outbox,
         conflicts: current.conflicts,
