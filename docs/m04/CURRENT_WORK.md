@@ -89,6 +89,16 @@ Preserve backend state/key, Web profile, emulator and unrelated files.
 
 ## Continuation — 2026-10-05
 
+M04.5 pushed827285e, remote SHA verified; final source VM1145/2 skips, UI/dashboard
+52/52, public dev config14/14, analyzer no issues. M04.6 source/local privacy
+receipt PRIVACY_ACCEPTANCE.md: actual recipient no foreign catalog/organize;
+offline retained draft masked with chip on revoke/reconnect. New native APK
+827285e built62.8s installed-r preserves data. Web old session28609 quit; new
+cold20135 compiling8776, keep browser contexts online/profiles. Backend67568.
+Native reverse/wifi/data restored. Actual native ALL filter0 correct; manager
+renaming associated Label fromQA-M04-Renamed toQA-M04-Final. Next delete/prune,
+protected local admin/unlock/lock, newgrant draft fence and current runtime QA.
+
 Fresh graph connection recovered; generation2026-10-02T16:47:30Z is stale for
 current candidate (metadata_changed/not_tracked/partial121). Read exact changed
 source; do not infer current coverage from old graph. M04.4 f7b4fe4 pushed.
