@@ -101,7 +101,8 @@ export type InvalidMutationReason =
   | 'BASE_REVISION_INVALID'
   | 'PAYLOAD_REQUIRED'
   | 'PAYLOAD_INVALID'
-  | 'PAYLOAD_TOO_LARGE';
+  | 'PAYLOAD_TOO_LARGE'
+  | 'ATTACHMENTS_UNSUPPORTED';
 
 /** The request is not applicable as sent; the handler maps this to a client error. */
 export class SyncInvalidMutationError extends Error {

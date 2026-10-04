@@ -11,6 +11,29 @@ import 'package:note_ai_app/infrastructure/sync/local_sync_state_codec.dart';
 import 'local_sync_codec_fixtures.dart';
 
 void main() {
+  test(
+    'inner v4 migration preserves pins, preferences and attempted payloads',
+    () {
+      final state = richStateFixture();
+      final encoded = LocalSyncStateCodec.encode(state);
+      encoded['schemaVersion'] = 4;
+      for (final raw in encoded['notes']! as List<Object?>) {
+        (raw! as Map<String, Object?>).remove('attachments');
+      }
+      for (final raw in encoded['conflicts']! as List<Object?>) {
+        final conflict = raw! as Map<String, Object?>;
+        (conflict['local']! as Map<String, Object?>).remove('attachments');
+        final remote = conflict['remote'] as Map<String, Object?>?;
+        remote?.remove('attachments');
+        remote?.remove('includesAttachments');
+      }
+      final migrated = LocalSyncStateCodec.decode(encoded);
+      expect(migrated, state);
+      expect(LocalSyncStateCodec.encode(migrated)['outbox'], encoded['outbox']);
+      expect(migrated.userPreferences, state.userPreferences);
+    },
+  );
+
   group('envelope round trip', () {
     test('decodes an encoded account state into an equal state', () {
       final LocalSyncState state = richStateFixture();
@@ -26,30 +49,33 @@ void main() {
       expect(decoded.cursor, const SyncCursor('opaque-cursor-1'));
     });
 
-    test('writes exactly the frozen envelope fields at schema version 4', () {
-      final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
-        richStateFixture(),
-      );
+    test(
+      'writes exactly the frozen envelope fields at inner schema version 5',
+      () {
+        final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
+          richStateFixture(),
+        );
 
-      expect(LocalSyncStateCodec.schemaVersion, 4);
-      expect(LocalSyncSchema.version, 4);
-      expect(envelope.keys.toSet(), <String>{
-        'schemaVersion',
-        'accountUserId',
-        'notes',
-        'outbox',
-        'cursor',
-        'conflicts',
-        'userPreferences',
-      });
-      expect(envelope['schemaVersion'], 4);
-      expect(envelope['accountUserId'], 'user-1');
-      expect(envelope['cursor'], 'opaque-cursor-1');
-      expect(envelope['notes'], isA<List<Object?>>());
-      expect(envelope['outbox'], isA<List<Object?>>());
-      expect(envelope['conflicts'], isA<List<Object?>>());
-      expect(envelope['userPreferences'], isA<Map<String, Object?>>());
-    });
+        expect(LocalSyncStateCodec.schemaVersion, 5);
+        expect(LocalSyncSchema.version, 5);
+        expect(envelope.keys.toSet(), <String>{
+          'schemaVersion',
+          'accountUserId',
+          'notes',
+          'outbox',
+          'cursor',
+          'conflicts',
+          'userPreferences',
+        });
+        expect(envelope['schemaVersion'], 5);
+        expect(envelope['accountUserId'], 'user-1');
+        expect(envelope['cursor'], 'opaque-cursor-1');
+        expect(envelope['notes'], isA<List<Object?>>());
+        expect(envelope['outbox'], isA<List<Object?>>());
+        expect(envelope['conflicts'], isA<List<Object?>>());
+        expect(envelope['userPreferences'], isA<Map<String, Object?>>());
+      },
+    );
 
     test('round-trips an empty account with an explicit null cursor', () {
       final LocalSyncState state = LocalSyncState(accountUserId: 'user-1');
@@ -107,7 +133,10 @@ void main() {
       final Map<String, Object?> liveRemote = copyRecord(
         copyRecord(conflicts[0])['remote'],
       );
-      expect(liveRemote.keys.toSet(), LocalSyncSchema.snapshotFields);
+      expect(liveRemote.keys.toSet(), {
+        ...LocalSyncSchema.snapshotFields,
+        'includesAttachments',
+      });
       expect(liveRemote['revision'], 5);
       expect(liveRemote['serverUpdatedAt'], fixtureUpdatedAt.toIso8601String());
       expect(liveRemote['deletedAt'], isNull);
@@ -129,6 +158,8 @@ void main() {
         final Map<String, Object?> conflict = copyRecord(oldConflicts[i]);
         final Map<String, Object?> local = copyRecord(conflict['local'])
           ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
           ..remove('protected')
           ..remove('protectionRevision')
           ..remove('contentAvailable');
@@ -137,6 +168,8 @@ void main() {
         if (remoteValue != null) {
           remote = copyRecord(remoteValue)
             ..remove('pinnedAt')
+            ..remove('attachments')
+            ..remove('includesAttachments')
             ..remove('protected')
             ..remove('protectionRevision')
             ..remove('contentAvailable');
@@ -151,6 +184,8 @@ void main() {
       for (int i = 0; i < notes.length; i++) {
         notes[i] = copyRecord(notes[i])
           ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
           ..remove('protected')
           ..remove('protectionRevision')
           ..remove('contentAvailable');
@@ -179,6 +214,8 @@ void main() {
         notes[0] = copyRecord(notes[0])..['unexpected'] = true;
         notes[0] = copyRecord(notes[0])
           ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
           ..remove('protected')
           ..remove('protectionRevision')
           ..remove('contentAvailable');
@@ -301,14 +338,14 @@ void main() {
     });
 
     test(
-      'rejects versions outside the v2/v3 legacy and v4 current contract',
+      'rejects versions outside v2/v3/v4 legacy and v5 current contract',
       () {
         // Web numbers erase the int/double distinction for integral values.
         // A fractional version is invalid on both runtimes.
         final List<Object?> versions = <Object?>[
           0,
           1,
-          5,
+          6,
           '3',
           3.25,
           null,

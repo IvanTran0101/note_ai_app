@@ -7,6 +7,7 @@ import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 import 'note_share_grant_codec.dart';
+import '../attachments/attachment_codec.dart';
 
 /// Maps a [LocalNoteState] to and from one stored record.
 ///
@@ -24,6 +25,9 @@ abstract final class LocalNoteStateCodec {
       LocalSyncSchema.ownerId: note.ownerId,
       LocalSyncSchema.title: note.title,
       LocalSyncSchema.content: note.content,
+      LocalSyncSchema.attachments: note.attachments
+          .map(AttachmentCodec.encode)
+          .toList(),
       LocalSyncSchema.createdAt: note.createdAt.toIso8601String(),
       LocalSyncSchema.updatedAt: note.updatedAt.toIso8601String(),
       LocalSyncSchema.pinnedAt: note.pinnedAt?.toIso8601String(),
@@ -81,6 +85,10 @@ abstract final class LocalNoteStateCodec {
         share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
+        attachments: AttachmentCodec.decodeList(
+          record.rawValue(LocalSyncSchema.attachments),
+          noteId: id,
+        ),
         createdAt: createdAt,
         updatedAt: updatedAt,
         pinnedAt: pinnedAt,

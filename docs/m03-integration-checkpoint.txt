@@ -1,0 +1,59 @@
+M03 integration checkpoint - 2026-10-04 (Asia/Saigon)
+Status: open / IN PROGRESS. Local integration checkpoint verified; M03 end-to-end NOT COMPLETE.
+
+Branch: final-TanMinh only.
+Integrated baseline: b5ecc64416ae7123ddc96d9fb9dac74a11a8f4ec, the delivered combined M02/M05/M06 source.
+Checkpoint identity: the commit containing this file; resolve with git log -1 -- docs/m03-integration-checkpoint.txt.
+No additional feature work was done during checkpoint publication. AWS was not deployed.
+The pre-integration local M03 backup and stash remain retained on the original workstation. Do not blindly pop the old stash over the integrated code.
+
+COMPLETED / VERIFIED
+- Ported M03 foundation onto the named canonical M02 writer and M05/M06 session/access fences; no second writer/outbox/cursor.
+- Immutable attachment metadata across Note/DTO/local state/payloads/snapshots/ACK/pull/conflict. Legacy manifest omission preserves local data; nonempty feature-aware manifest omitted from ACK is rejected.
+- Inner schema 5 migrates legacy 2/3/4, preserving pins/preferences/cursor/outbox/conflicts and attempted payload identity. Outer encrypted packet and AAD remain M05 v3.
+- Local-first validation, SHA-256, encrypted chunk staging/recovery and Native cache tests. Policy: images 10 MiB, MP4 50 MiB, PDF/TXT/CSV 20 MiB; 10 files/100 MiB per note; 250 MiB cache per actor; 256 KiB chunks.
+- M05 opened protected key is reused for binary chunks without device-key fallback while locked; lock/reopen preserves encrypted metadata. Owner online/offline unlock includes attachmentRead/attachmentWrite.
+- Picker, IndexedDB and authenticated HTTP Range adapter SOURCE exists, but application/UI/browser/device integration is NOT accepted.
+- Fixed legacy encrypted-vault migration normalization before redaction/quarantine; fixed ACK manifest loss.
+- Legacy backend refuses attachment mutations or nonempty/malformed stored manifests instead of silently dropping them. This is a compatibility safety gate, NOT an implemented attachment backend.
+
+TEST RECEIPTS (overlapping suites; do not sum as unique tests)
+- Main scoped Flutter integration: 162 passed, 1 failed (v2 encrypted migration). That failure was fixed.
+- Complete affected encrypted-vault + M05 binary-key suites AFTER fix: 8 passed, 0 failed. Isolated migration retest also passed. The entire original broad suite was not rerun after the fix.
+- Additional M02 repository/application, M06 sharing/editor, codec/store regression: 105 passed, 0 failed; includes inner-v4 migration preserving attempted payloads/preferences.
+- Scoped Dart analyzer: No issues found.
+- Backend local/mock: 46 passed = attachment compatibility 5, parser 15, response 14, DynamoDB mock 6, protection-epoch/security 6.
+- No unresolved Git conflicts. Windows-aware diff --check passed.
+- Flutter runner bypassed the unrelated local_llm_bridge Windows native build hook. AI/RAG was outside scope; no full app/browser build acceptance claimed.
+
+KNOWN BLOCKERS / UNVERIFIED
+- Backend local-first/protection test tooling lacks @noble/hashes/argon2.js; sharing tooling lacks the Cognito SDK. Dependencies are declared, but unavailable in the local test cache. Those groups are NOT counted as pass.
+- Full TypeScript typecheck was not verified.
+- Backend returns ATTACHMENTS_UNSUPPORTED for attachment sync. Local work is retained; cloud upload/link is NOT complete or enabled.
+- No Brave/Chrome IndexedDB, Android device, real Range/seek/CORS/memory or AWS live tests.
+- AWS credentials/deployment/live acceptance require leader handoff; credentials are not the only remaining issue.
+
+EXACT REMAINING M03 WORK
+1. Wire AttachmentApplicationService, AttachmentSecurityAdapter, key/grant providers, cache and reader in the application composition root; no production allow-all guard or plaintext fallback.
+2. Wire file/gallery/camera picker and editor attachment list; implement image/video/document preview, permission/cancel/fallback, progress/failure/retry/cancel, confirm remove and owner-only export. Preserve draft and Pending versus server Ready semantics.
+3. Finish durable attempt identity/phase/resume records, planned attachment/object version/server epochs, create-ACK wait and recovery/reconciliation across cache versus Note outbox. Resolve unknown outcomes before retry/cancel.
+4. Implement private S3/IAM least-privilege SOURCE/SETUP, authenticated attempt/upload/read routes, actual-byte/type/size/checksum verification, immutable final object/version and server-authorized note/object association. Check JWT/fresh ACL/own M05 grant per request/Range; no signed/public GET shortcut.
+5. Implement authoritative association ACK, replay/lost-ACK handling, cancel/link races, unlink/tombstone ACK and reference-safe cleanup. Complete feature-aware schema/fingerprint/legacy replay/mixed-client rollout; authorized copy/rebind for new note IDs.
+6. Complete binary key/cache/reader lifecycle for password/protection rotate/disable, lock/logout/expiry/revoke, preserving pending encrypted drafts; validate recipient read-only and owner-write/export scopes.
+7. Restore backend test dependencies and run pending protection/sharing/local-first groups plus scoped TypeScript typecheck, then full attachment race/security/bypass regression.
+8. Verify Brave/Chrome IndexedDB/reopen/multitab and Android picker/preview/Range/seek/cancel/auth/CORS/memory/offline/relogin/revoke; only then mark platform requirements complete.
+9. Deliver AWS setup/config/live checklist to leader; leader adds real credentials/deploys, then AWS live acceptance. Do not tick cloud/FR/NFR/Done When from mock results.
+
+RECOMMENDED CONTINUATION
+First verify branch/HEAD/worktree and read this file plus the M03 Notion checklist. Start with composition-root + local staging/UI integration; display local Pending and keep cloud paths fail-closed until verified backend association exists. Then work through remaining items 3-6 and test 7-9. Preserve M02/M05/M06 behavior, canonical owner versus actor identity, and attempted mutation bytes. Do not work on M04/AI/RAG unless separately authorized. Commit/push in future sessions only with explicit permission.
+
+REPRODUCIBLE SCOPED TARGETS
+Dart analyze: lib/application/attachments lib/domain/notes lib/application/sync lib/application/notes lib/infrastructure/notes lib/infrastructure/sync lib/infrastructure/attachments lib/infrastructure/security test/application/attachments test/infrastructure/sync/local_sync_state_codec_test.dart
+Flutter test: test/application/attachments; test/infrastructure/notes/attachment_metadata_test.dart; test/infrastructure/sync/note_attachment_security_test.dart; test/sharing/m02_integration_test.dart; test/security/encrypted_store_test.dart; test/security/local_first_test.dart; test/infrastructure/sync/local_sync_state_codec_test.dart; test/infrastructure/sync/sync_conflict_codec_test.dart; test/infrastructure/sync/sync_http_mapper_test.dart; test/application/sync/sync_conflict_resolver_test.dart.
+Additional Flutter test: test/infrastructure/notes/note_repository_test.dart; test/application/notes/note_application_test.dart; test/sharing/m06_application_test.dart; test/sharing/editor_snapshot_test.dart; test/infrastructure/sync/local_sync_store_test.dart; test/infrastructure/sync/local_sync_state_codec_test.dart.
+After-fix Flutter test: test/security/encrypted_store_test.dart test/application/attachments/m05_binary_integration_test.dart.
+Backend: run each amplify/sync/{attachment_compatibility,request_parser,sync_response,dynamo_sync_store,security}.test.ts with the installed tsx runner. Pending: amplify/sync/local_first_security.test.ts, amplify/sharing/sharing.test.ts, amplify/protection/use_cases.test.ts.
+Use normal Flutter test tooling where supported. On the original workstation, an external flutter_tools runner was used to avoid unrelated local_llm_bridge native hooks; it is not part of this repository/checkpoint.
+
+PUBLICATION HYGIENE
+Only scoped source/tests, approved pubspec dependencies/lockfile and this .txt checkpoint are included. No newly staged skills, AgentOps, Markdown, secrets, credentials, generated build/test artifacts or machine-specific runner. The macOS generated plugin registrant change was excluded from this Web/Android checkpoint and retained locally.

@@ -7,6 +7,8 @@ import '../../application/sync/sync_mutation.dart';
 import 'local_sync_codec_reader.dart';
 import 'protection_sync_codec.dart';
 import 'local_sync_codec_schema.dart';
+import '../attachments/attachment_codec.dart';
+import '../../domain/notes/attachment.dart';
 
 /// Maps a [PendingMutation] to and from one stored outbox record.
 ///
@@ -110,7 +112,10 @@ abstract final class PendingMutationCodec {
     final SyncCodecObject? payload = record.requireNullableObject(
       LocalSyncSchema.payload,
       LocalSyncSchema.payloadFields,
-      optionalFields: <String>{LocalSyncSchema.pinnedAt},
+      optionalFields: <String>{
+        LocalSyncSchema.pinnedAt,
+        LocalSyncSchema.attachments,
+      },
     );
     if (payload == null) {
       return null;
@@ -120,6 +125,15 @@ abstract final class PendingMutationCodec {
       content: payload.requireString(LocalSyncSchema.content),
       pinnedAt: payload.requireNullableTimestamp(LocalSyncSchema.pinnedAt),
       includesPinnedAt: payload.contains(LocalSyncSchema.pinnedAt),
+      includesAttachments: payload.contains(LocalSyncSchema.attachments),
+      attachmentManifest: payload.contains(LocalSyncSchema.attachments)
+          ? AttachmentManifest(
+              AttachmentCodec.decodeList(
+                payload.rawValue(LocalSyncSchema.attachments),
+                noteId: record.requireNonBlankString(LocalSyncSchema.noteId),
+              ),
+            )
+          : const AttachmentManifest.empty(),
     );
   }
 
@@ -127,6 +141,10 @@ abstract final class PendingMutationCodec {
       <String, Object?>{
         LocalSyncSchema.title: payload.title,
         LocalSyncSchema.content: payload.content,
+        if (payload.includesAttachments)
+          LocalSyncSchema.attachments: payload.attachments
+              .map(AttachmentCodec.encode)
+              .toList(),
         if (payload.includesPinnedAt)
           LocalSyncSchema.pinnedAt: payload.pinnedAt?.toIso8601String(),
       };

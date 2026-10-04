@@ -91,6 +91,7 @@ const MUTATION_MESSAGES: Readonly<Record<MutationProblem, string>> = {
   PAYLOAD_REQUIRED: 'create and update need a title and content payload.',
   PAYLOAD_INVALID: 'A payload needs a string title and content.',
   PAYLOAD_TOO_LARGE: 'The note payload is too large to store.',
+  ATTACHMENTS_UNSUPPORTED: 'Attachment synchronization requires the verified-object backend. Local data is retained.',
 };
 
 const CURSOR_MESSAGES: Readonly<Record<InvalidCursorReason, string>> = {

@@ -116,12 +116,13 @@ void main() {
       old.remove('userPreferences');
       for (final note in old['notes'] as List) {
         note.remove('pinnedAt');
+        note.remove('attachments');
       }
       final decoded = LocalSyncStateCodec.decode(old);
       expect(decoded.notes.last.share, h.store.state.notes.last.share);
       expect(decoded.notes.last.serverRevision, 7);
       expect(decoded.userPreferences.userId, 'actor');
-      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 4);
+      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 5);
     },
   );
 
@@ -133,6 +134,7 @@ void main() {
     old['schemaVersion'] = 3;
     old['notes'] = [(old['notes'] as List).first];
     for (final note in old['notes'] as List) {
+      note.remove('attachments');
       note.remove('protected');
       note.remove('protectionRevision');
       note.remove('contentAvailable');

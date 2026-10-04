@@ -2,6 +2,7 @@ import '../sync/local_note_state.dart';
 import '../../domain/notes/note.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
+import '../../domain/notes/attachment.dart';
 
 /// A read-only application projection of the Note aggregate.
 ///
@@ -21,6 +22,7 @@ final class NoteDto {
     this.contentRevision = 0,
     this.share,
     this.pinnedAt,
+    this.attachmentManifest = const AttachmentManifest.empty(),
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -38,6 +40,9 @@ final class NoteDto {
       contentRevision: note.contentRevision,
       share: note.share,
       pinnedAt: note.pinnedAt,
+      attachmentManifest: AttachmentManifest(
+        note.contentAvailable ? note.attachments : const [],
+      ),
     );
   }
 
@@ -54,9 +59,14 @@ final class NoteDto {
     contentAvailable: note.contentAvailable,
     contentRevision: note.serverRevision,
     share: note.share,
+    attachmentManifest: AttachmentManifest(
+      note.contentAvailable ? note.attachments : const [],
+    ),
   );
 
   final DateTime? pinnedAt;
+  final AttachmentManifest attachmentManifest;
+  List<Attachment> get attachments => attachmentManifest.values;
   bool get isPinned => pinnedAt != null;
   final NoteShareGrant? share;
   NoteIdentity get identity => NoteIdentity(ownerId, id);
@@ -103,7 +113,8 @@ final class NoteDto {
         other.contentAvailable == contentAvailable &&
         other.contentRevision == contentRevision &&
         other.share == share &&
-        other.pinnedAt == pinnedAt;
+        other.pinnedAt == pinnedAt &&
+        other.attachmentManifest == attachmentManifest;
   }
 
   @override
@@ -120,6 +131,7 @@ final class NoteDto {
     contentRevision,
     share,
     pinnedAt,
+    attachmentManifest,
   );
 
   @override

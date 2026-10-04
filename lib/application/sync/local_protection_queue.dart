@@ -1,3 +1,4 @@
+import '../../domain/notes/attachment.dart';
 import '../notes/note_access.dart';
 import 'local_note_state.dart';
 import 'local_sync_state.dart';
@@ -83,6 +84,10 @@ abstract final class LocalProtectionQueue {
         content: note.content,
         pinnedAt: note.pinnedAt,
         includesPinnedAt: true,
+        attachmentManifest: AttachmentManifest(note.attachments),
+        includesAttachments:
+            note.attachments.isNotEmpty ||
+            last?.payload?.includesAttachments == true,
       ),
       protectionChange: ProtectionSyncChange(
         before: coalesce
@@ -100,6 +105,7 @@ abstract final class LocalProtectionQueue {
       LocalNoteState(
         id: n.id,
         pinnedAt: n.pinnedAt,
+        attachments: n.attachments,
         ownerId: n.ownerId,
         title: n.title,
         content: n.content,

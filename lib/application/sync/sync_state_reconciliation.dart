@@ -140,6 +140,11 @@ final class SyncStateReconciliation {
         requested.mutation.identityFor(accountUserId)) {
       throw const SyncFailure(code: SyncErrorCode.unexpected);
     }
+    if (requested.payload?.includesAttachments == true &&
+        requested.payload!.attachments.isNotEmpty &&
+        !snapshot.includesAttachments) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(
@@ -166,6 +171,10 @@ final class SyncStateReconciliation {
           .toList();
       final List<LocalNoteState> notes = List<LocalNoteState>.of(current.notes);
       final LocalNoteState local = notes[noteIndex];
+      if (snapshot.protection.revision < local.protection.revision &&
+          requested.protectionChange == null) {
+        throw const SyncFailure(code: SyncErrorCode.unexpected);
+      }
       notes[noteIndex] =
           later ||
               (requested.protectionChange != null && local.contentAvailable) ||
@@ -181,6 +190,7 @@ final class SyncStateReconciliation {
               createdAt: local.createdAt,
               updatedAt: local.updatedAt,
               pinnedAt: local.pinnedAt,
+              attachments: local.attachments,
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
               status: later ? local.status : NoteSyncStatus.synced,
@@ -195,7 +205,7 @@ final class SyncStateReconciliation {
                   : snapshot.protection,
               contentAvailable: local.contentAvailable,
             )
-          : fromRemote(snapshot, NoteSyncStatus.synced);
+          : fromRemote(snapshot, NoteSyncStatus.synced, previous: local);
       acknowledged = true;
       return copyState(current, notes: notes, outbox: outbox);
     });
@@ -284,6 +294,7 @@ final class SyncStateReconciliation {
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
         pinnedAt: note.pinnedAt,
+        attachments: note.attachments,
         serverRevision: note.serverRevision,
         deletedAt: note.deletedAt,
         status: status,
@@ -291,22 +302,30 @@ final class SyncStateReconciliation {
         contentAvailable: note.contentAvailable,
       );
 
-  LocalNoteState fromRemote(SyncNoteSnapshot snapshot, NoteSyncStatus status) =>
-      LocalNoteState(
-        id: snapshot.id,
-        ownerId: snapshot.ownerId ?? accountUserId,
-        share: snapshot.share,
-        title: snapshot.title,
-        content: snapshot.content,
-        createdAt: snapshot.createdAt,
-        updatedAt: snapshot.serverUpdatedAt,
-        pinnedAt: snapshot.pinnedAt,
-        serverRevision: snapshot.revision,
-        deletedAt: snapshot.deletedAt,
-        status: status,
-        protection: snapshot.protection,
-        contentAvailable: snapshot.contentAvailable,
-      );
+  LocalNoteState fromRemote(
+    SyncNoteSnapshot snapshot,
+    NoteSyncStatus status, {
+    LocalNoteState? previous,
+  }) => LocalNoteState(
+    id: snapshot.id,
+    ownerId: snapshot.ownerId ?? accountUserId,
+    share: snapshot.share,
+    title: snapshot.title,
+    content: snapshot.content,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.serverUpdatedAt,
+    pinnedAt: snapshot.pinnedAt,
+    attachments: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesAttachments
+        ? snapshot.attachments
+        : previous?.attachments ?? const [],
+    serverRevision: snapshot.revision,
+    deletedAt: snapshot.deletedAt,
+    status: status,
+    protection: snapshot.protection,
+    contentAvailable: snapshot.contentAvailable,
+  );
 }
 
 final class SyncPageApply {

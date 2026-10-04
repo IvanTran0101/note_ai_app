@@ -123,6 +123,14 @@ void registerEncryptedStoreScenarios() {
     );
     original['schemaVersion'] = 2;
     for (final note in original['notes'] as List) {
+      note.remove('attachments');
+    }
+    for (final conflict in original['conflicts'] as List) {
+      conflict['local'].remove('attachments');
+      conflict['remote']?.remove('attachments');
+      conflict['remote']?.remove('includesAttachments');
+    }
+    for (final note in original['notes'] as List) {
       (note as Map).remove('protected');
       note.remove('protectionRevision');
       note.remove('contentAvailable');

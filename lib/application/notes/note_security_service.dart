@@ -197,6 +197,7 @@ final class NoteSecurityService implements INoteAccessGuard {
       SyncNoteSnapshot(
         id: content.id,
         pinnedAt: content.pinnedAt,
+        attachments: content.attachments,
         ownerId: note.ownerId,
         share: note.share,
         title: content.title,

@@ -11,6 +11,7 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_metadata.dart';
 import '../../domain/notes/note_protection.dart';
@@ -83,7 +84,18 @@ final class NoteRepository
       if (note == null || note.isDeleted) {
         return null;
       }
-      return _toDomain(note);
+      return _toDomain(
+        note,
+        metadataOnly:
+            note.protection.enabled &&
+            !(accessGuard?.allows(
+                  ownerId: note.ownerId,
+                  noteId: note.id,
+                  protection: note.protection,
+                  operation: NoteOperation.read,
+                ) ??
+                false),
+      );
     });
   }
 
@@ -173,6 +185,7 @@ final class NoteRepository
                 existing.title != expected.title ||
                 existing.content != expected.content ||
                 existing.pinnedAt != expected.pinnedAt ||
+                !sameAttachments(existing.attachments, expected.attachments) ||
                 existing.share != expected.share ||
                 existing.protection != expected.protection ||
                 !existing.contentAvailable)) {
@@ -208,6 +221,12 @@ final class NoteRepository
         }
         if (note.pinnedAt != existing?.pinnedAt) {
           _authorizeUpdate(note, accountUserId, NoteOperation.manage);
+        }
+        if (!sameAttachments(
+          note.attachments,
+          existing?.attachments ?? const [],
+        )) {
+          _authorizeUpdate(note, accountUserId, NoteOperation.attachmentWrite);
         }
         return _stateAfterSave(current, note, now());
       });
@@ -333,10 +352,18 @@ final class NoteRepository
     );
   }
 
-  static SyncNotePayload _payloadOf(Note note, {bool includePin = false}) {
+  static SyncNotePayload _payloadOf(
+    Note note, {
+    bool includePin = false,
+    bool includeAttachments = false,
+  }) {
     return SyncNotePayload(
       title: note.title,
       content: note.content,
+      attachmentManifest: AttachmentManifest(note.attachments, noteId: note.id),
+      includesAttachments:
+          note.share == null &&
+          (includeAttachments || note.attachments.isNotEmpty),
       pinnedAt: note.pinnedAt,
       includesPinnedAt:
           note.share == null && (includePin || note.pinnedAt != null),
@@ -357,6 +384,7 @@ final class NoteRepository
       updatedAt: note.updatedAt,
       pinnedAt: note.pinnedAt,
       serverRevision: serverRevision,
+      attachments: note.attachments,
       status: status,
       protection: note.protection,
       contentAvailable: note.contentAvailable,
@@ -373,6 +401,7 @@ final class NoteRepository
       id: note.id,
       ownerId: note.ownerId,
       title: available ? note.title : '',
+      attachments: available ? note.attachments : const [],
       content: available ? note.content : '',
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,

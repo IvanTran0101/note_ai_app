@@ -2,6 +2,7 @@
 library;
 
 import 'protection_sync_change.dart';
+import '../../domain/notes/attachment.dart';
 
 import '../../domain/notes/note_identity.dart';
 
@@ -13,10 +14,15 @@ final class SyncNotePayload {
     required this.content,
     this.pinnedAt,
     this.includesPinnedAt = false,
+    this.attachmentManifest = const AttachmentManifest.empty(),
+    this.includesAttachments = false,
   });
 
   final String title;
   final String content;
+  final AttachmentManifest attachmentManifest;
+  List<Attachment> get attachments => attachmentManifest.values;
+  final bool includesAttachments;
   final DateTime? pinnedAt;
 
   /// False for persisted mutations created before pin was added. Keeping that
@@ -28,12 +34,21 @@ final class SyncNotePayload {
     return other is SyncNotePayload &&
         other.title == title &&
         other.content == content &&
+        other.attachmentManifest == attachmentManifest &&
+        other.includesAttachments == includesAttachments &&
         other.pinnedAt == pinnedAt &&
         other.includesPinnedAt == includesPinnedAt;
   }
 
   @override
-  int get hashCode => Object.hash(title, content, pinnedAt, includesPinnedAt);
+  int get hashCode => Object.hash(
+    title,
+    content,
+    pinnedAt,
+    includesPinnedAt,
+    attachmentManifest,
+    includesAttachments,
+  );
 }
 
 final class SyncMutation {

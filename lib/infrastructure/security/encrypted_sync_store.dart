@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cryptography/cryptography.dart';
+
+import '../../application/attachments/attachment_binding.dart';
+
 import '../../application/notes/local_first_note_vault.dart';
 import '../../application/sync/local_protection_queue.dart';
 import '../../application/sync/protection_sync_change.dart';
@@ -35,6 +39,23 @@ class EncryptedSyncStore
   final EncodedAccountStore backing;
   final EncryptedStateCodec codec;
   Future<void> _tail = Future<void>.value();
+  Future<SecretKey> attachmentKey(AttachmentBinding binding) => _enqueue(
+    () async {
+      final state = await _read();
+      final note = state.notes
+          .where((n) => n.identity == binding.note)
+          .firstOrNull;
+      if (note == null ||
+          note.isDeleted ||
+          !note.contentAvailable ||
+          note.protection != binding.protection ||
+          (note.share?.accessRevision ?? 0) != binding.accessRevision ||
+          note.share?.isActive == false) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+      }
+      return codec.attachmentKey(binding);
+    },
+  );
 
   Future<T> _enqueue<T>(Future<T> Function() action) {
     final previous = _tail;
@@ -189,8 +210,18 @@ class EncryptedSyncStore
       final pending = state.outbox.any(
         (m) => m.mutation.identityFor(state.accountUserId) == identity,
       );
+      if (!snapshot.includesAttachments &&
+          (current?.attachments.isNotEmpty ?? false) &&
+          !pending) {
+        throw StateError(
+          'A legacy content response cannot erase attachment metadata.',
+        );
+      }
       final hydrated = LocalNoteState(
         id: snapshot.id,
+        attachments: pending && current?.contentAvailable == true
+            ? current!.attachments
+            : snapshot.attachments,
         pinnedAt: pending && current != null
             ? current.pinnedAt
             : snapshot.pinnedAt,

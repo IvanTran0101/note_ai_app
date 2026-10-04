@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 
 import '../../application/notes/note_access.dart';
+import '../../application/attachments/attachment_binding.dart';
 import '../../application/notes/note_dto.dart';
 import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_note_state.dart';
@@ -36,6 +37,28 @@ final class EncryptedStateCodec {
   int generation = 0;
   bool migrationRequired = false;
   bool _disposed = false;
+
+  /// Borrowed M05 key: callers must not retain or destroy it. Lock/logout owns
+  /// destruction; binary operations must check live authority around each await.
+  Future<SecretKey> attachmentKey(AttachmentBinding binding) async {
+    if (_disposed || binding.actorId != namespace.accountUserId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    if (binding.protection.enabled) {
+      final opened = _opened[binding.note.referenceFor(binding.actorId)];
+      if (opened == null || opened.epoch != binding.protection.revision) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+      }
+      return opened.key;
+    }
+    final start = generation;
+    await _ensureDeviceKey();
+    if (start != generation || _disposed) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    return _deviceKey!;
+  }
+
   String get _accountAad => 'NoteFlow/M05/v3/${namespace.hash}';
   String _noteAad(String id, int epoch) =>
       '$_accountAad/note/${jsonEncode((_records[id] as Map?)?["binding"] ?? id)}/$epoch';
@@ -143,9 +166,13 @@ final class EncryptedStateCodec {
   }
 
   Future<LocalSyncState> _migrate(Map<String, Object?> old) async {
-    final state = NoteBundleProjection.migrateV2(old);
-    final decoded = LocalSyncStateCodec.decode(state);
+    final decoded = LocalSyncStateCodec.decode(
+      NoteBundleProjection.migrateV2(old),
+    );
     namespace.requireOwned(decoded);
+    // Redaction adds current manifest fields; normalize before quarantining so
+    // subsequent decoding does not mistake them for an invalid legacy record.
+    final state = LocalSyncStateCodec.encode(decoded);
     if (decoded.notes.length > 10000 ||
         decoded.outbox.length > 10000 ||
         decoded.conflicts.length > 10000) {

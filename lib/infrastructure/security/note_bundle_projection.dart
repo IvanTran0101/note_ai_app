@@ -72,6 +72,7 @@ abstract final class NoteBundleProjection {
     ...n,
     'title': '',
     'content': '',
+    'attachments': <Object?>[],
     'contentAvailable': false,
   };
   static Map<String, Object?> _pending(Map<String, Object?> m) => {
@@ -87,6 +88,7 @@ abstract final class NoteBundleProjection {
   }) {
     final note = <String, Object?>{
       'pinnedAt': null,
+      'attachments': <Object?>[],
       ...Map<String, Object?>.from(bundle['note'] as Map),
     };
     final id = reference(state, note);
@@ -149,16 +151,17 @@ abstract final class NoteBundleProjection {
           ...original,
           'local': {
             'pinnedAt': null,
+            'attachments': <Object?>[],
             ...Map<String, Object?>.from(original['local'] as Map),
           },
           'remote':
               newRemote != null &&
                   (newRemote['revision'] as int) >
                       ((oldRemote?['revision'] as int?) ?? 0)
-              ? {'pinnedAt': null, ...newRemote}
+              ? {'pinnedAt': null, 'attachments': <Object?>[], ...newRemote}
               : oldRemote == null
               ? null
-              : {'pinnedAt': null, ...oldRemote},
+              : {'pinnedAt': null, 'attachments': <Object?>[], ...oldRemote},
         };
       }).toList();
     }

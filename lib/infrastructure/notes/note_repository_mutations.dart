@@ -57,6 +57,14 @@ extension _NoteRepositoryMutations on NoteRepository {
   ) {
     final SyncNotePayload payload = NoteRepository._payloadOf(
       note,
+      includeAttachments:
+          !sameAttachments(existing.attachments, note.attachments) ||
+          current.outbox.any(
+            (m) =>
+                m.mutation.identityFor(current.accountUserId) ==
+                    note.identity &&
+                m.payload?.includesAttachments == true,
+          ),
       includePin:
           existing.pinnedAt != note.pinnedAt ||
           current.outbox.any(
