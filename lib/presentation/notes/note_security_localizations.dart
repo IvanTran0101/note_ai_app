@@ -26,6 +26,12 @@ final class NoteSecurityCopy {
     'Kết nối dịch vụ để xác minh ghi chú và bật bảo vệ.',
     'Connect to the service to verify this note and enable protection.',
   );
+  String get accessUnavailable =>
+      choose('Không thể truy cập ghi chú', 'Note unavailable');
+  String get accessUnavailableHint => choose(
+    'Bạn không còn quyền truy cập ghi chú này. Nháp mã hóa đã lưu được giữ lại.',
+    'You no longer have access to this note. Stored encrypted drafts are retained.',
+  );
   String get localFirstHint => choose(
     'Thay đổi được lưu trên thiết bị trước. Cloud sẽ đồng bộ khi có kết nối và quyền mở khóa.',
     'Changes save on this device first. Cloud sync follows when connected and authorized.',

@@ -290,16 +290,20 @@ final class NoteFlowPageHeader extends StatelessWidget {
                 ),
                 if (statusLabel != null)
                   Flexible(
-                    child: NoteFlowStateTransition(
-                      key: statusKey,
-                      child: _NoteFlowPageStatus(
-                        key: ValueKey<String>('$statusLabel-$statusBusy'),
-                        label: statusLabel!,
-                        busy: statusBusy,
-                        unavailable: statusUnavailable,
-                        dirty: statusDirty,
-                        error: statusError,
-                        draft: statusDraft,
+                    child: Semantics(
+                      key: const ValueKey('note-flow-status-semantics'),
+                      container: true,
+                      child: NoteFlowStateTransition(
+                        key: statusKey,
+                        child: _NoteFlowPageStatus(
+                          key: ValueKey<String>('$statusLabel-$statusBusy'),
+                          label: statusLabel!,
+                          busy: statusBusy,
+                          unavailable: statusUnavailable,
+                          dirty: statusDirty,
+                          error: statusError,
+                          draft: statusDraft,
+                        ),
                       ),
                     ),
                   ),
@@ -360,6 +364,7 @@ final class _NoteFlowPageStatus extends StatelessWidget {
 
     return Semantics(
       liveRegion: true,
+      container: true,
       label: label,
       child: Tooltip(
         message: label,

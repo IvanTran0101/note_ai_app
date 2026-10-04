@@ -52,6 +52,118 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('saved editor retains focus while its dirty feedback changes', (
+    tester,
+  ) async {
+    final controller = _FakeNotesController(notes: [buildNote()]);
+    await pumpPage(tester, controller, note: buildNote());
+    final field = find.byKey(NoteDetailPage.contentFieldKey);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: field, matching: find.byType(EditableText)),
+    );
+    expect(editable.focusNode.hasFocus, isTrue);
+    tester.testTextInput.enterText('First typed character');
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(editable.focusNode.hasFocus, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('unchanged ACK preserves the editor selection', (tester) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    final text = tester
+        .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+        .controller!;
+    text.selection = const TextSelection.collapsed(offset: 3);
+    await pumpPage(
+      tester,
+      controller,
+      note: NoteDto(
+        id: initial.id,
+        ownerId: initial.ownerId,
+        title: initial.title,
+        content: initial.content,
+        createdAt: initial.createdAt,
+        updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+        contentRevision: 1,
+      ),
+    );
+    expect(text.selection.baseOffset, 3);
+  });
+
+  testWidgets('ACK with unchanged text preserves and saves the newer draft', (
+    tester,
+  ) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Newer draft',
+    );
+    await tester.pump();
+    final acknowledged = NoteDto(
+      id: initial.id,
+      ownerId: initial.ownerId,
+      title: initial.title,
+      content: initial.content,
+      createdAt: initial.createdAt,
+      updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+      contentRevision: 1,
+    );
+    await pumpPage(tester, controller, note: acknowledged);
+    expect(find.byKey(const ValueKey('editor-remote-change')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+          .controller!
+          .text,
+      'Newer draft',
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(controller.notes.single.content, 'Newer draft');
+  });
+
+  testWidgets('changed remote text still requires review of the local draft', (
+    tester,
+  ) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Unsaved local draft',
+    );
+    await tester.pump();
+    await pumpPage(
+      tester,
+      controller,
+      note: NoteDto(
+        id: initial.id,
+        ownerId: initial.ownerId,
+        title: initial.title,
+        content: 'A real remote edit',
+        createdAt: initial.createdAt,
+        updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+        contentRevision: 1,
+      ),
+    );
+    expect(find.byKey(const ValueKey('editor-remote-change')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+          .controller!
+          .text,
+      'Unsaved local draft',
+    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(controller.replaceContentCalls, 0);
+  });
+
   testWidgets('creates a new note through the application seam', (
     WidgetTester tester,
   ) async {

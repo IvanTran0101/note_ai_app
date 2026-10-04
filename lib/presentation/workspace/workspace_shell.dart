@@ -317,7 +317,11 @@ class WorkspaceShellState extends State<WorkspaceShell>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           AnimatedContainer(
-                            duration: NoteFlowMotion.duration(context),
+                            // A phone viewport cannot reserve the old desktop
+                            // sidebar width while its page changes layout.
+                            duration: compact
+                                ? Duration.zero
+                                : NoteFlowMotion.duration(context),
                             curve: Curves.easeOutCubic,
                             width: navigationWidth,
                             child: ClipRect(
@@ -336,7 +340,9 @@ class WorkspaceShellState extends State<WorkspaceShell>
                             ),
                           ),
                           AnimatedContainer(
-                            duration: NoteFlowMotion.duration(context),
+                            duration: compact
+                                ? Duration.zero
+                                : NoteFlowMotion.duration(context),
                             curve: Curves.easeOutCubic,
                             width: dividerWidth,
                             child: dividerWidth == 0

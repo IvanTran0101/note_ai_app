@@ -1,6 +1,27 @@
 part of 'note_detail_page.dart';
 
 extension _NoteDetailSharing on NoteDetailPageState {
+  bool _rebaseUnchangedSavedText(NoteDto incoming) {
+    final previous = _note;
+    if (previous == null ||
+        incoming.identity != previous.identity ||
+        !incoming.contentAvailable ||
+        incoming.contentRevision < previous.contentRevision ||
+        incoming.isProtected != previous.isProtected ||
+        incoming.protectionRevision != previous.protectionRevision ||
+        incoming.share != previous.share ||
+        incoming.title != _savedTitle ||
+        incoming.content != _savedContent) {
+      return false;
+    }
+    // An ACK can advance revision/timestamps while the user types a new draft.
+    // Keep that draft and compare the next save against the acknowledged base.
+    _note = incoming;
+    _pendingSavedNote = null;
+    _scheduleAutosave();
+    return true;
+  }
+
   bool get _hasRemoteEditorChange {
     final fresh = _pendingSavedNote, old = _note;
     return fresh != null &&

@@ -68,6 +68,27 @@ void main() {
     return tester.widget<IndexedStack>(find.byType(IndexedStack)).index!;
   }
 
+  testWidgets('phone resize releases desktop navigation on the first frame', (
+    tester,
+  ) async {
+    double pageWidth = 0;
+    await pumpShell(
+      tester,
+      size: const Size(1280, 844),
+      dashboardPage: LayoutBuilder(
+        builder: (context, constraints) {
+          pageWidth = constraints.maxWidth;
+          return const SizedBox.expand();
+        },
+      ),
+    );
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
+    expect(pageWidth, 390);
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('starts on the dashboard destination', (
     WidgetTester tester,
   ) async {

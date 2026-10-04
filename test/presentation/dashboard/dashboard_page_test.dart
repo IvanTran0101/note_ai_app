@@ -50,6 +50,56 @@ void main() {
   });
 
   group('DashboardPage', () {
+    testWidgets('durable changes refresh Home without navigating away', (
+      tester,
+    ) async {
+      final changes = ChangeNotifier();
+      final notes = _FakeNotesController();
+      final query = _FakeDashboardQuery(_overview(notes: []));
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(query: query),
+        notesController: notes,
+        noteChanges: changes,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.emptyStateKey), findsOneWidget);
+      notes.notes.add(_buildNote(title: 'Arrived after initial sync'));
+      query.result = _overview(notes: notes.notes);
+      changes.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byType(DashboardNoteCard), findsOneWidget);
+      expect(find.byKey(DashboardPage.emptyStateKey), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      changes.dispose();
+    });
+
+    testWidgets('change during loading queues one final Home reload', (
+      tester,
+    ) async {
+      final changes = ChangeNotifier();
+      final gate = Completer<void>();
+      final notes = _FakeNotesController()..listNotesGate = gate;
+      final query = _FakeDashboardQuery(_overview(notes: []));
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(query: query),
+        notesController: notes,
+        noteChanges: changes,
+      );
+      await tester.pump();
+      notes.notes.add(_buildNote());
+      query.result = _overview(notes: notes.notes);
+      changes.notifyListeners();
+      changes.notifyListeners();
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(notes.listNotesCalls, 2);
+      expect(find.byType(DashboardNoteCard), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      changes.dispose();
+    });
+
     testWidgets('shows a loading skeleton while the overview is pending', (
       WidgetTester tester,
     ) async {
@@ -1333,6 +1383,7 @@ Future<void> _pumpDashboard(
   Size size = const Size(1200, 900),
   double textScale = 1.0,
   ValueChanged<bool>? onSearchVisibilityChanged,
+  Listenable? noteChanges,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -1374,6 +1425,7 @@ Future<void> _pumpDashboard(
             onOpenSettings: onOpenSettings,
             onOpenDiagnostics: onOpenDiagnostics,
             onSearchVisibilityChanged: onSearchVisibilityChanged,
+            noteChanges: noteChanges,
           );
           return MediaQuery(
             data: MediaQuery.of(context)

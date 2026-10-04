@@ -24,7 +24,11 @@ final class NoteSecurityPanel extends StatelessWidget {
   final VoidCallback? onBack;
   @override
   Widget build(BuildContext context) {
+    if (!note.isProtected && !canManage && !locked) {
+      return const SizedBox.shrink();
+    }
     final copy = NoteSecurityCopy(context);
+    final accessLost = locked && !note.isProtected && note.share != null;
     Widget button(NoteSecurityAction action, {bool enabled = true}) =>
         TextButton(
           key: ValueKey('note-security-${action.name}'),
@@ -54,24 +58,33 @@ final class NoteSecurityPanel extends StatelessWidget {
                   child: Text(
                     note.isProtected
                         ? copy.protectedNote
+                        : accessLost
+                        ? copy.accessUnavailable
                         : copy.label(NoteSecurityAction.enable),
                   ),
                 ),
               ],
             ),
-            if (locked) Text(note.isProtected ? copy.locked : copy.unavailable),
+            if (locked)
+              Text(
+                note.isProtected
+                    ? copy.locked
+                    : accessLost
+                    ? copy.accessUnavailableHint
+                    : copy.unavailable,
+              ),
             if (retained) Text(copy.retained),
             if (pendingProtection) Text(copy.pendingProtection),
             if (busy) const LinearProgressIndicator(),
             Wrap(
               spacing: 8,
               children: [
-                if (localFirst && pendingProtection)
+                if (localFirst && pendingProtection && note.share == null)
                   button(
                     NoteSecurityAction.syncProtection,
                     enabled: serverAvailable && !locked,
                   ),
-                if (!note.isProtected)
+                if (!note.isProtected && canManage)
                   button(
                     NoteSecurityAction.enable,
                     enabled: (localFirst || serverAvailable) && !locked,
@@ -89,7 +102,11 @@ final class NoteSecurityPanel extends StatelessWidget {
                       enabled: localFirst || serverAvailable,
                     ),
                   ],
-                  button(NoteSecurityAction.recover, enabled: serverAvailable),
+                  if (note.share == null)
+                    button(
+                      NoteSecurityAction.recover,
+                      enabled: serverAvailable,
+                    ),
                 ],
               ],
             ),

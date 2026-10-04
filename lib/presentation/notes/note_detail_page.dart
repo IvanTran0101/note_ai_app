@@ -205,6 +205,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
         } else {
           _adoptSavedNote(incoming);
         }
+      } else if (incoming != null && _rebaseUnchangedSavedText(incoming)) {
+        // The saved text is unchanged; preserve the newer editor draft.
       } else {
         _pendingSavedNote = incoming;
         _autosaveTimer?.cancel();
@@ -229,8 +231,12 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _note = incoming;
     _savedTitle = incoming?.title ?? '';
     _savedContent = incoming?.content ?? '';
-    _titleController.text = _savedTitle;
-    _contentController.text = _savedContent;
+    if (_titleController.text != _savedTitle) {
+      _titleController.text = _savedTitle;
+    }
+    if (_contentController.text != _savedContent) {
+      _contentController.text = _savedContent;
+    }
     _titleController.addListener(_editorChanged);
     _contentController.addListener(_editorChanged);
     _summaryController.clearFailure();

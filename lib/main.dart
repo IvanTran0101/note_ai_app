@@ -1220,6 +1220,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                 : null,
             dashboard: DashboardPage(
               key: _dashboardPageKey,
+              noteChanges: _syncPresentationControllerForCurrentAccount(),
               embeddedInWorkspace: true,
               dashboardController: _dashboardController,
               notesController: _notesController,

@@ -109,6 +109,8 @@ extension _NoteDetailSecurity on NoteDetailPageState {
       _update(() {
         if (!_isDirty) {
           _adoptSavedNote(fresh);
+        } else if (_rebaseUnchangedSavedText(fresh)) {
+          // Protected reads also receive metadata-only ACKs before full text.
         } else {
           _pendingSavedNote = fresh;
         }

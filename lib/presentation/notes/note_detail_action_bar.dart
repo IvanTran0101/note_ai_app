@@ -66,6 +66,7 @@ final class NoteDetailActionBar extends StatelessWidget {
     }
 
     final Widget summarizeButton = Semantics(
+      container: true,
       button: true,
       enabled: summarizeEnabled,
       label: isSummarizing ? summarizingLabel : summarizeLabel,
@@ -97,6 +98,7 @@ final class NoteDetailActionBar extends StatelessWidget {
       }) {
         return Builder(
           builder: (BuildContext buttonContext) => Semantics(
+            container: true,
             button: true,
             enabled: enabled,
             label: label,
@@ -186,6 +188,7 @@ final class NoteDetailActionBar extends StatelessWidget {
                   children: <Widget>[
                     if (onSave != null)
                       Semantics(
+                        container: true,
                         button: true,
                         enabled: saveEnabled,
                         label: isSaving ? savingLabel : saveLabel,
@@ -207,6 +210,7 @@ final class NoteDetailActionBar extends StatelessWidget {
                     if (hasMoreAction)
                       Builder(
                         builder: (BuildContext buttonContext) => Semantics(
+                          container: true,
                           button: true,
                           enabled: moreEnabled,
                           label: moreLabel,

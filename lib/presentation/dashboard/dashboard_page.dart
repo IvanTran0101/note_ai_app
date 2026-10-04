@@ -34,6 +34,7 @@ final class DashboardPage extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.onSearchVisibilityChanged,
+    this.noteChanges,
   });
 
   /// Controller for M5.1/M5.2 overview state.
@@ -65,6 +66,9 @@ final class DashboardPage extends StatefulWidget {
 
   /// Reports the existing search visibility state to a compact host shell.
   final ValueChanged<bool>? onSearchVisibilityChanged;
+
+  /// Account-scoped notifications after durable note/security sync changes.
+  final Listenable? noteChanges;
 
   static const Key searchFieldKey = ValueKey<String>('dashboard-search-field');
   static const Key searchToggleKey = ValueKey<String>(
@@ -122,17 +126,24 @@ final class DashboardPageState extends State<DashboardPage> {
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
   Future<void>? _loadInFlight;
+  bool _reloadAfterCurrent = false;
 
   @override
   void initState() {
     super.initState();
     widget.dashboardController.addListener(_onOverviewStateChanged);
+    widget.noteChanges?.addListener(_notesChanged);
     unawaited(reload());
   }
 
   @override
   void didUpdateWidget(covariant DashboardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.noteChanges != widget.noteChanges) {
+      oldWidget.noteChanges?.removeListener(_notesChanged);
+      widget.noteChanges?.addListener(_notesChanged);
+      _notesChanged();
+    }
     if (oldWidget.dashboardController != widget.dashboardController) {
       oldWidget.dashboardController.removeListener(_onOverviewStateChanged);
       widget.dashboardController.addListener(_onOverviewStateChanged);
@@ -157,7 +168,20 @@ final class DashboardPageState extends State<DashboardPage> {
     } finally {
       if (identical(_loadInFlight, operation)) {
         _loadInFlight = null;
+        if (_reloadAfterCurrent && mounted) {
+          _reloadAfterCurrent = false;
+          unawaited(reload());
+        }
       }
+    }
+  }
+
+  void _notesChanged() {
+    if (!mounted) return;
+    if (_loadInFlight != null) {
+      _reloadAfterCurrent = true;
+    } else {
+      unawaited(reload());
     }
   }
 
@@ -630,6 +654,7 @@ final class DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
+    widget.noteChanges?.removeListener(_notesChanged);
     widget.dashboardController.removeListener(_onOverviewStateChanged);
     _searchController.dispose();
     super.dispose();
