@@ -1,12 +1,32 @@
 # MUST REMEMBER
 
+## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
+
+Read this file first before every coding turn. M03 partial03b5326 is merged at
+cc4dc04 with M02/M05/M06. M04.1–8 are implemented and handed off under approved
+A/A/A; product source0919ccf, QA receipt3b789f5. See docs/m04/ACCEPTANCE.md,
+UI_QA.md and HANDOFF.md. Full VM1151/2 configured skips, Chrome956/1 configured
+skip on107 browser-compatible targets (real IndexedDB), backend64/tsc, dev
+config14/14 and analyzer clean142.1s. Actual headed Chrome owner/recipient and
+Android retained data/offline/reopen/reconnect/labels/protection/draft QA passed.
+Confirmed QA defects were fixed and retested; acceptance is bounded to those
+recorded scenarios. Notion M04 rubric18/18 source/local, AWS gates separate.
+
+Preserve inner schema6, envelope/AAD3, typed identity/replay, canonical actor
+store/writer/outbox/cursor and all pin/attachments/protection/sharing/drafts.
+Readable shared labels can refresh independently of pending text; they never
+replay a blocked old-grant draft or replace its body/base/outbox. M03 verified
+cloud upload/read/Range remains the collaborator's unfinished gate. M09 stays
+deferred until the user asks to integrate both collaborators and replan UI/UX.
+Do not restart accepted M04 work from the historical pending checkpoints below.
+
 ## Active request — M03 incoming + M04 implementation (2026-10-04)
 
 User authorized integrating the new partial M03 from final-TanMinh, implementing
 M04 from the collaborator's Notion plan, running regression and actual Chrome/
 Android UI QA, fixing bugs and updating/pushing final-tuankiet per milestone.
-M03 incoming is03b5326 on baselineb5ecc64. Merge text is clean but runtime QA is
-pending. Preserve every accepted M02/M05/M06/UI QA fix and unrelated dirty file.
+M03 incoming is03b5326 on baselineb5ecc64, merged and source/local QA accepted.
+Preserve every accepted M02/M05/M06/UI QA fix and unrelated dirty file.
 Do not finish/deploy the remaining M03 cloud routes for the collaborator; current
 Pending attachment flow intentionally fails closed against the legacy backend.
 Read docs/m04/CURRENT_WORK.md for active continuity and Notion progress URL.
@@ -218,7 +238,9 @@ the two requested sync-status/password-note redesigns and reference images.
   `trace_path`, `get_code_snippet`, then `check_index_coverage` for every source
   path relied on. Read missed/partial source ranges directly and qualify claims.
 - Current primary checkout: D:/kiet/hk7/flutter/midterm/note_ai_app-note-ai-app,
-  branch final-tuankiet. Use graph noteflow-final-d and R: short-path alias.
+  branch final-tuankiet. Use graph D-kiet-hk7-flutter-midterm-note_ai_app-note-ai-app
+  and R: short-path alias. Check current generation/coverage; fall back to exact
+  source when stale or partial.
   The former C: implementation and merge worktrees were archived/removed per
   user request. Keep .playwright-cli/ and final_project.md untracked and unchanged.
   Normal fast-forward push to HEAD:refs/heads/final-tuankiet; verify remote SHA.

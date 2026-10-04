@@ -1,6 +1,6 @@
 # M04 current work
 
-## Latest checkpoint — M04.7 local acceptance, 2026-10-05
+## Latest checkpoint — M04.8 source/setup handoff, 2026-10-05
 
 Product source0919ccf: VM1151/2 configured skips, Chrome956/1 configured skip on
 107 compatible original targets (real IndexedDB included), analyzer clean142.1s,
@@ -9,12 +9,24 @@ and Android source APK accepted; see ACCEPTANCE.md and UI_QA.md. Fresh recipient
 filter/list/detail chip works with cloud body and blocked old-grant pending1
 intact. Native install-r/cold query/filter retained pin/locked masking/Pending.
 No confirmed defect remains open in the recorded scope. Source/setup handoff
-draft is HANDOFF.md; publish M04.7 and tick its local criteria, then M04.8 handoff
-with MUST_REMEMBER update and final HEAD APK provenance. Keep AWS gates unchecked.
+is HANDOFF.md; M04.7 pushed3b789f5 and all18 canonical rubric criteria checked
+with source/local scope. M04.8 handoff and MUST_REMEMBER acceptance updated;
+push this documentation batch, tick M04.8, then verify final HEAD APK provenance.
+Keep AWS gates unchecked.
 M03 cloud is still partial; M09 deferred. Preserve profiles, state/key and AVD.
 Graph connected but02/10 generation is stale; coverage + exact source fallback
 was performed for changed paths. _agent_ops scripts/records remain absent.
 Below is the earlier integration history; its pending statuses are historical.
+
+### Closure records
+
+| Record | Resolution |
+| --- | --- |
+| MUST_REMEMBER.md | Updated approved scope, acceptance, schema/writer/draft constraints and deferred gates |
+| docs/m04/CURRENT_WORK.md | Updated current checkpoint, superseded history and final publication step |
+| docs/m04/ACCEPTANCE.md + UI_QA.md | Updated fresh source/Chrome/Android receipts, fixed defects and limits |
+| docs/m04/HANDOFF.md | Added run/config/routes/IAM/schema/migration/collaborator/live-gate handoff |
+| _agent_ops/ records/tools | Not needed: directory and SESSION_PROTOCOL.md are absent; no records or template fabricated |
 
 ## Active task — 2026-10-04
 
