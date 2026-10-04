@@ -119,9 +119,24 @@ final class AttachmentApplicationService {
     String noteId,
     Future<List<AttachmentInput>> Function() pick,
   ) async {
-    final binding = await _capture(noteId);
+    var binding = await _capture(noteId);
     await _fresh(binding);
     final selected = await pick();
+    if (!binding.protection.enabled && selected.isNotEmpty) {
+      // Native picker pauses the Activity and locks M05 leases. An unprotected
+      // owner may reacquire live authority ONLY for the identical captured
+      // actor/session/resource/content/protection/access epochs.
+      final resumed = await _capture(noteId);
+      if (resumed.actorId != binding.actorId ||
+          resumed.note != binding.note ||
+          resumed.sessionGeneration != binding.sessionGeneration ||
+          resumed.protection != binding.protection ||
+          resumed.accessRevision != binding.accessRevision ||
+          resumed.contentRevision != binding.contentRevision) {
+        throw StateError('The picker authority changed.');
+      }
+      binding = resumed;
+    }
     _requireOwner(binding);
     for (final input in selected) {
       final note = await _fresh(binding);

@@ -151,12 +151,19 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
     }
   }
 
-  Future<void> _pick(AttachmentSource source) => _run(
-    (service) => service.pickAndStage(
-      widget.note.id,
-      () => widget.controller.pickAttachments(source),
-    ),
-  );
+  Future<void> _pick(AttachmentSource source) async {
+    final identity = widget.note.identity;
+    await _run(
+      (service) => service.pickAndStage(
+        widget.note.id,
+        () => widget.controller.pickAttachments(source),
+      ),
+    );
+    // A native picker can cause a lifecycle lock/rebuild while it is open.
+    if (mounted && _allowed && widget.note.identity == identity) {
+      await _reload();
+    }
+  }
 
   Future<void> _cancel(LocalAttachmentDraft draft) async {
     final generation = _generation;

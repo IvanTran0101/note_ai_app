@@ -136,9 +136,11 @@ void main() {
   late _Drafts drafts;
   late AttachmentApplicationService service;
   var actor = 'owner', allowed = true, uploads = 0, syncs = 0;
+  var leaseGeneration = 0, sessionEpoch = 1, contentEpoch = 1;
   late UploadAttachment transport;
   setUp(() {
     actor = 'owner';
+    leaseGeneration = 0; sessionEpoch = 1; contentEpoch = 1;
     allowed = true;
     uploads = 0;
     syncs = 0;
@@ -188,11 +190,14 @@ void main() {
         note: NoteIdentity('owner', id),
         protection: const NoteProtection.unprotected(),
         accessRevision: 1,
-        sessionGeneration: 1,
-        contentRevision: 1,
+        sessionGeneration: sessionEpoch,
+        contentRevision: contentEpoch,
+        accessGeneration: leaseGeneration,
       ),
       requireAccess: (binding, operation) {
-        if (!allowed) throw StateError('locked/session changed');
+        if (!allowed || binding.accessGeneration != leaseGeneration) {
+          throw StateError('locked/session changed');
+        }
       },
       upload: (binding, file, openRead) => transport(binding, file, openRead),
       now: () => time,
@@ -286,6 +291,32 @@ void main() {
       expect(drafts.linked, isTrue);
     },
   );
+
+
+  test('unprotected picker can reacquire only a stable session after pause', () async {
+    await service.pickAndStage('note', () async {
+      leaseGeneration++;
+      return [AttachmentInput(fileName: 'hello.txt', mimeType: 'text/plain', sizeBytes: 5,
+        openRead: ([start, end]) => Stream.value([1]))];
+    });
+    expect(drafts.queued, isTrue);
+    expect(store.state.outbox, isEmpty);
+    expect(uploads, 0);
+  });
+  for (final change in ['session', 'content', 'actor']) {
+    test('picker cannot reacquire after $change changed', () async {
+      await expectLater(service.pickAndStage('note', () async {
+        leaseGeneration++;
+        if (change == 'session') sessionEpoch++;
+        if (change == 'content') contentEpoch++;
+        if (change == 'actor') actor = 'other';
+        return [AttachmentInput(fileName: 'hello.txt', mimeType: 'text/plain', sizeBytes: 5,
+          openRead: ([start, end]) => Stream.value([1]))];
+      }), throwsStateError);
+      expect(drafts.queued, isFalse);
+      expect(store.state.outbox, isEmpty);
+    });
+  }
 
   test('picker result is rejected after authority changes', () async {
     final selected = Completer<List<AttachmentInput>>();
@@ -437,6 +468,7 @@ void main() {
       await expectLater(stage(), throwsStateError);
       await expectLater(service.remove('note', 'anything'), throwsStateError);
       actor = 'owner';
+    leaseGeneration = 0; sessionEpoch = 1; contentEpoch = 1;
       await stage();
       await service.retry('note', draft.cacheId);
       await expectLater(
