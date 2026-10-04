@@ -53,6 +53,7 @@ export type NoteBody = Readonly<{
   share?: NoteSnapshot['share'];
   labelIds?: readonly string[];
   labelProjections?: NoteSnapshot['labelProjections'];
+  attachments?: NoteSnapshot['attachments'];
 }>;
 
 export type AppliedMutationBody = Readonly<{
@@ -128,6 +129,8 @@ export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false, labels
   serverUpdatedAt: note.serverUpdatedAt,
   pinnedAt: note.pinnedAt ?? null,
   deletedAt: note.deletedAt,
+  ...(note.attachments !== undefined ? {attachments: note.deletedAt === null &&
+    (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.attachments ?? [] : []} : {}),
   ...(labels ? {labelIds: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelIds ?? [] : [],
     labelProjections: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelProjections ?? [] : []} : {}),
 });

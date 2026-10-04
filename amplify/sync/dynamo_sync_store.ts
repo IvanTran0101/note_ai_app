@@ -17,6 +17,8 @@ import { MAX_ATTEMPTS, META_SORT_KEY, NOTE_SORT_KEY_PREFIX, MUTATION_SORT_KEY_PR
 export * from './sync_store_models';
 export { SyncInvalidCursorError } from './cursor';
 import { NoteSecurityError } from '../protection/protection_store';
+import { AttachmentError } from '../attachments/models';
+import type { AttachmentAttemptStore } from '../attachments/attempt_store';
 import type { NoteSecurityAuthority, ProtectionMetadata, SecurityAuthorization } from '../protection/protection_store';
 
 export class DynamoSyncStore implements SyncStore {
@@ -25,6 +27,7 @@ export class DynamoSyncStore implements SyncStore {
   private readonly security?: NoteSecurityAuthority;
   private readonly feed?: ActorFeed;
   private readonly acl?: DynamoNoteAcl;
+  private readonly attachments?: AttachmentAttemptStore;
 
   constructor(options: DynamoSyncStoreOptions) {
     if (typeof options?.tableName !== 'string' || options.tableName.length === 0) {
@@ -32,6 +35,7 @@ export class DynamoSyncStore implements SyncStore {
     }
     this.tableName = options.tableName;
     this.security = options.security;
+    this.attachments = options.attachments;
     this.documentClient =
       options.documentClient ??
       DynamoDBDocumentClient.from(
@@ -47,6 +51,9 @@ export class DynamoSyncStore implements SyncStore {
   async applyMutation(ownerId: string, mutation: SyncMutation,
     authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult> {
     const request = normalizeMutation(mutation);
+    if (request.payload?.attachments !== undefined && (!this.attachments || !this.security)) {
+      throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified-object backend required.');
+    }
     const ownerKey = ownerKeyOf(ownerId);
     const actor = authorization?.actorId ?? ownerId;
     if (actor !== ownerId && (!this.security || !this.feed || request.ownerId !== ownerId ||
@@ -59,6 +66,9 @@ export class DynamoSyncStore implements SyncStore {
       const a = await this.security?.authorize(actor, ownerId, request.noteId,
         request.protectionChange || request.payload && 'pinnedAt' in request.payload
           ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+      if (request.payload?.attachments !== undefined) {
+        await this.security?.authorize(actor, ownerId, request.noteId, 'attachmentWrite', authorization?.grant);
+      }
       if (actor !== ownerId && a?.access?.accessRevision !== request.accessRevision) throw new NoteSecurityError('denied');
       return a;
     };
@@ -218,6 +228,16 @@ export class DynamoSyncStore implements SyncStore {
     const note = projection ? { ...next, protected: projection.enabled,
       protectionRevision: projection.revision } : next;
     const transactItems = transactItemsFor(this.tableName, ownerKey, request, remote, note, lastSequence, now);
+    if (remote?.attachments?.length || request.payload?.attachments?.length) {
+      if (!this.attachments || !authority) throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified-object backend required.');
+      try {
+        transactItems?.push(...await this.attachments.associationWrites(ownerKey.slice('OWNER#'.length),
+          request.noteId, remote?.attachments ?? [], note.attachments ?? [], authority.revision));
+      } catch (e) {
+        if (e instanceof AttachmentError) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Attachment association refused.');
+        throw e;
+      }
+    }
     const addedLabels = (request.payload?.labelIds ?? []).filter(id => !(remote?.labelIds ?? []).includes(id));
     for (const id of addedLabels) {
       const row = await this.readItem(ownerKey, `LABEL#${id}`);
@@ -242,9 +262,11 @@ export class DynamoSyncStore implements SyncStore {
           ':epoch': authority.revision, ':enabled': authority.enabled } }) } });
       if (authority.enabled) transactItems?.push({ ConditionCheck: {
         TableName: this.tableName, Key: itemKey(ownerKey, `GRANT#${authority.grantHash}`),
-        ConditionExpression: 'expiresAt > :now AND revision = :epoch AND actorId = :actor AND targetNoteId = :note AND contains(operations, :operation)',
+        ConditionExpression: 'expiresAt > :now AND revision = :epoch AND actorId = :actor AND targetNoteId = :note AND contains(operations, :operation)' +
+          (request.payload?.attachments !== undefined ? ' AND contains(operations, :attachmentOperation)' : ''),
         ExpressionAttributeValues: { ':now': Date.now(), ':epoch': authority.revision,
-          ':actor': authority.actorId, ':note': request.noteId, ':operation': authority.operation } } });
+          ':actor': authority.actorId, ':note': request.noteId, ':operation': authority.operation,
+          ...(request.payload?.attachments !== undefined ? {':attachmentOperation': 'attachmentWrite'} : {}) } } });
     }
 
     try {
@@ -265,7 +287,7 @@ export class DynamoSyncStore implements SyncStore {
     const enabled = authority?.enabled ?? note.protected ?? false;
     return { ...note, protected: enabled,
       protectionRevision: authority?.revision ?? note.protectionRevision ?? 0,
-      ...(enabled ? { title: '', content: '', labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
+      ...(enabled ? { title: '', content: '', ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
   }
 
   private async readItem(ownerKey: string, sortKey: string): Promise<Record<string, unknown> | null> {

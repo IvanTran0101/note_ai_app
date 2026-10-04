@@ -6,6 +6,7 @@ import { createSyncHttpApi } from './sync/http_api';
 import { createNotesTable } from './sync/notes_table';
 import { createSyncFunction } from './sync/sync_function';
 import { createRealtimeInfrastructure } from './realtime/infrastructure';
+import { createAttachmentStorage } from './attachments/infrastructure';
 
 /**
  * NoteFlow Amplify Gen 2 backend.
@@ -25,6 +26,9 @@ const notesTable = createNotesTable(syncStack);
 const realtime = createRealtimeInfrastructure(syncStack, notesTable,
   backend.auth.resources.userPool.userPoolId, backend.auth.resources.userPoolClient.userPoolClientId);
 const syncFunction = createSyncFunction(syncStack, notesTable, backend.auth.resources.userPool.userPoolId);
+const attachmentOrigins = String(syncStack.node.tryGetContext('attachmentUploadOrigins') ?? '').split(',').map(x => x.trim()).filter(Boolean);
+const attachments = createAttachmentStorage(syncStack, syncFunction.lambda, attachmentOrigins);
+syncFunction.lambda.addEnvironment('ATTACHMENT_BUCKET', attachments.bucketName);
 const syncHttpApi = createSyncHttpApi({
   scope: syncStack,
   handler: syncFunction.lambda,
@@ -42,6 +46,8 @@ const summaryInfrastructure = createSummaryInfrastructure({
 backend.addOutput({
   custom: {
     syncApiEndpoint: syncHttpApi.api.apiEndpoint,
+    attachmentApiEndpoint: syncHttpApi.api.apiEndpoint,
+    attachmentProtocolVersion: 1,
     aiApiEndpoint: summaryInfrastructure.api.apiEndpoint,
     eventHttpEndpoint: realtime.httpEndpoint,
     eventSocketEndpoint: realtime.socketEndpoint,

@@ -33,7 +33,7 @@ const MUTATIONS_PATH = '/sync/mutations';
 const CHANGES_PATH = '/sync/changes';
 
 /** Headers the contract's client sends: `Authorization` plus a JSON body. */
-const SYNC_REQUEST_HEADERS = ['authorization', 'content-type', 'x-note-unlock-grant'];
+const SYNC_REQUEST_HEADERS = ['authorization', 'content-type', 'x-note-unlock-grant', 'range'];
 
 export type SyncHttpApiProps = Readonly<{
   /** Scope the API is created in, e.g. `backend.createStack('SyncStack')`. */
@@ -88,6 +88,7 @@ export const createSyncHttpApi = ({
       allowOrigins: allowedOrigins,
       allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.POST, CorsHttpMethod.OPTIONS],
       allowHeaders: SYNC_REQUEST_HEADERS,
+      exposeHeaders: ['content-range', 'content-length', 'accept-ranges', 'content-type'],
       // The client sends a bearer token rather than cookies, so a wildcard
       // origin cannot be used for credentialed cross-site requests.
       allowCredentials: false,

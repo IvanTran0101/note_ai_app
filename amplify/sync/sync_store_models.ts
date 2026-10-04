@@ -2,6 +2,8 @@ import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { NoteSecurityAuthority } from '../protection/protection_store';
 import type { ShareRecord } from '../sharing/share_models';
 import type { LabelSnapshot } from '../labels/label_models';
+import type { AttachmentDescriptor } from '../attachments/models';
+import type { AttachmentAttemptStore } from '../attachments/attempt_store';
 
 export type NoteSnapshot = Readonly<{
   id: string;
@@ -20,6 +22,7 @@ export type NoteSnapshot = Readonly<{
   /** Internal membership CAS; never exposed by transport. */
   sharingRevision?: number;
   labelIds?: readonly string[];
+  attachments?: readonly AttachmentDescriptor[];
   labelProjections?: readonly Readonly<{id: string; name: string}>[];
 }>;
 
@@ -32,7 +35,7 @@ export type ProtectionSyncChange = Readonly<{
 export type SyncOperation = 'create' | 'update' | 'delete';
 
 /** `create` and `update` require this; `delete` ignores it. */
-export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null; labelIds?: readonly string[] }>;
+export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null; labelIds?: readonly string[]; attachments?: readonly AttachmentDescriptor[] }>;
 
 /** One client mutation, already stripped of transport concerns. */
 export type SyncMutation = Readonly<{
@@ -143,6 +146,7 @@ export type DynamoSyncStoreOptions = Readonly<{
   documentClient?: DynamoDBDocumentClient;
   security?: NoteSecurityAuthority;
   sharing?: boolean;
+  attachments?: AttachmentAttemptStore;
 }>;
 
 export type NormalizedMutation = Readonly<{

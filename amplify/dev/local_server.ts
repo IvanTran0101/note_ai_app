@@ -20,6 +20,11 @@ import { appliedMutationResponse, changesResponse, conflictResponse, jsonRespons
 import { DynamoRelayStore } from '../realtime/dynamo_relay_store';
 import { RevisionRelay } from '../realtime/relay';
 import { LocalDatabase } from './local_database';
+import { LocalAttachmentObjects } from './local_attachment_objects';
+import { AttachmentAttemptStore } from '../attachments/attempt_store';
+import { AttachmentUseCases } from '../attachments/use_cases';
+import { handleAttachments, isAttachmentPath } from '../attachments/handler';
+import { CHUNK_BYTES } from '../attachments/models';
 import type { APIGatewayProxyEventV2WithJWTAuthorizer as Event } from 'aws-lambda';
 
 export const USERS = { 'owner@example.invalid': 'm06-dev-owner', 'recipient@example.invalid': 'm06-dev-recipient' };
@@ -45,7 +50,10 @@ const shares = new ShareUseCases(new DynamoShareStore('local-dev', db.client), {
     return user;
   },
 }, security);
-const sync = new DynamoSyncStore({ tableName: 'local-dev', documentClient: db.client, security, sharing: true });
+const objects = new LocalAttachmentObjects();
+const attempts = new AttachmentAttemptStore('local-dev', db.client);
+const attachments = new AttachmentUseCases(attempts, objects, security);
+const sync = new DynamoSyncStore({ tableName: 'local-dev', documentClient: db.client, security, sharing: true, attachments: attempts });
 const labels = new DynamoLabelStore('local-dev', db.client);
 const relay = new RevisionRelay(new DynamoRelayStore('local-dev', db.client), {
   async read(actor, owner, note) { const s = await acl.read(actor, owner, note); return s?.status === 'active' ? s.accessRevision : null; },
@@ -75,6 +83,7 @@ async function dispatch(req: IncomingMessage, url: URL, actor: string, body: str
   const event = { rawPath: url.pathname, body,
     headers: req.headers, queryStringParameters: Object.fromEntries(url.searchParams),
     requestContext: { http: { method: req.method } } } as unknown as Event;
+  if (isAttachmentPath(url.pathname)) return handleAttachments(event, actor, attachments);
   if (url.pathname.startsWith('/notes/')) return url.pathname.endsWith('/shares')
     ? handleShares(event, actor, shares)
     : handleProtection(event, actor, security, async () => { throw new NoteSecurityError('unavailable'); });
@@ -110,8 +119,9 @@ export const server = createServer(async (req, res) => {
     res.writeHead(403); res.end(); return;
   }
   if (origin) { res.setHeader('access-control-allow-origin', origin); res.setHeader('vary', 'Origin'); }
-  res.setHeader('access-control-allow-headers', 'authorization,content-type,x-note-unlock-grant');
-  res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+  res.setHeader('access-control-allow-headers', 'authorization,content-type,x-note-unlock-grant,range');
+  res.setHeader('access-control-expose-headers', 'content-range,content-length,accept-ranges,content-type');
+  res.setHeader('access-control-allow-methods', 'GET,POST,PUT,OPTIONS');
   res.setHeader('cache-control', 'no-store');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
   try {
@@ -120,11 +130,22 @@ export const server = createServer(async (req, res) => {
       res.writeHead(failed ? 503 : 200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ kind: 'm06-local-dev', version: 1 })); return;
     }
+    if (req.method === 'PUT' && url.pathname === '/dev/attachment-put') {
+      const buffer = Buffer.alloc(CHUNK_BYTES); let size = 0;
+      try {
+        for await (const part of req) {
+          if (size + part.length > buffer.length) throw Error('Too large'); buffer.set(part, size); size += part.length;
+        }
+        await serialized(() => objects.put(url.searchParams.get('cap') ?? '', buffer.subarray(0, size)));
+        res.writeHead(200); res.end(); return;
+      } finally { buffer.fill(0); }
+    }
     const actor = localActor(req.headers.authorization);
     if (!actor) { res.writeHead(401); res.end(); return; }
     let body = ''; for await (const part of req) { body += part; if (Buffer.byteLength(body) > 65536) throw Error('Too large'); }
     const reply = await serialized(() => dispatch(req, url, actor, body));
-    res.writeHead(reply.statusCode!, { 'content-type': 'application/json' }); res.end(reply.body);
+    res.writeHead(reply.statusCode!, reply.headers as Record<string, string>);
+    res.end(reply.isBase64Encoded ? Buffer.from(reply.body!, 'base64') : reply.body);
   } catch (error) {
     const reply = error instanceof NoteSecurityError ? securityErrorResponse(error)
       : jsonResponse(error instanceof SyncInvalidCursorError || error instanceof SyncInvalidMutationError ? 422 : 503,

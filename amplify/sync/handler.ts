@@ -1,6 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { DynamoLabelStore } from '../labels/dynamo_label_store';
+import { AttachmentAttemptStore } from '../attachments/attempt_store';
+import { S3AttachmentObjects } from '../attachments/s3_object_store';
+import { AttachmentUseCases } from '../attachments/use_cases';
+import { handleAttachments, isAttachmentPath } from '../attachments/handler';
 import { parseLabelMutation } from '../labels/label_models';
 import { labelProjectionResponse } from '../labels/label_projection_handler';
 import type {
@@ -102,7 +106,10 @@ const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NA
   new Argon2idPasswordHasher(), new DynamoNoteAcl(NOTES_TABLE_NAME, documentClient),
   new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
   Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
-const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true });
+const attachmentAttempts = process.env.ATTACHMENT_BUCKET ? new AttachmentAttemptStore(NOTES_TABLE_NAME, documentClient) : undefined;
+const attachmentService = attachmentAttempts ? new AttachmentUseCases(attachmentAttempts,
+  new S3AttachmentObjects(process.env.ATTACHMENT_BUCKET!), security) : undefined;
+const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true, attachments: attachmentAttempts });
 const labels = new DynamoLabelStore(NOTES_TABLE_NAME, documentClient);
 const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
   new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
@@ -248,6 +255,9 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
     if (event.rawPath.startsWith('/notes/')) {
       const actor = ownerSubOf(event);
       if (!actor) return unauthorizedResponse();
+      if (isAttachmentPath(event.rawPath)) return attachmentService
+        ? await handleAttachments(event, actor, attachmentService)
+        : jsonResponse(503, {code: 'ATTACHMENT_UNAVAILABLE', retryable: true});
       return event.rawPath.endsWith('/shares') ? await handleShares(event, actor, sharing)
         : await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub));
     }

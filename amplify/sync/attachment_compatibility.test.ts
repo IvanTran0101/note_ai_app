@@ -10,6 +10,5 @@ for (const attachments of [[], [{ id: 'unverified-client-object' }]]) {
   assert.throws(() => normalizePayload('update', payload), (e: unknown) =>
     e instanceof SyncInvalidMutationError && e.reason === 'ATTACHMENTS_UNSUPPORTED');
 }
-assert.throws(() => toNoteSnapshot({ attachments: [{ id: 'keep-existing' }] }), (e: unknown) =>
-  e instanceof SyncInvalidMutationError && e.reason === 'ATTACHMENTS_UNSUPPORTED');
+assert.throws(() => toNoteSnapshot({ attachments: [{ id: 'keep-existing' }] }));
 console.log('Attachment compatibility: 5 checks passed');

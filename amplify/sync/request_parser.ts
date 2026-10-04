@@ -20,6 +20,7 @@
 
 import { parseProtectionChange } from './sync_protection_change';
 import { labelIds } from '../labels/label_models';
+import { manifest } from '../attachments/models';
 import type { InvalidMutationReason, SyncMutation, SyncOperation } from './dynamo_sync_store';
 
 /** Contract defaults for `GET /sync/changes`; the store clamps to the same window. */
@@ -161,10 +162,12 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
     if (wireVersion !== 2 || sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
     try { ids = labelIds(payload.labelIds); } catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
   }
-  // The verified-object association transaction is not deployed in this
-  // checkpoint. Never accept and silently discard a feature-aware manifest.
+  let attachments;
   if (Object.hasOwn(payload, 'attachments')) {
-    return { ok: false, problem: 'ATTACHMENTS_UNSUPPORTED' };
+    if (wireVersion !== 2) return {ok: false, problem: 'ATTACHMENTS_UNSUPPORTED'};
+    if (sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
+    try { attachments = manifest(payload.attachments, noteId); }
+    catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
   }
   if (
     typeof title !== 'string' ||
@@ -188,7 +191,7 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}) },
+    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}), ...(attachments ? {attachments} : {}) },
       ...(wireVersion === 2 ? {wireVersion: 2} : {}),
       ...(sharedRoute ? { ownerId: ownerId!, accessRevision: accessRevision as number } : {}),
       ...(protectionChange ? { protectionChange } : {}) },

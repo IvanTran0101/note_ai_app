@@ -1,5 +1,19 @@
 # MUST REMEMBER
 
+## Active request — Finish M03 (2026-10-05)
+
+The user now authorizes completing all remaining M03 implementation after M04,
+including backend/storage source, verified upload/association, scoped reads,
+recovery, media/file UI and setup. This supersedes the historical restriction
+below reserving unfinished M03 routes for the collaborator. Keep local-first,
+one canonical writer/outbox/cursor, schema6/AAD3, all M02/M04/M05/M06 data and
+session/access guards. Follow the collaborator's settled policy/contract; M09
+stays deferred. Test and fix with actual Chrome and Android emulator flows,
+update Notion and push final-tuankiet after each accepted milestone. AWS source
+and local acceptance are separate from leader deployment/live AWS acceptance.
+Read docs/m03/CURRENT_WORK.md for continuity once created. New progress page:
+https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
+
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
 Read this file first before every coding turn. M03 partial03b5326 is merged at
@@ -16,7 +30,7 @@ Preserve inner schema6, envelope/AAD3, typed identity/replay, canonical actor
 store/writer/outbox/cursor and all pin/attachments/protection/sharing/drafts.
 Readable shared labels can refresh independently of pending text; they never
 replay a blocked old-grant draft or replace its body/base/outbox. M03 verified
-cloud upload/read/Range remains the collaborator's unfinished gate. M09 stays
+cloud upload/read/Range is now the active completion task above. M09 stays
 deferred until the user asks to integrate both collaborators and replan UI/UX.
 Do not restart accepted M04 work from the historical pending checkpoints below.
 
@@ -27,8 +41,8 @@ M04 from the collaborator's Notion plan, running regression and actual Chrome/
 Android UI QA, fixing bugs and updating/pushing final-tuankiet per milestone.
 M03 incoming is03b5326 on baselineb5ecc64, merged and source/local QA accepted.
 Preserve every accepted M02/M05/M06/UI QA fix and unrelated dirty file.
-Do not finish/deploy the remaining M03 cloud routes for the collaborator; current
-Pending attachment flow intentionally fails closed against the legacy backend.
+Historical scope: the Pending attachment flow initially failed closed against
+the legacy backend. The new M03 request above authorizes finishing its source.
 Read docs/m04/CURRENT_WORK.md for active continuity and Notion progress URL.
 User approved M04 A/A/A: duplicate names with stable IDs,64 Unicode code points
 per name and32 labels/note; coordinated schema/typed two-way sync with legacy

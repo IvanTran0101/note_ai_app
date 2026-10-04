@@ -9,11 +9,11 @@ export async function recipientProjection(actor: string, owner: string, note: No
   const share = await acl.read(actor, owner, note.id);
   if (!share) throw new NoteSecurityError('denied');
   if (share.status === 'revoked') return { ...note, ownerId: owner, share,
-    title: '', content: '', labelIds: [], labelProjections: [], contentAvailable: false, deletedAt: null };
+    title: '', content: '', ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false, deletedAt: null };
   const protection = await security.metadata(actor, owner, note.id);
   const live = await acl.read(actor, owner, note.id);
   if (!live || live.status !== 'active' || live.accessRevision !== share.accessRevision) throw new NoteSecurityError('denied');
   return { ...note, ownerId: owner, share: live, protected: protection.enabled,
     protectionRevision: protection.revision,
-    ...(protection.enabled ? { title: '', content: '', labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
+    ...(protection.enabled ? { title: '', content: '', ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
 }

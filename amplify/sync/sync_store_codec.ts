@@ -1,5 +1,6 @@
 import { parseProtectionChange } from './sync_protection_change';
 import { labelIds } from '../labels/label_models';
+import { manifest } from '../attachments/models';
 import { decodeShare } from '../sharing/share_models';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
@@ -120,9 +121,11 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown, ver
   const hasLabels = Object.hasOwn(payload, 'labelIds');
   if (hasLabels && version !== 2) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label-aware route required.');
   const ids = hasLabels ? labelIds(payload.labelIds) : undefined;
-  if (Object.hasOwn(payload, 'attachments')) {
-    throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified attachment association is required.');
-  }
+  const hasAttachments = Object.hasOwn(payload, 'attachments');
+  if (hasAttachments && version !== 2) throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Attachment-aware route required.');
+  let attachments;
+  try { attachments = hasAttachments ? manifest(payload.attachments) : undefined; }
+  catch { throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid attachment manifest.'); }
   if (
     typeof title !== 'string' ||
     typeof content !== 'string' ||
@@ -152,6 +155,7 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown, ver
     content,
     ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}),
     ...(ids ? { labelIds: ids } : {}),
+    ...(attachments ? {attachments} : {}),
   };
 };
 
@@ -191,7 +195,8 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid shared mutation.');
   }
 
-  if (ownerId && payload && (Object.hasOwn(payload, 'pinnedAt') || Object.hasOwn(payload, 'labelIds'))) {
+  if (payload?.attachments?.some(a => a.noteId !== noteId)) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid attachment binding.');
+  if (ownerId && payload && (Object.hasOwn(payload, 'pinnedAt') || Object.hasOwn(payload, 'labelIds') || Object.hasOwn(payload, 'attachments'))) {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Shared text writes cannot organize notes.');
   }
   return {
@@ -214,6 +219,8 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         ...(protectionChange ? [protectionChange] : []),
         ...(ownerId ? [ownerId, accessRevision] : []),
         ...(mutation.wireVersion === 2 ? [2, 'note', payload?.labelIds ?? null] : []),
+        // Omitted field preserves the exact legacy/v2 fingerprint. Empty is an explicit remove.
+        ...(payload && Object.hasOwn(payload, 'attachments') ? ['attachments-v1', payload.attachments] : []),
       ])}`,
     ),
   };
@@ -235,6 +242,7 @@ export const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unkno
   ...(snapshot.share ? { share: snapshot.share } : {}),
   ...(snapshot.sharingRevision !== undefined ? { sharingRevision: snapshot.sharingRevision } : {}),
   ...(snapshot.labelIds !== undefined ? { labelIds: snapshot.labelIds } : {}),
+  ...(snapshot.attachments !== undefined ? {attachments: snapshot.attachments} : {}),
 });
 
 export const stringFieldOf = (item: Record<string, unknown>, name: string): string => {
@@ -246,10 +254,9 @@ export const stringFieldOf = (item: Record<string, unknown>, name: string): stri
 };
 
 export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
-  if (Object.hasOwn(item, 'attachments') &&
-      (!Array.isArray(item.attachments) || item.attachments.length !== 0)) {
-    throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Attachment-aware storage is required before this write.');
-  }
+  let attachments;
+  try { attachments = Object.hasOwn(item, 'attachments') ? manifest(item.attachments, item.id as string) : undefined; }
+  catch { throw corruptData(); }
   const revision = item.revision;
   const deletedAt = item.deletedAt;
   const pinnedAt = item.pinnedAt;
@@ -280,6 +287,7 @@ export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
     ...(item.share !== undefined ? { share: decodeShare(item) } : {}),
     ...(item.sharingRevision !== undefined ? { sharingRevision: membershipRevision(item) } : {}),
     ...(Object.hasOwn(item, 'labelIds') ? {labelIds: labelIds(item.labelIds)} : {}),
+    ...(attachments ? {attachments} : {}),
   };
 };
 
@@ -359,6 +367,8 @@ export const nextSnapshot = (
   protectionRevision: remote?.protectionRevision ?? 0,
   ...(remote?.sharingRevision !== undefined ? { sharingRevision: remote.sharingRevision } : {}),
   labelIds: request.payload?.labelIds ?? remote?.labelIds ?? [],
+  ...(request.payload?.attachments !== undefined || remote?.attachments !== undefined ? {
+    attachments: request.operation === 'delete' ? [] : request.payload?.attachments ?? remote?.attachments ?? []} : {}),
 });
 
 export function membershipRevision(row: Record<string, unknown>): number {
@@ -382,7 +392,8 @@ export const transactItemsFor = (
 ): TransactWriteCommandInput['TransactItems'] => {
   const sequence = lastSequence + 1;
   const attributes = snapshotAttributes(note);
-  const metadata = note.protected ? { ...attributes, title: '', content: '' } : attributes;
+  const metadata = note.protected ? { ...attributes, title: '', content: '',
+    ...(note.attachments !== undefined ? {attachments: []} : {}) } : attributes;
   // Unused expression attribute values are a DynamoDB validation error, so the
   // revision guard only appears when a stored note has a revision to match.
   const noteGuard =

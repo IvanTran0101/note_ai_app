@@ -43,7 +43,9 @@ export const createSyncFunction = (stack: Stack, table: ITable, userPoolId?: str
     entry: HANDLER_ENTRY,
     handler: 'handler',
     runtime: Runtime.NODEJS_22_X,
-    timeout: Duration.seconds(28),
+    // Large attachment verification can outlive the HTTP API response window.
+    // Durable attempt/status reconciles unknown ACKs without repeating Note writes.
+    timeout: Duration.seconds(180),
     memorySize: 1536,
     description: 'NoteFlow sync and note security API.',
     // Passing the group sets the function's logging config, so Lambda writes
