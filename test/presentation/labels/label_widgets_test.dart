@@ -75,6 +75,7 @@ void main() {
     tester,
   ) async {
     setup();
+    final semantics = tester.ensureSemantics();
     final note = NoteDto.fromDomain(
       Note.create(
         id: 'query-note',
@@ -96,6 +97,13 @@ void main() {
         onSelectNote: (_) {},
         onRetry: null,
       ),
+    );
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('notes-search-field')))
+          .rect
+          .height,
+      lessThan(100),
     );
     await tester.enterText(
       find.byKey(const ValueKey('notes-search-field')),
@@ -127,6 +135,7 @@ void main() {
     expect(find.text('No matching notes.'), findsNothing);
     expect(find.text('Private owner filter'), findsNothing);
     expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets(

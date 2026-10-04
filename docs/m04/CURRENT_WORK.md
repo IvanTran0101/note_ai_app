@@ -89,6 +89,17 @@ Preserve backend state/key, Web profile, emulator and unrelated files.
 
 ## Continuation — 2026-10-05
 
+Current source full1146/2 skips and analyzer clean61s, geometry widgets5/5;
+confirmed Web search semantics bounds fixed and real physical pointer/keyboard
+No matching notes observed. Access-lost copy corrected with regression. Committing
+this QA fix now; no backend/deployment changes. Native online protection + lock,
+cold offline wrong/right unlock and encrypted offline edit accepted. Native
+password admin remains originalserver-first(kIsWeb flag), not a new M04 defect.
+Native online unlock currentdialog processing pending protected edit reconciliation.
+Browser ownernewcold5603, backend67568; both browsercontexts+nativeonline restored.
+Next build this source fix APK, actual Native query and final regression receipt,
+then M04.7/.8 Notion/rubric/leader handoff + per-milestone push. Preserve data.
+
 M04.5 pushed827285e, remote SHA verified; final source VM1145/2 skips, UI/dashboard
 52/52, public dev config14/14, analyzer no issues. M04.6 source/local privacy
 receipt PRIVACY_ACCEPTANCE.md: actual recipient no foreign catalog/organize;

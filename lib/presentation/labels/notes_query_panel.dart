@@ -80,20 +80,24 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Column(
             children: [
-              TextField(
-                key: const ValueKey('notes-search-field'),
-                controller: _search,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: copy.search,
-                  suffixIcon: _search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: copy.clear,
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => setState(_search.clear),
-                        ),
+              Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: TextField(
+                  key: const ValueKey('notes-search-field'),
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: copy.search,
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: copy.clear,
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(_search.clear),
+                          ),
+                  ),
                 ),
               ),
               ConstrainedBox(

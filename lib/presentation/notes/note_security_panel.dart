@@ -73,7 +73,8 @@ final class NoteSecurityPanel extends StatelessWidget {
                     ? copy.accessUnavailableHint
                     : copy.unavailable,
               ),
-            if (retained) Text(copy.retained),
+            if (retained)
+              Text(accessLost ? copy.accessRetained : copy.retained),
             if (pendingProtection) Text(copy.pendingProtection),
             if (busy) const LinearProgressIndicator(),
             Wrap(

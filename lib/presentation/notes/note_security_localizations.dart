@@ -67,6 +67,10 @@ final class NoteSecurityCopy {
     'Có nháp mã hóa từ mật khẩu cũ được giữ lại. Chỉnh sửa bị chặn để tránh ghi đè nháp.',
     'Encrypted drafts from the old password are retained. Editing is blocked to prevent overwriting them.',
   );
+  String get accessRetained => choose(
+    'Bản nháp mã hóa từ quyền cũ được giữ lại và không tự gửi sau khi quyền thay đổi.',
+    'Encrypted drafts from earlier access are retained and never submitted automatically after access changes.',
+  );
   String label(NoteSecurityAction action) => switch (action) {
     NoteSecurityAction.enable => choose('Bật bảo vệ', 'Enable protection'),
     NoteSecurityAction.unlock => choose('Mở khóa', 'Unlock'),

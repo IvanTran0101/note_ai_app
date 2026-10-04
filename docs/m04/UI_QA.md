@@ -62,3 +62,35 @@ Duplicate/rename/delete with chip propagation, offline cold reopen/reconnect,
 protected/shared privacy and owner-only organization, retained drafts, final
 regression/analyzer/APK revision, collaborator/canonical Notion ticks and push.
 M09 and live AWS deployment remain outside this implementation batch.
+
+## Latest regression fixes and receipts
+
+- Final current source1146 PASS/2 configured skips, analyzer clean61.0s;
+  focused Label/query/privacy widgets5/5 and security+Label UI9/9 PASS.
+- Chrome physical pointer + native keyboard reached No matching notes immediately
+  (screenshot query-pixel-no-match.png), then live body matching. Pure query made
+  no HTTP request. Accessibility input originally inherited the whole Notes-area
+  geometry/name; a bounded explicit semantics container now gives the input its
+  own53-pixel rectangle/Search notes name. Regression asserts bounded geometry.
+  Locator keyboard typing into an accessibility proxy may not dispatch a Flutter
+  edit; real pointer activation targets the native editing element.
+- Native duplicate catalog rows, rename, deletion and selected tombstone pruning
+  passed. Associated deletion preserved Note/body/pin. Chrome manual Sync now
+  removed the deleted chip while the editor remained open, validating the cache
+  observer fix against a Note whose revision did not change.
+- Native new synthetic Note with Label protected online, locked with no title,
+  body or chip exposure, reopened cold with backend loopback removed. Wrong
+  offline password was rejected; correct cached offline unlock restored body and
+  Label. Offline edit was saved explicitly on Back, as encrypted pending content.
+  Reconnect requires online scoped unlock before sending that protected edit.
+- Native password administration uses the existing server-first M05 composition
+  (`localFirst: kIsWeb`). Offline administration returns unavailable and retains
+  data. This is outside the approved Web-only password administration correction;
+  M04 query/cache and encrypted offline Note edits remain local-first.
+- Regrant as Viewer displayed the unchanged cloud body, not the old-grant draft;
+  blocked encrypted pending draft remains retained. Revoked unprotected share
+  previously incorrectly described that draft as an old-password draft. Copy now
+  describes earlier access; independent widget regression covers it.
+
+Final rebuilt Android search geometry, protected reconnect and final handoff
+receipt remain; do not treat this running journal as completed actual QA.
