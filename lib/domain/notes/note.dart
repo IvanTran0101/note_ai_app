@@ -3,6 +3,8 @@ import 'note_protection.dart';
 import 'note_identity.dart';
 import 'note_share_grant.dart';
 import 'attachment.dart';
+import '../labels/label.dart';
+import '../labels/label_projection.dart';
 
 /// The Note aggregate root for the notes domain.
 ///
@@ -22,6 +24,8 @@ class Note {
     this.share,
     this._pinnedAt,
     this._attachments,
+    this._labelIds,
+    this.labelProjections,
   );
 
   /// Creates a new note with valid text and identical creation/update times.
@@ -47,6 +51,8 @@ class Note {
       null,
       null,
       const [],
+      const [],
+      const [],
     );
   }
 
@@ -64,6 +70,8 @@ class Note {
     NoteShareGrant? share,
     DateTime? pinnedAt,
     List<Attachment> attachments = const [],
+    Iterable<String> labelIds = const [],
+    Iterable<LabelProjection> labelProjections = const [],
   }) {
     if (share != null &&
         (share.note != NoteIdentity(ownerId, id) ||
@@ -74,7 +82,9 @@ class Note {
         (!contentAvailable &&
             (title.isNotEmpty ||
                 content.isNotEmpty ||
-                attachments.isNotEmpty))) {
+                attachments.isNotEmpty ||
+                labelIds.isNotEmpty ||
+                labelProjections.isNotEmpty))) {
       throw ArgumentError('Invalid note content availability.');
     }
     return Note._(
@@ -90,6 +100,8 @@ class Note {
       share,
       pinnedAt?.toUtc(),
       freezeAttachments(attachments, noteId: id),
+      freezeLabelIds(labelIds),
+      List.unmodifiable(labelProjections),
     );
   }
 
@@ -105,6 +117,8 @@ class Note {
   DateTime _updatedAt;
   DateTime? _pinnedAt;
   List<Attachment> _attachments;
+  List<String> _labelIds;
+  final List<LabelProjection> labelProjections;
   NoteProtection _protection;
   final bool _contentAvailable;
   final int _contentRevision;
@@ -174,6 +188,28 @@ class Note {
     final next = _attachments.where((item) => item.id != attachmentId).toList();
     if (next.length == _attachments.length) return;
     _attachments = List.unmodifiable(next);
+    _updatedAt = now.toUtc();
+  }
+
+  List<String> get labelIds {
+    _requireContent();
+    return _labelIds;
+  }
+
+  void attachLabel(Label label, DateTime now) {
+    _requireContent();
+    if (label.ownerId != ownerId || label.isDeleted) {
+      throw ArgumentError('Label must be active in the note owner catalog.');
+    }
+    if (_labelIds.contains(label.id)) return;
+    _labelIds = freezeLabelIds([..._labelIds, label.id]);
+    _updatedAt = now.toUtc();
+  }
+
+  void detachLabel(String labelId, DateTime now) {
+    _requireContent();
+    if (!_labelIds.contains(labelId)) return;
+    _labelIds = freezeLabelIds(_labelIds.where((id) => id != labelId));
     _updatedAt = now.toUtc();
   }
 
