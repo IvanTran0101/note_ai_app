@@ -42,6 +42,7 @@ extension _NoteRepositoryUpdate on NoteRepository {
         result = fresh;
         if (fresh.title == existing.title &&
             fresh.content == existing.content &&
+            sameAttachments(fresh.attachments, existing.attachments) &&
             fresh.pinnedAt == existing.pinnedAt) {
           return state;
         }
@@ -78,6 +79,9 @@ extension _NoteRepositoryUpdate on NoteRepository {
     }
     if (note.pinnedAt != old.pinnedAt) {
       _authorizeUpdate(note, actor, NoteOperation.manage);
+    }
+    if (!sameAttachments(note.attachments, old.attachments)) {
+      _authorizeUpdate(note, actor, NoteOperation.attachmentWrite);
     }
     if (note.title != old.title || note.content != old.content) {
       _authorizeUpdate(note, actor, NoteOperation.edit);

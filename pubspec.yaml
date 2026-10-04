@@ -70,6 +70,10 @@ dependencies:
   indexed_db: ^1.0.1
   cryptography: ^2.9.0
   flutter_secure_storage: ^11.2.0
+  file_selector: ^1.1.0
+  image_picker: ^1.2.3
+  video_player: ^2.14.1
+  web: ^1.1.1
 
 dev_dependencies:
   integration_test:

@@ -1,0 +1,68 @@
+M03 integration checkpoint - 2026-10-04 (Asia/Saigon)
+Status: OPEN / IN PROGRESS. M03 end-to-end is NOT COMPLETE.
+Branch: final-TanMinh ONLY. Resolve checkpoint identity with git log -1 -- docs/m03-integration-checkpoint.txt.
+Prior verified checkpoint: b72c297c7d832711252e3c1c49110f1f2209f174.
+Integrated M02/M05/M06 baseline: b5ecc64416ae7123ddc96d9fb9dac74a11a8f4ec.
+
+SESSION STATE / PRESERVATION
+- Actual repository: C:/Users/Admin/Desktop/Flutter/final. The Codex workspace under Documents/ChatGPT/note_app_ai is a separate staging repository on master; it was not used for publication.
+- At entry final-TanMinh was at b72c297; no leftover checkpoint/documentation changes.
+- Existing macOS generated registrant edit and line-ending-only note_repository_delete.dart status remain excluded and preserved. Do not blindly pop the retained pre-integration stash or overwrite the backup.
+- No other branch is modified, merged or pushed. No AWS live call/deployment; credentials remain outside source.
+
+NEW SOURCE / LOCAL FLOW
+- AttachmentRuntime composes one encrypted binary cache per actor, AttachmentSecurityAdapter, M05 borrowed/device key resolution, canonical Note repository and existing sync request seam. Production requires EncryptedSyncStore; alternate test stores fail closed.
+- Composition root supplies the picker and Attachment service through an optional controller seam. The focused/embedded NoteDetail editor renders the local Pending panel inside its existing scroll surface.
+- pickAndStage captures actor/session/access/protection authority BEFORE opening a platform picker, then rechecks it before every stage. Picker cancellation produces no mutation. Completed files survive a partial multi-file failure.
+- File/gallery/photo/video picker actions, Pending filenames/size, bounded image/TXT/CSV preview, retry error/progress, and confirmed cancellation of an unlinked local draft are wired. Attachment operations do not replace editor title/content or create another Note writer/outbox/cursor.
+- Local readers recheck authority per chunk and completion. Preview buffers are wiped and decoded image cache entries evicted on close/security changes/dispose. Pending ciphertext survives same-actor relogin while an old active reader is rejected.
+- Cloud UploadAttachment in the production runtime explicitly throws unavailable. Retry retains Pending drafts. Legacy backend ATTACHMENTS_UNSUPPORTED/422 safety gate is unchanged. No Ready/cloud-completion claim.
+- Private, versioned, encrypted, TLS-only S3 CloudFormation storage template and separated staging signer/verifier/version-reader/staging-cleanup IAM roles: amplify/attachments/storage.template.json. Final deletes are not granted; no automatic expiry or direct browser GET CORS.
+- Environment-only AWS/source handoff: docs/m03-aws-storage-setup.txt. Template is independent source, not wired into amplify/backend.ts or any attachment handler. No S3 SDK adapter, route deployment, actual-byte verification or verified association yet.
+
+VERIFICATION FOR THIS SESSION
+- Final broad Flutter regression: 300 passed, 1 new widget fixture timeout. All other writer/M02/M05/M06/migration/editor tests passed, including both M05 binary-key tests with 180-second timeout.
+- Fixed widget fake-clock setup and allowed the repository fake's real event-loop work to complete. Complete affected application/widget group after fix: 12 passed, 0 failed. These suites overlap; do not sum as unique tests. The entire broad suite was not rerun after the fixture-only fix.
+- Final scoped Dart analyzer: No issues found (attachments, infrastructure, notes UI, main and new application/runtime tests).
+- Backend: full tsc --noEmit -p amplify passed. 44 actual local checks passed: compatibility 5, parser 15, response 14, protection 8 (including real Argon2id), storage policy 2. Node runner reports 13 passing test nodes because three script files each contain multiple checks.
+- Four backend groups remain blocked by missing @smithy/core/retry or /transport runtime modules: sharing, dynamo_sync_store, local_first_security, security. npm ci was bounded after over 30 minutes of slow downloads/resource contention; partially installed node_modules remain local/ignored. No dependency/lockfile change was committed. Complete lockfile restoration before retrying those groups.
+- Web debug compilation was attempted and stopped for resource contention; no Web build or real browser acceptance is claimed. No connected Android device/emulator; no Brave/Chrome behavioral tests, Android builds or AWS live calls.
+- Explicit staged diff review and credential-pattern scan passed; generated macOS edits and normalized-empty note repository dirt were excluded.
+- Initial attachment group: 39 passed, 1 existing M05 online/offline unlock test timed out at 30 seconds on this slow machine. Not counted as a pass; final rerun uses 180-second timeout.
+- Initial new runtime tests cover production composition, ciphertext/no filenames in stored files, reopen Pending, fail-closed cloud retry, cancellation and same-user relogin fencing.
+- New application checks cover stale picker authority, cancelled picker, reader completion guard. New widget check covers Pending/cloud failure retention and clearing preview/filenames on lock.
+- Storage source: 2 local JSON/IAM invariant tests passed; not CloudFormation validation/deployment or AWS/IAM live acceptance.
+- Scoped source analyzer passed after 3 style findings were fixed. Final analyzer includes the added widget test.
+- Flutter test runner bypasses the unrelated local_llm_bridge native build hook. It is external to Git; AI/RAG and full Windows/Android native build acceptance are not claimed.
+- Local device discovery: Windows, Chrome 81.0.4044.138, Edge 152.0.4191.66; no Android device/emulator. No real Brave/Chrome IndexedDB, picker, seek, memory, CORS or revoke acceptance.
+
+PRIOR VERIFIED FOUNDATION (PRESERVED)
+- Immutable manifest survives Note/DTO/local state/queue/ACK/pull/conflict. Feature-aware nonempty manifest omitted from ACK fails closed; legacy omission preserves local metadata.
+- Inner schema 5 migrates 2/3/4 and preserves pins/preferences/cursor/outbox/conflicts/attempted bytes. M05 outer encryption/AAD remains v3.
+- Validation/SHA-256/encrypted chunks and quotas: JPG/PNG/WebP 10 MiB, MP4 50 MiB, PDF/TXT/CSV 20 MiB; 10 files / 100 MiB per note; 250 MiB per actor cache; 256 KiB chunks.
+- Protected cache borrows M05 opened key with no locked device-key fallback. Owner online/offline unlock includes attachmentRead/attachmentWrite. Prior encrypted-vault migration/ACK fixes remain intact.
+- Prior main Flutter run: 162 pass, 1 migration failure subsequently fixed; affected vault/binary-key rerun 8/8, additional M02/M06 105/105. Suites overlap; do not sum as unique test count. Prior backend local/mock 46 pass.
+
+EXACT REMAINING M03 WORK
+1. Backend: authenticated attempt/upload/verify/read routes; private S3 SDK adapter from environment; actual-byte MIME/type/size/SHA-256; pinned staging validation/copy/final version; immutable verified object and server-authorized association. Existing CloudFormation template alone is not backend completion.
+2. Durable attempt identity, planned attachment/object version and server epochs, phase/resume, unknown-outcome reconciliation, retry/cancel/link races, create-ACK recovery across binary cache and canonical Note outbox. Current queued/linked cache foundation is not this complete lifecycle.
+3. Authoritative association and unlink/tombstone ACK, lost-ACK replay, reference-safe cleanup, feature-aware backend manifest/fingerprint/legacy replay/mixed-client rollout, authorized new-note-ID copy/rebind. Leave legacy gate in place until verified.
+4. Authenticated reader composition with fresh per-Range ACL/actor grant/object/protection/access checks. Owner/local preview only is wired; shared viewer/editor read-only binary preview remains unimplemented.
+5. Video/PDF preview, export with owner/export scope, active transfer progress and cancellation, linked remove/ACK, Android lost-camera-data recovery into the correct durable note binding, typed permission/fallback feedback, localization and platform UI verification. Current spinner and retained-draft error are not full transfer progress/Failed lifecycle.
+6. Cache/key migration and reader teardown across password/protection enable/rotate/disable, expiry/revoke/logout; preserve and recover pending encrypted drafts. Epoch changes currently fail closed but do not re-encrypt old pending cache under the new key/AAD. Full decoded-media lifecycle/memory acceptance remains unverified.
+7. Finish backend dependency restoration/typecheck and relevant full security/race/bypass tests where any final receipts below still mark a blocker. Do not claim mocked tests as cloud acceptance.
+8. Brave/Chrome IndexedDB reopen/multitab/offline/relogin/quota and picker/preview; Android device/gallery/camera/seek/cancel/auth/CORS/memory/revoke; active stream revoke semantics. Web compilation and widget checks cannot tick these platform requirements.
+9. Leader handoff/deployment/live AWS acceptance is intentionally outside the current scope. Supply real environment credentials later, validate/deploy storage and authenticated handlers, then run live checklist. All M03 major milestones/V01-V11/FR/NFR/Done When remain incomplete.
+
+NEXT SESSION
+Verify branch/HEAD/status, read this file and current M03 Notion checklist first. Preserve excluded dirt/stash/backup. Do not redo runtime/local Pending integration or disturb M02/M05/M06. Continue backend verified attempt/association/ACK contract and durable recovery before enabling cloud sync; then complete shared reader, preview/export and key/cache epoch lifecycle. Review storage.template.json/setup against the actual chosen routes. AWS live testing remains out of scope unless explicitly reauthorized.
+
+REPRODUCIBLE TARGETS
+Dart analyze: lib/application/attachments lib/infrastructure/attachments lib/presentation/notes lib/main.dart test/application/attachments.
+Flutter: test/application/attachments; test/infrastructure/notes/attachment_metadata_test.dart; test/infrastructure/sync/note_attachment_security_test.dart; M02/M06 sharing; encrypted_store/local_first; local_sync_state/conflict/http codec; sync_conflict_resolver; Note repository/application; editor/page/surface/workspace regressions.
+Use a realistic timeout for the M05 Argon2 checks on a slow host; report failures separately.
+Backend: node --import tsx --test amplify/attachments/storage_setup.test.ts amplify/sync/*.test.ts amplify/protection/*.test.ts amplify/sharing/*.test.ts; npm run typecheck. Do not run AWS live tests.
+External original workstation runner: C:/Users/Admin/Documents/ChatGPT/note_app_ai/m03_flutter_test_runner.dart with the SDK flutter_tools package_config; not a tracked deliverable.
+
+PUBLICATION HYGIENE
+Explicit scoped source/test/storage/setup/checkpoint staging only. No secrets, generated registrants/build outputs/node_modules/npm cache, machine runner, skills, AgentOps, unrelated Markdown or dependency upgrades. Remote hash must match final-TanMinh after push.

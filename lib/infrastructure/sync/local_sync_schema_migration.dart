@@ -35,6 +35,7 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
       path: 'legacy.note',
       allowedFields: fields.difference({
         'pinnedAt',
+        'attachments',
         if (!hasSecurity) ...security,
       }),
       optionalFields: {...optional, 'pinnedAt'},
@@ -44,6 +45,8 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
       'protectionRevision': 0,
       'contentAvailable': true,
       'pinnedAt': null,
+      'attachments': <Object?>[],
+      if (remote) 'includesAttachments': false,
       ...record,
     };
   }
@@ -76,4 +79,42 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
           'noteLayout': 'grid',
         },
   };
+}
+
+/// Inner v4 predates attachments. Freeze its exact note shape before adding
+/// the empty manifest; queued payloads remain byte-for-byte unchanged.
+Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
+  final envelope = SyncCodecObject.from(
+    data,
+    path: 'legacy.v4',
+    allowedFields: LocalSyncSchema.envelopeFields,
+  );
+  void validate(Object? raw, bool remote) {
+    SyncCodecObject.from(
+      raw,
+      path: 'legacy.v4.note',
+      allowedFields:
+          (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
+              .difference({'attachments'}),
+      optionalFields: remote
+          ? LocalSyncSchema.snapshotOptionalFields
+          : LocalSyncSchema.noteOptionalFields,
+    );
+  }
+
+  envelope.requireObjectList(
+    'notes',
+    LocalSyncSchema.noteFields.difference({'attachments'}),
+    optionalFields: LocalSyncSchema.noteOptionalFields,
+  );
+  for (final record in envelope.requireObjectList(
+    'conflicts',
+    LocalSyncSchema.conflictFields,
+  )) {
+    validate(record.rawValue('local'), false);
+    if (record.rawValue('remote') != null) {
+      validate(record.rawValue('remote'), true);
+    }
+  }
+  return migrateLocalSyncV3(data);
 }

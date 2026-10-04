@@ -2,6 +2,7 @@
 library;
 
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
 
@@ -19,7 +20,11 @@ final class SyncNoteSnapshot {
     this.contentAvailable = true,
     this.ownerId,
     this.share,
+    Iterable<Attachment> attachments = const [],
+    bool? includesAttachments,
   }) : id = _requireNonBlank(id, 'id'),
+       includesAttachments = includesAttachments ?? attachments.isNotEmpty,
+       attachments = freezeAttachments(attachments, noteId: id),
        revision = _requirePositive(revision, 'revision') {
     if (ownerId != null && ownerId!.trim().isEmpty ||
         share != null &&
@@ -28,8 +33,15 @@ final class SyncNoteSnapshot {
                 accessRemoved &&
                     (contentAvailable ||
                         title.isNotEmpty ||
-                        content.isNotEmpty))) {
+                        content.isNotEmpty ||
+                        this.attachments.isNotEmpty))) {
       throw ArgumentError('Invalid canonical access projection.');
+    }
+    if (!contentAvailable &&
+        (title.isNotEmpty ||
+            content.isNotEmpty ||
+            this.attachments.isNotEmpty)) {
+      throw ArgumentError('Unavailable snapshot must be redacted.');
     }
   }
 
@@ -41,6 +53,8 @@ final class SyncNoteSnapshot {
   bool get accessRemoved => share != null && !share!.isActive;
   final String title;
   final String content;
+  final List<Attachment> attachments;
+  final bool includesAttachments;
   final DateTime createdAt;
   final DateTime serverUpdatedAt;
   final int revision;
@@ -57,6 +71,8 @@ final class SyncNoteSnapshot {
         other.id == id &&
         other.title == title &&
         other.content == content &&
+        sameAttachments(other.attachments, attachments) &&
+        other.includesAttachments == includesAttachments &&
         other.createdAt == createdAt &&
         other.serverUpdatedAt == serverUpdatedAt &&
         other.revision == revision &&
@@ -73,6 +89,8 @@ final class SyncNoteSnapshot {
     id,
     title,
     content,
+    Object.hashAll(attachments),
+    includesAttachments,
     createdAt,
     serverUpdatedAt,
     revision,

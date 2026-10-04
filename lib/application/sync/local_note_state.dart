@@ -2,6 +2,7 @@
 library;
 
 import 'note_sync_status.dart';
+import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
@@ -28,11 +29,19 @@ final class LocalNoteState {
     this.protection = const NoteProtection.unprotected(),
     this.contentAvailable = true,
     this.share,
+    Iterable<Attachment> attachments = const [],
   }) : id = _requireNonBlank(id, 'id'),
+       attachments = freezeAttachments(attachments, noteId: id),
        ownerId = _requireNonBlank(ownerId, 'ownerId'),
        serverRevision = _requireNonNegative(serverRevision, 'serverRevision') {
     if (share != null && share!.note != identity) {
       throw ArgumentError('Share must match canonical note identity.');
+    }
+    if (!contentAvailable &&
+        (title.isNotEmpty ||
+            content.isNotEmpty ||
+            this.attachments.isNotEmpty)) {
+      throw ArgumentError('Unavailable content must be redacted.');
     }
   }
 
@@ -50,6 +59,7 @@ final class LocalNoteState {
 
   /// The current content.
   final String content;
+  final List<Attachment> attachments;
   final NoteProtection protection;
   final bool contentAvailable;
 
@@ -81,6 +91,7 @@ final class LocalNoteState {
         other.ownerId == ownerId &&
         other.title == title &&
         other.content == content &&
+        sameAttachments(other.attachments, attachments) &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
         other.pinnedAt == pinnedAt &&
@@ -98,6 +109,7 @@ final class LocalNoteState {
     ownerId,
     title,
     content,
+    Object.hashAll(attachments),
     createdAt,
     updatedAt,
     pinnedAt,

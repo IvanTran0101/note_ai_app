@@ -14,7 +14,12 @@ final class SyncPageProjection {
       outbox = List.of(state.outbox),
       conflicts = List.of(state.conflicts);
   final LocalSyncState state;
-  final LocalNoteState Function(SyncNoteSnapshot, NoteSyncStatus) fromRemote;
+  final LocalNoteState Function(
+    SyncNoteSnapshot,
+    NoteSyncStatus, {
+    LocalNoteState? previous,
+  })
+  fromRemote;
   final List<LocalNoteState> notes;
   final List<PendingMutation> outbox;
   final List<SyncConflict> conflicts;
@@ -46,7 +51,7 @@ final class SyncPageProjection {
     final protectionChanged =
         old != null && snapshot.protection != old.protection;
     if (accessChanged || protectionChanged) {
-      notes[index] = fromRemote(snapshot, NoteSyncStatus.synced);
+      notes[index] = fromRemote(snapshot, NoteSyncStatus.synced, previous: old);
       if (identity.ownerId != state.accountUserId) _blockStaleWork(snapshot);
       pulled++;
       changed = true;
@@ -59,7 +64,7 @@ final class SyncPageProjection {
       return;
     }
     if (old != null && snapshot.revision <= old.serverRevision) return;
-    final incoming = fromRemote(snapshot, NoteSyncStatus.synced);
+    final incoming = fromRemote(snapshot, NoteSyncStatus.synced, previous: old);
     if (index < 0) {
       notes.add(incoming);
     } else {

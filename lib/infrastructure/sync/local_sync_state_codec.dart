@@ -40,7 +40,7 @@ abstract final class LocalSyncStateCodec {
     LocalSyncSchema.userPreferences: _encodePreferences(state.userPreferences),
   };
 
-  /// Decodes schema 4, migrating supported schema 2/3 envelopes in memory.
+  /// Decodes schema 5, migrating supported schema 2/3/4 envelopes in memory.
   /// Existing attempted mutations retain their old payload shape and ID.
   static LocalSyncState decode(Object? data) {
     final Map<String, Object?> raw = _asObject(data, _rootPath);
@@ -68,6 +68,7 @@ abstract final class LocalSyncStateCodec {
       );
     }
     if (version == 3) return _decodeCurrent(migrateLocalSyncV3(raw));
+    if (version == 4) return _decodeCurrent(migrateLocalSyncV4(raw));
     if (version != schemaVersion) {
       throw LocalSyncCodecException(
         'must be schemaVersion $schemaVersion or a supported older version.',

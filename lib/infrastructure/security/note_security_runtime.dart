@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../application/auth/current_user_session.dart';
 import '../../application/notes/local_note_vault.dart';
+import '../../application/attachments/attachment_binding.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_application.dart';
 import '../../application/notes/note_security_service.dart';
@@ -195,6 +196,33 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
       note.referenceFor(account),
       remoteProtection,
       remoteOperation,
+    );
+  }
+
+  String? attachmentGrant(AttachmentBinding binding, NoteOperation operation) {
+    requireSession(binding.actorId);
+    if (session.sessionGeneration != binding.sessionGeneration ||
+        accessGeneration != binding.accessGeneration ||
+        operation != NoteOperation.attachmentRead &&
+            operation != NoteOperation.attachmentWrite ||
+        operation == NoteOperation.attachmentWrite &&
+            binding.actorId != binding.note.ownerId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    requireAccess(
+      ownerId: binding.note.ownerId,
+      noteId: binding.note.noteId,
+      protection: binding.protection,
+      operation: operation,
+    );
+    if (!binding.protection.enabled) return null;
+    final reference = binding.note.referenceFor(binding.actorId);
+    forAccount(binding.actorId)
+        .requireRemote(reference, binding.protection, operation);
+    return _gateways[binding.actorId]!.grantHeader(
+      reference,
+      binding.protection,
+      operation,
     );
   }
 

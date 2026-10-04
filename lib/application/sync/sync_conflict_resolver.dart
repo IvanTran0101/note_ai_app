@@ -1,6 +1,8 @@
 /// Explicit application policy for resolving one stored sync conflict.
 library;
 
+import '../../domain/notes/attachment.dart';
+
 import 'local_note_state.dart';
 import 'local_sync_state.dart';
 import 'local_sync_store.dart';
@@ -128,7 +130,9 @@ final class SyncConflictResolver {
       }
 
       if (choice == SyncConflictChoice.useRemote) {
-        if (remote != null) notes.add(_fromRemote(remote, accountUserId));
+        if (remote != null) {
+          notes.add(_fromRemote(remote, accountUserId, previous: local));
+        }
       } else if (remote == null) {
         if (!local.isDeleted) {
           notes.add(_pendingNote(local, serverRevision: 0));
@@ -178,6 +182,11 @@ final class SyncConflictResolver {
           );
         }
       } else if (remote.isDeleted) {
+        if (local.attachments.isNotEmpty) {
+          throw StateError(
+            'Copying attachments to a new note requires authorized object rebinding.',
+          );
+        }
         final LocalNoteState replacement = LocalNoteState(
           id: generateNoteId(),
           ownerId: accountUserId,
@@ -186,6 +195,7 @@ final class SyncConflictResolver {
           createdAt: local.createdAt,
           updatedAt: timestamp,
           pinnedAt: local.pinnedAt,
+          attachments: local.attachments,
           status: NoteSyncStatus.pending,
         );
         notes
@@ -257,7 +267,9 @@ final class SyncConflictResolver {
             title: local.title,
             content: local.content,
             pinnedAt: local.pinnedAt,
-            includesPinnedAt: true,
+            includesPinnedAt: local.share == null,
+            attachmentManifest: AttachmentManifest(local.attachments),
+            includesAttachments: local.share == null,
           ),
     createdAt: timestamp,
   );
@@ -282,6 +294,7 @@ LocalNoteState _pendingNote(
   createdAt: note.createdAt,
   updatedAt: note.updatedAt,
   pinnedAt: note.pinnedAt,
+  attachments: note.attachments,
   serverRevision: serverRevision,
   deletedAt: note.deletedAt,
   status: NoteSyncStatus.pending,
@@ -289,19 +302,27 @@ LocalNoteState _pendingNote(
   contentAvailable: note.contentAvailable,
 );
 
-LocalNoteState _fromRemote(SyncNoteSnapshot note, String accountUserId) =>
-    LocalNoteState(
-      id: note.id,
-      ownerId: note.ownerId ?? accountUserId,
-      share: note.share,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.serverUpdatedAt,
-      pinnedAt: note.pinnedAt,
-      serverRevision: note.revision,
-      deletedAt: note.deletedAt,
-      status: NoteSyncStatus.synced,
-      protection: note.protection,
-      contentAvailable: note.contentAvailable,
-    );
+LocalNoteState _fromRemote(
+  SyncNoteSnapshot note,
+  String accountUserId, {
+  LocalNoteState? previous,
+}) => LocalNoteState(
+  id: note.id,
+  ownerId: note.ownerId ?? accountUserId,
+  share: note.share,
+  title: note.title,
+  content: note.content,
+  createdAt: note.createdAt,
+  updatedAt: note.serverUpdatedAt,
+  pinnedAt: note.pinnedAt,
+  attachments: !note.contentAvailable || note.isDeleted
+      ? const []
+      : note.includesAttachments
+      ? note.attachments
+      : previous?.attachments ?? const [],
+  serverRevision: note.revision,
+  deletedAt: note.deletedAt,
+  status: NoteSyncStatus.synced,
+  protection: note.protection,
+  contentAvailable: note.contentAvailable,
+);

@@ -29,6 +29,8 @@ extension NoteSecurityActions on NoteSecurityService {
               NoteOperation.edit,
               NoteOperation.delete,
               NoteOperation.summary,
+              NoteOperation.attachmentRead,
+              if (note.ownerId == accountId) NoteOperation.attachmentWrite,
               if (localFirst) NoteOperation.manage,
               if (localFirst) NoteOperation.export,
             },
@@ -51,6 +53,8 @@ extension NoteSecurityActions on NoteSecurityService {
         if (note.ownerId == accountId) NoteOperation.delete,
         if (note.ownerId == accountId) NoteOperation.manage,
         NoteOperation.summary,
+        NoteOperation.attachmentRead,
+        if (note.ownerId == accountId) NoteOperation.attachmentWrite,
       });
       _live(captured, generation);
       await vault.unlock(id, password, lease.protection, verifiedOnline: true);

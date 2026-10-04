@@ -6,6 +6,7 @@ import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
 import 'note_share_grant_codec.dart';
+import '../attachments/attachment_codec.dart';
 
 /// Maps a [SyncNoteSnapshot] to and from its stored form.
 ///
@@ -27,6 +28,10 @@ abstract final class SyncNoteSnapshotCodec {
         LocalSyncSchema.share: NoteShareGrantCodec.encode(snapshot.share!),
       LocalSyncSchema.title: snapshot.title,
       LocalSyncSchema.content: snapshot.content,
+      LocalSyncSchema.attachments: snapshot.attachments
+          .map(AttachmentCodec.encode)
+          .toList(),
+      if (!snapshot.includesAttachments) 'includesAttachments': false,
       LocalSyncSchema.createdAt: snapshot.createdAt.toIso8601String(),
       LocalSyncSchema.serverUpdatedAt: snapshot.serverUpdatedAt
           .toIso8601String(),
@@ -75,6 +80,13 @@ abstract final class SyncNoteSnapshotCodec {
         share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
+        attachments: AttachmentCodec.decodeList(
+          record.rawValue(LocalSyncSchema.attachments),
+          noteId: id,
+        ),
+        includesAttachments:
+            !record.containsField('includesAttachments') ||
+            record.requireBool('includesAttachments'),
         createdAt: createdAt,
         serverUpdatedAt: serverUpdatedAt,
         revision: revision,

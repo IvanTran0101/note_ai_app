@@ -153,6 +153,11 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   }
 
   const { title, content } = payload;
+  // The verified-object association transaction is not deployed in this
+  // checkpoint. Never accept and silently discard a feature-aware manifest.
+  if (Object.hasOwn(payload, 'attachments')) {
+    return { ok: false, problem: 'ATTACHMENTS_UNSUPPORTED' };
+  }
   if (
     typeof title !== 'string' ||
     typeof content !== 'string' ||

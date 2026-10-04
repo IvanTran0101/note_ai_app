@@ -116,6 +116,9 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown): Mu
     throw new SyncInvalidMutationError('PAYLOAD_REQUIRED', 'create and update need a title and content payload.');
   }
   const { title, content } = payload;
+  if (Object.hasOwn(payload, 'attachments')) {
+    throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified attachment association is required.');
+  }
   if (
     typeof title !== 'string' ||
     typeof content !== 'string' ||
@@ -235,6 +238,10 @@ export const stringFieldOf = (item: Record<string, unknown>, name: string): stri
 };
 
 export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
+  if (Object.hasOwn(item, 'attachments') &&
+      (!Array.isArray(item.attachments) || item.attachments.length !== 0)) {
+    throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Attachment-aware storage is required before this write.');
+  }
   const revision = item.revision;
   const deletedAt = item.deletedAt;
   const pinnedAt = item.pinnedAt;

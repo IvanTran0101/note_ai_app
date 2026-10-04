@@ -133,10 +133,14 @@ void registerM02StoreScenarios() {
         old.remove('userPreferences');
         for (final note in old['notes'] as List) {
           note.remove('pinnedAt');
+          note.remove('attachments');
         }
         for (final conflict in old['conflicts'] as List) {
           conflict['local'].remove('pinnedAt');
+          conflict['local'].remove('attachments');
           conflict['remote']?.remove('pinnedAt');
+          conflict['remote']?.remove('attachments');
+          conflict['remote']?.remove('includesAttachments');
         }
         document['packet'] = await crypto.encryptJson(
           inner,

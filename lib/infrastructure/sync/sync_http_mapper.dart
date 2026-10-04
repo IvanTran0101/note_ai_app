@@ -18,6 +18,7 @@ import 'dart:convert';
 
 import 'protection_sync_codec.dart';
 import 'share_wire_codec.dart';
+import '../attachments/attachment_codec.dart';
 
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
@@ -89,6 +90,8 @@ Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
     body['payload'] = <String, Object?>{
       'title': payload.title,
       'content': payload.content,
+      if (payload.includesAttachments)
+        'attachments': payload.attachments.map(AttachmentCodec.encode).toList(),
       if (payload.includesPinnedAt)
         'pinnedAt': payload.pinnedAt?.toIso8601String(),
     };
@@ -219,6 +222,15 @@ SyncNoteSnapshot _decodeNote(
   bool authorizedContent = false,
 }) {
   final Object? id = json['id'];
+  final securityFields = [
+    'protected',
+    'protectionRevision',
+    'contentAvailable',
+  ];
+  if (securityFields.any(json.containsKey) &&
+      !securityFields.every(json.containsKey)) {
+    throw const FormatException('Incomplete note protection metadata.');
+  }
   if (id is! String || id.trim().isEmpty) {
     throw const FormatException('Note "id" must be a non-blank string.');
   }
@@ -236,7 +248,9 @@ SyncNoteSnapshot _decodeNote(
   final share = json['share'] == null
       ? null
       : ShareWireCodec.decode(json['share']);
-  final owner = share == null ? null : json['ownerId'];
+  final owner = share == null && !json.containsKey('protected')
+      ? null
+      : json['ownerId'];
   if (share != null &&
       (owner != share.note.ownerId || id != share.note.noteId)) {
     throw const FormatException('Mismatched canonical sharing metadata.');
@@ -247,6 +261,13 @@ SyncNoteSnapshot _decodeNote(
     share: share,
     title: hasContent ? _readString(json, 'title') : '',
     content: hasContent ? _readString(json, 'content') : '',
+    attachments:
+        hasContent &&
+            json['deletedAt'] == null &&
+            json.containsKey('attachments')
+        ? AttachmentCodec.decodeList(json['attachments'], noteId: id)
+        : const [],
+    includesAttachments: json.containsKey('attachments'),
     protection: NoteProtection(enabled: enabled, revision: epoch),
     contentAvailable: hasContent,
     createdAt: _readTimestamp(json, 'createdAt'),

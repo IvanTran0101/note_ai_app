@@ -155,6 +155,7 @@ extension LocalNoteSecurityActions on NoteSecurityService {
       final lease = await gateway.unlock(id, cloudPassword, {
         NoteOperation.read,
         NoteOperation.summary,
+        NoteOperation.attachmentRead,
         if (shared.share!.role.name == 'editor') NoteOperation.edit,
       });
       _live(captured, generation);

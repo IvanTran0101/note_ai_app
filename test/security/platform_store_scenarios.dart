@@ -45,6 +45,14 @@ void registerPlatformStoreScenarios() {
         securityState(account, pending: true),
       );
       legacy['schemaVersion'] = 2;
+      for (final note in legacy['notes'] as List) {
+        note.remove('attachments');
+      }
+      for (final conflict in legacy['conflicts'] as List) {
+        conflict['local'].remove('attachments');
+        conflict['remote']?.remove('attachments');
+        conflict['remote']?.remove('includesAttachments');
+      }
       await writeLegacyPlatformRecord(account, jsonEncode(legacy));
       final store =
           createLocalSyncStore(accountUserId: account) as EncryptedSyncStore;

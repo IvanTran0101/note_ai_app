@@ -2,6 +2,7 @@ import 'note_metadata.dart';
 import 'note_protection.dart';
 import 'note_identity.dart';
 import 'note_share_grant.dart';
+import 'attachment.dart';
 
 /// The Note aggregate root for the notes domain.
 ///
@@ -20,6 +21,7 @@ class Note {
     this._contentRevision,
     this.share,
     this._pinnedAt,
+    this._attachments,
   );
 
   /// Creates a new note with valid text and identical creation/update times.
@@ -44,6 +46,7 @@ class Note {
       0,
       null,
       null,
+      const [],
     );
   }
 
@@ -60,6 +63,7 @@ class Note {
     int contentRevision = 0,
     NoteShareGrant? share,
     DateTime? pinnedAt,
+    List<Attachment> attachments = const [],
   }) {
     if (share != null &&
         (share.note != NoteIdentity(ownerId, id) ||
@@ -67,7 +71,10 @@ class Note {
       throw ArgumentError('Invalid canonical sharing projection.');
     }
     if (contentRevision < 0 ||
-        (!contentAvailable && (title.isNotEmpty || content.isNotEmpty))) {
+        (!contentAvailable &&
+            (title.isNotEmpty ||
+                content.isNotEmpty ||
+                attachments.isNotEmpty))) {
       throw ArgumentError('Invalid note content availability.');
     }
     return Note._(
@@ -82,6 +89,7 @@ class Note {
       contentRevision,
       share,
       pinnedAt?.toUtc(),
+      freezeAttachments(attachments, noteId: id),
     );
   }
 
@@ -96,6 +104,7 @@ class Note {
   String _content;
   DateTime _updatedAt;
   DateTime? _pinnedAt;
+  List<Attachment> _attachments;
   NoteProtection _protection;
   final bool _contentAvailable;
   final int _contentRevision;
@@ -142,6 +151,31 @@ class Note {
   DateTime get createdAt => _createdAt;
   DateTime get updatedAt => _updatedAt;
   DateTime? get pinnedAt => _pinnedAt;
+  List<Attachment> get attachments {
+    _requireContent();
+    return _attachments;
+  }
+
+  void addAttachment(Attachment attachment, DateTime now) {
+    _requireContent();
+    final existing = _attachments.where((item) => item.id == attachment.id);
+    if (existing.isNotEmpty) {
+      if (existing.single != attachment) {
+        throw ArgumentError('Attachment identity cannot be rebound.');
+      }
+      return;
+    }
+    _attachments = freezeAttachments([..._attachments, attachment], noteId: id);
+    _updatedAt = now.toUtc();
+  }
+
+  void removeAttachment(String attachmentId, DateTime now) {
+    _requireContent();
+    final next = _attachments.where((item) => item.id != attachmentId).toList();
+    if (next.length == _attachments.length) return;
+    _attachments = List.unmodifiable(next);
+    _updatedAt = now.toUtc();
+  }
 
   /// Renames the note while preserving the entered text exactly.
   void rename(String title, DateTime now) {
