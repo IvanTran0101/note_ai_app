@@ -1,15 +1,34 @@
-# M04 actual UI QA — in progress
+# M04 actual UI QA — local acceptance
 
 2026-10-05, final-tuankiet. Matching local HTTP/socket backend, real headed
 Chrome persistent owner profile and Android emulator-5554; installed/encrypted
 data preserved. This receipt covers observed UI flows, separate from source
 tests and deployed AWS acceptance.
 
-Latest reproduced defect: recipient Viewer retains a blocked old-grant draft.
-After owner association advanced the Note revision, scoped HTTP returned the
-correct label while the client suppressed its chip. Shared metadata refresh is
-now passes98 focused Label/sync tests, including current Editor draft and stale
-snapshot rejection. Actual clients and M04.7 are being retested.
+## Final receipt — source0919ccf
+
+Full VM1151 PASS/2 configured skips; Chrome956 PASS/1 configured skip across107
+compatible original targets, including real IndexedDB; analyzer no issues142.1s.
+Backend64 Node nodes, TypeScript and public dev configuration14/14 PASS.
+Android APK build51.7s, install-r/cold reopen retained data and actual keyword+
+label filtering, pin, protected masking and58-byte Pending descriptor passed.
+APK SHA256:92EFDA6D70D8BEBED669A0FDE9B3BAFAFA585E9EA4E1ADBF13765E674A5A6679.
+
+Final recipient Viewer with blocked old-grant draft: scoped refreshHTTP200 returned
+one current readable label. Filter/list/detail chips now display it, scoped
+filter returns only that Note, cloud body remains intact and old pending count1
+stays blocked. No organize action appears. Regression reproduced missing chip
+before the fix;98 Label/sync tests now pass for blocked Viewer, current Editor
+draft and older snapshot rejection. Shared label metadata updates independently
+of body/base/outbox with fresh access/protection checks.
+
+Final artifacts (ignored): output/playwright/m04/web-shared-draft-label-fixed.png;
+output/playwright/qa-20261004/m04-apk-0919ccf-query-settled.png. A screenshot taken
+during the Back animation is excluded; the settled frame and fresh UI dump were
+verified. Native build emitted the existing future Kotlin plugin compatibility
+warning and completed successfully. ACCEPTANCE.md maps V01–V08 and current limits.
+No confirmed defect remains open within these recorded source/local scenarios.
+The remaining sections are the incremental QA history, not outstanding tasks.
 
 ## Accepted observations so far
 

@@ -1,5 +1,21 @@
 # M04 current work
 
+## Latest checkpoint — M04.7 local acceptance, 2026-10-05
+
+Product source0919ccf: VM1151/2 configured skips, Chrome956/1 configured skip on
+107 compatible original targets (real IndexedDB included), analyzer clean142.1s,
+backend64 Node nodes/tsc and dev config14/14 PASS. Actual Chrome owner/recipient
+and Android source APK accepted; see ACCEPTANCE.md and UI_QA.md. Fresh recipient
+filter/list/detail chip works with cloud body and blocked old-grant pending1
+intact. Native install-r/cold query/filter retained pin/locked masking/Pending.
+No confirmed defect remains open in the recorded scope. Source/setup handoff
+draft is HANDOFF.md; publish M04.7 and tick its local criteria, then M04.8 handoff
+with MUST_REMEMBER update and final HEAD APK provenance. Keep AWS gates unchecked.
+M03 cloud is still partial; M09 deferred. Preserve profiles, state/key and AVD.
+Graph connected but02/10 generation is stale; coverage + exact source fallback
+was performed for changed paths. _agent_ops scripts/records remain absent.
+Below is the earlier integration history; its pending statuses are historical.
+
 ## Active task — 2026-10-04
 
 User asks pull new partial M03 from final-TanMinh, implement M04 according to
