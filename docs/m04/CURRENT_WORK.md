@@ -10,9 +10,12 @@ filter/list/detail chip works with cloud body and blocked old-grant pending1
 intact. Native install-r/cold query/filter retained pin/locked masking/Pending.
 No confirmed defect remains open in the recorded scope. Source/setup handoff
 is HANDOFF.md; M04.7 pushed3b789f5 and all18 canonical rubric criteria checked
-with source/local scope. M04.8 handoff and MUST_REMEMBER acceptance updated;
-push this documentation batch, tick M04.8, then verify final HEAD APK provenance.
-Keep AWS gates unchecked.
+with source/local scope. M04.8 handoff97f7b03 and MUST_REMEMBER acceptance pushed,
+remote hash verified. Notion publication verified: progress25 checked/1 AWS gate
+unchecked; collaborator plan29 checked/0 unchecked; canonical rubric18 checked.
+Final HEAD APK provenance is retained under ignored output/m04-integration;
+its final build/install smoke does not change accepted product source0919ccf.
+Keep AWS gates unchecked. No implementation task remains in this approved scope.
 M03 cloud is still partial; M09 deferred. Preserve profiles, state/key and AVD.
 Graph connected but02/10 generation is stale; coverage + exact source fallback
 was performed for changed paths. _agent_ops scripts/records remain absent.
