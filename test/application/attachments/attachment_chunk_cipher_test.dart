@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/attachments/attachment_binding.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
 import 'package:note_ai_app/domain/notes/note_identity.dart';
 import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/attachments/attachment_chunk_cipher.dart';
@@ -19,34 +20,37 @@ AttachmentBinding binding({
 );
 
 void main() {
-  test(
-    'M05 AES-GCM ciphertext is bound to actor, canonical note, epoch and chunk',
-    () async {
-      final key = await NoteCrypto().newKey();
-      addTearDown(key.destroy);
-      final cipher = AttachmentChunkCipher(
-        requireAccess: (_, _) {},
-        resolveKey: (_) async => key,
-      );
-      final packet = await cipher.seal(binding(), 'a' * 64, 0, [10, 20, 30]);
-      expect(packet.keys.toSet(), {'nonce', 'ciphertext', 'mac'});
-      expect(await cipher.open(binding(), 'a' * 64, 0, packet), [10, 20, 30]);
-      for (final other in [
-        binding(actor: 'recipient'),
-        binding(note: 'other'),
-        binding(epoch: 2),
-      ]) {
-        await expectLater(
-          cipher.open(other, 'a' * 64, 0, packet),
-          throwsA(isA<Exception>()),
-        );
-      }
+  test('AES-GCM binds actor, canonical note and chunk; live authority rejects stale protection', () async {
+    final key = await NoteCrypto().newKey();
+    addTearDown(key.destroy);
+    final cipher = AttachmentChunkCipher(
+      requireAccess: (b, _) {
+        if (b.protection.revision != 1) {
+          throw const NoteSecurityFailure(
+            NoteSecurityFailureCode.staleRevision,
+          );
+        }
+      },
+      resolveKey: (_) async => key,
+    );
+    final packet = await cipher.seal(binding(), 'a' * 64, 0, [10, 20, 30]);
+    expect(packet.keys.toSet(), {'nonce', 'ciphertext', 'mac'});
+    expect(await cipher.open(binding(), 'a' * 64, 0, packet), [10, 20, 30]);
+    for (final other in [
+      binding(actor: 'recipient'),
+      binding(note: 'other'),
+      binding(epoch: 2),
+    ]) {
       await expectLater(
-        cipher.open(binding(), 'a' * 64, 1, packet),
+        cipher.open(other, 'a' * 64, 0, packet),
         throwsA(isA<Exception>()),
       );
-    },
-  );
+    }
+    await expectLater(
+      cipher.open(binding(), 'a' * 64, 1, packet),
+      throwsA(isA<Exception>()),
+    );
+  });
   test('explicit attachment scope required; key/session changes mid-await fail closed', () async {
     final key = await NoteCrypto().newKey();
     addTearDown(key.destroy);

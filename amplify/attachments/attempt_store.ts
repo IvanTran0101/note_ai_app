@@ -8,6 +8,8 @@ import type { Attempt, AttachmentDescriptor } from './models';
 type Writes = NonNullable<TransactWriteCommandInput['TransactItems']>;
 export const attemptKey = (owner: string, note: string, id: string) =>
   ({ownerId: `OWNER#${owner}`, noteId: `ATTEMPT#${JSON.stringify([note, id])}`});
+const cancellationKey = (owner: string, note: string, id: string) =>
+  ({ownerId: `OWNER#${owner}`, noteId: `ATTACHMENT_CANCEL#${JSON.stringify([note, id])}`});
 
 /** Same table and conditional Note authority as M02/M05/M06. No second Note writer. */
 export class AttachmentAttemptStore {
@@ -51,10 +53,29 @@ export class AttachmentAttemptStore {
         Key: {ownerId: `OWNER#${after.ownerId}`, noteId: `NOTE#${after.targetNoteId}`},
         ConditionExpression: 'revision = :revision AND deletedAt = :active',
       ExpressionAttributeValues: {':revision': noteRevision, ':active': null}}}, ...this.guards(authority)];
+    if (!before) writes.push({ConditionCheck: {TableName: this.table,
+      Key: cancellationKey(after.ownerId, after.targetNoteId, after.id),
+      ConditionExpression: 'attribute_not_exists(noteId)'}});
     if (!before || before.phase !== 'cancelled' && after.phase === 'cancelled') {
       writes.push(await this.quotaWrite(after.ownerId, after.targetNoteId,
         before ? -1 : 1, before ? -after.sizeBytes : after.sizeBytes));
     }
+    try { await this.db.send(new TransactWriteCommand({TransactItems: writes})); }
+    catch (e) {
+      if ((e as Error).name === 'TransactionCanceledException') throw new AttachmentError('stale');
+      throw new AttachmentError('unavailable');
+    }
+  }
+  /** A cancel ACK before begin must also prevent a late begin from admitting bytes. */
+  async cancelMissing(owner: string, note: string, id: string, authority: SecurityAuthorization, noteRevision: number) {
+    const writes: Writes = [{Put: {TableName: this.table,
+      Item: {...cancellationKey(owner, note, id), cancelled: true}}},
+      {ConditionCheck: {TableName: this.table, Key: attemptKey(owner, note, id),
+        ConditionExpression: 'attribute_not_exists(noteId)'}},
+      {ConditionCheck: {TableName: this.table,
+        Key: {ownerId: `OWNER#${owner}`, noteId: `NOTE#${note}`},
+        ConditionExpression: 'revision = :revision AND deletedAt = :active',
+        ExpressionAttributeValues: {':revision': noteRevision, ':active': null}}}, ...this.guards(authority)];
     try { await this.db.send(new TransactWriteCommand({TransactItems: writes})); }
     catch (e) {
       if ((e as Error).name === 'TransactionCanceledException') throw new AttachmentError('stale');

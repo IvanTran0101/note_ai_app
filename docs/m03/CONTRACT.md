@@ -43,6 +43,31 @@ orphan conservatively; it must never delete a referenced object. Expiry/TTL is
 not immediate cleanup proof. Source/local fixture acceptance and live S3/IAM/
 Cognito/Range acceptance remain separate.
 
+## Binary key compatibility and password administration
+
+Each actor/canonical Note has a stable random binary DEK. The existing encrypted
+account packet accepts its original4 inner fields or an optional fifth binaryKeys
+map; Note schema6 and envelope/AAD3 stay unchanged. The binary DEK is wrapped by
+the current M05 Note key when protected, otherwise by the account device key.
+Enable/change/disable rewraps it in the same M05 account CAS. Protected reads
+always require the opened current Note key, even if the DEK was previously opened.
+Old clients reject the extended envelope rather than erase key records; downgrade
+is unsupported. No cleartext keys/passwords/grants enter Note metadata or outbox.
+
+Chunk AADv2 binds actor, canonical Note, access epoch, cache ID and chunk. Mutable
+protection epochs are enforced by the current DEK wrap and live guards. Old AADv1
+packets are converted one chunk at a time before password administration while
+their original M05 root is still available. Both versions are readable during a
+crash-interrupted conversion. Remote reset with an unavailable retired key keeps
+the old wrap/ciphertext blocked for explicit recovery; no device-key substitution.
+
+A cancel ACK before begin persists a conditional tombstone, so a late begin is
+refused without reserving quota. Begin under fresh owner authority can renew an
+unlinked pending attempt to the current protection epoch while preserving its
+immutable metadata/chunks/final key. Old protected grants cannot authorize this.
+Cancellation uses fresh current authority; linked attempts require canonical
+remove, never cancellation or speculative final deletion.
+
 ## Technical sources
 
 - S3 part minimum5MiB, last part exemption:

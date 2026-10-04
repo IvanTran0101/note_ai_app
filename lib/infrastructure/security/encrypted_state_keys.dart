@@ -131,6 +131,14 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     final start = generation;
     final key = await crypto.newKey();
     try {
+      await _ensureDeviceKey();
+      await _rewrapBinary(
+        id,
+        note.protection,
+        p,
+        note.protection.enabled ? _opened[id]?.key : _deviceKey,
+        key,
+      );
       await _wrap(id, password, p, key);
       if (start != generation) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
@@ -161,6 +169,7 @@ extension EncryptedStateKeys on EncryptedStateCodec {
     );
     final key = _opened[id]!.key;
     final start = generation;
+    await _rewrapBinary(id, oldNote.protection, p, key, key);
     await _wrap(id, newPassword, p, key);
     if (start != generation) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
@@ -210,6 +219,8 @@ extension EncryptedStateKeys on EncryptedStateCodec {
       old.protection,
       verifiedOnline: false,
     );
+    await _ensureDeviceKey();
+    await _rewrapBinary(id, old.protection, p, _opened[id]?.key, _deviceKey!);
     _records.remove(id);
     lock(id);
     return EncryptedStateCodec.changeMetadata(decoded, id, p);

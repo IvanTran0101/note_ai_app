@@ -24,9 +24,14 @@ final class HttpAttachmentReader {
     required this.requireAccess,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
+    bool allowLocalDev = false,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null {
-    if (baseUri.scheme != 'https' ||
+    if (!(baseUri.scheme == 'https' ||
+            allowLocalDev &&
+                baseUri.scheme == 'http' &&
+                baseUri.host == '127.0.0.1' &&
+                baseUri.port == 8796) ||
         baseUri.host.isEmpty ||
         baseUri.userInfo.isNotEmpty ||
         baseUri.hasQuery ||

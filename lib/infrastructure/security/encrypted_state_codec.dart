@@ -18,6 +18,7 @@ import 'note_crypto.dart';
 part 'encrypted_state_keys.dart';
 part 'encrypted_shared_drafts.dart';
 part 'encrypted_legacy_bindings.dart';
+part 'encrypted_attachment_keys.dart';
 
 /// Account encryption and per-note wrapping are separate boundaries. Migration
 /// quarantines unknown legacy content until canonical online metadata is known.
@@ -33,6 +34,8 @@ final class EncryptedStateCodec {
   Map<String, Object?> _records = {};
   Map<String, Object?> _quarantine = {};
   Map<String, Object?> _retained = {};
+  Map<String, Object?> _binaryKeys = {};
+  final Map<String, SecretKey> _binaryOpened = {};
   final Map<String, ({SecretKey key, int epoch})> _opened = {};
   int generation = 0;
   bool migrationRequired = false;
@@ -40,7 +43,7 @@ final class EncryptedStateCodec {
 
   /// Borrowed M05 key: callers must not retain or destroy it. Lock/logout owns
   /// destruction; binary operations must check live authority around each await.
-  Future<SecretKey> attachmentKey(AttachmentBinding binding) async {
+  Future<SecretKey> attachmentRootKey(AttachmentBinding binding) async {
     if (_disposed || binding.actorId != namespace.accountUserId) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
@@ -131,12 +134,23 @@ final class EncryptedStateCodec {
       _deviceKey!,
       _accountAad,
     );
-    if (inner.length != 4) {
+    if (inner.length != 4 &&
+        !(inner.length == 5 && inner['binaryKeys'] is Map)) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
     }
     _records = Map<String, Object?>.from(inner['protected'] as Map);
     _quarantine = Map<String, Object?>.from(inner['quarantine'] as Map);
     _retained = Map<String, Object?>.from(inner['retained'] as Map);
+    final binaryKeys = Map<String, Object?>.from(
+      (inner['binaryKeys'] as Map?) ?? {},
+    );
+    for (final reference in _binaryOpened.keys.toList()) {
+      if (jsonEncode(binaryKeys[reference]) !=
+          jsonEncode(_binaryKeys[reference])) {
+        _binaryOpened.remove(reference)?.destroy();
+      }
+    }
+    _binaryKeys = binaryKeys;
     final state = Map<String, Object?>.from(inner['state'] as Map);
     _normalizeLegacyBindings(state);
     for (final note in NoteBundleProjection.notes(state)) {
@@ -182,6 +196,7 @@ final class EncryptedStateCodec {
     _records = {};
     _quarantine = {};
     _retained = {};
+    _binaryKeys = {};
     for (final note in decoded.notes) {
       _quarantine[note.referenceFor(namespace.accountUserId)] = await crypto
           .encryptJson(
@@ -260,6 +275,7 @@ final class EncryptedStateCodec {
         'protected': _records,
         'quarantine': _quarantine,
         'retained': _retained,
+        if (_binaryKeys.isNotEmpty) 'binaryKeys': _binaryKeys,
       },
       _deviceKey!,
       _accountAad,
@@ -319,10 +335,19 @@ final class EncryptedStateCodec {
     _records.clear();
     _quarantine.clear();
     _retained.clear();
+    _binaryKeys.clear();
   }
 
   void lock(String? id) {
     generation++;
+    if (id == null) {
+      for (final key in _binaryOpened.values) {
+        key.destroy();
+      }
+      _binaryOpened.clear();
+    } else {
+      _binaryOpened.remove(id)?.destroy();
+    }
     if (id == null) {
       for (final opened in _opened.values) {
         opened.key.destroy();

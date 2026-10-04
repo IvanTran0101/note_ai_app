@@ -9,14 +9,20 @@ import '../../application/attachments/attachment_draft_store.dart';
 import '../../application/attachments/attachment_input.dart';
 import '../../application/attachments/attachment_policy.dart';
 import '../../application/attachments/local_attachment_draft.dart';
+import '../../application/attachments/attachment_transfer.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
 import 'attachment_blob_store.dart';
 import 'attachment_byte_validation.dart';
 import 'attachment_chunk_cipher.dart';
 
+part 'attachment_cache_transfer.dart';
+part 'attachment_cache_reads.dart';
+part 'attachment_cache_cleanup.dart';
+
 /// Durable staging is encrypted before any transport is allowed to run.
-final class EncryptedAttachmentCache implements AttachmentDraftStore {
+final class EncryptedAttachmentCache
+    implements AttachmentDraftStore, AttachmentTransferCache {
   EncryptedAttachmentCache({
     required this.actorId,
     required this.store,
@@ -28,6 +34,9 @@ final class EncryptedAttachmentCache implements AttachmentDraftStore {
   final AttachmentChunkCipher cipher;
   final String Function() generateId;
   Future<void> _tail = Future.value();
+
+  Future<void> upgradeLegacyPackets(AttachmentBinding binding) =>
+      _upgradeLegacyPackets(binding);
 
   // One cache instance per account. Keep stage/link/cancel serialized so a
   // cancelled staging operation cannot recreate chunks after cleanup.
@@ -369,114 +378,25 @@ final class EncryptedAttachmentCache implements AttachmentDraftStore {
     await _removeStaging(id, 200);
   }
 
-  Future<void> _markCancelling(
-    String id,
-    String scope, {
-    AttachmentBinding? binding,
-  }) async {
-    await store.updateIndex((index) {
-      if (binding != null) _require(binding, NoteOperation.attachmentWrite);
-      final record = index[id];
-      if (record is! Map ||
-          record['scope'] != scope ||
-          record['phase'] == 'linked') {
-        throw StateError('Only an unlinked attachment can be cancelled.');
-      }
-      return {
-        ...index,
-        id: {...record, 'phase': 'cancelling'},
-      };
-    });
-  }
-
-  Stream<List<int>> _readChunks(
+  @override
+  Future<bool> isLinked(AttachmentBinding binding, String id) =>
+      linkedState(binding, id);
+  @override
+  Future<void> queueCancellation(AttachmentBinding binding, String id) =>
+      queueCancelState(binding, id);
+  @override
+  Future<List<String>> cancellationIds(AttachmentBinding binding) =>
+      cancelStateIds(binding);
+  @override
+  Future<void> finishCancellation(AttachmentBinding binding, String id) =>
+      finishCancelState(binding, id);
+  @override
+  Stream<List<int>> readAssociated(
     AttachmentBinding binding,
-    LocalAttachmentDraft draft,
-    int start,
-    int end, {
-    NoteOperation operation = NoteOperation.attachmentRead,
-  }) async* {
-    _require(binding, operation);
-    if (draft.sizeBytes <= 0 ||
-        draft.sizeBytes > 50 * AttachmentPolicy.mib ||
-        draft.chunkCount !=
-            (draft.sizeBytes + AttachmentPolicy.chunkBytes - 1) ~/
-                AttachmentPolicy.chunkBytes) {
-      throw const FormatException('Invalid attachment chunk manifest.');
-    }
-    if (start < 0 || end < start || end > draft.sizeBytes) {
-      throw RangeError('Invalid attachment range.');
-    }
-    for (
-      var chunk = start ~/ AttachmentPolicy.chunkBytes;
-      chunk < draft.chunkCount && chunk * AttachmentPolicy.chunkBytes < end;
-      chunk++
-    ) {
-      _require(binding, operation);
-      final index = await store.readIndex();
-      _require(binding, operation);
-      final record = index[draft.cacheId];
-      final phases = operation == NoteOperation.attachmentWrite
-          ? const {'staging', 'queued', 'linked'}
-          : const {'queued', 'linked'};
-      if (record is! Map ||
-          record['scope'] != _scope(binding) ||
-          record['sizeBytes'] != draft.sizeBytes ||
-          (record['phase'] != 'staging' &&
-              record['chunkCount'] != draft.chunkCount) ||
-          !phases.contains(record['phase'])) {
-        throw StateError('Attachment was cancelled or is unavailable.');
-      }
-      final packet = await store.readChunk(_chunk(draft.cacheId, chunk));
-      _require(binding, operation);
-      if (packet == null) {
-        throw StateError('Encrypted attachment chunk is missing.');
-      }
-      final plaintext = await cipher.open(
-        binding,
-        draft.cacheId,
-        chunk,
-        packet,
-        operation: operation,
-      );
-      try {
-        final base = chunk * AttachmentPolicy.chunkBytes;
-        final expected = draft.sizeBytes - base < AttachmentPolicy.chunkBytes
-            ? draft.sizeBytes - base
-            : AttachmentPolicy.chunkBytes;
-        if (plaintext.length != expected) {
-          throw const FormatException('Invalid encrypted attachment size.');
-        }
-        final from = start > base ? start - base : 0;
-        final to = end < base + plaintext.length
-            ? end - base
-            : plaintext.length;
-        _require(binding, operation);
-        // Returned chunks belong to the consumer; its preview/transport must
-        // release them on cancellation. The cache's decrypted buffer is wiped.
-        yield Uint8List.fromList(plaintext.sublist(from, to));
-      } finally {
-        plaintext.fillRange(0, plaintext.length, 0);
-      }
-    }
-  }
-
-  Future<void> _removeStaging(String id, int count) async {
-    for (var chunk = 0; chunk < count; chunk++) {
-      await store.removeChunk(_chunk(id, chunk));
-    }
-    await store.removeChunk('$id-meta');
-    await store.updateIndex((index) => {...index}..remove(id));
-  }
-}
-
-final class _DigestSink implements Sink<crypto.Digest> {
-  crypto.Digest? value;
-  @override
-  void add(crypto.Digest data) {
-    value = data;
-  }
-
-  @override
-  void close() {}
+    Attachment attachment,
+    ReadRemoteAttachment remote, {
+    int start = 0,
+    int? end,
+  }) =>
+      readAssociatedChunks(binding, attachment, remote, start: start, end: end);
 }

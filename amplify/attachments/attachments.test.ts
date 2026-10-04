@@ -189,3 +189,52 @@ test('HTTP binary206/auth/Range/method contract; no signed GET or grant URL', as
   assert.equal((await handleAttachments(e, 'stranger', f.service)).statusCode, 403);
   assert.equal((await handleAttachments({...e, requestContext: {http: {method: 'POST'}}, body: '{}'}, 'owner', f.service)).statusCode, 404);
 });
+
+test('cancel before begin is durable/idempotent and blocks late upload without reserving quota', async () => {
+  const f = await fixture();
+  assert.equal((await f.service.cancel('owner', 'owner', 'n', id)).phase, 'cancelled');
+  await f.service.cancel('owner', 'owner', 'n', id);
+  await assert.rejects(() => f.service.begin('owner', 'owner', 'n', f.m));
+  assert.equal(await f.attempts.read('owner', 'n', id), null);
+  assert.equal(f.db.get('owner', 'ATTACHMENT_QUOTA#n'), undefined);
+  await assert.rejects(() => f.service.cancel('stranger', 'owner', 'n', id));
+});
+
+test('begin wins cancellation race only until fresh cancellation retries and closes the attempt', async () => {
+  const f = await fixture();
+  f.db.beforeTransaction = () => {
+    const attempt = {...f.m, actorId: 'owner', ownerId: 'owner', targetNoteId: 'n',
+      protectionRevision: 0, protected: false, phase: 'uploading', generation: 1,
+      finalKey: 'final/race', createdAt: new Date().toISOString(), chunks: []};
+    f.db.put({ownerId: 'OWNER#owner', noteId: `ATTEMPT#${JSON.stringify(['n', id])}`, generation: 1, attempt});
+    f.db.put({ownerId: 'OWNER#owner', noteId: 'ATTACHMENT_QUOTA#n', generation: 1, count: 1, bytes: f.bytes.length});
+  };
+  await assert.rejects(() => f.service.cancel('owner', 'owner', 'n', id));
+  await f.service.cancel('owner', 'owner', 'n', id);
+  assert.equal((await f.attempts.read('owner', 'n', id))!.phase, 'cancelled');
+  assert.equal(f.db.get('owner', 'ATTACHMENT_QUOTA#n')!.count, 0);
+});
+
+test('fresh owner protection epoch continues immutable pending bytes, but old grants cannot', async () => {
+  const f = await fixture(); await f.staged();
+  const original = (await f.attempts.read('owner', 'n', id))!;
+  f.db.put({ownerId: 'OWNER#owner', noteId: 'PROTECTION#n', canonicalOwnerId: 'owner', targetNoteId: 'n',
+    enabled: true, revision: 1, verifier: 'test-verifier'});
+  const raw = 'z'.repeat(43);
+  await f.ps.putGrant({hash: hash(Buffer.from(raw)), actorId: 'owner', ownerId: 'owner', noteId: 'n',
+    revision: 1, operations: ['attachmentWrite'], issuedAt: Date.now(), expiresAt: Date.now() + 60000} as any);
+  await assert.rejects(() => f.service.verify('owner', 'owner', 'n', id, raw));
+  await assert.rejects(() => f.service.begin('owner', 'owner', 'n', f.m));
+  await f.service.begin('owner', 'owner', 'n', f.m, raw);
+  const renewed = (await f.attempts.read('owner', 'n', id))!;
+  assert.deepEqual(renewed.chunks, original.chunks);
+  assert.equal(renewed.finalKey, original.finalKey); assert.equal(renewed.protectionRevision, 1);
+  assert.equal((await f.service.verify('owner', 'owner', 'n', id, raw)).phase, 'verified');
+  f.db.put({ownerId: 'OWNER#owner', noteId: 'PROTECTION#n', canonicalOwnerId: 'owner', targetNoteId: 'n', enabled: true, revision: 2, verifier: 'new-test-verifier'});
+  await assert.rejects(() => f.service.cancel('owner', 'owner', 'n', id, raw));
+  const fresh = 'w'.repeat(43);
+  await f.ps.putGrant({hash: hash(Buffer.from(fresh)), actorId: 'owner', ownerId: 'owner', noteId: 'n',
+    revision: 2, operations: ['attachmentWrite'], issuedAt: Date.now(), expiresAt: Date.now() + 60000} as any);
+  await f.service.cancel('owner', 'owner', 'n', id, fresh);
+  assert.equal((await f.attempts.read('owner', 'n', id))!.phase, 'cancelled');
+});

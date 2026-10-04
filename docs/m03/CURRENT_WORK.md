@@ -32,10 +32,19 @@ Android attachment Ready claim yet. Client transport/cache/UI remain next.
 
 ## Current step
 
-Implement durable versioned staging/verification and canonical sync association
-first, with bounded tests. Then wire client transport/cache and UI. Every milestone
-needs fresh tests, Notion evidence and explicit-file commit/push. All M03 ticks
-remain pending until their named acceptance passes. AWS deployment/live evidence
+Client transport/cache now has bounded upload, sparse encrypted remote Range,
+durable cancellation intent and Ready after server association. Binary DEK is
+independently wrapped inside the M05 envelope and atomically rewrapped with
+protection changes; v1 packets migrate before administration. Fresh VM attachment
++security75/75 and Chrome13/13 passed, including offline enable/change/disable,
+restart, legacy conversion, failed key CAS and remote reset denial. Backend83/83
+and TypeScript passed with cancel-before-begin and fresh-epoch retry coverage.
+This is adapter/source acceptance; IndexedDB/UI/Android acceptance remains next.
+
+Next: abort/progress and cache reader lifecycle, bounded media/export adapters,
+then full UI and actual Chrome/Android QA. Complete IndexedDB, retry/lost-ACK and
+cleanup matrix before major milestone acceptance. Every milestone needs fresh
+tests, Notion evidence and explicit-file commit/push. AWS deployment/live evidence
 is separate; no operator credentials/deployment is assumed.
 
 ## Runtime continuity

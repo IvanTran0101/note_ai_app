@@ -20,11 +20,11 @@ export class AttachmentUseCases {
     if (!n || n.deletedAt !== null) throw new NoteSecurityError('denied');
     return {a, n};
   }
-  private async bound(actor: string, owner: string, note: string, id: string, grant?: string) {
+  private async bound(actor: string, owner: string, note: string, id: string, grant?: string, currentEpoch = true) {
     const {a, n} = await this.authority(actor, owner, note, 'attachmentWrite', grant);
     const attempt = await this.attempts.read(owner, note, attemptId(id));
     if (!attempt || attempt.actorId !== actor || attempt.ownerId !== owner || attempt.targetNoteId !== note) throw new AttachmentError('denied');
-    if (attempt.protectionRevision !== a.revision || attempt.protected !== a.enabled) throw new AttachmentError('stale');
+    if (currentEpoch && (attempt.protectionRevision !== a.revision || attempt.protected !== a.enabled)) throw new AttachmentError('stale');
     return {a, n, attempt};
   }
   async begin(actor: string, owner: string, note: string, input: unknown, grant?: string) {
@@ -33,6 +33,13 @@ export class AttachmentUseCases {
     const old = await this.attempts.read(owner, note, id);
     if (old) {
       if (old.actorId !== actor || JSON.stringify(fileMetadata(old)) !== JSON.stringify(m)) throw new AttachmentError('invalid');
+      // Owner's fresh authority can continue the same immutable payload after
+      // password administration. Linked/unlinked objects are never rebound.
+      if ((old.protectionRevision !== a.revision || old.protected !== a.enabled) &&
+          ['uploading', 'verifying', 'verified'].includes(old.phase) && !n.attachments?.some(x => x.id === id)) {
+        await this.attempts.save(old, {...old, protected: a.enabled, protectionRevision: a.revision,
+          phase: old.phase === 'verifying' ? 'uploading' : old.phase, generation: old.generation + 1}, a, n.revision);
+      }
       return this.status(actor, owner, note, id, grant);
     }
     const next: Attempt = {...m, id, actorId: actor, ownerId: owner, targetNoteId: note,
@@ -42,7 +49,7 @@ export class AttachmentUseCases {
     return this.status(actor, owner, note, id, grant);
   }
   async status(actor: string, owner: string, note: string, id: string, grant?: string) {
-    const {attempt} = await this.bound(actor, owner, note, id, grant);
+    const {attempt} = await this.bound(actor, owner, note, id, grant, false);
     return {id: attempt.id, phase: attempt.phase, chunkCount: chunkCount(attempt),
       completedChunks: attempt.chunks.length, ...(attempt.descriptor ? {attachment: attempt.descriptor} : {})};
   }
@@ -107,7 +114,13 @@ export class AttachmentUseCases {
     return this.status(actor, owner, note, id, grant);
   }
   async cancel(actor: string, owner: string, note: string, id: string, grant?: string) {
-    const {a, n, attempt} = await this.bound(actor, owner, note, id, grant);
+    const {a, n} = await this.authority(actor, owner, note, 'attachmentWrite', grant);
+    const attempt = await this.attempts.read(owner, note, attemptId(id));
+    if (!attempt) {
+      await this.attempts.cancelMissing(owner, note, id, a, n.revision);
+      return {id, phase: 'cancelled'};
+    }
+    if (attempt.actorId !== actor || attempt.ownerId !== owner || attempt.targetNoteId !== note) throw new AttachmentError('denied');
     if (attempt.phase === 'linked' || n.attachments?.some(x => x.id === id)) throw new AttachmentError('stale');
     if (attempt.phase !== 'cancelled' && attempt.phase !== 'unlinked') {
       await this.attempts.save(attempt, {...attempt, phase: 'cancelled', generation: attempt.generation + 1}, a, n.revision);

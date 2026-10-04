@@ -37,6 +37,7 @@ class EncryptedSyncStore
   EncryptedSyncStore(String accountId, this.backing)
     : codec = EncryptedStateCodec(LocalSyncAccountNamespace(accountId));
   final EncodedAccountStore backing;
+  Future<void> Function(String reference)? beforeAttachmentProtectionChange;
   final EncryptedStateCodec codec;
   Future<void> _tail = Future<void>.value();
   Future<SecretKey> attachmentKey(AttachmentBinding binding) => _enqueue(
@@ -53,7 +54,30 @@ class EncryptedSyncStore
           note.share?.isActive == false) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
       }
-      return codec.attachmentKey(binding);
+      if (codec.hasAttachmentKey(binding)) return codec.attachmentKey(binding);
+      SecretKey? result;
+      await _mutate((current) async {
+        result = await codec.attachmentKey(binding);
+        return current;
+      });
+      return result!;
+    },
+  );
+  Future<SecretKey> attachmentLegacyKey(AttachmentBinding binding) => _enqueue(
+    () async {
+      final state = await _read();
+      final note = state.notes
+          .where((n) => n.identity == binding.note)
+          .firstOrNull;
+      if (note == null ||
+          !note.contentAvailable ||
+          note.protection != binding.protection ||
+          (note.share?.accessRevision ?? 0) != binding.accessRevision ||
+          note.isDeleted ||
+          note.share?.isActive == false) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+      }
+      return codec.attachmentRootKey(binding);
     },
   );
 
@@ -139,20 +163,35 @@ class EncryptedSyncStore
   });
 
   @override
-  Future<NoteProtection> enableLocal(String id, String password) =>
-      _localProtection(id, null, password, enable: true);
-  @override
-  Future<NoteProtection> changeLocal(String id, String current, String next) =>
-      _localProtection(id, current, next, enable: true);
-  @override
-  Future<NoteProtection> disableLocal(String id, String current) =>
-      _localProtection(id, current, null, enable: false);
+  Future<NoteProtection> enableLocal(String id, String password) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _localProtection(id, null, password, enable: true);
+  }
 
   @override
-  Future<void> seal(String id, String password, NoteProtection p) =>
-      _enqueue(() async {
-        await _mutate((state) => codec.seal(state, id, password, p));
-      });
+  Future<NoteProtection> changeLocal(
+    String id,
+    String current,
+    String next,
+  ) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _localProtection(id, current, next, enable: true);
+  }
+
+  @override
+  Future<NoteProtection> disableLocal(String id, String current) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _localProtection(id, current, null, enable: false);
+  }
+
+  @override
+  Future<void> seal(String id, String password, NoteProtection p) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _enqueue(() async {
+      await _mutate((state) => codec.seal(state, id, password, p));
+    });
+  }
+
   @override
   Future<void> unlock(
     String id,
@@ -171,16 +210,23 @@ class EncryptedSyncStore
     String oldPassword,
     String newPassword,
     NoteProtection p,
-  ) => _enqueue(() async {
-    await _mutate(
-      (state) => codec.rewrap(state, id, oldPassword, newPassword, p),
-    );
-  });
+  ) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _enqueue(() async {
+      await _mutate(
+        (state) => codec.rewrap(state, id, oldPassword, newPassword, p),
+      );
+    });
+  }
+
   @override
-  Future<void> disable(String id, String password, NoteProtection p) =>
-      _enqueue(() async {
-        await _mutate((state) => codec.disable(state, id, password, p));
-      });
+  Future<void> disable(String id, String password, NoteProtection p) async {
+    await beforeAttachmentProtectionChange?.call(id);
+    return _enqueue(() async {
+      await _mutate((state) => codec.disable(state, id, password, p));
+    });
+  }
+
   @override
   Future<void> observeProtection(String id, NoteProtection p) =>
       _enqueue(() async {

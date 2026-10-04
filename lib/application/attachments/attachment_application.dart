@@ -5,11 +5,15 @@ import '../../domain/notes/note.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart';
 import '../notes/note_application.dart';
+import '../notes/note_access.dart';
 import 'attachment_binding.dart';
 import 'attachment_draft_store.dart';
 import 'attachment_input.dart';
 import 'attachment_policy.dart';
 import 'local_attachment_draft.dart';
+import 'attachment_transfer.dart';
+
+part 'attachment_application_read.dart';
 
 /// The remote adapter must reuse draft.cacheId as its idempotent attempt ID,
 /// verify bytes server-side, and return an immutable verified descriptor.
@@ -31,6 +35,10 @@ final class AttachmentApplicationService {
     required this.upload,
     required this.now,
     this.requestSync,
+    this.remoteRead,
+    this.remoteCancel,
+    this.isAssociated,
+    this.progress = const Stream.empty(),
   });
 
   final INoteRepository notes;
@@ -40,6 +48,10 @@ final class AttachmentApplicationService {
   final UploadAttachment upload;
   final DateTime Function() now;
   final RequestNoteSync? requestSync;
+  final ReadRemoteAttachment? remoteRead;
+  final CancelRemoteAttachment? remoteCancel;
+  final Future<bool> Function(AttachmentBinding, String)? isAssociated;
+  final Stream<AttachmentProgress> progress;
   final Map<String, Future<NoteDto>> _uploads = {};
   final Set<String> _cancelled = {};
 
@@ -74,7 +86,6 @@ final class AttachmentApplicationService {
     if (note.id != binding.note.noteId ||
         note.ownerId != binding.note.ownerId ||
         note.protection != binding.protection ||
-        note.contentRevision != binding.contentRevision ||
         note.share != null &&
             note.share!.accessRevision != binding.accessRevision) {
       throw StateError('The canonical attachment note changed.');
@@ -150,13 +161,19 @@ final class AttachmentApplicationService {
   Stream<List<int>> readLocal(
     String noteId,
     String cacheId, {
+    int start = 0,
     int? end,
   }) async* {
     final binding = await _capture(noteId);
     await _fresh(binding);
     final draft = await drafts.load(binding, cacheId);
     _requireOwner(binding);
-    await for (final chunk in drafts.read(binding, draft, end: end)) {
+    await for (final chunk in drafts.read(
+      binding,
+      draft,
+      start: start,
+      end: end,
+    )) {
       _requireOwner(binding);
       yield chunk;
     }
@@ -166,6 +183,16 @@ final class AttachmentApplicationService {
   Future<List<LocalAttachmentDraft>> pending(String noteId) async {
     final binding = await _capture(noteId);
     await _fresh(binding);
+    if (drafts case final AttachmentTransferCache cache) {
+      for (final id in await cache.cancellationIds(binding)) {
+        try {
+          await remoteCancel?.call(binding, id);
+          if (remoteCancel != null) await cache.finishCancellation(binding, id);
+        } on Object {
+          _requireOwner(binding);
+        }
+      }
+    }
     await drafts.recoverIncomplete(binding);
     _requireOwner(binding);
     final ids = await drafts.pendingIds(binding);
@@ -217,7 +244,9 @@ final class AttachmentApplicationService {
       _requireDescriptor(binding, draft, linked.single);
       // A previous local commit may have succeeded before marking the cache.
       // Recover it without uploading or appending another descriptor.
-      await drafts.markLinked(binding, cacheId);
+      if (isAssociated == null || await isAssociated!(binding, cacheId)) {
+        await drafts.markLinked(binding, cacheId);
+      }
       _requireOwner(binding);
       requestSync?.call(binding.actorId);
       return NoteDto.fromDomain(note);
@@ -235,11 +264,13 @@ final class AttachmentApplicationService {
       );
     }
     _requireAttempt(binding, cacheId);
-    final verified = await upload(
-      binding,
-      draft,
-      () => drafts.read(binding, draft),
-    );
+    final verified = await upload(binding, draft, () async* {
+      await for (final chunk in drafts.read(binding, draft)) {
+        _requireAttempt(binding, cacheId);
+        yield chunk;
+        _requireAttempt(binding, cacheId);
+      }
+    });
     _requireAttempt(binding, cacheId);
     _requireDescriptor(binding, draft, verified);
     final updated = await notes.updateById(
@@ -270,7 +301,7 @@ final class AttachmentApplicationService {
     note = updated;
     // Local Note + outbox is committed first. Failure here leaves a recoverable
     // queued draft, never a discarded file whose metadata was not saved.
-    await drafts.markLinked(binding, cacheId);
+    if (isAssociated == null) await drafts.markLinked(binding, cacheId);
     _requireOwner(binding);
     requestSync?.call(binding.actorId);
     return NoteDto.fromDomain(note);
@@ -298,7 +329,18 @@ final class AttachmentApplicationService {
       throw StateError('Remove the linked attachment through the note writer.');
     }
     _cancelled.add(_attemptKey(binding, cacheId));
-    await drafts.cancelLocal(binding, cacheId);
+    if (remoteCancel != null && drafts is AttachmentTransferCache) {
+      final cache = drafts as AttachmentTransferCache;
+      await cache.queueCancellation(binding, cacheId);
+      try {
+        await remoteCancel!(binding, cacheId);
+        await cache.finishCancellation(binding, cacheId);
+      } on Object {
+        _requireOwner(binding);
+      }
+    } else {
+      await drafts.cancelLocal(binding, cacheId);
+    }
     _requireOwner(binding);
   }
 
@@ -325,4 +367,13 @@ final class AttachmentApplicationService {
     requestSync?.call(binding.actorId);
     return NoteDto.fromDomain(updated);
   }
+
+  Stream<List<int>> read(
+    String reference,
+    Attachment attachment, {
+    int start = 0,
+    int? end,
+  }) => readAssociated(reference, attachment, start: start, end: end);
+  Future<bool> ready(String reference, Attachment attachment) =>
+      associatedReady(reference, attachment);
 }
