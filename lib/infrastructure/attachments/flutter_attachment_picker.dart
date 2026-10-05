@@ -5,12 +5,17 @@ import 'package:flutter/services.dart';
 import '../../application/attachments/attachment_input.dart';
 import '../../application/attachments/attachment_policy.dart';
 import 'attachment_picker_cleanup.dart';
+import 'attachment_camera_video.dart';
 
 /// Official plugin adapters; no storage permission, file path or plugin in Domain.
 final class FlutterAttachmentPicker {
-  FlutterAttachmentPicker({ImagePicker? imagePicker})
-    : _images = imagePicker ?? ImagePicker();
+  FlutterAttachmentPicker({
+    ImagePicker? imagePicker,
+    Future<XFile> Function(XFile)? prepareCameraVideo,
+  }) : _images = imagePicker ?? ImagePicker(),
+       _prepareCameraVideo = prepareCameraVideo ?? prepareAttachmentCameraVideo;
   final ImagePicker _images;
+  final Future<XFile> Function(XFile) _prepareCameraVideo;
 
   Future<List<AttachmentInput>> pick(AttachmentSource source) async {
     try {
@@ -57,7 +62,7 @@ final class FlutterAttachmentPicker {
         selected = file == null ? [] : [file];
       case AttachmentSource.cameraVideo:
         final file = await _images.pickVideo(source: ImageSource.camera);
-        selected = file == null ? [] : [file];
+        selected = file == null ? [] : await _prepareVideos([file]);
     }
     return _map(selected);
   }
@@ -69,7 +74,27 @@ final class FlutterAttachmentPicker {
     if (recovered.exception != null) {
       throw StateError('Camera selection could not be recovered.');
     }
-    return _map(recovered.files ?? []);
+    final files = recovered.files ?? [];
+    return _map(
+      recovered.type == RetrieveType.video
+          ? await _prepareVideos(files)
+          : files,
+    );
+  }
+
+  Future<List<XFile>> _prepareVideos(List<XFile> files) async {
+    final prepared = <XFile>[];
+    try {
+      for (final file in files) {
+        prepared.add(await _prepareCameraVideo(file));
+      }
+      return prepared;
+    } on Object {
+      for (final file in [...files, ...prepared]) {
+        await releaseAttachmentSelection(file.path);
+      }
+      rethrow;
+    }
   }
 
   Future<List<AttachmentInput>> _map(List<XFile> selected) async {

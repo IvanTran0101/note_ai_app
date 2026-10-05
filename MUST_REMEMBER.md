@@ -16,6 +16,15 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 camera continuation: e0411dc matching native invalid/cancel/gallery/photo
+QA passed. Camera's H264/AMR-NB fails strict H264/AAC; quality1 alone was ineffective
+and removed. Android camera-only bounded AMR->AAC adapter preserves H264 frames,
+uses owned scratch only/50MiB limits/90s deadline; normal validation/encrypted
+staging/authority checks unchanged. Actual Record video->Ready/export gives
+H264/AAC926703bytes; native Play14s/end and seek14->4s pass, scratch cleaned.
+Focused VM14/Chrome14 +analyzer3 clean3.5s; final Kotlin/APK build31.2s passed.
+Publish checkpoint/matching clean HEAD APK; final UI/full regression pending.
+
 06/10 continuation:71a2795 pushed and matching APK actual native protected TXT
 export hash passed. New note saved fully offline; native Documents multi-select
 JPG/TXT/27.2MiB MP4 stages before create ACK, survives cold reopen, renders image

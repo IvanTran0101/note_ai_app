@@ -66,6 +66,17 @@ bytes already authorized and delivered cannot be recalled.
 
 ## Evidence status
 
+Android camera captures with H264/AMR audio are normalized locally to H264/AAC-LC
+before byte validation and encrypted staging. The adapter accepts only app-owned
+camera scratch files, copies H264 samples without decoding, and converts only
+AMR/AMR-WB audio. Input/output are bounded to50MiB, sample-copy buffer1MiB plus
+codec buffers, deadline90s. Intermediate/partial files are cleaned; the returned
+selection uses the existing staging/rejection cleanup. Non-camera selections and
+other platforms are unchanged. Source uses Android's built-in
+[MediaCodec](https://developer.android.com/reference/android/media/MediaCodec)
+and [MediaMuxer](https://developer.android.com/reference/android/media/MediaMuxer).
+Actual emulator Record video/Ready/export/Play/seek acceptance is in UI_QA.md.
+
 Adapter/source receipts and actual Chrome/Android QA are tracked separately in
 CURRENT_WORK.md and the M03 Notion progress page. This document describes source
 behavior, not deployed AWS or full human UI acceptance.

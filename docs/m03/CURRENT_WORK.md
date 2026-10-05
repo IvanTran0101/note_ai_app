@@ -1,5 +1,36 @@
 # M03 completion — active work
 
+## Current continuation — camera capture compatibility
+
+Camera normalization now accepted in actual UI: Record video -> Done stages and
+uploads5th file926703bytes to Ready/All synced. Download/export ffprobe confirms
+H264/AAC1280x720/14.954356s; native Play reaches14s end, slider seeks14->4s while
+paused. Camera normalization scratch directory is empty after staging.
+Quality1 preset alone still returned AMR-NB, so that approach was removed.
+New platform adapter converts only AMR/AMR-WB audio in app-owned camera scratch
+to AAC-LC; H264 samples are copied, ordinary supported files untouched. Codec
+buffers plus1MiB sample-copy bound,50MiB input/output limit and90s deadline;
+activity destruction stops work, partial/intermediate files cleaned, returned
+copy uses existing selection cleanup. No new dependencies or cloud/policy changes.
+Camera/lost-video mapping5 regressions plus picker/pending VM14/Chrome14 pass;
+scoped analyzer3 items clean3.5s. Initial2 test filename failures were XFile
+fromData VM fixture behavior, corrected with explicit bounded fake file.
+Native resource acquisition cleanup strengthened after UI receipt; current
+Kotlin final source build31.2s passed; publish checkpoint then matching clean
+HEAD APK. Final M03 matrix pending.
+
+e0411dc pushed/remote verified; matching APK sourceDirty=false, SHA256
+588BAAA74DDBA60D3F26F145AA01F7C9DB9AFE06068D318D4F5CAB7DD307265E.
+Actual native invalid/oversize feedback is now visible; Documents cancellation
+returns quietly, Gallery PNG and camera JPG reach Ready, camera cancellation
+keeps existing four Ready files. Native camera video is H264/AMR-NB (own scratch
+video859919bytes/7.267944s verified by ffprobe), rejected by H264/AAC validation.
+Plugin ACTION_VIDEO_CAPTURE omits quality. MainActivity now requests quality1
+only for video capture, retaining output URI/grants/result/options; validator
+and all staging/security guards stay intact. Kotlin/APK and actual AAC/Ready
+retest pending. No accepted camera fix or total M03 claim yet.
+Owned backend26508 remains; Web stopped; emulator-5554 retained data/online.
+
 ## Current continuation — 06/10 offline create ACK UI QA
 
 Waiting-state fix29516d7 pushed/remote verified, VM29/Chrome29/scoped analyzer

@@ -1,5 +1,24 @@
 # M03 actual Chrome / Android QA
 
+## 06/10 — camera video and picker feedback
+
+e0411dc matching APK installed-r/cold start preserves all notes. Actual native
+fake-MIME and21MiB TXT reject with visible feedback; Documents cancel creates
+no draft/error. Gallery PNG and camera JPG72450bytes reach Ready. Camera cancel
+preserves the four Ready files. Camera video initially returned H264/AMR-NB;
+even explicit quality1 was ineffective, so the preset approach was removed.
+
+New Android camera-only AMR->AAC adapter tested by actual Record video/Done:
+5th file4def5093...mp4 reaches Ready/All synced. Deliberate native export is
+926703bytes; ffprobe H264/AAC1280x720/14.954356s. Real Play reaches14s end and
+paused slider seeks14->4s. Original camera selection and normalization scratch
+are cleaned after staging (owned scratch directory empty). UI screenshot
+m03-camera-normalized-ready/playing/seek.png and native-camera-normalized-export.mp4
+are ignored QA artifacts. This actual run used the working normalization APK,
+not a clean final HEAD APK; subsequent resource-failure cleanup still requires
+current build. VM14/Chrome14 over3 focused targets and analyzer3 clean3.5s.
+Do not infer full M03 completion from this camera checkpoint.
+
 ## 06/10/2026 — current71a native offline / large / remove
 
 Picker feedback fix: same-scope resumed native picker failures are presented
