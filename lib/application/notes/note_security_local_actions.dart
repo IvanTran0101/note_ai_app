@@ -104,18 +104,20 @@ extension LocalNoteSecurityActions on NoteSecurityService {
         ?.protectionChange;
     if (change == null) return;
     if (change.before.enabled) {
-      final lease = await gateway.unlock(id, cloudPassword, {
-        NoteOperation.manage,
-        NoteOperation.read,
-        NoteOperation.edit,
-        NoteOperation.delete,
-      });
+      final lease = await gateway.unlock(
+        id,
+        cloudPassword,
+        NoteOperation.values.toSet(),
+      );
       _live(captured, generation);
       if (lease.protection != change.before) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
       }
     }
-    await _unblock(id);
+    // An explicit owner retry can resend a protection mutation rejected by
+    // an older attachment wire route. Keep its stable ID and frozen payload;
+    // ordinary/shared invalid mutations still require their own resolution.
+    await _unblock(id, retryProtectionWire: true);
     _live(captured, generation);
     await syncNow?.call();
     _live(captured, generation);
@@ -180,12 +182,11 @@ extension LocalNoteSecurityActions on NoteSecurityService {
     if (remoteProtection?.enabled == true &&
         !gateway.hasAuthority(id, remoteProtection!, NoteOperation.manage)) {
       if (cloudPassword == null) return false;
-      final lease = await gateway.unlock(id, cloudPassword, {
-        NoteOperation.read,
-        NoteOperation.edit,
-        NoteOperation.delete,
-        NoteOperation.manage,
-      });
+      final lease = await gateway.unlock(
+        id,
+        cloudPassword,
+        NoteOperation.values.toSet(),
+      );
       _live(captured, generation);
       if (lease.protection != remoteProtection) return false;
     }

@@ -70,11 +70,16 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
   'NOTE_ACCESS_DENIED': SyncErrorCode.forbidden,
 };
 
-/// Encodes one client mutation as a `POST /sync/mutations` request body.
-///
-/// `payload` is present exactly when the mutation carries one, so a delete
-/// without content omits the key instead of sending `null`. The body includes
-/// `ownerId` only for a canonical shared update.
+/// One decision owns typed encoding and routing, including M05 mutations that
+/// carry attachment metadata without any labels.
+bool requiresSyncWireV2(SyncMutation mutation) =>
+    mutation.isLabel ||
+    mutation.payload?.includesLabels == true ||
+    mutation.payload?.includesAttachments == true;
+
+/// Encodes one client mutation with its matching negotiated wire version.
+/// `payload` is omitted for a content-free delete; `ownerId` identifies a
+/// canonical shared update, while the authenticated actor remains separate.
 Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
   if (mutation.isLabel) {
     return {
@@ -88,7 +93,7 @@ Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
     };
   }
   final Map<String, Object?> body = <String, Object?>{
-    if (mutation.payload?.includesLabels == true) ...{
+    if (requiresSyncWireV2(mutation)) ...{
       'wireVersion': 2,
       'entityType': 'note',
     },

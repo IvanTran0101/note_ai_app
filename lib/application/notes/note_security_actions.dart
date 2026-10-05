@@ -55,6 +55,7 @@ extension NoteSecurityActions on NoteSecurityService {
         NoteOperation.summary,
         NoteOperation.attachmentRead,
         if (note.ownerId == accountId) NoteOperation.attachmentWrite,
+        if (note.ownerId == accountId) NoteOperation.export,
       });
       _live(captured, generation);
       await vault.unlock(id, password, lease.protection, verifiedOnline: true);

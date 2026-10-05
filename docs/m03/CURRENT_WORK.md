@@ -200,3 +200,74 @@ unrelated macOS bytes72E079.../.playwright-cli/final_project.md. Native APK stil
 2930639: rebuild after remaining browser QA/full regression, install-r and
 retest Pending/protected/pickers/media/export. Full M03 remains in progress.
 Runtime Web57655/fixture7755; Chrome m04-owner export preview open.
+
+## Confirmed typed protection sync defect
+
+2d2e302 pushed/remote verified. Actual Chrome enable protection on the7-file
+note persisted local keys/content but failed422 at legacy protected-mutations.
+Client typed-wire decision only checked includesLabels, while the M05 payload
+includesAttachments and no labels. Added shared requiresSyncWireV2 mapper/route
+decision for attachments OR labels, including empty unlink. Legacy text-only
+shape unchanged. New5 route/encoding regressions + adapter/security VM47/47 pass.
+Full VM and all backend suites now running sequentially with Web stopped.
+Protected Pending retry on fresh browser, full Chrome and Android remain next.
+Web57655 stopped; fixture7755 remains, profiles/data preserved.
+
+## Fresh full regression / current runtime — continuation
+Full VM1190/4 configured skips, all15 backend files87/87 +tsc and dev config14/14 pass.
+Full Chrome123 compatible targets: app342 +storage408 +UI305 =1055 PASS/1 real-model skip/0fail.
+Real M03 IndexedDB and Web canonical encrypted store included; focused subsets not added.
+Analyzer26278 running; Web stopped, backend7755 live. Restart Web after analyzer,
+retest old local protected Pending with corrected typed v2 route; seven attachments
+must retain keys/data. Android still293 APK; incoming Ready rows uncertain until
+proper scroll/current build. Rebuild/install-r after Web acceptance. No full M03 yet.
+
+## Actual rejected protection recovery — new confirmed issue
+Web restarted94382; original QA-M03-Android local protected note retained7 Ready.
+Cold unlock works. Explicit Sync protection only clears forbidden/null blocks,
+not historical invalidMutation422; fresh edit remains behind blocked predecessor.
+Added bounded explicit owner protection+attachment retry; automatic unlock/ordinary/
+shared invalid writes stay blocked. Stable ID/payload/retryCount retained. New2
+regressions test explicit retry preservation and no automatic retry. Initial test
+load lacked extension library import (harness compilation), corrected. Focused
+VM89807 running; Web stopped exact scoped PID31328 (non-TTY stdin was closed).
+Actual native manifest7 confirmed after correct editor scroll; JPG/PNG render.
+No stale-manifest product defect. Backend7755 retains data. Restart Web with tty
+next, retest original rejected queue; commit/push then APK current source.
+
+## Resume after user-interrupted runtime
+New2 recovery regression fixtures corrected (extension import/secure storage mock/
+explicit typed-empty payload); focused VM11/11 and Chrome11/11 pass.
+Last CLI unlock/protection retry was interrupted; no actual pass or push claim.
+All runtimes stopped with interruption; restarted fixture7293 and Web76771 tty;
+emulator-5554 cold boots retained data, ADB reverse restored. Profiles remain
+output/m04-integration/chrome-owner and chrome-recipient. Graph transport closed,
+use exact source fallback with prior stale coverage. Current Git2d2e302, typed
+route/recovery/tests/docs uncommitted. Original macOS72E... preserved. Retest
+original local protected Pending, then publish accepted fix and build APK from R:.
+
+## Actual protection retry accepted; online-owner export scope issue
+Web cold reload/unlock now reaches All synced with7 Ready. Original rejected
+protection mutation completed during interrupted run; second ordinary text
+mutation was initially403 under a predecessor grant, then full-scope refresh
+retried successfully. Android independently receives protected metadata/unlocks
+QA-M03-Android; cached JPG renders. Protected WebP renders expected fixture.
+Cold online owner unlock lacks export scope, hiding Download on Android; added
+owner-only export request and full owner scopes for predecessor/protection
+retry, shared scope set stays read/summary/(editor edit)/attachmentRead only.
+New first-online-owner export regression; focused VM85756 running. Web76771
+stopped cleanly via q. Backend7293/emulator/data/profiles retained. Graph coverage
+connector recovered, index still stale2026-10-02; exact source read for flagged.
+Need focused Chrome/static acceptance, publish fixes then matching APK/new QA.
+
+## Ready to publish protection integration fix
+Focused current VM12/12 and Chrome12/12 pass; scoped analyzer7 items clean3.4s
+(after unused test import removed). Original Web protected queue reaches All
+synced7 Ready; Android independently receives/opens protected note. Cold owner
+export scope fix is source/unit accepted; native matching APK retest pending.
+Browser old loaded program stays live while Flutter tests/analyzer ran; dev
+WebSocket errors after stopping server are harness state, not product failures.
+Local synthetic Viewer share submitted for QA-M03-Android; inspect fresh dialog
+ACK before recipient/revoke acceptance. Source/UI QA incomplete, M09 deferred.
+Commit/push only owned5 Dart source +2 test +MUST/docs; preserve macOS72E...,
+.playwright-cli/final_project.md. Then build R: current debugAPK serially.

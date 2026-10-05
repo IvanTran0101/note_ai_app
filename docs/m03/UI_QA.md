@@ -56,3 +56,45 @@ view is open raised a disposed EngineFlutterView SDK assertion; cold reload
 restores runtime, without a demonstrated product cold-run failure. Public
 viewer cache contains viewer assets only; private bytes remain encrypted in IDB.
 Do not count successful adapter doubles as actual UI or deployed AWS evidence.
+
+## Protection/attachment integration — continuation
+
+Cold Web reload retains the seven linked files and the locally protected note.
+Unlock preserves its original body/metadata. A protection payload containing
+attachments but no labels incorrectly selected legacy v1 route/encoding, which
+correctly failed422 at the backend. One shared typed decision now selects v2 for
+attachments or labels, including empty unlink; legacy text-only bytes unchanged.
+
+The already-rejected mutation also remained blocked after explicit Sync
+protection, and a fresh edit queued behind it. Explicit owner protection retry
+now unblocks only invalid protection+attachment entries, preserving stable ID,
+frozen payload, createdAt, keys and retryCount. Automatic unlock and unrelated
+invalid writes remain blocked. Focused VM11/11 passes; Chrome/actual retry is
+pending. Initial new-test extension import, secure-storage mock and typed-empty
+fixture setup errors were corrected; these are test harness errors.
+
+Before this last recovery delta: full VM1190/4 configured skips, Chrome1055/1
+configured real-model skip over123 targets, backend87/87, tsc/dev config14/14 and
+analyzer clean103.2s. Do not add overlapping focused counts to these totals.
+
+Native incoming Ready rows are confirmed after scrolling the editor: this was
+viewport clipping, not a canonical sync defect. Old APK2930639 renders JPG/PNG
+with expected fixture pixels; final receipt still needs the corrected matching
+APK, native upload and the remaining protection/shared/offline/large matrix.
+
+## Retest after interrupted runtime
+
+The backend, emulator and browser processes were restarted with retained data,
+profiles and encrypted fixture state. Original protection mutation has ACKed:
+Web cold unlock reaches All synced with7 Ready and renders protected WebP;
+Android independently receives the locked metadata and unlocks the same note.
+Protected cached JPG is readable. UI image/text fixtures remain unchanged.
+
+The later text edit initially received403 under the predecessor's reduced
+scope, then full owner grant refresh retried successfully. Owner predecessor/
+explicit protection retry now requests the full owner set on the first grant.
+The first verified online owner unlock also omitted export, so Android had no
+Download controls: export is now requested only for canonical owner. Recipient
+scope set and domain policy still deny export/attachmentWrite. Focused VM12/12
+passes with a first-online-owner regression. Chrome12/static checks/native retest
+are pending. Native still2930639, not final corrected APK. No full M03 receipt.

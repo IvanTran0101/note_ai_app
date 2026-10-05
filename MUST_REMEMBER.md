@@ -16,6 +16,16 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+M03 actual QA continues after source2930639/fix2d2e302. Typed attachment-only
+protection routes/encoding and explicit owner retry of historical422 are fixed;
+cold Web now syncs the original protected note with7 Ready files. Owner online
+unlock/export and predecessor scopes have current focused VM12/Chrome12 and
+scoped analyzer acceptance. Full pre-recovery baseline VM1190/4 configured skips,
+Chrome1055/1 real-model skip, backend87/tsc/dev config14 are separate receipts.
+Read docs/m03/CURRENT_WORK.md/UI_QA.md: matching corrected Android APK and final
+protected/shared/offline/large/permission/remove matrix are still pending.
+Do not infer full M03 completion or AWS live acceptance from these checkpoints.
+
 Read this file first before every coding turn. M03 partial03b5326 is merged at
 cc4dc04 with M02/M05/M06. M04.1–8 are implemented and handed off under approved
 A/A/A; product source0919ccf, QA receipt3b789f5. See docs/m04/ACCEPTANCE.md,

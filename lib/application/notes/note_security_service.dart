@@ -263,7 +263,7 @@ final class NoteSecurityService implements INoteAccessGuard {
     }
   }
 
-  Future<void> _unblock(String id) async {
+  Future<void> _unblock(String id, {bool retryProtectionWire = false}) async {
     if (vault.hasRetainedCiphertext(id)) return;
     await store.update(
       (state) => LocalSyncState(
@@ -286,7 +286,13 @@ final class NoteSecurityService implements INoteAccessGuard {
                           _knownShares[id]!.isActive) &&
                   m.blocked &&
                   (m.lastError == null ||
-                      m.lastError == SyncErrorCode.forbidden)
+                      m.lastError == SyncErrorCode.forbidden ||
+                      retryProtectionWire &&
+                          m.lastError == SyncErrorCode.invalidMutation &&
+                          m.mutation.identityFor(accountId).ownerId ==
+                              accountId &&
+                          m.protectionChange != null &&
+                          m.payload?.includesAttachments == true)
               ? _unblocked(m)
               : m,
         ),

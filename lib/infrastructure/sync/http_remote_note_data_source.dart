@@ -186,7 +186,7 @@ final class HttpRemoteNoteDataSource
       final http.Response response = await _send(
         method: 'POST',
         uri: _endpoint(
-          mutation.isLabel || mutation.payload?.includesLabels == true
+          requiresSyncWireV2(mutation)
               ? mutation.ownerId != null
                     ? 'sync/v2/shared-mutations'
                     : mutation.protectionChange != null
