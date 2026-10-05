@@ -1,5 +1,20 @@
 # M03 actual Chrome / Android QA
 
+## 06/10 — final Web transfer/validation/removal receipt
+
+Large paused seek40->7.7517s reaches ready4 and expected painted frame.
+Own QA-M03-Transfer-Progress stages large MP4; actual numeric Uploading reaches
+22020096/28511765bytes. Network off -> Retry needed/error, durable local draft
+retained. Restore +explicit Retry reaches one Ready; body unchanged. Busy and
+single-file Flutter semantics merge the row into the panel, so exact-row wait
+timed out; fresh snapshot shows Ready. No exact retry PUT count is claimed.
+Web fake-MIME/oversize preserve existing file; oversize rejection advice visible.
+Keep leaves file; confirmed Remove and reopening give0 attachments, same body
+and All synced. Native actual cancel/permission and Chrome portable cancellation
+tests are separate; Web chooser Cancel is not claimed because CLI's upload
+command requires a nonempty file list. CLI modal/locator errors are harness data.
+M03.7 UI source/local accepted; final full regression/handoff remain pending.
+
 ## 06/10 — fresh-profile protected Web export / local-first password
 
 Current large Chrome export: interruption atSaving262144/28511765bytes returns

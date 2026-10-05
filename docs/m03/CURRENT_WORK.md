@@ -1,5 +1,24 @@
 # M03 completion — active work
 
+## Current continuation — M03.7 accepted, full final regression next
+
+Paused Chrome seek40->7.7517s eventually ready4 with expected painted frame.
+Own QA-M03-Transfer-Progress: choose large MP4, numeric Uploading22020096/
+28511765bytes; network off gives Retry needed/error and retains draft. Restore/
+explicit Retry reaches one Ready; body intact. Busy/single-file Flutter
+semantics merges row into panel, so exact-row helper timed out despite progress
+and Ready; fresh public DOM/snapshot confirms actual states. No product defect
+from locator/CLI modal/empty-upload harness errors. Fake-MIME/oversize Web
+selections preserve the existing Ready file; oversize feedback visible.
+Keep retains file; Confirm Remove/reopen yields0 attachments, same body/All synced.
+Web chooser cancellation via CLI is not claimed: CLI cannot submit an empty
+file list; native actual cancellation and portable Chrome widget tests cover it.
+Notion M03.1–7 +rubric17/17 source/local now checked. M03.8 full current VM/
+Chrome127/backend/static and M03.9 final setup/handoff still pending. Publish
+owned UI/docs checkpoint, close owned Chrome/Web, run Flutter serially on D:.
+Backend26508 preserves state; temporary diagnostic8799 must stop. No source
+changes since47, native47 code coverage retained. M09/AWS live remain separate.
+
 ## Current continuation — M03.6 accepted, publish then finish UI/regression
 
 Fresh Chrome protected TXT75bytes/current SHA passes. Actual offline05->06 /

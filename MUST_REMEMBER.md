@@ -16,6 +16,14 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 M03.7 source/local UI accepted: Chrome large export interrupt/retry/hash,
+Play and painted seek40->7.75s; upload interrupted22020096/28511765bytes retains
+draft, explicit retry reaches one Ready. Web fake-MIME/oversize preserve existing
+file; Keep/Remove +reopen leaves0 files, body intact/All synced. Native full
+picker/camera/PDF/offline/large/export matrix is recorded below. Notion M03.1–7
+and rubric17/17 source/local; full final VM/127-target Chrome/backend/static and
+handoff M03.8–9 still pending. AWS live and M09 stay separate/deferred.
+
 06/10 M03.6 source/local accepted: native47 online rotate/disable +offline
 protected WebP; fresh headed Chrome protected TXT export hash passes, Web
 offline rotate/disable/enable retains WebP, canonical reconnect/fresh05 unlock
