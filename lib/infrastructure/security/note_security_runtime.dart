@@ -208,8 +208,9 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
     if (session.sessionGeneration != binding.sessionGeneration ||
         accessGeneration != binding.accessGeneration ||
         operation != NoteOperation.attachmentRead &&
-            operation != NoteOperation.attachmentWrite ||
-        operation == NoteOperation.attachmentWrite &&
+            operation != NoteOperation.attachmentWrite &&
+            operation != NoteOperation.export ||
+        operation != NoteOperation.attachmentRead &&
             binding.actorId != binding.note.ownerId) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
     }

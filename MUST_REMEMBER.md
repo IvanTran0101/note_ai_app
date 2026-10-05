@@ -16,6 +16,19 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+Chrome tests on this Windows SDK must use the existing
+`python tool/run_chrome_tests.py --sdk C:/Users/meow/flutter --aggregate <targets>`.
+Direct `flutter test --platform chrome` currently gives CanvasKit404 and stripped
+test selectors before test main; those stuck loads are not acceptance receipts.
+The runner isolates two URL-handler fixes in a temporary tools overlay and leaves
+the installed SDK intact. Serialize Flutter commands and close only our QA
+browser/emulator runtimes if memory pressure blocks tests; retain profiles/data.
+Current d45e02a matching APK has8 Ready after retrying native old Pending PDF,
+owner Download controls and actual native protected MP4 play/seek. Recipient
+Viewer/Editor read-only WebP preview and active-preview revoke passed. A further
+confirmed runtime export-grant whitelist defect is being fixed/tested; actual
+protected Web/native export hash and remaining final M03 matrix still pending.
+
 M03 actual QA continues after source2930639/fix2d2e302. Typed attachment-only
 protection routes/encoding and explicit owner retry of historical422 are fixed;
 cold Web now syncs the original protected note with7 Ready files. Owner online

@@ -21,6 +21,18 @@ Run Flutter builds/tests sequentially: their shared native hook lock is exclusiv
 Keep VM/browser/Web runs on the same checkout spelling to avoid rebuilding host
 native assets merely from switching D:/R: paths.
 
+Chrome regression tests on the installed Windows SDK use the repository runner:
+
+```powershell
+python tool/run_chrome_tests.py --sdk C:/Users/meow/flutter --aggregate <test-files>
+```
+
+It normalizes two test-server URL handlers in a temporary tools copy without
+editing the installed SDK. Direct Flutter Chrome tests currently fail to load
+CanvasKit and select nested tests because of Windows filesystem separators;
+that loading state is not a test receipt. Choose browser-compatible targets;
+VM-only native adapters run in the regular VM suite and actual Android QA.
+
 Plain flutter run -d chrome does not start this backend or load .env; use the
 launcher or follow docs/m06/DEV_SETUP.md. Local fixture auth is synthetic and
 does not prove Cognito/S3 deployment behavior.

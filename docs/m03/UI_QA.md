@@ -1,5 +1,37 @@
 # M03 actual Chrome / Android QA
 
+## Latest actual checkpoint — d45e02a and export forwarding fix
+
+APK d45e02a built94.9s, sourceDirty=false, SHA256
+2120A0B13B0DC502F93B7F2505B612B3B0DD70AA6F6BA09D3207BD250342E8A8.
+Install-r/cold start retains prior data. Native auto-retries its original Pending
+PDF, so both clients show8 Ready with All synced. Cold owner Download buttons now
+exist. Native protected TXT preview shows expected75-byte content; body remains
+the original text plus the earlier typed-retry marker. Protected MP4 renders,
+actual Play advances time and the slider seeks from15s end to5s while paused.
+Native PDF Page1 renders its expected fixture text; Page2 receipt remains pending.
+
+Recipient Viewer and Editor render protected WebP through real UI but have no
+Add/Remove/Download controls. Role change and then revoke while preview is open
+close preview/mask note content. Prior revoked draft pending count1 remains;
+no new mutation or silent old-grant replay is demonstrated. Browser screenshot
+web-viewer-protected-webp-current.png records readable pixels before revoke.
+
+Confirmed export failure: the runtime transport whitelist accepted only
+attachmentRead/attachmentWrite, denying export even after the owner's verified
+online unlock. Added owner-only export forwarding, preserving session/access
+generation and M05 remote grant checks. New4 tests reproduce2 owner failures
+before fix; current focused VM22/22 and Chrome22/22 pass. Unicode HTTP test-response setup and a
+removed Response.encoding parameter and new-device masked metadata were test
+harness corrections. Scoped analyzer2 items clean66.5s. Actual new
+APK export/native/Web hash retest and final matrix remain next.
+
+Direct Flutter Chrome test launches are not receipts: existing Windows test-server
+URI bugs give CanvasKit404 and stripped test selector (confirmed browser console).
+Use tool/run_chrome_tests.py --aggregate isolated tools overlay, preserving the
+installed SDK. Own browser profiles and Android data survive temporary shutdown
+for resource pressure; do not classify idle uiautomator's stale XML as product UI.
+
 05/10/2026, final-tuankiet. In progress; this is not full M03 acceptance.
 Headed Chrome owner/recipient retain their IndexedDB profiles. Android
 emulator-5554 retains existing app data. Synthetic accounts and the local backend

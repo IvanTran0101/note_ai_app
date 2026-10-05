@@ -1,5 +1,38 @@
 # M03 completion — active work
 
+## Current continuation — export forwarding QA fix
+
+d45e02a is pushed/remote verified. Its APK built94.9s, sourceDirty=false,
+SHA2562120A0B13B0DC502F93B7F2505B612B3B0DD70AA6F6BA09D3207BD250342E8A8;
+install-r/cold start preserved data. Native old Pending PDF auto-ACKed, now8
+Ready across devices. Cold owner Download controls exist. Actual recipient
+Viewer/Editor attachment read-only, protected WebP render; role change/revoke
+while preview open closes preview/masks contents. Native protected TXT preview,
+MP4 actual play and seek15s end→5s, preserved full body verified in UI.
+
+Confirmed next bug: NoteSecurityRuntime.attachmentGrant denies export even
+for owner with export scope; protected remote/cache-miss export fails. Added
+owner-only export forwarding, preserving fresh session/access/protection checks.
+New4 regressions: protected/unprotected owner, recipient denial, lock/session
+fences. Corrected HTTP mock Unicode response with Response.bytes; red run2
+owner failures/2pass proves whitelist defect. Fixed VM22/22 pass across4 targets.
+Direct Flutter Chrome launches stuck at loading; diagnostics confirmed existing
+Windows test-server URI defects (CanvasKit404 and missing backslash selector).
+Use existing tool/run_chrome_tests.py --aggregate overlay; installed SDK unchanged.
+Own headed browser sessions closed (profiles retained), emulator stopped after
+native media receipt for resources. Correct runner Chrome22/22 and latest
+VM22/22 passed after initializing masked protection metadata in the new-device
+fixture before unlock. Scoped analyzer2 items clean66.5s. Publish this accepted
+fix batch, then matching APK install-r.
+Continue actual
+native/protected Web export hash. Final large/offline/picker/permission/remove
+matrix and full current regression remain pending. M03.2–5 source/local progress
+ticks now recorded; full UI/M03/AWS live not ticked. M09 deferred.
+
+Runtime fixture7293; Web98124 stopped; emulator stopped, keeps app/data. Browser
+m04-owner/m04-recipient closed for test resources. Open retained profiles after
+matching APK build and new Web startup. Unrelated macOS72E079... unchanged.
+
 User request05/10/2026 authorizes finishing M03 after accepted M04. Baseline
 final-tuankiet82625b0; retain unrelated macOS generated file, .playwright-cli/
 and final_project.md. R: aliases this D: checkout. M09 deferred.
