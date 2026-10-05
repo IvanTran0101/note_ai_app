@@ -1,6 +1,12 @@
 import '../../domain/notes/attachment.dart';
 import 'attachment_binding.dart';
 
+/// A staged file is durable, but upload must wait for the canonical create ACK.
+/// This is a normal local-first state, not a validation or transfer failure.
+final class AttachmentAwaitingNoteSync implements Exception {
+  const AttachmentAwaitingNoteSync();
+}
+
 final class AttachmentProgress {
   const AttachmentProgress(
     this.id,

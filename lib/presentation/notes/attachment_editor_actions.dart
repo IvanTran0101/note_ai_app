@@ -16,6 +16,8 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
     });
     try {
       await action(service);
+    } on AttachmentAwaitingNoteSync {
+      // The panel describes this normal Pending state without a false error.
     } on AttachmentSelectionFailure catch (failure) {
       if (_current(generation)) {
         _update(

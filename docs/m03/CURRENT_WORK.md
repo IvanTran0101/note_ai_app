@@ -1,5 +1,36 @@
 # M03 completion — active work
 
+## Current continuation — 06/10 offline create ACK UI QA
+
+71a2795 pushed/remote verified; matching APK35.8s/sourceDirty=false, SHA256
+8EEFF9312F50824B878AA29F689A3F4E83EA8EEC5C15BE7F23E3C4939E5B822B.
+Actual native protected TXT export75bytes matches original SHA2569D467DD5...;
+receipt under ignored output/playwright/m03-20261005. Runtime restart retains
+actor fixture/profiles/AVD data. Android new QA-M03-Native-Offline explicitly
+saved offline (Wi-Fi/data off, ADB reverses removed), Documents multi-select
+JPG/TXT/27.2MiB MP4 all Pending. Cold app restart retains all3; JPG pixels and
+40s large video render/play/seek offline. Reconnect/reverse8796+8797 and canonical
+create ACK then automatic retries yield3 Ready/All synced, body preserved.
+
+Confirmed presentation defect: pre-create ACK retry throws generic StateError,
+displaying invalid-file/quota advice despite a normal local-first waiting state.
+Added provider-neutral AttachmentAwaitingNoteSync, no-error catch and normal
+waiting notice. New focused2 regressions plus application/transfer VM29/Chrome29
+passed; scoped analyzer5 items clean58.4s. Publish accepted waiting-state fix;
+first VM invocation rebuilt Windows native hook (~216 compilation units), not a
+loading defect. No new fix acceptance/push until receipts. Native UI currently
+71a source; matching pending-notice APK after regression/push. Large full export,
+picker invalid/cancel/gallery/camera matrix continue. Native large export
+28,511,765bytes SHA25639E568A5... matches original; Keep/Remove TXT confirmation
+reaches2 Ready/All synced with body retained. Actual invalid native picker rejects
+bytes but feedback is absent after lifecycle; fix next. Chrome owner
+closed during TXT download; no browser/export receipt from that interrupted run.
+Graph connector recovered but generation02/10 stale/untracked for M03, exact
+source fallback used. `_agent_ops/` still absent; this file is continuity.
+
+Owned runtime fixture26508; Web11717 stopped to serialize Flutter testing.
+AVD emulator-5554 online with data preserved. M09 stays deferred.
+
 ## Current continuation — export forwarding QA fix
 
 d45e02a is pushed/remote verified. Its APK built94.9s, sourceDirty=false,

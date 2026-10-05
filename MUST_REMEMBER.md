@@ -16,6 +16,17 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 continuation:71a2795 pushed and matching APK actual native protected TXT
+export hash passed. New note saved fully offline; native Documents multi-select
+JPG/TXT/27.2MiB MP4 stages before create ACK, survives cold reopen, renders image
+and plays/seeks40s video offline. Reconnect yields3 Ready/All synced; large native
+export SHA256 matches original. Keep/Remove confirmation preserves body and
+unlink ACK gives2 Ready. Normal pre-create ACK waiting now has a typed status/
+notice instead of false file/quota error: fresh VM29/29 +Chrome29/29, scoped
+analyzer5 items clean58.4s; checkpoint being published. Actual invalid native picker rejects bytes but loses
+feedback through lifecycle; fix next. Matching notice APK/final expanded matrix
+and full current regression remain pending. See docs/m03/CURRENT_WORK.md.
+
 Chrome tests on this Windows SDK must use the existing
 `python tool/run_chrome_tests.py --sdk C:/Users/meow/flutter --aggregate <targets>`.
 Direct `flutter test --platform chrome` currently gives CanvasKit404 and stripped

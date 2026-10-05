@@ -26,9 +26,7 @@ extension _AttachmentApplicationUpload on AttachmentApplicationService {
     );
     if (note.contentRevision == 0) {
       requestSync?.call(binding.actorId);
-      throw StateError(
-        'Attachment is queued locally until the note create is acknowledged.',
-      );
+      throw const AttachmentAwaitingNoteSync();
     }
     _requireAttempt(binding, cacheId);
     final verified = await upload(binding, draft, () async* {

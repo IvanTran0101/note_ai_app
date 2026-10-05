@@ -1,5 +1,30 @@
 # M03 actual Chrome / Android QA
 
+## 06/10/2026 — current71a native offline / large / remove
+
+Matching71a APK SHA2568EEFF931... (build35.8s/sourceDirty=false), install-r
+preserves data. Protected cold owner TXT Download exports75bytes with original
+SHA2569D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0.
+
+New QA-M03-Native-Offline saved through UI with Wi-Fi/data disabled and no ADB
+reverse. Documents multi-select JPG/TXT/large MP4 gives3 encrypted Pending before
+server create ACK. Cold stop/start keeps all3 and body; JPG renders and large
+40s MP4 opens/plays/time advances/slider seeks offline. Reconnect/reverse8796+8797
+and create ACK followed by retries yield3 Ready/All synced. Actual native export
+of28,511,765byte MP4 yields SHA25639E568A52EF3FA09AD1A5BE83E4616CA32B9BD635720A6F26F331896FF3C7F8E,
+matching original. Ignored receipts: native-export-qa-video-large.mp4 and native
+offline screenshots under output/playwright/m03-20261005 / qa-20261004.
+
+Remove TXT: Keep retains file; Confirm Remove reaches2 Ready/All synced and body
+unchanged. Invalid chooser files create no extra attachment, but actual feedback
+is absent after native lifecycle transition; investigation continues. Pre-create
+ACK Pending retry incorrectly shows file/quota error. New typed waiting-state
+fix +normal notice has VM29/29 +Chrome29/29; scoped analyzer5 items clean58.4s.
+First widget harness blocked on a fake-clock queued read; corrected runAsync /
+state assertion, not a product defect. Native still71a pending matching new APK.
+Chrome protected TXT export attempt ended with browser closed; no acceptance
+claim from that interrupted attempt. Current final UI/Chrome regression pending.
+
 ## Latest actual checkpoint — d45e02a and export forwarding fix
 
 APK d45e02a built94.9s, sourceDirty=false, SHA256

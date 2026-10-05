@@ -42,6 +42,10 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
               'Images 10 MiB · MP4 50 MiB · PDF/TXT/CSV 20 MiB. Up to 10 files / 100 MiB per note.',
             ),
           if (_busy) const LinearProgressIndicator(),
+          if (_pending.isNotEmpty && widget.note.contentRevision == 0)
+            const Text(
+              'Saved on this device. Attachments will upload after this note syncs.',
+            ),
           if (_error != null)
             Text(
               _error!,
