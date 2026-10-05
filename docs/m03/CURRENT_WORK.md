@@ -1,5 +1,68 @@
 # M03 completion — active work
 
+## Current continuation — M03.6 accepted, publish then finish UI/regression
+
+Fresh Chrome protected TXT75bytes/current SHA passes. Actual offline05->06 /
+Lock /cachedUnlock06 /WebP; Disable06 /WebP; local Enable05; reconnect and
+explicit predecessor cloud05 then06 authorization drain all protection changes.
+Fresh online final05 unlock refreshes all8 Ready/All synced, body retained.
+Notion M03.6/progress +two collab integration/cache subchecks checked source/local.
+Native online rotate/disable and protected offline WebP receipt above completes
+current key/cache matrix with existing scoped guard/race regressions. AWS live
+separate. Publish owned docs/MUST checkpoint before next accepted UI milestone.
+
+Large Chrome download interrupt atSaving262144/28511765bytes -> canceled;
+network restore/reopen/full export28511765bytes SHA39E568A5... matches original;
+108 authenticated206 cloud ranges, max262144bytes. JS heap reported before
+502354755, first25s sampled max620992307, after630630232bytes; not all-process/
+native decode/whole-duration peak or leak proof. Plaintext chunk bounds separate.
+Actual public direct content request without auth401; authorized206.
+Large Play0->2.059s/40s; paused seek40->7.7517s, wait for painted frame next.
+Upload progress/failure/retry/remaining Web validation and final full tests next.
+
+## Current continuation — native47 large/offline receipt, Web next
+
+Web14852/fixture26508 live, AVD stopped gracefully preserving data. Original
+chrome-owner profile crashes at ANY download: protected app export and isolated
+public HTTP TXT both terminate Chrome (native c0000005 chrome.dll), while a
+fresh diagnostic profile downloads75bytes normally. Disable-GPU trial did not
+fix the old profile. Keep old profile/drafts intact; use new owned
+output/m04-integration/chrome-m03-final-owner for uncached/cloud export +offline
+password lifecycle. No accepted protected Web export yet; don't count old75byte
+file timestamp as current proof. Diagnostic server8799/session35202 is temporary.
+
+Clean47 APK cold offline reopen retained QA-M03-Wait-Notice body/JPG Pending;
+reconnect gave create ACK then Ready/All synced, normal waiting notice cleared.
+Native47 large MP4 actual Play advanced to19/40s; paused slider sought8/40s.
+OS memory samples (debug emulator, not peak/whole-file/leak proof): baseline
+PSS458853/RSS557540KiB; initialized video PSS501496/RSS607804; actual Play
+PSS502349/RSS609328; immediately after closing PSS510367/RSS618084. Native
+codec/frame/runtime overhead is included; bounded-range/chunk tests are separate.
+Native original eight-file note online rotate05->06/Lock/Unlock06 succeeds,
+WebP still renders. Disable06/actual WebP also passes; restoring05 protection
+before headed Chrome. Final Web and full127-target Chrome/
+VM/backend/static acceptance still pending. No source changed since47.
+
+## Current continuation — native offline and permission matrix
+
+47f7ad5 PDF checkpoint pushed/remote verified. Clean matching47 APK29.3s,
+sourceDirty=false, SHA25650709E7125B9BA4D9B5D546D6536B1139D89D5AE6555A48F4432F91E18D52F83.
+Protected native WebP still renders after offline unlock with Wi-Fi/data off and
+ADB reverse removed. No password changed: native composition localFirst=kIsWeb
+keeps password administration online; Web password local-first remains mandatory.
+Do not treat unavailable native offline admin as an M03 regression or silently
+expand M05. Online/native and local-first/Web rotate/disable cache QA remain.
+Actual system Camera denied: prompt/Don't allow -> clear Camera error -> Dismiss
+returns same note, no crash/file/error; original granted permission and flags
+restored. Existing source/widget denied feedback tests are a separate receipt.
+Notion rubric9/17 now checked including denied/no-crash; M03.1–5 consistent.
+Fresh new QA-M03-Wait-Notice saved fully offline, JPG Pending and normal
+'Saved on this device...after this note syncs' notice, no file/quota error.
+Matching47 APK install-r/cold offline reopen currently in progress; then restore
+network/reverses and confirm create ACK/Ready. Backend26508 alive; Web stopped.
+Full Chrome inventory is now127 targets: original123 +runtime export +pending
+note +camera video +PDF controls. Full final VM/Chrome/backend/analyze pending.
+
 ## Current continuation — native PDF navigation
 
 2ec1abf camera fix pushed/remote verified; matching clean HEAD APK9.8s, SHA256

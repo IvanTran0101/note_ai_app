@@ -16,6 +16,16 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 M03.6 source/local accepted: native47 online rotate/disable +offline
+protected WebP; fresh headed Chrome protected TXT export hash passes, Web
+offline rotate/disable/enable retains WebP, canonical reconnect/fresh05 unlock
+gives8 Ready/All synced. Old owned Chrome profile crashes on ANY download,
+including public TXT outside app; keep its data/drafts, new QA profile is
+output/m04-integration/chrome-m03-final-owner. Current large Chrome download
+interrupt/retry/hash and direct unauthenticated401 passed; Play/seek/UI upload
+progress plus final127 Chrome/VM/backend/static matrix still being completed.
+M03.7–9 and AWS live remain pending. Read docs/m03/CURRENT_WORK.md/PROGRESS.md.
+
 06/10 PDF continuation: camera2ec1abf pushed, clean HEAD APK9.8s/sourceDirty=false.
 Native protected WebP passed. New explicit PDF Previous/Next/page count resolves
 nested editor scroll navigation; actual Page2 painted text, Page3 boundary,

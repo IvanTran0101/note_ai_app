@@ -1,5 +1,74 @@
 # M03 actual Chrome / Android QA
 
+## 06/10 — fresh-profile protected Web export / local-first password
+
+Current large Chrome export: interruption atSaving262144/28511765bytes returns
+canceled; restore network/reopen/retry downloads28511765bytes with correct name
+and SHA25639E568A52EF3FA09AD1A5BE83E4616CA32B9BD635720A6F26F331896FF3C7F8E.
+108 authenticated cloud206 responses, maxContent-Length262144; no credentials,
+identities, URLs or response bodies retained. Current public direct content
+request without auth401 versus authorized206. Actual Play0->2.059s/40s;
+paused seek40->7.7517s awaiting painted frame. Reported Chrome JS heap bytes:
+before502354755, first25s sample maximum620992307, final630630232. This excludes
+native/worker/GPU/whole-process allocations and is not a leak/whole-duration
+peak claim. Bounded plaintext chunks/source tests are separate evidence.
+
+Original owned Chrome QA profile crashes on any download, including an isolated
+public HTTP75byte TXT outside the app; native c0000005 in chrome.dll. Fresh
+diagnostic Chrome profile downloads that same fixture normally. GPU-off trial
+did not repair the old profile. Preserve its data/drafts; new owned
+chrome-m03-final-owner profile receives existing cloud notes. Actual uncached
+protected TXT export now downloads qa-text.txt75bytes, failure=null, current
+timestamp and original SHA2569D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0.
+
+Real browser context offline: Rotate05->06 commits local with1 pending, Lock/
+offlineUnlock06 opens cached WebP pixels. Disable06 commits local with2 pending
+and same WebP pixels render. Re-enable05 locally, reconnect; Sync protection
+with predecessor cloud05 then06 drains all queued protection changes to
+All synced. Fresh online final05 unlock refreshes all8 Ready, manifest/body
+retained. M03.6 source/local accepted; AWS live remains separate.
+Offline console errors are only expected ERR_INTERNET_DISCONNECTED, no uncaught
+application error. Screenshot offline-rotated-webp / offline-disable-webp.
+Initial disable-row harness used textContent on aria-labelled Flutter semantics,
+corrected to accessible-name locator; no product defect from that locator timeout.
+
+## 06/10 — matching47 cold offline and large playback
+
+Native47 online protection lifecycle: Change password05->06, Lock, online
+Unlock06 succeeds; cached WebP pixels still render. Disable06 succeeds and
+the same WebP renders unprotected. Eight-file manifest/body remain; re-enabled
+the original05 fixture protection before Chrome QA. Screenshots rotated-webp /
+disable-webp show actual expected pixels and security UI. Native offline admin
+was not exercised; existing composition restricts local-first admin to Web.
+
+Matching clean47 APK install-r/cold offline reopen keeps waiting-note body and
+JPG Pending with normal create-ACK notice. Reconnect gives Ready/All synced.
+Evidence m03-native-wait-notice-cold47 / ready47 screenshots.
+Large28,511,765byte video actual native47 Play advances19/40s and paused seek
+reaches8/40s (m03-native47-large-advanced / large-seek). Original offline Play/
+seek and full export checksum are recorded below on71a; no new export claimed.
+Debug emulator OS PSS/RSS samples inKiB: baseline458853/557540, initialized
+501496/607804, Play502349/609328, immediate close510367/618084. This includes
+native codecs/frame buffers/Flutter overhead and is neither peak/leak acceptance
+nor proof by itself of bounded loading. Chunk/range source tests supply that
+separate evidence. Memory logs remain ignored under output/m04-integration.
+
+## 06/10 — offline protected cache / denial / waiting notice
+
+Protected WebP renders after offline cached unlock with Wi-Fi/data disabled and
+ADB reverses removed. Native password admin is online in the existing kIsWeb
+composition; no native offline password change was performed. Web local-first
+password lifecycle actual receipt and native online rotate/disable remain next.
+
+Actual external Camera permission: original granted permission temporarily
+revoked for QA, prompt Don't allow -> clear Camera error -> Dismiss returns to
+same five-file note without crash or new attachment/error. Permission and flags
+restored exactly. API35 external camera reports cancellation, not an app-visible
+PlatformException; separate adapter/widget denied regressions cover that code.
+Native new note QA-M03-Wait-Notice saved offline; selected JPG Pending displays
+normal create-ACK waiting notice, no invalid-file error. Matching clean47 APK
+29.3s/sourceDirty=false is being installed-r for cold offline/reconnect receipt.
+
 ## 06/10 — native PDF navigation and active lock
 
 Corrected working APK27.1s, installed-r with retained data. Native PDF rendered
