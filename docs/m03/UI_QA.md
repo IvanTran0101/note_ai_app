@@ -1,5 +1,16 @@
 # M03 actual Chrome / Android QA
 
+## Current acceptance06/10 — M03.8 source/local
+
+All listed actual UI scenarios below are accepted with product source47f7ad5;
+later29e8e60 changes only QA documents, product tree identical. Final full
+regression at29: VM1213/4 configured skips, Chrome1075/1 configured skip across
+127 compatible targets, backend87/87, tsc/dev-config14 and full analyzer clean
+140.2s. See ACCEPTANCE.md for evidence levels/limits and all11 fixed defects.
+M03.9 source/setup publication and exact final HEAD APK refresh follow next;
+its external artifact/UI receipt is in the Notion progress page/local JSON.
+The dated pending statements below are historical checkpoint records.
+
 ## 06/10 — final Web transfer/validation/removal receipt
 
 Large paused seek40->7.7517s reaches ready4 and expected painted frame.

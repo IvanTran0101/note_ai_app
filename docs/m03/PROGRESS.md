@@ -2,7 +2,7 @@
 
 Source/local acceptance is distinct from leader AWS deployment/live acceptance.
 Current product source: 47f7ad5 (camera normalization, native PDF controls and
-all earlier M03 integration fixes); final full regression is pending.
+all earlier M03 integration fixes); final full regression at29e8e60 passed.
 
 | Milestone | Source/local status | Evidence |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ all earlier M03 integration fixes); final full regression is pending.
 | M03.5 private object/upload/association | Accepted | SDK/CDK/source/local87; exact actual export hashes |
 | M03.6 scoped access/key/cache | Accepted | UI_QA.md: owner/export, sharing/revoke, lock, Web offline/native online rotation |
 | M03.7 picker/media/transfer UI | Accepted | UI_QA.md: native full pickers/media; Web large progress/interruption/retry/hash/seek/remove |
-| M03.8 final regression/UI | In progress | Expanded127 Chrome targets; current VM/backend/static pending |
+| M03.8 final regression/UI | Accepted | VM1213/4 skips; Chrome1075/1 skip on127 targets; backend87, tsc/dev-config14/analyzer clean; actual UI_QA |
 | M03.9 handoff/remote | In progress | DEV_SETUP/MEDIA exist; final acceptance/handoff pending |
 | AWS deployment/live | Leader gate | DEV_SETUP.md; no deployment receipt |
 
@@ -27,5 +27,5 @@ https://app.notion.com/p/3e9f9c7a1aa080ec8394d4390367e266
 M09 remains deferred. Preserve old QA profiles/drafts and unrelated working files.
 Detailed continuation is CURRENT_WORK.md; actual UI evidence is UI_QA.md.
 
-Notion rubric17/17 source/local checked; M03.8–9 and AWS live gate still pending.
+Notion rubric17/17 and M03.1–8 source/local checked; M03.9 publication and AWS live gate still pending.
 M03.6 receipt pushed b395170; source remains47f7ad5, later commits document QA.

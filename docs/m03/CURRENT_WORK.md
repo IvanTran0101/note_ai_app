@@ -1,5 +1,30 @@
 # M03 completion — active work
 
+## Current continuation — M03.8 accepted, publish then close M03.9
+
+Full final29 regression PASS: VM1213/4 configured skips; Chrome1075/1 model skip
+across127 targets(353/412/310), backend87/87, tsc clean, dev-config14/14, analyzer
+No issues140.2s. Product unchanged since47, exact native47 QA accepted. Update
+Notion M03.8 +source/local V01–11, publish owned5 acceptance records explicitly.
+Then M03.9 handoff/closure/remote publication; build exact final HEAD from R:,
+install-r/start retained AVD and verify cross-device zero-file transfer note,
+protected fresh05 unlock/eight Ready/PDF Next. Record final artifact/UI externally
+on Notion and ignored provenance JSON without committing logs/profile/secrets.
+All Flutter regression processes ended; fixture26508 alive. Original macOS72E...
+bytes/.playwright-cli/final_project.md preserved. Do not start M09/deploy AWS.
+
+## Current continuation — final regression and handoff06/10
+
+At29e8e60 product source unchanged since47f7ad5. Fresh full VM1213 PASS/4
+configured skips; Chrome127 targets353+412+310=1075 PASS/1 configured model skip;
+all15 backend files87/87, tsc clean and dev config14/14. Final analyzer runs
+serially in50854. Runner cp1252 cannot print Node info glyph; ignored harness
+stdout UTF8/resume preserves accepted receipts at exact same HEAD. No source
+test failed. Draft ACCEPTANCE/HANDOFF created; finalize M03.8/9 Notion/docs/push,
+then final exact HEAD APK/install-r cross-device/protected/PDF smoke. Keep native
+and headed Web stopped until analyzer finishes. Backend26508 retained. Preserve
+macOS original72E079.../.playwright-cli/final_project.md. M09/AWS live separate.
+
 ## Current continuation — M03.7 accepted, full final regression next
 
 Paused Chrome seek40->7.7517s eventually ready4 with expected painted frame.

@@ -16,6 +16,19 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 M03.8 source/local accepted: final full VM1213/4 configured skips,
+Chrome1075/1 configured skip on127 targets, backend87/87, tsc/dev-config14 and
+full analyzer clean140.2s. Actual UI matrix uses matching47 source/native APK;
+29e8e60 product tree unchanged. Publish accepted M03.8 docs/Notion, then final
+M03.9 handoff/push/exact HEAD APK install-r smoke. M09/AWS live remain separate.
+
+06/10 final regression at29e8e60: VM1213/4 configured skips; Chrome1075/1
+configured skip across127 targets; backend87/87, tsc/dev-config14 clean. Final
+analyzer +source/setup/handoff publication +exact final HEAD native APK smoke
+remain next. No source changes since47f7ad5. See docs/m03/ACCEPTANCE.md,
+HANDOFF.md and CURRENT_WORK.md. Runner console-encoding exception is repaired
+in ignored QA harness; it is not a product failure. M09/AWS live stay separate.
+
 06/10 M03.7 source/local UI accepted: Chrome large export interrupt/retry/hash,
 Play and painted seek40->7.75s; upload interrupted22020096/28511765bytes retains
 draft, explicit retry reaches one Ready. Web fake-MIME/oversize preserve existing
