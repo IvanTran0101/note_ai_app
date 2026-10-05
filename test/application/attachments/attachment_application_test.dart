@@ -12,6 +12,7 @@ import 'package:note_ai_app/application/attachments/attachment_application.dart'
 import 'package:note_ai_app/application/attachments/attachment_binding.dart';
 import 'package:note_ai_app/application/attachments/attachment_draft_store.dart';
 import 'package:note_ai_app/application/attachments/attachment_input.dart';
+import 'package:note_ai_app/application/attachments/attachment_media.dart';
 import 'package:note_ai_app/application/attachments/local_attachment_draft.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
@@ -92,6 +93,28 @@ final class _Drafts implements AttachmentDraftStore {
   }
 }
 
+final class _MediaBridge implements AttachmentMediaBridge {
+  AttachmentMediaRequest? request;
+  final handle = _MediaHandle();
+  Completer<void>? wait;
+  @override
+  Future<AttachmentMediaHandle> open(AttachmentMediaRequest value) async {
+    request = value;
+    if (wait != null) await wait!.future;
+    return handle;
+  }
+}
+
+final class _MediaHandle implements AttachmentMediaHandle {
+  bool closed = false;
+  @override
+  Uri get uri => Uri.parse('http://127.0.0.1/transient');
+  @override
+  bool get exported => false;
+  @override
+  Future<void> close() async => closed = true;
+}
+
 final class _PanelAttachments implements AttachmentNotesController {
   _PanelAttachments(this.attachments);
   @override
@@ -135,13 +158,21 @@ void main() {
   late NoteRepository repository;
   late _Drafts drafts;
   late AttachmentApplicationService service;
+  late _MediaBridge media;
+  var readAborts = 0;
+  var exportAllowed = true;
   var actor = 'owner', allowed = true, uploads = 0, syncs = 0;
   var leaseGeneration = 0, sessionEpoch = 1, contentEpoch = 1;
   late UploadAttachment transport;
   setUp(() {
     actor = 'owner';
-    leaseGeneration = 0; sessionEpoch = 1; contentEpoch = 1;
+    leaseGeneration = 0;
+    sessionEpoch = 1;
+    contentEpoch = 1;
     allowed = true;
+    exportAllowed = true;
+    readAborts = 0;
+    media = _MediaBridge();
     uploads = 0;
     syncs = 0;
     store = FakeLocalSyncStore(
@@ -189,7 +220,7 @@ void main() {
         actorId: actor,
         note: NoteIdentity('owner', id),
         protection: const NoteProtection.unprotected(),
-        accessRevision: 1,
+        accessRevision: 0,
         sessionGeneration: sessionEpoch,
         contentRevision: contentEpoch,
         accessGeneration: leaseGeneration,
@@ -198,12 +229,34 @@ void main() {
         if (!allowed || binding.accessGeneration != leaseGeneration) {
           throw StateError('locked/session changed');
         }
+        if (operation == NoteOperation.export && !exportAllowed) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+        }
       },
       upload: (binding, file, openRead) => transport(binding, file, openRead),
       now: () => time,
       requestSync: (_) => syncs++,
+      mediaBridge: media,
+      cancelRemoteRead: (_, _) => readAborts++,
+      remoteRead: (_, _, {int start = 0, int? end}) =>
+          Stream.value([1, 2, 3, 4, 5].sublist(start, end)),
+      remoteExportRead: (_, _, {int start = 0, int? end}) =>
+          Stream.value([1, 2, 3, 4, 5].sublist(start, end)),
     );
   });
+  test(
+    'Native picker cancellation after a lifecycle lock has no false error',
+    () async {
+      await service.pickAndStage('note', () async {
+        allowed = false;
+        leaseGeneration++;
+        return [];
+      });
+      expect(drafts.queued, false);
+      expect(store.state.outbox, isEmpty);
+    },
+  );
+
   Future<void> stage() async {
     await service.stage(
       'note',
@@ -215,6 +268,81 @@ void main() {
       ),
     );
   }
+
+  test(
+    'Pending media is scoped; closing aborts reads but retains local draft',
+    () async {
+      await stage();
+      final handle = await service.openPendingMedia('note', draft);
+      expect(await media.request!.read(0, 5).expand((b) => b).toList(), [
+        104,
+        101,
+        108,
+        108,
+        111,
+      ]);
+      await handle.close();
+      await expectLater(
+        media.request!.authorize(),
+        throwsA(isA<NoteSecurityFailure>()),
+      );
+      expect(media.handle.closed, true);
+      expect(readAborts, 1);
+      expect(drafts.queued, true);
+      await handle.close();
+      expect(readAborts, 1);
+    },
+  );
+
+  test(
+    'Cancel while bridge is opening closes eventual handle and retains bytes',
+    () async {
+      await stage();
+      media.wait = Completer<void>();
+      final work = service.openPendingMedia('note', draft);
+      final assertion = expectLater(work, throwsA(isA<NoteSecurityFailure>()));
+      while (media.request == null) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      service.cancelMedia('note', draft.cacheId);
+      media.wait!.complete();
+      await assertion;
+      expect(media.handle.closed, true);
+      expect(readAborts, 1);
+      expect(drafts.queued, true);
+    },
+  );
+
+  test('Media guards fresh manifest, lock and separate export scope', () async {
+    await stage();
+    await service.retry('note', draft.cacheId);
+    exportAllowed = false;
+    await expectLater(
+      service.openExport('note', verified()),
+      throwsA(isA<NoteSecurityFailure>()),
+    );
+    expect(media.request, null);
+    final handle = await service.openMedia('note', verified());
+    expect(media.request!.exportFile, false);
+    await service.remove('note', draft.cacheId);
+    await expectLater(
+      media.request!.authorize(),
+      throwsA(isA<NoteSecurityFailure>()),
+    );
+    await handle.close();
+  });
+
+  test(
+    'An opened media capability cannot survive an access-generation change',
+    () async {
+      await stage();
+      final handle = await service.openPendingMedia('note', draft);
+      leaseGeneration++;
+      await expectLater(media.request!.authorize(), throwsStateError);
+      await handle.close();
+      expect(readAborts, 1);
+    },
+  );
 
   test(
     'stage is local-first; upload uses the fresh M02 atomic writer',
@@ -292,27 +420,44 @@ void main() {
     },
   );
 
-
-  test('unprotected picker can reacquire only a stable session after pause', () async {
-    await service.pickAndStage('note', () async {
-      leaseGeneration++;
-      return [AttachmentInput(fileName: 'hello.txt', mimeType: 'text/plain', sizeBytes: 5,
-        openRead: ([start, end]) => Stream.value([1]))];
-    });
-    expect(drafts.queued, isTrue);
-    expect(store.state.outbox, isEmpty);
-    expect(uploads, 0);
-  });
+  test(
+    'unprotected picker can reacquire only a stable session after pause',
+    () async {
+      await service.pickAndStage('note', () async {
+        leaseGeneration++;
+        return [
+          AttachmentInput(
+            fileName: 'hello.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+            openRead: ([start, end]) => Stream.value([1]),
+          ),
+        ];
+      });
+      expect(drafts.queued, isTrue);
+      expect(store.state.outbox, isEmpty);
+      expect(uploads, 0);
+    },
+  );
   for (final change in ['session', 'content', 'actor']) {
     test('picker cannot reacquire after $change changed', () async {
-      await expectLater(service.pickAndStage('note', () async {
-        leaseGeneration++;
-        if (change == 'session') sessionEpoch++;
-        if (change == 'content') contentEpoch++;
-        if (change == 'actor') actor = 'other';
-        return [AttachmentInput(fileName: 'hello.txt', mimeType: 'text/plain', sizeBytes: 5,
-          openRead: ([start, end]) => Stream.value([1]))];
-      }), throwsStateError);
+      await expectLater(
+        service.pickAndStage('note', () async {
+          leaseGeneration++;
+          if (change == 'session') sessionEpoch++;
+          if (change == 'content') contentEpoch++;
+          if (change == 'actor') actor = 'other';
+          return [
+            AttachmentInput(
+              fileName: 'hello.txt',
+              mimeType: 'text/plain',
+              sizeBytes: 5,
+              openRead: ([start, end]) => Stream.value([1]),
+            ),
+          ];
+        }),
+        throwsStateError,
+      );
       expect(drafts.queued, isFalse);
       expect(store.state.outbox, isEmpty);
     });
@@ -347,6 +492,49 @@ void main() {
     expect(store.state.outbox, isEmpty);
   });
 
+  test(
+    'selected provider copies release after stage and early denial',
+    () async {
+      var releases = 0;
+      AttachmentInput input() => AttachmentInput(
+        fileName: 'hello.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 5,
+        openRead: ([start, end]) => Stream.value([104, 101, 108, 108, 111]),
+        release: () async {
+          releases++;
+        },
+      );
+      await service.stage('note', input());
+      expect(releases, 1);
+      allowed = false;
+      await expectLater(service.stage('note', input()), throwsStateError);
+      expect(releases, 2);
+    },
+  );
+
+  test('changed picker actor releases every selected provider copy', () async {
+    var releases = 0;
+    AttachmentInput input() => AttachmentInput(
+      fileName: 'hello.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+      openRead: ([start, end]) => Stream.value([104, 101, 108, 108, 111]),
+      release: () async {
+        releases++;
+      },
+    );
+    await expectLater(
+      service.pickAndStage('note', () async {
+        actor = 'recipient';
+        return [input(), input()];
+      }),
+      throwsStateError,
+    );
+    expect(releases, 2);
+    expect(drafts.queued, false);
+  });
+
   test('local reader rechecks authority at stream completion', () async {
     await stage();
     final work = service.readLocal('note', draft.cacheId).listen((chunk) {
@@ -365,13 +553,20 @@ void main() {
       Future<void> settlePanel() async {
         // The repository fake schedules a zero-delay timer for each read.
         // Flush those timers even while the idle panel has no scheduled frame.
-        for (var i = 0; i < 10; i++) {
+        // The panel deliberately polls Pending/Ready every3s. pumpAndSettle
+        // cannot prove idleness of a periodic browser UI; advance bounded steps
+        // and assert that the actual transfer indicator has stopped instead.
+        for (var i = 0; i < 40; i++) {
           await tester.pump(const Duration(milliseconds: 10));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 2)),
+          );
         }
         await tester.runAsync(() async {
           await Future<void>.delayed(const Duration(milliseconds: 20));
         });
-        await tester.pumpAndSettle();
+        await tester.pump();
+        expect(find.byType(LinearProgressIndicator), findsNothing);
       }
 
       await tester.runAsync(stage);
@@ -468,7 +663,9 @@ void main() {
       await expectLater(stage(), throwsStateError);
       await expectLater(service.remove('note', 'anything'), throwsStateError);
       actor = 'owner';
-    leaseGeneration = 0; sessionEpoch = 1; contentEpoch = 1;
+      leaseGeneration = 0;
+      sessionEpoch = 1;
+      contentEpoch = 1;
       await stage();
       await service.retry('note', draft.cacheId);
       await expectLater(

@@ -1,6 +1,52 @@
 part of 'encrypted_attachment_cache.dart';
 
 extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
+  Future<void> prepareRemovalState(
+    AttachmentBinding binding,
+    Attachment attachment,
+  ) => _serialized(() async {
+    _require(binding, NoteOperation.attachmentWrite);
+    if (attachment.noteId != binding.note.noteId) {
+      throw StateError('Invalid removal identity');
+    }
+    await store.updateIndex((index) {
+      _require(binding, NoteOperation.attachmentWrite);
+      final record = index[attachment.id];
+      if (record is Map &&
+          (record['scope'] != _scope(binding) ||
+              record['sizeBytes'] != attachment.sizeBytes)) {
+        throw StateError('Invalid removal cache');
+      }
+      if (record is Map &&
+          {'remoteCancelling', 'remoteCancelled'}.contains(record['phase'])) {
+        return index;
+      }
+      return {
+        ...index,
+        attachment.id: {
+          'scope': _scope(binding),
+          'sizeBytes': attachment.sizeBytes,
+          'chunkCount': record is Map ? record['chunkCount'] : 0,
+          'phase': 'removing',
+        },
+      };
+    });
+  });
+
+  Future<List<String>> removalStateIds(AttachmentBinding binding) async {
+    _require(binding, NoteOperation.attachmentWrite);
+    final index = await store.readIndex();
+    _require(binding, NoteOperation.attachmentWrite);
+    return index.entries
+        .where(
+          (e) =>
+              (e.value as Map)['scope'] == _scope(binding) &&
+              (e.value as Map)['phase'] == 'removing',
+        )
+        .map((e) => e.key)
+        .toList();
+  }
+
   Future<bool> linkedState(AttachmentBinding binding, String id) async {
     _require(binding, NoteOperation.attachmentRead);
     final index = await store.readIndex();
@@ -21,7 +67,12 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
           final record = index[id];
           if (record is! Map ||
               record['scope'] != _scope(binding) ||
-              !{'queued', 'remoteCancelling'}.contains(record['phase'])) {
+              !{
+                'queued',
+                'removing',
+                'remoteCancelling',
+                'remoteCancelled',
+              }.contains(record['phase'])) {
             throw StateError('Invalid cancellation.');
           }
           chunks = record['chunkCount'] as int;
@@ -35,6 +86,18 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         }
         await store.removeChunk('$id-meta');
         _require(binding, NoteOperation.attachmentWrite);
+        await store.updateIndex((index) {
+          _require(binding, NoteOperation.attachmentWrite);
+          final record = index[id] as Map;
+          if (record['scope'] != _scope(binding) ||
+              record['phase'] != 'remoteCancelling') {
+            throw StateError('Invalid cancellation cleanup');
+          }
+          return {
+            ...index,
+            id: {...record, 'phase': 'remoteCancelled'},
+          };
+        });
       });
   Future<List<String>> cancelStateIds(AttachmentBinding binding) async {
     _require(binding, NoteOperation.attachmentWrite);
@@ -44,7 +107,10 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         .where(
           (e) =>
               (e.value as Map)['scope'] == _scope(binding) &&
-              (e.value as Map)['phase'] == 'remoteCancelling',
+              {
+                'remoteCancelling',
+                'remoteCancelled',
+              }.contains((e.value as Map)['phase']),
         )
         .map((e) => e.key)
         .toList();
@@ -57,7 +123,7 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         final entry = index[id];
         if (entry is! Map ||
             entry['scope'] != _scope(binding) ||
-            entry['phase'] != 'remoteCancelling') {
+            !{'remoteCancelling', 'remoteCancelled'}.contains(entry['phase'])) {
           throw StateError('Invalid cancellation ACK.');
         }
         await _removeStaging(id, entry['chunkCount'] as int);
@@ -94,7 +160,11 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         }
         final used = index.values.fold<int>(
           0,
-          (n, r) => n + ((r as Map)['sizeBytes'] as int),
+          (n, r) =>
+              n +
+              ((r as Map)['phase'] == 'remoteCancelled'
+                  ? 0
+                  : r['sizeBytes'] as int),
         );
         if (used + attachment.sizeBytes > AttachmentPolicy.maxCacheBytes) {
           throw StateError('Encrypted cache quota exceeded.');
@@ -166,7 +236,17 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
             operation: NoteOperation.attachmentRead,
           );
           _require(binding, NoteOperation.attachmentRead);
-          await store.writeChunk(_chunk(id, i), packet);
+          await _serialized(() async {
+            final index = await store.readIndex();
+            _require(binding, NoteOperation.attachmentRead);
+            final current = index[id];
+            if (current is! Map ||
+                current['scope'] != scope ||
+                !{'queued', 'linked', 'remote'}.contains(current['phase'])) {
+              throw StateError('Attachment cache was removed during read.');
+            }
+            await store.writeChunk(_chunk(id, i), packet);
+          });
         }
         _require(binding, NoteOperation.attachmentRead);
         if (bytes.length != chunkEnd - base) {

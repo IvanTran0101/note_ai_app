@@ -22,7 +22,10 @@ part 'attachment_cache_cleanup.dart';
 
 /// Durable staging is encrypted before any transport is allowed to run.
 final class EncryptedAttachmentCache
-    implements AttachmentDraftStore, AttachmentTransferCache {
+    implements
+        AttachmentDraftStore,
+        AttachmentTransferCache,
+        AttachmentRemovalCache {
   EncryptedAttachmentCache({
     required this.actorId,
     required this.store,
@@ -93,7 +96,9 @@ final class EncryptedAttachmentCache
       var used = 0, noteBytes = 0, noteCount = 0;
       for (final raw in index.entries) {
         final entry = Map<String, Object?>.from(raw.value as Map);
-        used += entry['sizeBytes'] as int;
+        if (entry['phase'] != 'remoteCancelled') {
+          used += entry['sizeBytes'] as int;
+        }
         if (entry['scope'] == scope &&
             {
               'staging',
@@ -391,6 +396,14 @@ final class EncryptedAttachmentCache
   @override
   Future<void> queueCancellation(AttachmentBinding binding, String id) =>
       queueCancelState(binding, id);
+  @override
+  Future<void> prepareRemoval(
+    AttachmentBinding binding,
+    Attachment attachment,
+  ) => prepareRemovalState(binding, attachment);
+  @override
+  Future<List<String>> removalIds(AttachmentBinding binding) =>
+      removalStateIds(binding);
   @override
   Future<List<String>> cancellationIds(AttachmentBinding binding) =>
       cancelStateIds(binding);

@@ -16,6 +16,8 @@ import 'attachment_store.dart';
 import 'encrypted_attachment_cache.dart';
 import 'http_attachment_upload.dart';
 import 'http_attachment_reader.dart';
+import 'attachment_media_bridge.dart';
+import '../../domain/notes/note_protection.dart';
 
 /// Account-scoped binary cache; uses the canonical Note writer and M05 key.
 /// Verified transport is composed only when the Note security API is configured.
@@ -105,6 +107,17 @@ final class AttachmentRuntime {
               client: security.client,
               allowLocalDev: local,
             );
+      final exportReader = uri == null
+          ? null
+          : HttpAttachmentReader(
+              baseUri: uri,
+              tokenProvider: security.tokenProvider,
+              grantHeader: security.attachmentGrant,
+              requireAccess: authority.requireAccess,
+              client: security.client,
+              allowLocalDev: local,
+              operation: NoteOperation.export,
+            );
       return AttachmentApplicationService(
         notes: notes,
         drafts: cache,
@@ -118,9 +131,16 @@ final class AttachmentRuntime {
         now: () => DateTime.now().toUtc(),
         requestSync: requestSync,
         remoteRead: reader?.read,
+        remoteExportRead: exportReader?.read,
+        mediaBridge: createAttachmentMediaBridge(),
+        cancelRemoteRead: (binding, id) {
+          reader?.cancel(binding, id);
+          exportReader?.cancel(binding, id);
+        },
         remoteCancel: uploader?.cancel,
         isAssociated: uploader?.linked,
         progress: progress.stream,
+        onReadProgress: progress.add,
       );
     });
   }

@@ -39,3 +39,10 @@ abstract interface class AttachmentTransferCache {
   Future<void> finishCancellation(AttachmentBinding binding, String id);
   Future<bool> isLinked(AttachmentBinding binding, String id);
 }
+
+/// A binary-only removal intent precedes the canonical Note writer. It prevents
+/// retry resurrection across a crash without creating another Note outbox.
+abstract interface class AttachmentRemovalCache {
+  Future<void> prepareRemoval(AttachmentBinding binding, Attachment attachment);
+  Future<List<String>> removalIds(AttachmentBinding binding);
+}

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../domain/notes/attachment.dart';
@@ -12,8 +13,13 @@ import 'attachment_input.dart';
 import 'attachment_policy.dart';
 import 'local_attachment_draft.dart';
 import 'attachment_transfer.dart';
+import 'attachment_media.dart';
 
 part 'attachment_application_read.dart';
+part 'attachment_application_media.dart';
+part 'attachment_application_upload.dart';
+part 'attachment_application_removal.dart';
+part 'attachment_application_local.dart';
 
 /// The remote adapter must reuse draft.cacheId as its idempotent attempt ID,
 /// verify bytes server-side, and return an immutable verified descriptor.
@@ -36,9 +42,13 @@ final class AttachmentApplicationService {
     required this.now,
     this.requestSync,
     this.remoteRead,
+    this.remoteExportRead,
+    this.mediaBridge,
+    this.cancelRemoteRead,
     this.remoteCancel,
     this.isAssociated,
     this.progress = const Stream.empty(),
+    this.onReadProgress,
   });
 
   final INoteRepository notes;
@@ -49,11 +59,18 @@ final class AttachmentApplicationService {
   final DateTime Function() now;
   final RequestNoteSync? requestSync;
   final ReadRemoteAttachment? remoteRead;
+  final ReadRemoteAttachment? remoteExportRead;
+  final AttachmentMediaBridge? mediaBridge;
+  final void Function(AttachmentBinding, String)? cancelRemoteRead;
   final CancelRemoteAttachment? remoteCancel;
   final Future<bool> Function(AttachmentBinding, String)? isAssociated;
   final Stream<AttachmentProgress> progress;
+  final void Function(AttachmentProgress)? onReadProgress;
   final Map<String, Future<NoteDto>> _uploads = {};
   final Set<String> _cancelled = {};
+  final Map<String, _AttachmentMediaLease> _mediaLeases = {};
+  final Map<String, Set<_AttachmentMediaLease>> _readLeases = {};
+  final Set<String> _cancellationDrains = {};
 
   Future<AttachmentBinding> _capture(String noteId) async {
     final binding = await captureBinding(noteId);
@@ -101,98 +118,29 @@ final class AttachmentApplicationService {
     return note;
   }
 
-  Future<LocalAttachmentDraft> stage(
-    String noteId,
-    AttachmentInput input,
-  ) async {
-    final binding = await _capture(noteId);
-    final note = await _fresh(binding);
-    AttachmentPolicy.validate(
-      fileName: input.fileName,
-      mimeType: input.mimeType,
-      sizeBytes: input.sizeBytes,
-      existing: note.attachments,
-    );
-    final draft = await drafts.stage(
-      binding,
-      input,
-      existing: note.attachments,
-    );
-    // A lock/session transition keeps durable ciphertext for a later retry,
-    // but does not expose an obsolete result to the old UI session.
-    _requireOwner(binding);
-    return draft;
-  }
-
-  /// Capture authority BEFORE opening a platform picker. A result from an old
-  /// account/lock session must never be staged under a freshly captured actor.
+  Future<LocalAttachmentDraft> stage(String noteId, AttachmentInput input) =>
+      _stage(noteId, input);
   Future<void> pickAndStage(
     String noteId,
-    Future<List<AttachmentInput>> Function() pick,
-  ) async {
-    var binding = await _capture(noteId);
-    await _fresh(binding);
-    final selected = await pick();
-    if (!binding.protection.enabled && selected.isNotEmpty) {
-      // Native picker pauses the Activity and locks M05 leases. An unprotected
-      // owner may reacquire live authority ONLY for the identical captured
-      // actor/session/resource/content/protection/access epochs.
-      final resumed = await _capture(noteId);
-      if (resumed.actorId != binding.actorId ||
-          resumed.note != binding.note ||
-          resumed.sessionGeneration != binding.sessionGeneration ||
-          resumed.protection != binding.protection ||
-          resumed.accessRevision != binding.accessRevision ||
-          resumed.contentRevision != binding.contentRevision) {
-        throw StateError('The picker authority changed.');
-      }
-      binding = resumed;
-    }
-    _requireOwner(binding);
-    for (final input in selected) {
-      final note = await _fresh(binding);
-      await drafts.stage(binding, input, existing: note.attachments);
-      _requireOwner(binding);
-    }
-  }
-
-  /// Bounded local preview; no raw key, grant or filesystem path reaches UI.
-  /// The original authority is rechecked for every chunk and at completion.
+    Future<List<AttachmentInput>> Function() pick, {
+    Future<void> Function()? resumeProtected,
+  }) => _pickAndStage(noteId, pick, resumeProtected: resumeProtected);
   Stream<List<int>> readLocal(
     String noteId,
     String cacheId, {
     int start = 0,
     int? end,
-  }) async* {
-    final binding = await _capture(noteId);
-    await _fresh(binding);
-    final draft = await drafts.load(binding, cacheId);
-    _requireOwner(binding);
-    await for (final chunk in drafts.read(
-      binding,
-      draft,
-      start: start,
-      end: end,
-    )) {
-      _requireOwner(binding);
-      yield chunk;
-    }
-    _requireOwner(binding);
-  }
+  }) => _readLocal(noteId, cacheId, start: start, end: end);
 
   Future<List<LocalAttachmentDraft>> pending(String noteId) async {
     final binding = await _capture(noteId);
     await _fresh(binding);
-    if (drafts case final AttachmentTransferCache cache) {
-      for (final id in await cache.cancellationIds(binding)) {
-        try {
-          await remoteCancel?.call(binding, id);
-          if (remoteCancel != null) await cache.finishCancellation(binding, id);
-        } on Object {
-          _requireOwner(binding);
-        }
+    if (drafts case final AttachmentRemovalCache cache) {
+      for (final id in await cache.removalIds(binding)) {
+        await _removeCaptured(binding, id);
       }
     }
+    _drainCancellations(binding);
     await drafts.recoverIncomplete(binding);
     _requireOwner(binding);
     final ids = await drafts.pendingIds(binding);
@@ -216,7 +164,6 @@ final class AttachmentApplicationService {
       binding.accessRevision,
       binding.protection.enabled,
       binding.protection.revision,
-      binding.contentRevision,
       cacheId,
     ]);
     final running = _uploads[key];
@@ -234,94 +181,6 @@ final class AttachmentApplicationService {
     }
   }
 
-  Future<NoteDto> _upload(AttachmentBinding binding, String cacheId) async {
-    final draft = await drafts.load(binding, cacheId);
-    _requireAttempt(binding, cacheId);
-    var note = await _fresh(binding);
-    _requireAttempt(binding, cacheId);
-    final linked = note.attachments.where((item) => item.id == cacheId);
-    if (linked.isNotEmpty) {
-      _requireDescriptor(binding, draft, linked.single);
-      // A previous local commit may have succeeded before marking the cache.
-      // Recover it without uploading or appending another descriptor.
-      if (isAssociated == null || await isAssociated!(binding, cacheId)) {
-        await drafts.markLinked(binding, cacheId);
-      }
-      _requireOwner(binding);
-      requestSync?.call(binding.actorId);
-      return NoteDto.fromDomain(note);
-    }
-    AttachmentPolicy.validate(
-      fileName: draft.fileName,
-      mimeType: draft.mimeType,
-      sizeBytes: draft.sizeBytes,
-      existing: note.attachments,
-    );
-    if (note.contentRevision == 0) {
-      requestSync?.call(binding.actorId);
-      throw StateError(
-        'Attachment is queued locally until the note create is acknowledged.',
-      );
-    }
-    _requireAttempt(binding, cacheId);
-    final verified = await upload(binding, draft, () async* {
-      await for (final chunk in drafts.read(binding, draft)) {
-        _requireAttempt(binding, cacheId);
-        yield chunk;
-        _requireAttempt(binding, cacheId);
-      }
-    });
-    _requireAttempt(binding, cacheId);
-    _requireDescriptor(binding, draft, verified);
-    final updated = await notes.updateById(
-      noteId: binding.note.noteId,
-      ownerId: binding.note.ownerId,
-      expectedAccountUserId: binding.actorId,
-      canCommit: () {
-        _requireAttempt(binding, cacheId);
-        return true;
-      },
-      change: (fresh) {
-        _requireNote(binding, fresh);
-        _requireAttempt(binding, cacheId);
-        final existing = fresh.attachments.where((item) => item.id == cacheId);
-        if (existing.isEmpty) {
-          AttachmentPolicy.validate(
-            fileName: draft.fileName,
-            mimeType: draft.mimeType,
-            sizeBytes: draft.sizeBytes,
-            existing: fresh.attachments,
-          );
-        }
-        fresh.addAttachment(verified, now().toUtc());
-        return fresh;
-      },
-    );
-    _requireOwner(binding);
-    note = updated;
-    // Local Note + outbox is committed first. Failure here leaves a recoverable
-    // queued draft, never a discarded file whose metadata was not saved.
-    if (isAssociated == null) await drafts.markLinked(binding, cacheId);
-    _requireOwner(binding);
-    requestSync?.call(binding.actorId);
-    return NoteDto.fromDomain(note);
-  }
-
-  void _requireDescriptor(
-    AttachmentBinding binding,
-    LocalAttachmentDraft draft,
-    Attachment verified,
-  ) {
-    if (verified.id != draft.cacheId ||
-        verified.noteId != binding.note.noteId ||
-        verified.fileName != draft.fileName ||
-        verified.mimeType != draft.mimeType ||
-        verified.sizeBytes != draft.sizeBytes ||
-        verified.sha256 != draft.sha256) {
-      throw StateError('Server descriptor does not match the staged attempt.');
-    }
-  }
-
   Future<void> cancel(String noteId, String cacheId) async {
     final binding = await _capture(noteId);
     final note = await _fresh(binding);
@@ -329,15 +188,11 @@ final class AttachmentApplicationService {
       throw StateError('Remove the linked attachment through the note writer.');
     }
     _cancelled.add(_attemptKey(binding, cacheId));
+    cancelMedia(noteId, cacheId);
     if (remoteCancel != null && drafts is AttachmentTransferCache) {
       final cache = drafts as AttachmentTransferCache;
       await cache.queueCancellation(binding, cacheId);
-      try {
-        await remoteCancel!(binding, cacheId);
-        await cache.finishCancellation(binding, cacheId);
-      } on Object {
-        _requireOwner(binding);
-      }
+      _drainCancellations(binding);
     } else {
       await drafts.cancelLocal(binding, cacheId);
     }
@@ -346,26 +201,7 @@ final class AttachmentApplicationService {
 
   Future<NoteDto> remove(String noteId, String attachmentId) async {
     final binding = await _capture(noteId);
-    _requireOwner(binding);
-    final updated = await notes.updateById(
-      noteId: binding.note.noteId,
-      ownerId: binding.note.ownerId,
-      expectedAccountUserId: binding.actorId,
-      canCommit: () {
-        _requireOwner(binding);
-        return true;
-      },
-      change: (fresh) {
-        _requireNote(binding, fresh);
-        fresh.removeAttachment(attachmentId, now().toUtc());
-        return fresh;
-      },
-    );
-    _requireOwner(binding);
-    // Server cleanup follows the authoritative manifest sync, not a speculative
-    // client-side S3 delete that could break another device's current snapshot.
-    requestSync?.call(binding.actorId);
-    return NoteDto.fromDomain(updated);
+    return _removeCaptured(binding, attachmentId);
   }
 
   Stream<List<int>> read(
@@ -376,4 +212,23 @@ final class AttachmentApplicationService {
   }) => readAssociated(reference, attachment, start: start, end: end);
   Future<bool> ready(String reference, Attachment attachment) =>
       associatedReady(reference, attachment);
+  Future<AttachmentMediaHandle> openMedia(
+    String reference,
+    Attachment attachment,
+  ) => _openMedia(reference, attachment: attachment);
+  Future<AttachmentMediaHandle> openPendingMedia(
+    String reference,
+    LocalAttachmentDraft draft,
+  ) => _openMedia(reference, draft: draft);
+  Future<AttachmentMediaHandle> openExport(
+    String reference,
+    Attachment attachment,
+  ) => _openMedia(reference, attachment: attachment, exportFile: true);
+  void cancelMedia(String reference, String attachmentId) {
+    final key = jsonEncode([reference, attachmentId]);
+    _mediaLeases[key]?.cancel();
+    for (final read in _readLeases[key] ?? <_AttachmentMediaLease>{}) {
+      read.cancel();
+    }
+  }
 }

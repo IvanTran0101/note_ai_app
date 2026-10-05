@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -25,6 +26,7 @@ final class HttpAttachmentReader {
     required this.requireAccess,
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
+    this.operation = NoteOperation.attachmentRead,
     bool allowLocalDev = false,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null {
@@ -37,7 +39,9 @@ final class HttpAttachmentReader {
         baseUri.userInfo.isNotEmpty ||
         baseUri.hasQuery ||
         baseUri.hasFragment ||
-        timeout <= Duration.zero) {
+        timeout <= Duration.zero ||
+        operation != NoteOperation.attachmentRead &&
+            operation != NoteOperation.export) {
       throw ArgumentError(
         'An HTTPS attachment API and positive timeout are required.',
       );
@@ -52,9 +56,20 @@ final class HttpAttachmentReader {
   final void Function(AttachmentBinding binding, NoteOperation operation)
   requireAccess;
   final Duration timeout;
+  final NoteOperation operation;
   final http.Client _client;
   final bool _ownsClient;
   bool _closed = false;
+  final _reads = <String, Set<Completer<void>>>{};
+
+  String _key(AttachmentBinding b, String id) =>
+      jsonEncode([b.actorId, b.note.key, id]);
+
+  void cancel(AttachmentBinding b, String id) {
+    for (final read in _reads[_key(b, id)] ?? <Completer<void>>{}) {
+      if (!read.isCompleted) read.complete();
+    }
+  }
 
   void _require(AttachmentBinding binding, Attachment attachment) {
     if (_closed) {
@@ -64,6 +79,12 @@ final class HttpAttachmentReader {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
     }
     requireAccess(binding, NoteOperation.attachmentRead);
+    if (operation == NoteOperation.export) {
+      if (binding.actorId != binding.note.ownerId) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+      }
+      requireAccess(binding, NoteOperation.export);
+    }
   }
 
   Uri _endpoint(AttachmentBinding binding, Attachment attachment) {
@@ -77,6 +98,7 @@ final class HttpAttachmentReader {
       queryParameters: {
         'ownerId': binding.note.ownerId,
         'objectVersion': attachment.objectVersion,
+        if (operation == NoteOperation.export) 'mode': 'export',
       },
     );
   }
@@ -107,14 +129,31 @@ final class HttpAttachmentReader {
     );
     final digest = _DigestSink();
     final hasher = crypto.sha256.startChunkedConversion(digest);
+    final key = _key(binding, attachment.id);
+    final cancel = Completer<void>();
+    (_reads[key] ??= {}).add(cancel);
+    void guard() {
+      _require(binding, attachment);
+      if (cancel.isCompleted) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+      }
+    }
+
     try {
       for (var offset = start; offset < stop;) {
         final next = (offset + AttachmentPolicy.chunkBytes < stop)
             ? offset + AttachmentPolicy.chunkBytes
             : stop;
-        final bytes = await _range(binding, attachment, offset, next);
+        final bytes = await _range(
+          binding,
+          attachment,
+          offset,
+          next,
+          guard,
+          cancel.future,
+        );
         try {
-          _require(binding, attachment);
+          guard();
           hasher.add(bytes);
           yield bytes;
         } catch (_) {
@@ -123,7 +162,7 @@ final class HttpAttachmentReader {
         }
         offset = next;
       }
-      _require(binding, attachment);
+      guard();
       hasher.close();
       if (start == 0 &&
           stop == attachment.sizeBytes &&
@@ -136,6 +175,9 @@ final class HttpAttachmentReader {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.network);
     } on Object {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+    } finally {
+      _reads[key]?.remove(cancel);
+      if (_reads[key]?.isEmpty ?? false) _reads.remove(key);
     }
   }
 
@@ -144,16 +186,18 @@ final class HttpAttachmentReader {
     Attachment attachment,
     int start,
     int end,
+    void Function() guard,
+    Future<void> cancel,
   ) async {
     for (var attempt = 0; attempt < 2; attempt++) {
-      _require(binding, attachment);
+      guard();
       final token = await tokenProvider(forceRefresh: attempt == 1)
           .timeout(timeout);
-      _require(binding, attachment);
+      guard();
       if (token == null || noteJwtSubject(token) != binding.actorId) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
       }
-      final grant = grantHeader(binding, NoteOperation.attachmentRead);
+      final grant = grantHeader(binding, operation);
       if (binding.protection.enabled &&
           (grant == null || !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(grant))) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
@@ -163,7 +207,8 @@ final class HttpAttachmentReader {
         method: 'GET',
         uri: _endpoint(binding, attachment),
         timeout: timeout,
-        requireAccess: () => _require(binding, attachment),
+        requireAccess: guard,
+        cancel: cancel,
         discard: (bytes) => bytes?.fillRange(0, bytes.length, 0),
         configure: (request) => request.headers.addAll({
           'Authorization': 'Bearer $token',
@@ -194,7 +239,7 @@ final class HttpAttachmentReader {
           var written = 0;
           try {
             await for (final chunk in response.stream.timeout(timeout)) {
-              _require(binding, attachment);
+              guard();
               if (written + chunk.length > bytes.length) {
                 throw const NoteSecurityFailure(
                   NoteSecurityFailureCode.unavailable,
@@ -203,7 +248,7 @@ final class HttpAttachmentReader {
               bytes.setRange(written, written + chunk.length, chunk);
               written += chunk.length;
             }
-            _require(binding, attachment);
+            guard();
             if (written != bytes.length) {
               throw const NoteSecurityFailure(
                 NoteSecurityFailureCode.unavailable,
@@ -223,6 +268,11 @@ final class HttpAttachmentReader {
 
   void close() {
     _closed = true;
+    for (final reads in _reads.values) {
+      for (final read in reads) {
+        if (!read.isCompleted) read.complete();
+      }
+    }
     if (_ownsClient) _client.close();
   }
 }

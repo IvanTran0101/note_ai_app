@@ -1,6 +1,17 @@
 part of 'attachment_application.dart';
 
 extension _AttachmentApplicationRead on AttachmentApplicationService {
+  void _requireSameReader(AttachmentBinding b, AttachmentBinding current) {
+    if (current.actorId != b.actorId ||
+        current.note != b.note ||
+        current.sessionGeneration != b.sessionGeneration ||
+        current.accessGeneration != b.accessGeneration ||
+        current.protection != b.protection ||
+        current.accessRevision != b.accessRevision) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+  }
+
   Future<AttachmentBinding> _readBinding(
     String reference,
     Attachment attachment,
@@ -30,8 +41,10 @@ extension _AttachmentApplicationRead on AttachmentApplicationService {
     Attachment attachment, {
     int start = 0,
     int? end,
+    bool exportFile = false,
   }) async* {
     final b = await _readBinding(reference, attachment);
+    if (exportFile) requireAccess(b, NoteOperation.export);
     Stream<List<int>> missing(
       AttachmentBinding _,
       Attachment _, {
@@ -42,42 +55,67 @@ extension _AttachmentApplicationRead on AttachmentApplicationService {
     }
 
     final cache = drafts;
+    final remote = exportFile ? remoteExportRead : remoteRead;
     final source = cache is AttachmentTransferCache
         ? (cache as AttachmentTransferCache).readAssociated(
             b,
             attachment,
-            remoteRead ?? missing,
+            remote ?? missing,
             start: start,
             end: end,
           )
-        : (remoteRead ?? missing)(b, attachment, start: start, end: end);
-    await for (final chunk in source) {
-      try {
-        final current = await _readBinding(reference, attachment);
-        if (current.actorId != b.actorId ||
-            current.note != b.note ||
-            current.sessionGeneration != b.sessionGeneration ||
-            current.accessGeneration != b.accessGeneration ||
-            current.protection != b.protection ||
-            current.accessRevision != b.accessRevision) {
-          throw const NoteSecurityFailure(
-            NoteSecurityFailureCode.sessionChanged,
-          );
-        }
-        requireAccess(b, NoteOperation.attachmentRead);
-      } on Object {
-        chunk.fillRange(0, chunk.length, 0);
-        rethrow;
+        : (remote ?? missing)(b, attachment, start: start, end: end);
+    final key = jsonEncode([reference, attachment.id]);
+    final lease = _AttachmentMediaLease(
+      () => cancelRemoteRead?.call(b, attachment.id),
+    );
+    (_readLeases[key] ??= {}).add(lease);
+    void guard() {
+      if (lease.cancelled) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
       }
-      yield chunk;
+      requireAccess(b, NoteOperation.attachmentRead);
+      if (exportFile) requireAccess(b, NoteOperation.export);
     }
-    requireAccess(b, NoteOperation.attachmentRead);
+
+    try {
+      var completed = start;
+      await for (final chunk in source) {
+        try {
+          final current = await _readBinding(reference, attachment);
+          _requireSameReader(b, current);
+          guard();
+          completed += chunk.length;
+          onReadProgress?.call(
+            AttachmentProgress(
+              attachment.id,
+              exportFile ? 'Saving' : 'Reading',
+              completed,
+              attachment.sizeBytes,
+            ),
+          );
+        } on Object {
+          chunk.fillRange(0, chunk.length, 0);
+          rethrow;
+        }
+        yield chunk;
+      }
+      guard();
+    } finally {
+      _readLeases[key]?.remove(lease);
+      if (_readLeases[key]?.isEmpty ?? false) _readLeases.remove(key);
+    }
   }
 
   Future<bool> associatedReady(String reference, Attachment attachment) async {
     final b = await _readBinding(reference, attachment);
     if (b.actorId != b.note.ownerId) return true;
     final cache = drafts;
+    if (cache is AttachmentRemovalCache &&
+        (await (cache as AttachmentRemovalCache).removalIds(b))
+            .contains(attachment.id)) {
+      return false;
+    }
     if (cache is AttachmentTransferCache &&
         await (cache as AttachmentTransferCache).isLinked(b, attachment.id)) {
       return true;

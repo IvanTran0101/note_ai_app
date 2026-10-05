@@ -160,6 +160,41 @@ extension _NoteDetailSecurity on NoteDetailPageState {
     }
   }
 
+  Future<void> _resumeProtectedAttachment(NoteDto selected) async {
+    final controller = _securityController,
+        service = _securityController?.noteSecurity;
+    if (!mounted ||
+        controller == null ||
+        service == null ||
+        _note?.identity != selected.identity ||
+        _note?.protectionRevision != selected.protectionRevision) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    if (_canRead) return;
+    final session = controller.sessionGeneration;
+    _update(() => _securityBusy = true);
+    try {
+      await showNoteSecurityDialog(
+        context: context,
+        service: service,
+        noteId: selected.reference,
+        action: NoteSecurityAction.unlock,
+        serverAvailable: controller.securityServerAvailable,
+        sessionEvents: controller.securityChanges,
+        isCurrent: () =>
+            mounted &&
+            controller.sessionGeneration == session &&
+            identical(controller.noteSecurity, service) &&
+            _note?.identity == selected.identity,
+      );
+      if (mounted && controller.sessionGeneration == session) {
+        await _readSecuredNote();
+      }
+    } finally {
+      if (mounted) _update(() => _securityBusy = false);
+    }
+  }
+
   Widget _securityPanel() {
     final controller = _securityController;
     Widget panel(bool pending) => NoteSecurityPanel(

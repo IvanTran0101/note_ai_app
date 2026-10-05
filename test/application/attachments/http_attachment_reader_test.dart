@@ -13,6 +13,8 @@ import 'package:note_ai_app/domain/notes/note_identity.dart';
 import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/attachments/http_attachment_reader.dart';
 
+import 'attachment_http_request_test.dart' show WaitingClient;
+
 String jwt(String actor) =>
     'header.${base64UrlEncode(utf8.encode(jsonEncode({'sub': actor})))}.signature';
 Attachment file(List<int> data, {String? checksum}) => Attachment(
@@ -67,6 +69,67 @@ Future<List<int>> collect(Stream<Uint8List> stream) async {
 }
 
 void main() {
+  test(
+    'explicit file close aborts headers; a later read receives a fresh lease',
+    () async {
+      final client = WaitingClient();
+      final b = binding(), attachment = file([1]);
+      final reader = HttpAttachmentReader(
+        baseUri: Uri.parse('https://api.example.test'),
+        tokenProvider: ({required forceRefresh}) async => jwt('actor'),
+        grantHeader: (_, _) => null,
+        requireAccess: (_, _) {},
+        client: client,
+      );
+      final assertion = expectLater(
+        collect(reader.read(b, attachment)),
+        throwsA(isA<NoteSecurityFailure>()),
+      );
+      await client.started.future;
+      reader.cancel(b, attachment.id);
+      await assertion;
+      expect(client.aborted, true);
+      reader.close();
+    },
+  );
+
+  test(
+    'owner export requires both scopes and uses a distinct backend mode',
+    () async {
+      final data = utf8.encode('abc'), operations = <NoteOperation>[];
+      final b = AttachmentBinding(
+        actorId: 'owner',
+        note: NoteIdentity('owner', 'note'),
+        protection: const NoteProtection.unprotected(),
+        accessRevision: 0,
+        sessionGeneration: 1,
+        contentRevision: 2,
+      );
+      final reader = HttpAttachmentReader(
+        baseUri: Uri.parse('https://api.example.test'),
+        tokenProvider: ({required forceRefresh}) async => jwt('owner'),
+        grantHeader: (_, op) {
+          expect(op, NoteOperation.export);
+          return null;
+        },
+        requireAccess: (_, op) => operations.add(op),
+        operation: NoteOperation.export,
+        client: MockClient((request) async {
+          expect(request.url.queryParameters['mode'], 'export');
+          return range(request, data);
+        }),
+      );
+      expect(await collect(reader.read(b, file(data))), data);
+      expect(
+        operations,
+        containsAll([NoteOperation.attachmentRead, NoteOperation.export]),
+      );
+      await expectLater(
+        collect(reader.read(binding(), file(data))),
+        throwsA(isA<NoteSecurityFailure>()),
+      );
+    },
+  );
   test(
     'large read uses bounded authenticated Ranges and the attachment scope',
     () async {

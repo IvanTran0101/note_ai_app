@@ -60,8 +60,9 @@ final class AttachmentSecurityAdapter {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
     }
     if (operation != NoteOperation.attachmentRead &&
-            operation != NoteOperation.attachmentWrite ||
-        operation == NoteOperation.attachmentWrite &&
+            operation != NoteOperation.attachmentWrite &&
+            operation != NoteOperation.export ||
+        operation != NoteOperation.attachmentRead &&
             binding.actorId != binding.note.ownerId) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
     }

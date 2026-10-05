@@ -191,6 +191,25 @@ test('HTTP binary206/auth/Range/method contract; no signed GET or grant URL', as
   assert.equal((await handleAttachments({...e, requestContext: {http: {method: 'POST'}}, body: '{}'}, 'owner', f.service)).statusCode, 404);
 });
 
+test('export intersects owner, attachmentRead and export scopes before and after bytes', async () => {
+  const f = await fixture(); const {attachment} = await f.linked();
+  assert.equal((await f.service.content('owner','owner','n',id,attachment.objectVersion,0,10,undefined,true)).bytes.length,10);
+  const now = new Date().toISOString();
+  f.db.put({...shareKey('owner','n','recipient'), share:{ownerId:'owner',noteId:'n',recipientId:'recipient',role:'editor',accessRevision:1,status:'active',sharedAt:now,updatedAt:now,revokedAt:null}});
+  await assert.rejects(() => f.service.content('recipient','owner','n',id,attachment.objectVersion,0,10,undefined,true), NoteSecurityError);
+  f.db.put({ownerId:'OWNER#owner',noteId:'PROTECTION#n',canonicalOwnerId:'owner',targetNoteId:'n',enabled:true,revision:1,verifier:'test'});
+  const raw = 'z'.repeat(43), grant = {hash:hash(Buffer.from(raw)),actorId:'owner',ownerId:'owner',noteId:'n',revision:1,operations:['attachmentRead'],issuedAt:Date.now(),expiresAt:Date.now()+60000};
+  await f.ps.putGrant(grant as any);
+  await assert.rejects(() => f.service.content('owner','owner','n',id,attachment.objectVersion,0,10,raw,true), NoteSecurityError);
+  const exportRaw = 'e'.repeat(43), bothRaw = 'b'.repeat(43);
+  await f.ps.putGrant({...grant,hash:hash(Buffer.from(exportRaw)),operations:['export']} as any);
+  await assert.rejects(() => f.service.content('owner','owner','n',id,attachment.objectVersion,0,10,exportRaw,true), NoteSecurityError);
+  await f.ps.putGrant({...grant,hash:hash(Buffer.from(bothRaw)),operations:['attachmentRead','export']} as any);
+  assert.equal((await f.service.content('owner','owner','n',id,attachment.objectVersion,0,10,bothRaw,true)).bytes.length,10);
+  f.objects.onRead = () => f.db.put({ownerId:'OWNER#owner',noteId:'PROTECTION#n',canonicalOwnerId:'owner',targetNoteId:'n',enabled:true,revision:2,verifier:'test'});
+  await assert.rejects(() => f.service.content('owner','owner','n',id,attachment.objectVersion,0,10,bothRaw,true), NoteSecurityError);
+});
+
 test('cancel before begin is durable/idempotent and blocks late upload without reserving quota', async () => {
   const f = await fixture();
   assert.equal((await f.service.cancel('owner', 'owner', 'n', id)).phase, 'cancelled');

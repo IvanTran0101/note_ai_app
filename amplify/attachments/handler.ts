@@ -21,10 +21,12 @@ export async function handleAttachments(e: Event, actor: string, service: Attach
     const owner = identifier(e.queryStringParameters?.ownerId ?? actor), grant = unlockGrantOf(e);
     const method = e.requestContext.http.method;
     if (action === 'content' && method === 'GET') {
+      const mode = e.queryStringParameters?.mode;
+      if (mode !== undefined && mode !== 'export') throw new AttachmentError('invalid');
       const range = /^bytes=(\d+)-(\d+)$/.exec(header(e, 'range') ?? '');
       if (!range || Number(range[2]) - Number(range[1]) + 1 > CHUNK_BYTES) throw new AttachmentError('invalid');
       const start = Number(range[1]), end = Number(range[2]) + 1;
-      const r = await service.content(actor, owner, note, id, identifier(e.queryStringParameters?.objectVersion), start, end, grant);
+      const r = await service.content(actor, owner, note, id, identifier(e.queryStringParameters?.objectVersion), start, end, grant, mode === 'export');
       try { return {statusCode: 206, isBase64Encoded: true, headers: {
         'content-type': r.descriptor.mimeType, 'content-length': String(r.bytes.length),
         'content-range': `bytes ${start}-${end - 1}/${r.descriptor.sizeBytes}`, 'accept-ranges': 'bytes',

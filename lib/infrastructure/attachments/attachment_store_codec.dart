@@ -25,6 +25,8 @@ abstract final class AttachmentStoreCodec {
               'linked',
               'cancelling',
               'remoteCancelling',
+              'remoteCancelled',
+              'removing',
               'remote',
             }.contains(record['phase'])) {
           throw const FormatException();

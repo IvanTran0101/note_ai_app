@@ -6,13 +6,20 @@ import 'package:flutter/material.dart';
 
 import '../../application/attachments/attachment_application.dart';
 import '../../application/attachments/attachment_input.dart';
+import '../../application/attachments/attachment_media.dart';
+import '../../application/attachments/attachment_transfer.dart';
 import '../../application/attachments/local_attachment_draft.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_application.dart';
+import '../../domain/notes/attachment.dart';
+import 'attachment_media_surface.dart';
 import 'notes_application_controller.dart';
+part 'attachment_editor_actions.dart';
+part 'attachment_editor_rows.dart';
+part 'attachment_editor_preview.dart';
 
-/// Local Pending flow. Binary actions never replace the editor's text draft.
-/// No cloud Ready claim is made until the verified backend is available.
+/// Binary actions use Application and the canonical writer. An ordinary text
+/// ACK does not cancel a transfer or replace the editor's unsaved text.
 final class AttachmentEditorPanel extends StatefulWidget {
   const AttachmentEditorPanel({
     super.key,
@@ -20,338 +27,176 @@ final class AttachmentEditorPanel extends StatefulWidget {
     required this.controller,
     required this.security,
     required this.enabled,
+    this.onChanged,
+    this.onResumeProtected,
+    this.onBeforePick,
   });
   final NoteDto note;
   final AttachmentNotesController controller;
   final SecuredNotesController? security;
   final bool enabled;
+  final ValueChanged<NoteDto>? onChanged;
+  final Future<void> Function()? onResumeProtected;
+  final Future<bool> Function()? onBeforePick;
   @override
   State<AttachmentEditorPanel> createState() => _AttachmentEditorPanelState();
 }
 
 final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
-  StreamSubscription<void>? _subscription;
+  StreamSubscription<void>? _securityEvents;
+  StreamSubscription<AttachmentProgress>? _progressEvents;
+  Timer? _refresh;
   List<LocalAttachmentDraft> _pending = const [];
-  Uint8List? _preview;
-  LocalAttachmentDraft? _previewDraft;
-  bool _busy = false;
+  final _progress = <String, AttachmentProgress>{};
+  final _ready = <String>{}, _working = <String>{};
+  final _retryAfter = <String, DateTime>{};
+  bool _loading = false;
   String? _error;
   int _generation = 0;
+  _AttachmentItem? _previewItem;
+  Uint8List? _preview;
+  AttachmentMediaHandle? _media;
+  AttachmentApplicationService? _previewService;
+  String? _previewReference;
+  bool _exporting = false;
+  NoteAccessCapabilities get _capabilities =>
+      widget.security?.capabilitiesFor(widget.note) ??
+      const NoteAccessCapabilities();
   bool get _allowed =>
-      widget.enabled &&
-      widget.note.contentAvailable &&
-      widget.security?.capabilitiesFor(widget.note).canManage == true;
+      widget.enabled && widget.note.contentAvailable && _capabilities.canRead;
+  bool get _canWrite => _allowed && _capabilities.canManage;
+  bool get _busy => _working.isNotEmpty;
+  String get _reference => widget.note.reference;
   AttachmentApplicationService? get _service => widget.controller.attachments;
+  bool _current(int generation) =>
+      mounted && _allowed && generation == _generation;
+  void _update(VoidCallback change) {
+    if (mounted) setState(change);
+  }
 
   @override
   void initState() {
     super.initState();
     _listen();
     unawaited(_reload());
-  }
-
-  void _clearPreview() {
-    final bytes = _preview;
-    if (bytes != null) {
-      // Image.memory also owns a decoded global-cache entry. Evict it when
-      // closing/locking, in addition to wiping our encoded plaintext buffer.
-      unawaited(
-        ResizeImage(MemoryImage(bytes), width: 1024, height: 1024).evict(),
-      );
-      bytes.fillRange(0, bytes.length, 0);
-    }
-    _preview = null;
-    _previewDraft = null;
+    _refresh = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => unawaited(_reload()),
+    );
   }
 
   void _listen() {
-    _subscription = widget.security?.securityChanges.listen((_) {
-      _generation++;
-      _clearPreview();
-      if (!mounted) return;
-      setState(() {
-        _pending = const [];
-        _error = null;
-        _busy = false;
-      });
+    _securityEvents = widget.security?.securityChanges.listen((_) {
+      _invalidate();
       unawaited(_reload());
+    });
+    _progressEvents = _service?.progress.listen((event) {
+      if (!_allowed || !mounted) return;
+      if (_pending.any((p) => p.cacheId == event.id) ||
+          widget.note.attachments.any((p) => p.id == event.id)) {
+        _update(() => _progress[event.id] = event);
+      }
+    });
+  }
+
+  void _invalidate() {
+    _generation++;
+    _clearPreview();
+    _update(() {
+      _pending = const [];
+      _ready.clear();
+      _progress.clear();
+      _working.clear();
+      _error = null;
     });
   }
 
   @override
   void didUpdateWidget(covariant AttachmentEditorPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.security != widget.security) {
-      unawaited(_subscription?.cancel());
+    final authorityChanged =
+        oldWidget.security != widget.security ||
+        oldWidget.controller != widget.controller;
+    if (authorityChanged) {
+      unawaited(_securityEvents?.cancel());
+      unawaited(_progressEvents?.cancel());
       _listen();
     }
-    if (oldWidget.note != widget.note ||
-        oldWidget.enabled != widget.enabled ||
-        oldWidget.controller != widget.controller) {
-      _generation++;
-      _clearPreview();
-      _pending = const [];
-      _busy = false;
-      unawaited(_reload());
+    if (authorityChanged ||
+        oldWidget.note.identity != widget.note.identity ||
+        oldWidget.note.protectionRevision != widget.note.protectionRevision ||
+        oldWidget.note.isProtected != widget.note.isProtected ||
+        oldWidget.note.share != widget.note.share ||
+        !_allowed) {
+      _invalidate();
+    } else if (_previewItem?.attachment case final Attachment attachment) {
+      if (!widget.note.attachments.contains(attachment)) _clearPreview();
     }
+    unawaited(_reload());
   }
 
   Future<void> _reload() async {
+    if (!_allowed || _loading) return;
+    _loading = true;
     final generation = _generation;
-    if (!_allowed) return;
     try {
-      final pending =
-          await _service?.pending(widget.note.id) ??
-          const <LocalAttachmentDraft>[];
-      if (mounted && generation == _generation && _allowed) {
-        setState(() => _pending = pending);
-      }
-    } on Object {
-      if (mounted && generation == _generation && _allowed) {
-        setState(
-          () => _error = 'Local attachments are unavailable. Unlock or retry.',
-        );
-      }
-    }
-  }
-
-  Future<void> _run(
-    Future<void> Function(AttachmentApplicationService) action,
-  ) async {
-    if (_busy || !_allowed) return;
-    final service = _service;
-    if (service == null) return;
-    final generation = _generation;
-    setState(() {
-      _busy = true;
-      _error = null;
-      _clearPreview();
-    });
-    try {
-      await action(service);
-    } on NoteSecurityFailure catch (failure) {
-      if (mounted && generation == _generation) {
-        setState(
-          () => _error = failure.code == NoteSecurityFailureCode.unavailable
-              ? 'Cloud attachments are unavailable. This file remains Pending on this device.'
-              : 'Attachment access changed. Unlock and retry.',
-        );
-      }
-    } on Object {
-      if (mounted && generation == _generation) {
-        setState(
-          () => _error = 'Attachment operation failed. Check file type, size and note quota, then retry. Completed local drafts are retained.',
-        );
-      }
-    } finally {
-      if (mounted && generation == _generation) {
-        setState(() => _busy = false);
-        await _reload();
-      }
-    }
-  }
-
-  Future<void> _pick(AttachmentSource source) async {
-    final identity = widget.note.identity;
-    await _run(
-      (service) => service.pickAndStage(
-        widget.note.id,
-        () => widget.controller.pickAttachments(source),
-      ),
-    );
-    // A native picker can cause a lifecycle lock/rebuild while it is open.
-    if (mounted && _allowed && widget.note.identity == identity) {
-      await _reload();
-    }
-  }
-
-  Future<void> _cancel(LocalAttachmentDraft draft) async {
-    final generation = _generation;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove local attachment?'),
-        content: const Text(
-          'The pending encrypted copy on this device will be removed.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true || generation != _generation) return;
-    await _run((service) => service.cancel(widget.note.id, draft.cacheId));
-  }
-
-  Future<void> _open(LocalAttachmentDraft draft) => _run((service) async {
-    final generation = _generation;
-    final image = draft.mimeType.startsWith('image/');
-    final text = draft.mimeType == 'text/plain' || draft.mimeType == 'text/csv';
-    if (!image && !text) {
-      setState(
-        () => _error = 'Video and PDF preview are not available yet. The encrypted file is retained.',
-      );
-      return;
-    }
-    final limit = image ? 10 * 1024 * 1024 : 64 * 1024;
-    final end = draft.sizeBytes < limit ? draft.sizeBytes : limit;
-    final bytes = Uint8List(end);
-    var offset = 0;
-    try {
-      await for (final chunk in service.readLocal(
-        widget.note.id,
-        draft.cacheId,
-        end: end,
-      )) {
-        try {
-          if (!mounted || generation != _generation || !_allowed) return;
-          if (offset + chunk.length > end) {
-            throw StateError('Preview exceeds its bound.');
-          }
-          bytes.setRange(offset, offset + chunk.length, chunk);
-          offset += chunk.length;
-        } finally {
-          chunk.fillRange(0, chunk.length, 0);
+      final service = _service;
+      if (service == null) return;
+      final pending = _canWrite
+          ? await service.pending(_reference)
+          : const <LocalAttachmentDraft>[];
+      final ready = <String>{};
+      for (final attachment in widget.note.attachments) {
+        if (!_current(generation)) return;
+        if (await service.ready(_reference, attachment)) {
+          ready.add(attachment.id);
         }
       }
-      if (offset != end) throw StateError('Incomplete preview.');
-      if (mounted && generation == _generation && _allowed) {
-        setState(() {
-          _preview = Uint8List.fromList(bytes);
-          _previewDraft = draft;
-        });
+      if (!_current(generation)) return;
+      _update(() {
+        _pending = pending;
+        _ready
+          ..clear()
+          ..addAll(ready);
+      });
+      if (_canWrite && !_busy) {
+        for (final draft in pending) {
+          if (!_current(generation) || !_canWrite) break;
+          if (!(_retryAfter[draft.cacheId]?.isAfter(DateTime.now()) ?? false)) {
+            await _retry(draft.cacheId);
+          }
+        }
       }
+    } on Object {
+      // A background refresh never erases ciphertext or an explicit Retry error.
     } finally {
-      bytes.fillRange(0, bytes.length, 0);
+      _loading = false;
     }
-  });
+  }
 
   @override
   void dispose() {
     _generation++;
+    _refresh?.cancel();
     _clearPreview();
-    unawaited(_subscription?.cancel());
+    unawaited(_securityEvents?.cancel());
+    unawaited(_progressEvents?.cancel());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!_allowed || _service == null) return const SizedBox.shrink();
-    final preview = _preview, previewDraft = _previewDraft;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Expanded(child: Text('Attachments')),
-                PopupMenuButton<AttachmentSource>(
-                  enabled: !_busy,
-                  tooltip: 'Add attachment',
-                  icon: const Icon(Icons.attach_file),
-                  onSelected: (source) => unawaited(_pick(source)),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: AttachmentSource.files,
-                      child: Text('Choose files'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.gallery,
-                      child: Text('Gallery'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.cameraPhoto,
-                      child: Text('Take photo'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.cameraVideo,
-                      child: Text('Record video'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const Text(
-              'Images 10 MiB · MP4 50 MiB · PDF/TXT/CSV 20 MiB. Up to 10 files / 100 MiB per note.',
-            ),
-            if (_busy) const LinearProgressIndicator(),
-            if (_error != null)
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            for (final draft in _pending)
-              ListTile(
-                title: Text(draft.fileName),
-                subtitle: Text(
-                  'Pending on this device · ${draft.sizeBytes} bytes',
-                ),
-                onTap: _busy ? null : () => unawaited(_open(draft)),
-                trailing: Wrap(
-                  children: [
-                    IconButton(
-                      tooltip: 'Retry upload',
-                      onPressed: _busy
-                          ? null
-                          : () => unawaited(
-                              _run((service) async {
-                                await service.retry(
-                                  widget.note.id,
-                                  draft.cacheId,
-                                );
-                              }),
-                            ),
-                      icon: const Icon(Icons.refresh),
-                    ),
-                    IconButton(
-                      tooltip: 'Remove local attachment',
-                      onPressed: _busy ? null : () => unawaited(_cancel(draft)),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-            for (final attachment in widget.note.attachments)
-              ListTile(
-                title: Text(attachment.fileName),
-                subtitle: const Text(
-                  'Linked metadata · remote preview unavailable',
-                ),
-              ),
-            if (preview != null && previewDraft != null) ...[
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => setState(_clearPreview),
-                  child: const Text('Close preview'),
-                ),
-              ),
-              if (previewDraft.mimeType.startsWith('image/'))
-                Image.memory(
-                  preview,
-                  height: 220,
-                  cacheWidth: 1024,
-                  cacheHeight: 1024,
-                  errorBuilder: (_, _, _) =>
-                      const Text('Image preview unavailable.'),
-                )
-              else
-                SelectableText(utf8.decode(preview, allowMalformed: true)),
-              if (preview.length < previewDraft.sizeBytes)
-                const Text('Showing the first 64 KiB.'),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => !_allowed || _service == null
+      ? const SizedBox.shrink()
+      : _buildPanel(context);
+}
+
+final class _AttachmentItem {
+  _AttachmentItem.local(this.draft) : attachment = null;
+  _AttachmentItem.associated(this.attachment) : draft = null;
+  final LocalAttachmentDraft? draft;
+  final Attachment? attachment;
+  String get id => attachment?.id ?? draft!.cacheId;
+  String get name => attachment?.fileName ?? draft!.fileName;
+  String get mime => attachment?.mimeType ?? draft!.mimeType;
+  int get size => attachment?.sizeBytes ?? draft!.sizeBytes;
 }

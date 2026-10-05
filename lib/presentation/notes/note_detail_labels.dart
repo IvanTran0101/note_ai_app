@@ -26,8 +26,11 @@ extension _NoteDetailLabels on NoteDetailPageState {
             note: note,
             controller: widget.notesController as AttachmentNotesController,
             security: _securityController,
+            onChanged: _labelsSaved,
+            onBeforePick: () async => !_isDirty || await _save(),
+            onResumeProtected: () => _resumeProtectedAttachment(note),
             enabled:
-                !_securityBusy && !_securityLoading && _capabilities.canManage,
+                !_securityBusy && !_securityLoading && _capabilities.canRead,
           ),
       ],
     );

@@ -144,7 +144,8 @@ export class AttachmentUseCases {
     return {id, phase: 'cancelled'};
   }
   async content(actor: string, owner: string, note: string, id: string, version: string,
-    start: number, end: number, grant?: string) {
+    start: number, end: number, grant?: string, exportFile = false) {
+    if (exportFile) await this.authority(actor, owner, note, 'export', grant);
     const {n} = await this.authority(actor, owner, note, 'attachmentRead', grant);
     const d = n.attachments?.find(x => x.id === id);
     if (!d || d.objectVersion !== version) throw new AttachmentError('denied');
@@ -157,6 +158,7 @@ export class AttachmentUseCases {
         data.set(bytes, count); count += bytes.length;
       }
       const live = await this.authority(actor, owner, note, 'attachmentRead', grant);
+      if (exportFile) await this.authority(actor, owner, note, 'export', grant);
       if (count !== data.length || !live.n.attachments?.some(x => sameDescriptor(x, d))) throw new AttachmentError('denied');
       return {bytes: data, descriptor: d};
     } catch (e) { data.fill(0); throw e; }
