@@ -1,5 +1,27 @@
 # M03 completion — active work
 
+## Current continuation — native PDF navigation
+
+2ec1abf camera fix pushed/remote verified; matching clean HEAD APK9.8s, SHA256
+4F476F92377EA644757B392EBEF651AB9B7AC721B53D0332A42494A2F41D747D,
+sourceDirty=false. Actual native protected WebP pixels render. PDF Page1 pixels
+render after async paint, but inner drags compete with editor scrolling and do
+not reliably reach Page2. Added explicit Previous/Next/page count in native PDF
+viewer, preserving custom guarded range reader/no scripts/links/16MiB cache.
+Five portable control regressions and actual matching dirty APK retest pending.
+Actual corrected dirty APK27.1s installed-r preserves all data: PDF Page1/3 ->
+Next Page2/3 with expected painted text, Next Page3/3 disables boundary, Previous
+returnsPage2. Lock while PDF open removes document/filename/controls and masks
+note. Protected native WebP pixels passed. Controls VM5/Chrome5 pass; initial
+fixture used RawTooltip as IconButton (harness), corrected. Three brace lints
+fixed, final scoped analyzer3 items clean6.5s. Publish accepted PDF checkpoint.
+Remaining current cache/
+password/denial/large/Web matrix and full regression still pending.
+Native remains prior camera working APK, protected PDF open; backend26508 alive,
+Web stopped. Notion M03.1–5 now consistent in collab plan/progress; rubric7/17
+checked by current source/local/actual picker/validation/cancel/remove evidence.
+Final full matrix/regression still pending; no M03/AWS/M09 completion claim.
+
 ## Current continuation — camera capture compatibility
 
 Camera normalization now accepted in actual UI: Record video -> Done stages and
@@ -25,10 +47,12 @@ Actual native invalid/oversize feedback is now visible; Documents cancellation
 returns quietly, Gallery PNG and camera JPG reach Ready, camera cancellation
 keeps existing four Ready files. Native camera video is H264/AMR-NB (own scratch
 video859919bytes/7.267944s verified by ffprobe), rejected by H264/AAC validation.
-Plugin ACTION_VIDEO_CAPTURE omits quality. MainActivity now requests quality1
+Initial probe, superseded by accepted normalization above: plugin omits quality;
+the first trial requested quality1
 only for video capture, retaining output URI/grants/result/options; validator
 and all staging/security guards stay intact. Kotlin/APK and actual AAC/Ready
-retest pending. No accepted camera fix or total M03 claim yet.
+retest was pending at that trial. Current camera acceptance is above; total M03
+remains incomplete.
 Owned backend26508 remains; Web stopped; emulator-5554 retained data/online.
 
 ## Current continuation — 06/10 offline create ACK UI QA

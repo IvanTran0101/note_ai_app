@@ -1,5 +1,17 @@
 # M03 actual Chrome / Android QA
 
+## 06/10 — native PDF navigation and active lock
+
+Corrected working APK27.1s, installed-r with retained data. Native PDF rendered
+Page1 but inner drags competed with outer editor scrolling. Added explicit
+Previous/Next/page count. Actual Next renders expected Page2/3 text/pixels, Next
+reachesPage3/3 and disables boundary, Previous returnsPage2. Lock now while PDF
+is open removes document/filename/controls and masks note. Protected WebP native
+pixels also render correctly. Evidence m03-native-pdf-page2-painted.png and
+m03-native-active-pdf-lock.png. Portable controls VM5/Chrome5; initial RawTooltip
+test type cast corrected. Three scoped brace lints fixed; analyzer3 clean6.5s.
+No full M03 acceptance yet.
+
 ## 06/10 — camera video and picker feedback
 
 e0411dc matching APK installed-r/cold start preserves all notes. Actual native

@@ -16,6 +16,12 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 PDF continuation: camera2ec1abf pushed, clean HEAD APK9.8s/sourceDirty=false.
+Native protected WebP passed. New explicit PDF Previous/Next/page count resolves
+nested editor scroll navigation; actual Page2 painted text, Page3 boundary,
+Previous and active-PDF Lock passed. Portable controls VM5/Chrome5; analyzer3
+clean6.5s. Publish accepted PDF checkpoint; full M03 regression/UI still pending.
+
 06/10 camera continuation: e0411dc matching native invalid/cancel/gallery/photo
 QA passed. Camera's H264/AMR-NB fails strict H264/AAC; quality1 alone was ineffective
 and removed. Android camera-only bounded AMR->AAC adapter preserves H264 frames,
