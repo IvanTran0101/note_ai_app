@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -101,6 +103,38 @@ void main() {
     expect(find.text('Detail'), findsOneWidget);
     expect(find.text('List'), findsOneWidget);
   });
+
+  testWidgets(
+    'dismiss barrier does not merge a tap action over editor semantics',
+    (WidgetTester tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await pumpAt(
+          tester,
+          const Size(700, 800),
+          onCompactBack: () {},
+          detail: Semantics(
+            container: true,
+            label: 'Attachment editor',
+            child: const Text('PDF controls'),
+          ),
+        );
+        final barrier = tester.widget<GestureDetector>(
+          find.byKey(ResponsiveNotesWorkspace.dismissBarrierKey),
+        );
+        expect(barrier.excludeFromSemantics, true);
+        expect(
+          tester
+              .getSemantics(find.text('PDF controls'))
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          false,
+        );
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
 
   testWidgets('expanded opens a side peek beside the interactive list', (
     WidgetTester tester,

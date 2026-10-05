@@ -41,6 +41,9 @@ and removes incomplete entries on failure/cancel or recovery. Completed delibera
 exports are retained. Other native platforms report export unavailable; the
 accepted target scope is Chrome and Android. Chrome uses a controlled explicit
 download action and the browser's stream/download UI.
+The export host navigates inside the controlled child worker scope; it relies
+on Content-Disposition rather than a download-attributed anchor, which Chrome
+can send directly to the server. Public viewer cache version v2 ships this fix.
 
 Per-file events report upload/verify/association phases and Reading/Saving byte
 positions, including cache hits. Pending is durable local staging; Awaiting note

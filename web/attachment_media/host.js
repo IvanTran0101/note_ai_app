@@ -12,8 +12,10 @@
   if (new URL(location.href).searchParams.get('export') === '1') {
     const button = document.createElement('button'); button.textContent = 'Download attachment';
     button.onclick = () => {
-      const link = document.createElement('a'); link.href = url; link.download = '';
-      document.body.append(link); link.click(); link.remove();
+      // A download-attributed anchor can bypass this iframe's service worker
+      // in Chrome. Navigate inside its controlled scope; the freshly guarded
+      // streaming response supplies Content-Disposition and the real filename.
+      location.assign(url.href);
       status.textContent = 'Download started. Check the browser downloads.';
     };
     status.replaceWith(button); return;

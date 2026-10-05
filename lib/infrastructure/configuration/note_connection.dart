@@ -10,6 +10,7 @@ final class NoteConnection {
     required this.tokenProvider,
     required this.client,
     required this.revisionSourceFor,
+    this.allowLocalAttachmentUploads = false,
   });
   final Uri baseUri;
   final SyncAccessTokenProvider tokenProvider;
@@ -17,4 +18,7 @@ final class NoteConnection {
   /// Borrowed by adapters; the composition that supplies it owns disposal.
   final http.Client client;
   final IRevisionSource Function(String actor) revisionSourceFor;
+
+  /// Explicit debug composition only; production staging still requires S3 TLS.
+  final bool allowLocalAttachmentUploads;
 }

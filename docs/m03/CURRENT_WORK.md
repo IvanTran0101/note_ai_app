@@ -154,3 +154,49 @@ Chrome/Android media QA and full regression remain. Current APK build session430
 is running sequentially from R:; do not start another Flutter build/test/run
 until it finishes. Backend7755/emulator/data remain as above. After the build,
 install-r the new APK, restart Web sequentially and perform the actual UI matrix.
+
+## Actual UI QA started —2930639
+
+Source checkpoint2930639 was pushed and remote SHA verified. Current APK built
+successfully527.3s (main_dev/android-x64), SHA256
+7D6B360FEA93CCF3A1C3FD1A1E35904596D72AA5DA8385F044D6ED5E9BB7B443;
+install-r and cold start retained app data. Receipt m03-apk-provenance.json.
+Web64830 at8776 and fixture7755 at8796/relay8797 are running. Chrome m04-owner
+with retained profile reopened current Web. Android created QA-M03-Android,
+saved on Back, reopened with attachment controls; same note arrived in Chrome.
+Actual file picker/media/export/offline/protected/shared QA is now in progress;
+no full M03 acceptance yet. Continue from current native and Web picker menus.
+
+## Actual QA defects — local transport / accessible iframe / Web export
+
+Confirmed real Chrome + Android picker files remain encrypted Pending because
+logical dev API composition did not enable the exact loopback staging URL.
+Added explicit debug-only composition flag; dev transport accepts only anonymous
+PUT to127.0.0.1:8796/dev/attachment-put with redirects disabled, and preserves
+abort signals on rewritten API requests. VM16/16 + Chrome16/16 and scoped
+analyzer passed. Chrome reload auto-retried all7 old Pending files to Ready after
+verified upload + canonical association ACK. Android rebuild/retest pending.
+
+Confirmed accessibility-enabled Chrome PDF controls were blocked by full-screen
+barrier tap semantics merged over editor. Excluded only barrier semantics; Back
+remains accessible. Actual Page2/3 click passed after bringing preview into view.
+MP4 plays real15s media with readyState4; seek still pending recorded UI evidence.
+
+Web export click incorrectly downloaded Flutter fallback HTML through a
+`download`-attributed anchor bypassing the child worker. Changed controlled
+iframe navigation to rely on guarded streaming Content-Disposition, bumped
+public viewer cache to v2. This fix is NOT yet accepted: actual download/hash
+retest pending. Fresh VM focused combined UI/composition/transfer suite running.
+No full M03 acceptance yet; AWS live remains separate.
+
+## Accepted UI fix checkpoint — awaiting commit/push
+
+Combined UI/composition/transfer VM28/28 and Chrome28/28 pass. Actual cold Web
+export retest with public viewer cache v2 downloads qa-text.txt75 bytes, no
+browser failure, SHA2569D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0
+matches original. All3 confirmed fixes now accepted for source/focused/Chrome
+scenarios. Stage only owned composition/semantics/export/test/docs files; keep
+unrelated macOS bytes72E079.../.playwright-cli/final_project.md. Native APK still
+2930639: rebuild after remaining browser QA/full regression, install-r and
+retest Pending/protected/pickers/media/export. Full M03 remains in progress.
+Runtime Web57655/fixture7755; Chrome m04-owner export preview open.

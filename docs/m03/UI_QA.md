@@ -1,0 +1,58 @@
+# M03 actual Chrome / Android QA
+
+05/10/2026, final-tuankiet. In progress; this is not full M03 acceptance.
+Headed Chrome owner/recipient retain their IndexedDB profiles. Android
+emulator-5554 retains existing app data. Synthetic accounts and the local backend
+exercise the real UI/writer/cache/transport/ACL code; AWS deployment is separate.
+Fixtures/evidence are ignored under output/playwright/m03-20261005 and
+output/m04-integration. No application database is seeded or reset for UI QA.
+
+## Matching runtime
+
+Source2930639 APK built527.3s, debug main_dev/android-x64, installed with -r.
+SHA256:7D6B360FEA93CCF3A1C3FD1A1E35904596D72AA5DA8385F044D6ED5E9BB7B443.
+Native data survived installation/cold start. New fixes require a new matching
+APK before final native acceptance. Web runs main_dev at127.0.0.1:8776; fixture
+8796 and relay8797 preserve encrypted local state on restart.
+
+## Results so far
+
+| Scenario | Current evidence |
+| --- | --- |
+| Existing M04 data | Chrome and Android retain old notes, pin/label state and protected masks. |
+| Create/sync | Android creates QA-M03-Android with body; Back saves, reopen exposes attachment panel; Chrome receives same title/body. |
+| Multi-file selection | Chrome selects JPG/PNG/WebP/TXT/CSV/3-page PDF/15s MP4; encrypted Pending survives Web restart. |
+| Upload retry/ACK | After dev-composition fix, all7 old Pending files automatically retry, verify and become Ready; All synced. |
+| Native picker | Android Documents picker selects QA files. ADB-pushed files require a MediaStore scan before appearing; this is fixture setup. Final native upload still awaits corrected APK. |
+| PDF | Chrome renders Page1/3 with expected text; after dismiss-semantics fix, real Next page click renders Page2/3. web-pdf-page2.png. |
+| Video | Chrome renders15s H264/AAC media; actual play changes paused true to false/time advances, readyState4; web-video-playing.png. Seek receipt still pending. |
+| Image | Chrome JPG bounded preview renders; all image formats final screenshots/reopen still pending. |
+| Export | Controlled-navigation/cache v2 retest downloads qa-text.txt,75 bytes, SHA256 matches source9D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0. Large export/protected/native still pending. |
+| Protected/shared/offline/remove/large files | Final actual matrix still pending. |
+
+## Confirmed defects and fixes
+
+1. Valid encrypted Pending could not upload in dev on either platform. Logical
+   HTTPS API and staging loopback PUT lacked explicit composition support.
+   Added debug-only opt-in, exact anonymous staging PUT whitelist and preserved
+   abort signals through API rewrite. Focused VM16/Chrome16 passed, then
+   combined composition/transfer/semantics VM28/Chrome28 passed. Actual Chrome
+   retry of7 existing drafts passed. Native retest pending.
+2. Center-peek dismiss barrier's full-screen tap semantics merged over the
+   editor and blocked iframe controls with accessibility enabled. Excluded
+   only the barrier semantics; Back remains accessible. Actual PDF page2 click
+   and focused semantics regression pass.
+3. Web download-attributed anchor bypassed the controlled child worker and
+   downloaded Flutter's HTML fallback. Changed iframe navigation to use the
+   fresh guarded stream's Content-Disposition; public cache v2. Actual TXT
+   download filename/size/SHA256 pass; browser reports no download failure.
+
+## Harness / runtime limitations
+
+An offscreen iframe must be brought into the Flutter editor viewport before
+clicking its controls. Offscreen timeouts and a mistaken click on the dismiss
+barrier are not counted as product defects. Flutter hot restart while a platform
+view is open raised a disposed EngineFlutterView SDK assertion; cold reload
+restores runtime, without a demonstrated product cold-run failure. Public
+viewer cache contains viewer assets only; private bytes remain encrypted in IDB.
+Do not count successful adapter doubles as actual UI or deployed AWS evidence.

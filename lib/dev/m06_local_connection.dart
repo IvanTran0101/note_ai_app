@@ -41,6 +41,7 @@ final class M06LoopbackClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final uri = request.url;
+    if (_anonymousStaging(request)) return _inner.send(request);
     if (uri.scheme != 'https' ||
         uri.host != devLogicalApi.host ||
         uri.userInfo.isNotEmpty ||
@@ -53,13 +54,39 @@ final class M06LoopbackClient extends http.BaseClient {
     if (credential == null || !credential.endsWith('.local-dev')) {
       throw http.ClientException('Local dev credential required.');
     }
-    final local = http.Request(
-      request.method,
-      uri.replace(scheme: 'http', host: '127.0.0.1', port: 8796),
-    )..followRedirects = false;
+    final localUri = uri.replace(scheme: 'http', host: '127.0.0.1', port: 8796);
+    final local = request is http.AbortableRequest
+        ? http.AbortableRequest(
+            request.method,
+            localUri,
+            abortTrigger: request.abortTrigger,
+          )
+        : http.Request(request.method, localUri);
+    local
+      ..followRedirects = false
+      ..maxRedirects = 0;
     local.headers.addAll(request.headers);
     local.bodyBytes = await request.finalize().toBytes();
     return _inner.send(local);
+  }
+
+  bool _anonymousStaging(http.BaseRequest request) {
+    final uri = request.url;
+    return request.method == 'PUT' &&
+        uri.scheme == 'http' &&
+        uri.host == '127.0.0.1' &&
+        uri.port == 8796 &&
+        uri.path == '/dev/attachment-put' &&
+        uri.userInfo.isEmpty &&
+        !uri.hasFragment &&
+        !request.followRedirects &&
+        request.headers.keys.every(
+          (name) => {
+            'content-type',
+            'x-amz-checksum-sha256',
+            'content-length',
+          }.contains(name.toLowerCase()),
+        );
   }
 
   @override
@@ -72,6 +99,7 @@ NoteConnection devConnection(String actor, M06LoopbackClient client) =>
       tokenProvider: ({required forceRefresh}) async =>
           devToken(actor, 'access'),
       client: client,
+      allowLocalAttachmentUploads: true,
       revisionSourceFor: (boundActor) {
         if (boundActor != actor) throw StateError('Local dev account changed.');
         return AppSyncRevisionSource(

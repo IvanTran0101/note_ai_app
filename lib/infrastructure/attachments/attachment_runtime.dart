@@ -27,12 +27,14 @@ final class AttachmentRuntime {
     required this.notes,
     required this.storeForAccount,
     required this.requestSync,
+    this.allowLocalAttachmentUploads = false,
     AttachmentBlobStore Function({required String actorId})? blobStoreFactory,
   }) : blobStoreFactory = blobStoreFactory ?? createAttachmentBlobStore;
   final NoteSecurityRuntime security;
   final INoteRepository notes;
   final EncryptedSyncStore Function(String) storeForAccount;
   final void Function(String) requestSync;
+  final bool allowLocalAttachmentUploads;
   final AttachmentBlobStore Function({required String actorId})
   blobStoreFactory;
   final _services = <String, AttachmentApplicationService>{};
@@ -83,9 +85,10 @@ final class AttachmentRuntime {
       final uri = security.baseUri;
       final local =
           kDebugMode &&
-          uri?.scheme == 'http' &&
-          uri?.host == '127.0.0.1' &&
-          uri?.port == 8796;
+          (allowLocalAttachmentUploads ||
+              uri?.scheme == 'http' &&
+                  uri?.host == '127.0.0.1' &&
+                  uri?.port == 8796);
       final uploader = uri == null
           ? null
           : HttpAttachmentUpload(

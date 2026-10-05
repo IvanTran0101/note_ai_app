@@ -2,7 +2,7 @@
 const media = new Map();
 const chunkBytes = 256 * 1024;
 const mediaRoot = new URL('./attachment_media/', self.location.href);
-const uiCache = 'noteflow-attachment-ui-pdfjs6.4.299-v1';
+const uiCache = 'noteflow-attachment-ui-pdfjs6.4.299-v2';
 self.addEventListener('install', event => event.waitUntil((async () => {
   const response = await fetch(new URL('asset_manifest.json',mediaRoot),{cache:'no-store'});
   if (!response.ok) throw Error('Viewer assets unavailable');

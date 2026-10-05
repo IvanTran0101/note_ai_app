@@ -149,6 +149,10 @@ final class _ResponsiveNotesWorkspaceState
                     offstage: !centerPeek || !widget.hasSelection,
                     child: GestureDetector(
                       key: ResponsiveNotesWorkspace.dismissBarrierKey,
+                      // Back already provides the accessible close action.
+                      // A full-screen tap semantic merges over the editor and
+                      // intercepts iframe PDF/video controls on Flutter Web.
+                      excludeFromSemantics: true,
                       behavior: HitTestBehavior.opaque,
                       onTap: widget.onDismiss ?? widget.onCompactBack,
                       child: ColoredBox(

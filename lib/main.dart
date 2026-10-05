@@ -496,6 +496,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   late final _attachmentRuntime = AttachmentRuntime(
     security: _noteSecurityRuntime,
     notes: _noteRepository,
+    allowLocalAttachmentUploads:
+        widget.connection?.allowLocalAttachmentUploads ?? false,
     storeForAccount: (actor) {
       final store = _localSyncStoreForAccount(accountUserId: actor);
       if (store is! EncryptedSyncStore) {
