@@ -2,6 +2,18 @@
 
 ## Current continuation — 06/10 offline create ACK UI QA
 
+Waiting-state fix29516d7 pushed/remote verified, VM29/Chrome29/scoped analyzer
+clean58.4s. Native invalid-file feedback disappears because foreground security
+events invalidate the panel's captured generation. Added picker-only presentation
+resume for identical live actor session/note/content/protection/access epochs,
+with current owner capabilities required. Application staging/grant guards stay
+unchanged. Background retries preserve explicit picker errors. Four new widget
+regressions cover same-scope invalid/permission denied, cancellation and a changed
+session; focused VM32/32 +Chrome32/32 passed. Scoped analyzer required an explicit
+record type; added typed canonical reference scope, analyzer3 items clean3.8s.
+Final focused source VM32/32 +Chrome32/32 passed; publish picker feedback fix.
+Matching combined APK and actual invalid/cancel/gallery/camera remain pending.
+
 71a2795 pushed/remote verified; matching APK35.8s/sourceDirty=false, SHA256
 8EEFF9312F50824B878AA29F689A3F4E83EA8EEC5C15BE7F23E3C4939E5B822B.
 Actual native protected TXT export75bytes matches original SHA2569D467DD5...;

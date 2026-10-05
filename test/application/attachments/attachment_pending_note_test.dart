@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/attachments/attachment_application.dart';
@@ -11,6 +13,7 @@ import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
 import 'package:note_ai_app/domain/notes/note_identity.dart';
+import 'package:note_ai_app/domain/notes/attachment.dart';
 import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
 import 'package:note_ai_app/presentation/notes/attachment_editor_panel.dart';
@@ -29,6 +32,12 @@ const _draft = LocalAttachmentDraft(
 
 final class _PendingDrafts implements AttachmentDraftStore {
   @override
+  Future<LocalAttachmentDraft> stage(
+    AttachmentBinding binding,
+    AttachmentInput input, {
+    required Iterable<Attachment> existing,
+  }) async => throw ArgumentError('Invalid type/size.');
+  @override
   Future<void> recoverIncomplete(AttachmentBinding binding) async {}
   @override
   Future<List<String>> pendingIds(AttachmentBinding binding) async => [
@@ -44,18 +53,23 @@ final class _PendingDrafts implements AttachmentDraftStore {
 }
 
 final class _Controller implements AttachmentNotesController {
-  _Controller(this.attachments);
+  _Controller(this.attachments, {this.pick});
+  final Future<List<AttachmentInput>> Function()? pick;
   @override
   final AttachmentApplicationService attachments;
   @override
   Future<List<AttachmentInput>> pickAttachments(
     AttachmentSource source,
-  ) async => [];
+  ) async => pick == null ? [] : await pick!();
 }
 
 final class _Security implements SecuredNotesController {
+  final events = StreamController<void>.broadcast(sync: true);
+  var epoch = 1;
   @override
-  Stream<void> get securityChanges => const Stream.empty();
+  int get sessionGeneration => epoch;
+  @override
+  Stream<void> get securityChanges => events.stream;
   @override
   NoteAccessCapabilities capabilitiesFor(NoteDto note) =>
       const NoteAccessCapabilities(canRead: true, canManage: true);
@@ -67,9 +81,11 @@ void main() {
   late FakeLocalSyncStore store;
   late NoteRepository repository;
   late AttachmentApplicationService service;
+  late _Security security;
   var uploads = 0, syncs = 0;
   setUp(() {
     uploads = syncs = 0;
+    security = _Security();
     final time = DateTime.utc(2026, 10, 6);
     store = FakeLocalSyncStore(
       accountUserId: 'owner',
@@ -114,6 +130,7 @@ void main() {
       requestSync: (_) => syncs++,
     );
   });
+  tearDown(() => security.events.close());
 
   test(
     'Create ACK waiting retains draft and never calls upload or Note writer',
@@ -141,7 +158,7 @@ void main() {
           body: AttachmentEditorPanel(
             note: note,
             controller: _Controller(service),
-            security: _Security(),
+            security: security,
             enabled: true,
           ),
         ),
@@ -166,4 +183,84 @@ void main() {
     expect(store.state.notes.single.attachments, isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final mode in ['invalid', 'denied', 'cancelled', 'new-session']) {
+    testWidgets('Picker lifecycle $mode feedback keeps authority fences', (
+      tester,
+    ) async {
+      final selected = Completer<List<AttachmentInput>>();
+      final note = await tester.runAsync(() => repository.findById('note'));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentEditorPanel(
+              note: NoteDto.fromDomain(note!),
+              controller: _Controller(service, pick: () => selected.future),
+              security: security,
+              enabled: true,
+            ),
+          ),
+        ),
+      );
+      Future<void> settle() async {
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 10));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 2)),
+          );
+        }
+      }
+
+      await settle();
+      await tester.tap(find.byTooltip('Add attachment'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose files'));
+      await tester.pump();
+      if (mode == 'new-session') security.epoch++;
+      security.events.add(null); // Platform picker pauses/resumes the Activity.
+      if (mode == 'denied') {
+        selected.completeError(
+          const AttachmentSelectionFailure(
+            AttachmentSelectionFailureCode.denied,
+          ),
+        );
+      } else {
+        selected.complete(
+          mode == 'cancelled'
+              ? []
+              : [
+                  AttachmentInput(
+                    fileName: 'invalid.txt',
+                    mimeType: 'text/plain',
+                    sizeBytes: 22020096,
+                    openRead: ([a, b]) => const Stream.empty(),
+                  ),
+                ],
+        );
+      }
+      await settle();
+      final expected = mode == 'denied'
+          ? 'File or camera access was denied'
+          : 'Attachment operation failed';
+      if (mode == 'invalid' || mode == 'denied') {
+        expect(find.textContaining(expected), findsOneWidget);
+        // Background retries must not erase an explicit picker failure.
+        await tester.pump(const Duration(seconds: 4));
+        await settle();
+        expect(find.textContaining(expected), findsOneWidget);
+      } else {
+        expect(
+          find.textContaining('Attachment operation failed'),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('File or camera access was denied'),
+          findsNothing,
+        );
+      }
+      expect(uploads, 0);
+      expect(store.state.notes.single.attachments, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 }

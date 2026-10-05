@@ -68,6 +68,24 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   bool get _busy => _working.isNotEmpty;
   String get _reference => widget.note.reference;
   AttachmentApplicationService? get _service => widget.controller.attachments;
+  // Picker Activity transitions can replace a lease while keeping the resource
+  // authority. Error feedback may resume only for that identical live scope.
+  ({
+    int? session,
+    String note,
+    bool protected,
+    int protectionRevision,
+    int? accessRevision,
+    int contentRevision,
+  })
+  get _pickerAuthority => (
+    session: widget.security?.sessionGeneration,
+    note: widget.note.reference,
+    protected: widget.note.isProtected,
+    protectionRevision: widget.note.protectionRevision,
+    accessRevision: widget.note.share?.accessRevision,
+    contentRevision: widget.note.contentRevision,
+  );
   bool _current(int generation) =>
       mounted && _allowed && generation == _generation;
   void _update(VoidCallback change) {
@@ -163,7 +181,7 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
         for (final draft in pending) {
           if (!_current(generation) || !_canWrite) break;
           if (!(_retryAfter[draft.cacheId]?.isAfter(DateTime.now()) ?? false)) {
-            await _retry(draft.cacheId);
+            await _retry(draft.cacheId, background: true);
           }
         }
       }

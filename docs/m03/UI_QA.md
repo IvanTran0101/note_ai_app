@@ -2,6 +2,15 @@
 
 ## 06/10/2026 — current71a native offline / large / remove
 
+Picker feedback fix: same-scope resumed native picker failures are presented
+after lifecycle invalidation; current owner capability and captured session,
+note identity/content/protection/access revisions must still match. No staging
+or grant check is relaxed. Background Pending retries retain explicit selection
+errors. Four new widgets cover invalid/denied/cancel/new-session; combined
+VM32/32 and Chrome32/32 pass. Added explicit record type for strict inference;
+scoped analyzer3 items clean3.8s. Final source rerun VM32/Chrome32 passed;
+matching APK actual retest next.
+
 Matching71a APK SHA2568EEFF931... (build35.8s/sourceDirty=false), install-r
 preserves data. Protected cold owner TXT Download exports75bytes with original
 SHA2569D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0.

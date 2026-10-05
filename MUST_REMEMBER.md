@@ -23,8 +23,11 @@ and plays/seeks40s video offline. Reconnect yields3 Ready/All synced; large nati
 export SHA256 matches original. Keep/Remove confirmation preserves body and
 unlink ACK gives2 Ready. Normal pre-create ACK waiting now has a typed status/
 notice instead of false file/quota error: fresh VM29/29 +Chrome29/29, scoped
-analyzer5 items clean58.4s; checkpoint being published. Actual invalid native picker rejects bytes but loses
-feedback through lifecycle; fix next. Matching notice APK/final expanded matrix
+analyzer5 items clean58.4s;29516d7 pushed/remote verified. Actual invalid native picker rejects bytes but loses
+feedback through lifecycle; source feedback fix has VM32/Chrome32, preserves
+identical actor session/resource epochs and current owner capability. Background
+retry keeps explicit picker errors. Final source VM32/Chrome32 passed and scoped
+analyzer3 items clean3.8s; publishing checkpoint then matching APK. Final expanded matrix
 and full current regression remain pending. See docs/m03/CURRENT_WORK.md.
 
 Chrome tests on this Windows SDK must use the existing
