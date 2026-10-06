@@ -1,4 +1,23 @@
-# M03 completion — active work
+# M03 completion — source/local delivery
+
+## Current record06/10 — M03.1–9 source/local complete
+
+8b04637 source/local acceptance is pushed and exact remote SHA verified. Product
+source47f7ad5; full final29 regression1213 VM/1075 Chrome/87 backend PASS,
+configured skips4/1, tsc/dev-config14/analyzer clean140.2s. No product tree delta
+after47. HANDOFF/ACCEPTANCE/PROGRESS/MUST/UI_QA are the closed delivery records.
+Post-publication exact Git revision/APK hash/install-r native refresh outcome:
+https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 and ignored
+output/m04-integration/m03-final-apk-provenance.json. That mutable receipt is
+refreshed after this documentation commit; consult it before any artifact claim.
+Retain existing app/browser/fixture data and blocked old-grant drafts. Windows
+R: is only SUBST to primary D checkout; restore it after runtime interruption.
+Backend/Web/AVD runtime receipts are transient, recheck ports/ADB before reuse.
+Unrelated macOS original72E079.../.playwright-cli/final_project.md remain owned
+by the user. M09 is deferred; AWS deployment/live is leader's separate gate.
+The continuation sections below are historical checkpoint records, not open
+implementation work. Investigate/fix any new M03 regression under the user's
+standing test/fix instruction before making a new completion claim.
 
 ## Current continuation — M03.8 accepted, publish then close M03.9
 

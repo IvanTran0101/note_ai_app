@@ -16,6 +16,16 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 M03.1–9 SOURCE/LOCAL complete. Acceptance8b04637: VM1213/4 configured
+skips, Chrome1075/1 model skip on127 targets, backend87/87, tsc/dev-config14 and
+analyzer clean140.2s. Actual Chrome/Android matrix and11 fixed defects are in
+docs/m03/ACCEPTANCE.md/UI_QA.md; final source/setup pack is HANDOFF.md. Exact
+post-publication Git/APK/native receipt is on the M03 Notion progress page and
+ignored output/m04-integration/m03-final-apk-provenance.json; check it for artifact
+status rather than historical pending checkpoints below. M02/M04/M05/M06 stay
+integrated, schema6/AAD3/single encrypted writer/outbox intact. No further M03
+source implementation planned; AWS leader live gates and M09 remain separate.
+
 06/10 M03.8 source/local accepted: final full VM1213/4 configured skips,
 Chrome1075/1 configured skip on127 targets, backend87/87, tsc/dev-config14 and
 full analyzer clean140.2s. Actual UI matrix uses matching47 source/native APK;

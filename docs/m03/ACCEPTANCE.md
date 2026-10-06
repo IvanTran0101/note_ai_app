@@ -3,8 +3,9 @@
 2026-10-06, final-tuankiet. Product source47f7ad5 includes M02/M04/M05/M06 and
 the completed attachment flows. Final regression at29e8e60 passed; no product
 source differs from47f7ad5, the matching APK used for actual native QA.
-M03.8 source/local is accepted. M03.9 publication and final HEAD artifact refresh
-follow separately. Leader AWS live acceptance remains an external gate.
+M03.1–9 source/local delivery is accepted. Post-publication exact HEAD artifact
+and native refresh outcomes are recorded on the Notion progress page and ignored
+provenance JSON. Leader AWS live acceptance remains an external gate.
 
 ## Final regression
 
@@ -93,6 +94,17 @@ guarantee that every possible platform/provider failure has been eliminated.
 
 ## Closure receipt
 
-M03.8 regression/UI accepted; M03.9 publication remains next. _agent_ops/ is absent in this checkout;
-CURRENT_WORK.md is the active continuity record and PROGRESS.md the milestone
-record. No unavailable pack records or named teams are claimed.
+M03.1–9 source/local records are closed below. Final post-publication artifact
+outcome is refreshed in the Notion progress page/local JSON, without committing
+runtime logs or profiles. _agent_ops/ is absent; no unavailable pack records or
+named teams are claimed. The applicable fallback records are:
+
+| Record | Resolution |
+| --- | --- |
+| MUST_REMEMBER.md | Updated: accepted M03, local-first/single writer and deferred M09/live gates. |
+| CURRENT_WORK.md | Updated: final source delivery, exact mutable artifact receipt and continuation boundaries. |
+| PROGRESS.md | Updated: M03.1–9 source/local accepted, AWS leader gate separate. |
+| ACCEPTANCE.md | Created/updated: fresh full regression, actual evidence/limits and11 fixed defects. |
+| UI_QA.md | Updated: actual Chrome/native journal and current acceptance above historical checkpoints. |
+| HANDOFF.md | Created: local launch, shared contracts/rollout and leader AWS checklist. |
+| _agent_ops/* | Not needed: folder/tools/protocol absent; use the records above. |
