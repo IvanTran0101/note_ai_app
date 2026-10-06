@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d292195d-20ba-465b-a9f6-5304b20bf9ea",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/candidate.json",
+  "output": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.html",
+  "specification": {
+    "sha256": "8f4a3d46668ff054fb9793a2c77eeb70ec4da649dc7732effef782833d3bcb21",
+    "bytes": 15803
+  },
+  "artifact": {
+    "sha256": "fe60e9ea852a27acabf6d8e1b2d939b8ea463a39076c8d3d50fe73123632c61f",
+    "bytes": 780809
+  }
+}
