@@ -59,6 +59,7 @@ AGENTS.md
 /.agents
 skills-lock.json
 /.claude
+/.pack/
 
 # Local secrets, credentials, and signing material
 .env

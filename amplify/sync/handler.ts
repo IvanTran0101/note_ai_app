@@ -278,12 +278,16 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
       return unauthorizedResponse();
     }
     if (event.rawPath === '/sync/v2/label-projections' && methodOf(event) === 'POST') {
-      return await labelProjectionResponse(ownerId, JSON.parse(event.body ?? 'null'), NOTES_TABLE_NAME, documentClient, security);
+      let body: unknown;
+      try { body = JSON.parse(event.body ?? 'null'); }
+      catch { return invalidMutationResponse('BODY_MALFORMED'); }
+      return await labelProjectionResponse(ownerId, body, NOTES_TABLE_NAME, documentClient, security);
     }
 
     return route === 'mutations' ? await handleMutation(event, ownerId) : await handleChanges(event, ownerId);
   } catch (error) {
-    if (error instanceof NoteSecurityError) return securityErrorResponse(error);
+    const mapped = responseForStoreError(route, error);
+    if (mapped !== undefined) return mapped;
     // Nothing about the failure crosses the contract: no message, stack, cause,
     // token, or request data is logged or returned.
     console.error('sync request failed', { route, errorName: errorNameOf(error) });

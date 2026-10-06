@@ -26,5 +26,8 @@ export function createAttachmentStorage(scope: Construct, handler: IFunction, or
     resources: [bucket.arnForObjects('staging/*')]}));
   handler.addToRolePolicy(new PolicyStatement({actions: ['s3:ListBucketVersions'], resources: [bucket.bucketArn],
     conditions: {StringLike: {'s3:prefix': ['staging/*']}}}));
+  // HEAD of an absent object is 404 only with this bucket-level permission.
+  // The trusted backend needs that distinction for new final objects/recovery.
+  handler.addToRolePolicy(new PolicyStatement({actions: ['s3:ListBucket'], resources: [bucket.bucketArn]}));
   return bucket;
 }

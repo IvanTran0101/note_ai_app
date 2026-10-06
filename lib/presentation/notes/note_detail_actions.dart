@@ -126,6 +126,7 @@ extension _NoteDetailActions on NoteDetailPageState {
     }
     final int accepted = _summaryController.acceptedResultCount;
     _update(() {
+      _refreshAcknowledgedNote();
       _error = null;
       _statusMessage = null;
     });

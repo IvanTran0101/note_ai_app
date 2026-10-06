@@ -204,14 +204,16 @@ Provider trả plain text; backend tự đóng gói JSON response, không cần 
 
 | Stage | Chính sách prompt |
 | --- | --- |
-| `direct` | Tóm tắt dữ kiện trong note; giữ ngôn ngữ, không theo app locale |
-| `section` | Giữ tên, con số, thời điểm, phủ định và ý chính phục vụ merge |
-| `merge` | Hợp nhất theo thứ tự, tránh lặp; không tự giải quyết mâu thuẫn bằng cách đoán |
+| `direct` | Tóm tắt ý chính trong tối đa 2 câu ngắn/45 từ; giữ ngôn ngữ, không theo app locale |
+| `section` | Tối đa 1 câu ngắn/25 từ; giữ dữ kiện thiết yếu và phủ định phục vụ merge |
+| `merge` | Tối đa 2 câu ngắn/45 từ; hợp nhất theo thứ tự, tránh lặp và không đoán cách giải quyết mâu thuẫn |
 
 Inputs được coi là dữ liệu, không phải system instructions. Nội dung trộn ngôn
 ngữ phải được xử lý theo nguồn; không thêm một generation call chỉ để phát hiện
 ngôn ngữ. Output 128/256 tokens ưu tiên summary ngắn, có thể mất chi tiết phụ;
-không hứa 80–150 từ hoặc cố cắt output để đạt số từ.
+không hứa 80–150 từ hoặc cố cắt output để đạt số từ. Giới hạn câu/từ là hướng dẫn
+cho model, không bảo đảm hard cap; backend vẫn chỉ nhận `finish_reason=stop`.
+Ưu tiên ý chính, bỏ chi tiết phụ và kết thúc câu trước khi chạm trần output.
 
 Các giới hạn vận hành sau được giữ trong plan Phase 1 mà user đã yêu cầu thực
 hiện. Chúng là cấu hình dự kiến cho phase implementation sau, không phải kết

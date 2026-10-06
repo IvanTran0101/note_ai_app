@@ -3,9 +3,8 @@
     {
       "name": "Default",
       "files": [
-        "noteflow-system.architecture.json",
-        "noteflow-system.html",
-        "noteflow-system.visual-check.json",
+        ".gitignore",
+        "macos/Flutter/GeneratedPluginRegistrant.swift",
         ".vscode/changelists.json"
       ]
     }

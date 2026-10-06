@@ -3,13 +3,43 @@ import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { Function } from 'aws-cdk-lib/aws-lambda';
+import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { S3Client, HeadObjectCommand, GetObjectCommand, CreateMultipartUploadCommand,
   UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand,
   ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { S3AttachmentObjects } from './s3_object_store';
 import { createAttachmentStorage } from './infrastructure';
 import { CHUNK_BYTES } from './models';
+test('concrete backend role can distinguish missing objects on exactly its bucket', () => {
+  const app = new App(), stack = new Stack(app, 'RoleTest');
+  const fn = new Function(stack, 'Fn', {runtime: Runtime.NODEJS_22_X,
+    handler: 'index.handler', code: Code.fromInline('exports.handler=async()=>{}')});
+  const bucket = createAttachmentStorage(stack, fn, ['https://notes.example.invalid']);
+  const resources: any = Template.fromStack(stack).toJSON().Resources;
+  const statements: any[] = Object.values(resources).filter((r: any) => r.Type === 'AWS::IAM::Policy')
+    .flatMap((r: any) => r.Properties.PolicyDocument.Statement);
+  const list = statements.filter(s => [s.Action].flat().includes('s3:ListBucket'));
+  assert.equal(list.length, 1);
+  assert.deepEqual([list[0].Resource].flat(), [stack.resolve(bucket.bucketArn)]);
+  assert.equal(list[0].Condition, undefined);
+  const deletes = statements.filter(s => [s.Action].flat().includes('s3:DeleteObject'));
+  assert.equal(deletes.length, 1);
+  assert.deepEqual([deletes[0].Resource].flat(), [stack.resolve(bucket.arnForObjects('staging/*'))]);
+});
+
+test('genuine HEAD 403 never starts multipart assembly', async () => {
+  const calls: string[] = [];
+  const client = {send: async (c: any) => {
+    calls.push(c.constructor.name);
+    throw Object.assign(new Error('synthetic denial'), {name: 'Forbidden', $metadata: {httpStatusCode: 403}});
+  }} as unknown as S3Client;
+  async function* chunks() { yield Buffer.from('x'); }
+  await assert.rejects(new S3AttachmentObjects('b', client).finalize('final/new', {
+    fileName: 'synthetic.txt', mimeType: 'text/plain', sizeBytes: 1,
+    sha256: createHash('sha256').update('x').digest('hex'),
+  }, chunks()), (e: any) => e.$metadata.httpStatusCode === 403);
+  assert.deepEqual(calls, ['HeadObjectCommand']);
+});
 test('CDK storage is private/versioned/TLS/retained; only staging gets CORS PUT/deletion/expiry', () => {
   const app = new App(), stack = new Stack(app, 'StorageTest');
   const fn = Function.fromFunctionArn(stack, 'Fn', 'arn:aws:lambda:us-east-1:123456789012:function:fixture');
