@@ -1,8 +1,20 @@
 # M03 — integrated source/local acceptance
 
-2026-10-06, final-tuankiet. Product source47f7ad5 includes M02/M04/M05/M06 and
-the completed attachment flows. Final regression at29e8e60 passed; no product
-source differs from47f7ad5, the matching APK used for actual native QA.
+## Current acceptance06/10 — retired-cache follow-up complete
+
+Fresh full regression and actual matching working APK/headed Chrome retest pass
+with the post-5af retired-cache read fix. A different device can retire this
+device's old local binary DEK wrap; fresh authorized remote bytes now stream
+transiently instead of failing optional cache seal. Only typed staleRevision is
+handled this way. Current session/grant/association/checksum checks remain; old
+ciphertext/drafts/wraps are unchanged. Six new cases exercise real wrapped-key
+retirement, offline refusal and locked/session/denied/unavailable/mid-seal access
+loss. Actual Android WebP/PDF Page2/Lock and Chrome WebP/TXT export/hash/Lock pass.
+Retired local cache remains unavailable offline; no missing key is fabricated.
+
+2026-10-06, final-tuankiet. The accepted product includes M02/M04/M05/M06,
+47f7ad5's attachment flows and the post-5af retired-cache fix. The fresh regression
+ran on that exact product patch; working APK provenance records its fingerprint.
 M03.1–9 source/local delivery is accepted. Post-publication exact HEAD artifact
 and native refresh outcomes are recorded on the Notion progress page and ignored
 provenance JSON. Leader AWS live acceptance remains an external gate.
@@ -11,13 +23,13 @@ provenance JSON. Leader AWS live acceptance remains an external gate.
 
 | Check | Current receipt | Ignored evidence under output/m04-integration |
 | --- | --- | --- |
-| Full VM | 1213 PASS,4 configured skips,0 failures;170.1s | m03-final-vm.log |
-| Chrome127 compatible original targets | 1075 PASS,1 configured skip,0 failures;353 application/domain,412 storage/sharing,310 UI | m03-final-chrome-*.log |
-| All15 backend files | 87 PASS,0 failures;30.0s runner/20.3s Node | m03-final-backend.log |
-| TypeScript | Clean;20.0s runner | m03-final-tsc.log |
-| Public dev configuration | 14/14 PASS;0.320s test/10.0s runner | m03-final-dev-config.log |
-| Full analyzer | No issues;140.2s analyzer/150.1s runner | m03-final-analyze.log |
-| Matching product47 native APK/UI | Build29.3s,sourceDirty=false; actual pickers/protection/PDF/large/offline/cold/reconnect PASS | m03-47f7-apk-provenance.json; UI_QA.md |
+| Full VM | 1219 PASS,4 configured skips,0 failures;140.1s runner | m03-post-cache-vm.log |
+| Chrome128 compatible original targets | 1081 PASS,1 configured skip,0 failures;359 application/domain,412 storage/sharing,310 UI | m03-post-cache-chrome-*.log |
+| All15 backend files | 87 PASS,0 failures;40.0s runner/34.61s Node | m03-post-cache-backend.log |
+| TypeScript | Clean;20.0s runner | m03-post-cache-tsc.log |
+| Public dev configuration | 14/14 PASS;0.288s test/10.0s runner | m03-post-cache-dev-config.log |
+| Full analyzer | No issues;38.8s analyzer/50.0s runner | m03-post-cache-analyze.log |
+| Matching working fix APK/UI | Build40.0s at5af +exact dirty product fingerprint; WebP/PDF Page2/Lock PASS. Broader unchanged47 UI matrix retained | m03-retired-cache-apk-provenance.json; UI_QA.md |
 | Final HEAD artifact refresh | Post-publication exact revision/hash/install-r smoke recorded in local JSON and Notion progress | m03-final-apk-provenance.json |
 
 VM skips: two attachment browser IndexedDB cases, one existing Web-store case
@@ -60,6 +72,10 @@ objects. No app database was seeded or reset for these UI flows.
 - Native protected PDF Next paints Page2, reaches Page3 boundary, Previous works;
   Lock removes the active document. Android camera H264/AMR is normalized to
   H264/AAC using owned bounded scratch; actual Ready/export/play/seek passed.
+- Follow-up after those cross-device password operations: old native wrapped DEK
+  is retired. Fresh online05 unlock now paints WebP and PDF Page2; Lock masks
+  active PDF. Chrome on current source paints WebP, exports the exact75byte TXT
+  hash and Lock closes its iframe. Retired encrypted bytes remain blocked offline.
 - Web offline password05->06, Lock/Unlock06 and cached WebP; Disable06/Enable05
   persist locally, canonical reconnect drains predecessor operations, fresh05
   online unlock gives8 Ready/All synced. Native cached offline unlock and online
@@ -77,8 +93,9 @@ objects. No app database was seeded or reset for these UI flows.
 | e0411dc | Native picker failure feedback lost after lifecycle pause. |
 | 2ec1abf | Android camera AMR audio rejected by settled H264/AAC policy. |
 | 47f7ad5 | Native PDF page navigation competing with editor scrolling. |
+| Post-5af follow-up | Retired local binary DEK blocked fresh authorized online preview after cross-device password administration. Cache persistence is optional only for typed staleRevision; guards remain. |
 
-Eleven confirmed product defects were fixed. SDK URL/CanvasKit loading, CLI
+Twelve confirmed product defects were fixed. SDK URL/CanvasKit loading, CLI
 modal/locator mistakes and fake-clock fixtures are harness issues. Old owned
 Chrome profile crashes on any download, including public TXT outside the app;
 fresh-profile actual export passes. The old profile/data/drafts were preserved.
@@ -104,7 +121,8 @@ named teams are claimed. The applicable fallback records are:
 | MUST_REMEMBER.md | Updated: accepted M03, local-first/single writer and deferred M09/live gates. |
 | CURRENT_WORK.md | Updated: final source delivery, exact mutable artifact receipt and continuation boundaries. |
 | PROGRESS.md | Updated: M03.1–9 source/local accepted, AWS leader gate separate. |
-| ACCEPTANCE.md | Created/updated: fresh full regression, actual evidence/limits and11 fixed defects. |
+| ACCEPTANCE.md | Updated: fresh full post-cache regression, actual evidence/limits and12 fixed defects. |
 | UI_QA.md | Updated: actual Chrome/native journal and current acceptance above historical checkpoints. |
 | HANDOFF.md | Created: local launch, shared contracts/rollout and leader AWS checklist. |
+| CONTRACT.md / MEDIA.md | Updated: authenticated online read with retired cache wrap and explicit offline limitation. |
 | _agent_ops/* | Not needed: folder/tools/protocol absent; use the records above. |

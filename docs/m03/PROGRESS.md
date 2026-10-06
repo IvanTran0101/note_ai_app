@@ -1,8 +1,16 @@
 # M03 progress
 
+06/10 final follow-up SOURCE/LOCAL accepted. A retired local binary DEK wrap after
+remote password administration no longer blocks fresh authenticated online reads;
+typed staleRevision skips optional cache seal while retaining old encrypted data
+and all current authority/binding/checksum guards. Fresh actual Android WebP/PDF
+Page2/Lock and headed Chrome WebP/protected TXT export/hash/Lock pass. Full new
+VM1219/Chrome1081/backend87 and static checks pass; twelve product defects fixed.
+Retired cache remains blocked offline, with no key replacement or storage reset.
+
 Source/local acceptance is distinct from leader AWS deployment/live acceptance.
-Current product source: 47f7ad5 (camera normalization, native PDF controls and
-all earlier M03 integration fixes); final full regression at29e8e60 passed.
+Current product includes the post-5af retired-cache fix on the accepted47 base.
+The exact publication/APK/native refresh receipt is on Notion/local provenance.
 
 | Milestone | Source/local status | Evidence |
 | --- | --- | --- |
@@ -11,9 +19,9 @@ all earlier M03 integration fixes); final full regression at29e8e60 passed.
 | M03.3 canonical manifest/sync | Accepted | Typed v2/migration/legacy preservation; cross-device Ready |
 | M03.4 encrypted staging/reopen | Accepted | Real Chrome IndexedDB; native offline Pending/cold/reconnect |
 | M03.5 private object/upload/association | Accepted | SDK/CDK/source/local87; exact actual export hashes |
-| M03.6 scoped access/key/cache | Accepted | UI_QA.md: owner/export, sharing/revoke, lock, Web offline/native online rotation |
+| M03.6 scoped access/key/cache | Accepted | Owner/export, sharing/revoke, lock, valid-key rotation; retired-cache authorized online read/guard tests and actual native preview |
 | M03.7 picker/media/transfer UI | Accepted | UI_QA.md: native full pickers/media; Web large progress/interruption/retry/hash/seek/remove |
-| M03.8 final regression/UI | Accepted | VM1213/4 skips; Chrome1075/1 skip on127 targets; backend87, tsc/dev-config14/analyzer clean; actual UI_QA |
+| M03.8 final regression/UI | Accepted | VM1219/4 skips; Chrome1081/1 skip on128 targets; backend87, tsc/dev-config14/analyzer clean38.8s; actual UI_QA |
 | M03.9 handoff/remote | Accepted | CONTRACT/MEDIA/DEV_SETUP/ACCEPTANCE/HANDOFF; exact Git/APK/native receipt on Notion/local provenance JSON |
 | AWS deployment/live | Leader gate | DEV_SETUP.md; no deployment receipt |
 
@@ -28,6 +36,6 @@ M09 remains deferred. Preserve old QA profiles/drafts and unrelated working file
 Detailed continuation is CURRENT_WORK.md; actual UI evidence is UI_QA.md.
 
 Notion rubric17/17 and M03.1–9 source/local accepted; AWS live gate still pending.
-M03.8 regression receipt published8b04637. Final Git SHA/APK hash/native refresh
-are mutable receipts on Notion and ignored output/m04-integration JSON.
-M03.6 receipt pushed b395170; source remains47f7ad5, later commits document QA.
+Final Git SHA/APK hash/native refresh are mutable receipts on Notion and ignored
+output/m04-integration JSON. Earlier8b04637/b395170 receipts are historical;
+the fresh post-cache regression supersedes their totals and includes the new fix.

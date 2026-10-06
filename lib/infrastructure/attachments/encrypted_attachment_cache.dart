@@ -10,6 +10,7 @@ import '../../application/attachments/attachment_input.dart';
 import '../../application/attachments/attachment_policy.dart';
 import '../../application/attachments/local_attachment_draft.dart';
 import '../../application/attachments/attachment_transfer.dart';
+import '../../application/notes/note_access.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
 import 'attachment_blob_store.dart';

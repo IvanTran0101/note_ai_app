@@ -16,6 +16,20 @@ https://app.notion.com/p/3eff9c7a1aa08170856afa612fd3f271 (under final flutter).
 
 ## Latest acceptance — M03 integrated / M04 source-local complete (2026-10-05)
 
+06/10 final follow-up source/local accepted: retired local binary DEK wrap after
+cross-device password administration no longer blocks fresh authorized online
+reads. Cache-seal skips only typed staleRevision, keeps current session/grant/
+association/checksum fences and old ciphertext/drafts/wraps; no plaintext persist,
+device-key substitution or reset. Retired bytes remain unavailable offline;
+current password cannot recreate a missing retired key. Fresh full VM1219/4
+configured skips, Chrome1081/1 model skip on128 targets, backend87/87,
+tsc/dev-config14/analyzer clean38.8s. Actual matching working APK paints protected
+WebP/PDF Page2 and Lock masks preview; headed Chrome WebP/TXT export75bytes/hash/
+Lock passed. Twelve confirmed product defects fixed/retested. Exact published
+Git/APK/native refresh receipt stays on M03 Notion/local provenance JSON. Earlier
+checkpoints below are history; do not reopen accepted work from their pending
+statements. M09 deferred and leader AWS live remains separate.
+
 06/10 M03.1–9 SOURCE/LOCAL complete. Acceptance8b04637: VM1213/4 configured
 skips, Chrome1075/1 model skip on127 targets, backend87/87, tsc/dev-config14 and
 analyzer clean140.2s. Actual Chrome/Android matrix and11 fixed defects are in

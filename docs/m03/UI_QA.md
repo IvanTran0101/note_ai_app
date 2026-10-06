@@ -1,15 +1,50 @@
 # M03 actual Chrome / Android QA
 
-## Current acceptance06/10 — M03.8 source/local
+## Current acceptance06/10 — final retired-cache follow-up
 
-All listed actual UI scenarios below are accepted with product source47f7ad5;
-later29e8e60 changes only QA documents, product tree identical. Final full
-regression at29: VM1213/4 configured skips, Chrome1075/1 configured skip across
-127 compatible targets, backend87/87, tsc/dev-config14 and full analyzer clean
-140.2s. See ACCEPTANCE.md for evidence levels/limits and all11 fixed defects.
-M03.9 source/setup publication and exact final HEAD APK refresh follow next;
-its external artifact/UI receipt is in the Notion progress page/local JSON.
-The dated pending statements below are historical checkpoint records.
+M03.1–9 source/local accepted with the post-5af retired-cache fix. Fresh full
+VM1219/4 configured skips, Chrome1081/1 model skip across128 targets, backend87/87,
+tsc/dev-config14 and analyzer clean38.8s. The broader accepted47 UI matrix below
+is retained for unchanged flows; current fix actual receipts are recorded next.
+ACCEPTANCE.md distinguishes levels/limits and all12 confirmed product defects.
+Exact post-publication APK/native refresh is on Notion/local provenance JSON.
+All later pending statements in this journal are historical checkpoint records.
+
+## 06/10 — cross-device retired-cache failure and actual fix retest
+
+Clean5af APK install-r/cold start retains pin/labels/body. Web removal propagates
+to QA-M03-Transfer-Progress: zero files, exact body retained, All synced. However,
+fresh online05 unlock of QA-M03-Android repeatedly fails protected WebP preview,
+including Lock/re-unlock. Native's old local DEK wrap was retired by the earlier
+Web password administration; authorized remote bytes were incorrectly blocked
+by optional encrypted cache persistence. A real-store red test reaches
+encrypted_attachment_keys37; initial fixture validation failure was corrected
+before the true red receipt. Typed staleRevision now skips optional cache seal,
+without replacing old wrap/ciphertext or bypassing current authority checks.
+
+Working fix APK: build40.0s at5af with sourceDirty=true/exact product fingerprint
+9a19bc5573c16c5ff57c56cc68171527e5e1fbb2823e7917125f6caa1f802980;
+SHA256 A3FA390FB919381F21AD83C17EAB21CA2918DD718A87EA523D4724CA0F1380A0.
+Install-r retains data. Actual fresh online05 unlock paints expected WebP1538bytes;
+PDF Next paints page2/3 and text, Lock removes PDF/body. Screenshots:
+m03-retired-cache-fixed-webp-painted / m03-retired-cache-fixed-pdf-page2 /
+m03-retired-cache-fixed-lock-masks-pdf under output/playwright/qa-20261004.
+Duplicate PDF row helper failed uniqueness; selection used the observed full
+visible row. First stale/null UI dump was refreshed before claims; no defect
+from either harness event. Retired encrypted cache stays blocked offline,
+verified by the real-store regression; actual valid-key offline evidence below
+does not establish that a missing retired DEK can be recreated.
+
+Current headed Chrome: fresh online05 unlock receives8 Ready/All synced; WebP
+paints expected blue fixture (post-cache-webp.png). The previously used
+chrome-m03-final-owner session closes during TXT download, without a new saved
+receipt. Preserve it and its data. A new owned chrome-m03-post-cache-owner profile
+downloads qa-text.txt successfully: failure=null,75bytes, fresh09:46 timestamp,
+SHA2569D467DD58D9B40F0D2246CCC21E5660158DED08AC95F4122DB0962E63714FCF0.
+Lock removes active iframe/body; post-cache-web-lock.png. Console snapshot0 errors,
+1 warning. Profile-dependent download closure is recorded separately from the
+corrected application cache defect, following earlier public-file diagnostics.
+No browser/app/fixture state was reset; production/source guards remain.
 
 ## 06/10 — final Web transfer/validation/removal receipt
 

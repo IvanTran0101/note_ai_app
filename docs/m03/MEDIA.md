@@ -64,6 +64,13 @@ plaintext and closes handles. Durable encrypted data/drafts remain recoverable
 under the existing M05/M06 rules. Each future Range request rechecks authority;
 bytes already authorized and delivered cannot be recalled.
 
+After protection changes on another device, this device's retired binary DEK
+wrap can prevent caching. Authenticated online preview/export then streams the
+fresh bounded remote bytes without persisting plaintext or replacing that wrap.
+Session/lock/revoke, association, final checksum and per-request guards remain.
+The older encrypted chunks/drafts remain retained and unavailable offline until
+their retired key can be recovered; a current password cannot recreate that key.
+
 ## Evidence status
 
 Android camera captures with H264/AMR audio are normalized locally to H264/AAC-LC

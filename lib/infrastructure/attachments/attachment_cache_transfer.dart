@@ -228,25 +228,7 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
           if (offset != bytes.length) {
             throw StateError('Incomplete remote chunk.');
           }
-          final packet = await cipher.seal(
-            binding,
-            id,
-            i,
-            bytes,
-            operation: NoteOperation.attachmentRead,
-          );
-          _require(binding, NoteOperation.attachmentRead);
-          await _serialized(() async {
-            final index = await store.readIndex();
-            _require(binding, NoteOperation.attachmentRead);
-            final current = index[id];
-            if (current is! Map ||
-                current['scope'] != scope ||
-                !{'queued', 'linked', 'remote'}.contains(current['phase'])) {
-              throw StateError('Attachment cache was removed during read.');
-            }
-            await store.writeChunk(_chunk(id, i), packet);
-          });
+          await _cacheAuthorizedRemoteChunk(binding, id, scope, i, bytes);
         }
         _require(binding, NoteOperation.attachmentRead);
         if (bytes.length != chunkEnd - base) {
@@ -269,6 +251,43 @@ extension _AttachmentTransferCacheOps on EncryptedAttachmentCache {
         stop == attachment.sizeBytes &&
         digest.value.toString() != attachment.sha256) {
       throw const FormatException('Attachment checksum does not match.');
+    }
+  }
+
+  Future<void> _cacheAuthorizedRemoteChunk(
+    AttachmentBinding binding,
+    String id,
+    String scope,
+    int chunk,
+    List<int> bytes,
+  ) async {
+    try {
+      final packet = await cipher.seal(
+        binding,
+        id,
+        chunk,
+        bytes,
+        operation: NoteOperation.attachmentRead,
+      );
+      _require(binding, NoteOperation.attachmentRead);
+      await _serialized(() async {
+        final index = await store.readIndex();
+        _require(binding, NoteOperation.attachmentRead);
+        final current = index[id];
+        if (current is! Map ||
+            current['scope'] != scope ||
+            !{'queued', 'linked', 'remote'}.contains(current['phase'])) {
+          throw StateError('Attachment cache was removed during read.');
+        }
+        await store.writeChunk(_chunk(id, chunk), packet);
+      });
+    } on NoteSecurityFailure catch (failure) {
+      _require(binding, NoteOperation.attachmentRead);
+      if (failure.code != NoteSecurityFailureCode.staleRevision) rethrow;
+      // A different device can retire this cache's wrapped DEK. The bytes have
+      // just passed the authenticated remote reader; keep them transient rather
+      // than replace the retired wrap or write plaintext. The Application still
+      // rechecks the current association/binding before releasing each chunk.
     }
   }
 }

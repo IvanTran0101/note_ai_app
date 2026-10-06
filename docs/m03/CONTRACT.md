@@ -61,6 +61,15 @@ their original M05 root is still available. Both versions are readable during a
 crash-interrupted conversion. Remote reset with an unavailable retired key keeps
 the old wrap/ciphertext blocked for explicit recovery; no device-key substitution.
 
+After a different device changes protection, a retired local DEK wrap can remain
+unrecoverable. A fresh authorized online read of an associated immutable object
+may stream without caching when the local cache seal reports staleRevision. Each
+remote request and Application chunk still recheck current authority/binding;
+checksum validation remains. No old wrap/draft/chunk is replaced and no plaintext
+is persisted. Those retired encrypted bytes remain unavailable offline; a current
+unlock alone cannot recreate a missing retired key. Local administration with a
+valid current DEK continues to rewrap/carry its encrypted cache normally.
+
 A cancel ACK before begin persists a conditional tombstone, so a late begin is
 refused without reserving quota. Begin under fresh owner authority can renew an
 unlinked pending attempt to the current protection epoch while preserving its

@@ -1,9 +1,10 @@
 # M03 — collaborator and leader handoff
 
-2026-10-06, final-tuankiet. Product source47f7ad5 completes the integrated
-attachment flows; final full regression passed at29e8e60 and was published in
-8b04637. ACCEPTANCE.md records1213 VM/1075 Chrome/87 backend passes, configured
-skips, clean static checks and actual UI evidence. M03.1–9 source/local delivery
+2026-10-06, final-tuankiet. The product includes47f7ad5's integrated attachment
+flows and the post-5af retired-cache read fix. Fresh full regression of that
+product tree passed: ACCEPTANCE.md records1219 VM/1081 Chrome/87 backend passes,
+configured skips, clean static checks and actual Chrome/Android evidence.
+M03.1–9 source/local delivery
 is accepted; final post-publication APK/native receipt is recorded on the Notion
 progress page and ignored output/m04-integration/m03-final-apk-provenance.json.
 M02/M04/M05/M06 remain composed through the same canonical store,
@@ -44,6 +45,11 @@ Local actors are fixtures, not Cognito accounts or AWS credentials.
   migrate old chunk AAD before retiring its key. Lock/revoke/session change
   invalidates reader/preview capability; blocked ciphertext is retained for
   explicit recovery, without device-key fallback or silent old-grant replay.
+- Cross-device administration can retire this device's old local cache wrap.
+  Fresh authorized online reads stream transiently when optional cache seal
+  reports staleRevision, retaining current guards and old ciphertext/wraps.
+  That retired cache remains unavailable offline; a current unlock cannot
+  recreate its missing key. Valid-key local administration still preserves cache.
 - Authenticated bounded Range, no signed GET. Previously delivered bytes cannot
   be recalled; next request must reauthorize. Export is an explicit owner action.
   Web private chunks stay encrypted in IDB; viewer assets alone may be cached.

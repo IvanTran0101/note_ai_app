@@ -1,5 +1,73 @@
 # M03 completion — source/local delivery
 
+## Current record06/10 — final follow-up source/local accepted
+
+Fresh full regression VM1219/4 configured skips, Chrome1081/1 configured model
+skip across128 targets(359/412/310), backend87/87, tsc/dev-config14 and analyzer
+clean38.8s passes on the unchanged post-5af retired-cache product patch. Working
+APK40.0s/fingerprint9a19bc.../hashA3FA390F... actual Android WebP/PDF Page2/Lock
+passes. Current headed Chrome WebP/8 Ready/All synced, fresh profile protected
+TXT75bytes/hash and Lock pass. Final-owner download session closes; retained it,
+new post-cache-owner export works. Profile closure is separate from12th fixed
+product defect. Retired ciphertext/wrap stays blocked offline, no key fabrication.
+
+Notion M03.1–9/V01–11 and rubric17/17 source/local are checked and fetch-verified;
+only leader AWS live remains unchecked. All three pages are inside final flutter.
+Next: explicit owned source/test/docs staging, commit/push final-tuankiet, exact
+remote SHA; strict clean exact HEAD APK from R: and install-r/native final smoke. Append exact
+artifact outcome to Notion/local JSON without another publication that changes
+HEAD. _agent_ops/ absent; closure records are listed in ACCEPTANCE.md.
+Backend86399 retains encrypted state; owned Chrome/Web6263/AVD closed normally
+after acceptance, profiles/data retained. Final native refresh restarts the AVD.
+Preserve macOS original72E079.../.playwright-cli/final_project.md and every app/
+browser/draft/fixture record. M09 deferred, AWS deployment/live remains leader gate.
+
+All continuation/diagnostic sections below are history, including pending work
+already accepted here. The next publication/artifact receipt supersedes5af.
+
+## Historical follow-up — cross-device protection/cache read06/10
+
+Fresh full follow-up acceptance is now PASS: VM1219/4 configured skips, Chrome
+1081/1 configured model skip across128 targets(359/412/310), backend87/87,
+tsc/dev-config14 and analyzer clean38.8s. Receipt m03-post-cache-regression.json;
+product patch unchanged through regression and working APK build40.0s, hash
+A3FA390F.../sourceDirty=true at5af. Actual Android fresh online05 unlock now paints
+the expected WebP and PDF Page2; Lock removes preview/body. Retained eight-file
+manifest and cross-device removal/body/All synced receipts remain. Backend86399
+alive, AVD closed normally retaining data; Web6263/main_dev8776 is ready. Fresh
+headed Chrome m04-owner/current source smoke, docs/Notion publication and exact
+final HEAD APK/install-r smoke remain next. Old ciphertext/wrap is retained and
+unavailable offline after remote retirement; online fresh authorized bytes stay
+transient. This is the twelfth confirmed product defect fixed/retested.
+
+The paragraphs below record the earlier diagnostic state of this follow-up.
+
+Fix is in attachment_cache_transfer/_cacheAuthorizedRemoteChunk, with the failure
+type imported in encrypted_attachment_cache. Skip cache-seal staleRevision only
+after authenticated remote bytes; Application binding/association/checksum and
+session/grant guards remain. New retired-cache test file6 cases uses real wrapped
+keys/snapshots/ciphertext. Initial fixture lacked a readable refreshed snapshot;
+corrected true red receipt reaches encrypted_attachment_keys37. After VM17/
+Chrome17 focused pass, added mid-seal authority-loss case for full run. Current
+98874 runs full VM->Chrome128(57/40/31)->backend15/tsc/dev-config/analyzer serially.
+AVD/Web stopped, backend86399 retained. Test split isolates retired-cache evidence;
+original key_lifecycle_test restored unchanged. Actual native/new final APK and
+explicit publication follow after fresh full acceptance.
+
+Final5af2a37 APK clean/sourceDirty=false/hash50709E7... installed-r and cold
+started. Cross-device Web removal reaches native0 files/body preserved/All synced.
+Fresh online05 unlock succeeds, but protected WebP preview repeatedly fails
+staleRevision, even after Lock/fresh online unlock. Source exact fallback confirms
+old local binary DEK wrap remains at retired protection epoch after Web admin;
+read cache fetches fresh authenticated bytes but seal with stale local wrap throws
+and incorrectly blocks online preview. Preserve all old encrypted cache/drafts/
+wraps; authorized remote read must work without persisting plaintext or replacing
+retired keys. Reopen M03.6/8 acceptance until focused +actual native +full regression
+pass. Fix only read-through cache optional seal on typed retired-key staleRevision,
+keep session/lock/revoke/checksum/association guards. Graph stale10/02/untracked,
+coverage queried, exact source read. Backend86399/AVD retained; Web stopped.
+M09/AWS live remain separate. No final completion claim from5af yet.
+
 ## Current record06/10 — M03.1–9 source/local complete
 
 8b04637 source/local acceptance is pushed and exact remote SHA verified. Product
