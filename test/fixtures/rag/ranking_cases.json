@@ -1,0 +1,88 @@
+{
+  "provenance": "offline-RRF-examples-not-search-quality-evidence",
+  "cases": [
+    {
+      "id": "rank-01",
+      "rankings": [
+        [
+          "A",
+          "B",
+          "C"
+        ],
+        [
+          "B",
+          "D",
+          "A"
+        ]
+      ],
+      "expected": [
+        "B",
+        "A",
+        "D",
+        "C"
+      ],
+      "contracts": [
+        "C06",
+        "C07"
+      ]
+    },
+    {
+      "id": "rank-02",
+      "rankings": [
+        [],
+        [
+          "B",
+          "A"
+        ]
+      ],
+      "expected": [
+        "B",
+        "A"
+      ],
+      "contracts": [
+        "C06",
+        "C24"
+      ]
+    },
+    {
+      "id": "rank-03",
+      "rankings": [
+        [
+          "A",
+          "A",
+          "B"
+        ],
+        [
+          "B",
+          "A"
+        ]
+      ],
+      "expected": [
+        "A",
+        "B"
+      ],
+      "contracts": [
+        "C06",
+        "C07"
+      ]
+    },
+    {
+      "id": "rank-04",
+      "rankings": [
+        [
+          "B"
+        ],
+        [
+          "A"
+        ]
+      ],
+      "expected": [
+        "A",
+        "B"
+      ],
+      "contracts": [
+        "C06"
+      ]
+    }
+  ]
+}

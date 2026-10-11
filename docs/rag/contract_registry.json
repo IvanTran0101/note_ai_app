@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "scopeDecision": {
+    "id": "OPEN01",
+    "status": "APPROVED_BY_USER",
+    "scope": {
+      "ownership": "own",
+      "syncedOnly": true,
+      "textOnly": true,
+      "protectedAllowed": false,
+      "sharedAllowed": false,
+      "attachmentsAllowed": false,
+      "turns": 1,
+      "scopeTypes": [
+        "account",
+        "note"
+      ]
+    }
+  },
+  "contracts": [
+    {
+      "id": "C01",
+      "status": "A",
+      "rule": "Flutter Web Vercel; backend RAG và BM25 trên AWS",
+      "plannedSteps": "P3.1 / P5.4",
+      "requiredEvidence": "Browser→AWS API; không provider key/BM25 index trong web bundle",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C02",
+      "status": "A",
+      "rule": "Paragraph-first; sentence/token fallback cho phần lớn; pack liền kề; target 400/max 512 tokens, overlap 0",
+      "plannedSteps": "P1.3 / P2.2 / P3.2",
+      "requiredEvidence": "Golden spans, Unicode, không bỏ đuôi; title/prefix tính trong budget",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C03",
+      "status": "A",
+      "rule": "Cohere Multilingual V3; 1024 chiều; document/search_document, question/search_query",
+      "plannedSteps": "P1.3 / P3.2",
+      "requiredEvidence": "Model/input type/dimensions; token + character preflight",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C04",
+      "status": "A",
+      "rule": "S3 Vectors pre-filter phạm vi hợp lệ + semantic Top-20",
+      "plannedSteps": "P2.1 / P2.3 / P3.1–2",
+      "requiredEvidence": "Filtered candidates, canonical authority, no cross-account text",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C05",
+      "status": "A",
+      "rule": "BM25 độc lập Top-20 trong Lambda; snapshot S3 thường; RAM/tmp là cache",
+      "plannedSteps": "P2.2–3 / P3.3",
+      "requiredEvidence": "Keyword-only match, tenant isolation, cache miss/stale/corrupt",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C06",
+      "status": "A",
+      "rule": "RRF constant 60, equal weights; rank từ 1; absent contribution 0",
+      "plannedSteps": "P1.3 / P2.3",
+      "requiredEvidence": "Fixture B-A-D-C, score/tie deterministic; không cộng raw BM25/cosine",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C07",
+      "status": "A/E",
+      "rule": "Merge đúng source identity/revision, một đóng góp mỗi branch; union tối đa 40",
+      "plannedSteps": "P1.3 / P2.3 / P3.3–4",
+      "requiredEvidence": "Duplicates và mixed revision; giữ provenance của hai nhánh",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C08",
+      "status": "A",
+      "rule": "MMR = RRF chuẩn hóa + cosine giữa chunks; λ 0.7; tối đa 8 anchors",
+      "plannedSteps": "P1.3 / P2.4",
+      "requiredEvidence": "Normalization OPEN03 được giải quyết; relevance/diversity/tie fixtures",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C09",
+      "status": "A",
+      "rule": "GetVectors theo batch; reuse vectors cùng model/revision; không re-embed shortlist",
+      "plannedSteps": "P2.4 / P3.2",
+      "requiredEvidence": "Keyword-only candidate có vector hợp lệ; schema/missing-vector errors",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C10",
+      "status": "A",
+      "rule": "Expansion tối đa 1 chunk trước + 1 sau mỗi anchor; không đệ quy",
+      "plannedSteps": "P1.3 / P2.4",
+      "requiredEvidence": "Không vượt ±1; không mở rộng từ neighbor; không ép đủ neighbors",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C11",
+      "status": "A",
+      "rule": "Expansion cùng note/revision/section, còn quyền và đủ điều kiện",
+      "plannedSteps": "P2.1 / P2.4 / P3.4",
+      "requiredEvidence": "Locked/deleted/revoked/stale neighbor không trở thành evidence",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C12",
+      "status": "A",
+      "rule": "Dedupe source identity/overlapping spans; merge contiguous spans cùng nguồn hợp lệ",
+      "plannedSteps": "P1.3 / P2.4",
+      "requiredEvidence": "C2+C3 windows thành C1-C2-C3-C4 một lần; source map không mất",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C13",
+      "status": "A",
+      "rule": "Giữ text gần giống nhưng khác nguồn, số liệu, điều kiện, đơn vị hoặc phủ định",
+      "plannedSteps": "P2.4 / P4.5",
+      "requiredEvidence": "80/100 và có/không không bị semantic-dedupe xóa",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C14",
+      "status": "A",
+      "rule": "Evidence cap 6000 tokens theo DeepSeek, gồm title/source labels; prompt/query/output ngân sách riêng",
+      "plannedSteps": "P1.3 / P2.4 / P4.1–4",
+      "requiredEvidence": "Đếm serialized evidence thực; kiểm giới hạn model Jev riêng",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C15",
+      "status": "A",
+      "rule": "Ưu tiên anchors; quá budget bỏ expansion trước; không cắt tùy tiện giữa câu",
+      "plannedSteps": "P2.4 / P4.3–5",
+      "requiredEvidence": "Low-priority removal và citations vẫn đúng; đủ điều kiện không bằng đủ bằng chứng",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C16",
+      "status": "A",
+      "rule": "Hai Noul: answerable_from_evidence + has_unresolved_conflict, criteria ở dưới",
+      "plannedSteps": "P1.4 / P2.5 / P4.1–2",
+      "requiredEvidence": "Exactly named noul answers; true/false fixtures VI/EN",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C17",
+      "status": "E",
+      "rule": "Minimal state text/source labels; source bundle immutable và bound tới request/revisions",
+      "plannedSteps": "P1.2 / P2.5 / P4.1–5",
+      "requiredEvidence": "Không vectors/scores/JWT/secrets; không thay evidence sau verdict",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C18",
+      "status": "A/E",
+      "rule": "Backend decision; allow mới generate; uncertainty/conflict/insufficient thì abstain",
+      "plannedSteps": "P1.4 / P2.5 / P4.2",
+      "requiredEvidence": "Thresholds OPEN04 không bịa; malformed/error khác no-evidence; DeepSeek 0 calls khi deny",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C19",
+      "status": "A",
+      "rule": "Không tự retrieve lại hoặc retry/fallback generation sau NOT_ENOUGH_CONTEXT",
+      "plannedSteps": "P2.3 / P2.5 / P4.4",
+      "requiredEvidence": "Call counters và bounded deadline; không hidden SDK generation retries",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C20",
+      "status": "A/E",
+      "rule": "DeepSeek viết từ evidence đã gate; backend kiểm citation/currentness; semantic quality còn phải eval",
+      "plannedSteps": "P1.2 / P2.5 / P4.3–5 / P5.2",
+      "requiredEvidence": "Known source IDs/spans; unsupported answer/citation fixtures; mở source đúng",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C21",
+      "status": "E",
+      "rule": "Canonical actor/consent/source status/revision checks ở indexing, retrieval, egress và release",
+      "plannedSteps": "P1.1 / P2.1 / P3.4 / P4.4 / P5.1–3",
+      "requiredEvidence": "Metadata filter không thay authority; deny/revoke/delete mid-run",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C22",
+      "status": "E",
+      "rule": "RAG consent riêng, default off; không reuse Summary grant; account/session/version binding",
+      "plannedSteps": "P1.1 / P2.1 / P3.4 / P5.1",
+      "requiredEvidence": "Eligibility/revoke store OPEN08; locale theo preference, không thêm language preference",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C23",
+      "status": "A/E",
+      "rule": "n8n async indexing ngoài query path; index/snapshot/cache publication chống replay/stale jobs",
+      "plannedSteps": "P1.1 / P3.3–5",
+      "requiredEvidence": "OPEN06/08 được giải quyết; out-of-order/partial-failure receipts",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C24",
+      "status": "E",
+      "rule": "Absence/uncertainty khác index-not-ready, auth, provider/validation và source-changed errors",
+      "plannedSteps": "P1.2 / P2.5 / P3.3 / P4.1–5 / P5.2",
+      "requiredEvidence": "Wire codes OPEN07; error không bị giả thành NOT_ENOUGH_CONTEXT",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    },
+    {
+      "id": "C25",
+      "status": "E",
+      "rule": "Secrets backend; focused tests; mock/live receipts riêng; AWS staging target 5 USD, external AI cost riêng",
+      "plannedSteps": "P1.5 / P2.5 / P3 / P4 / P5",
+      "requiredEvidence": "No content/secret logs; cost/latency evidence; no auto full-suite/deploy claim",
+      "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
+      "runtimeVerification": "UNVERIFIED"
+    }
+  ]
+}

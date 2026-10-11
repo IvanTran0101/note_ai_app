@@ -1,0 +1,65 @@
+import policy from '../../docs/rag/policy_v1.json';
+export { policy };
+export type ErrorCode = keyof typeof policy.technicalDefaults.errorHttpStatus;
+export class RagFailure extends Error {
+  constructor(public readonly code: ErrorCode) { super(code); }
+}
+export type Scope = Readonly<{ type: 'account' }> | Readonly<{ type: 'note'; noteId: string }>;
+export type RagRequest = Readonly<{ wireVersion: 1; question: string; scope: Scope }>;
+export type CanonicalNote = Readonly<{
+  ownerId: string; noteId: string; revision: number; title: string; content: string;
+  synced: boolean; protected: boolean; deleted: boolean; available: boolean;
+  incomingShared?: boolean;
+}>;
+export type Chunk = Readonly<{
+  ownerId: string; noteId: string; revision: number; sectionId: string; chunkId: string;
+  ordinal: number; title: string; startOffset: number; endOffset: number; text: string;
+}>;
+export type Ranked = Readonly<{ chunk: Chunk; rank: number }>;
+export type Candidate = Readonly<{ chunk: Chunk; score: number; vectorRank?: number; bm25Rank?: number }>;
+export type Source = Readonly<{
+  sourceId: string; noteId: string; revision: number; title: string;
+  startOffset: number; endOffset: number; quote: string;
+}>;
+export type Evidence = Readonly<{ sources: readonly Source[]; text: string }>;
+export type Counter = (text: string) => number;
+export type Counters = Readonly<{ embedding: Counter; evidence: Counter; jev: Counter; output: Counter }>;
+export type Verdict = 'ALLOW' | 'INSUFFICIENT_EVIDENCE' | 'UNRESOLVED_CONFLICT' | 'UNCERTAIN';
+export type RagResponse =
+  | Readonly<{ wireVersion: 1; requestId: string; status: 'ANSWERED'; answer: string; sources: readonly Source[] }>
+  | Readonly<{ wireVersion: 1; requestId: string; status: 'NOT_ENOUGH_CONTEXT'; reason: Exclude<Verdict, 'ALLOW'>; answer: null; sources: readonly [] }>
+  | Readonly<{ wireVersion: 1; requestId: string; status: 'ERROR'; code: ErrorCode }>;
+export type CanonicalState = Readonly<{
+  actorId: string; sessionGeneration: number;
+  consent: Readonly<{ accepted: boolean; version: string; generation: number }>;
+  indexReady: boolean; manifestVersion: string; notes: readonly CanonicalNote[];
+}>;
+export type AuthorityStore = Readonly<{ read(actor: string, signal: AbortSignal): Promise<CanonicalState> }>;
+export type RequestContext = Readonly<{
+  actor: string; request: RagRequest; state: CanonicalState; notes: readonly CanonicalNote[];
+  signal: AbortSignal; revalidate(): Promise<void>;
+}>;
+export type RetrievalDeps = Readonly<{
+  embedQuery(question: string, signal: AbortSignal): Promise<readonly number[]>;
+  vectorSearch(vector: readonly number[], context: RequestContext): Promise<readonly Ranked[]>;
+  keywordSearch(question: string, context: RequestContext): Promise<readonly Ranked[]>;
+  getVectors(chunks: readonly Chunk[], context: RequestContext): Promise<ReadonlyMap<string, readonly number[]>>;
+  neighbors(anchors: readonly Chunk[], context: RequestContext): Promise<readonly Chunk[]>;
+}>;
+export type JevInput = Readonly<{
+  model: string; questionSetVersion: string;
+  questions: typeof policy.jev.questions;
+  state: Readonly<{ question: string; evidence: string }>;
+}>;
+export type GenerateInput = Readonly<{ question: string; evidence: Evidence; maxOutputTokens: number }>;
+export type Providers = Readonly<{
+  jev(input: JevInput, signal: AbortSignal): Promise<unknown>;
+  generate(input: GenerateInput, signal: AbortSignal): Promise<unknown>;
+}>;
+export type RuntimeConfig = Readonly<{
+  mode: 'mock' | 'live'; model: string | null;
+  thresholds: Readonly<{ answerabilityMin: number; conflictMax: number }> | null;
+  jevMaxTokens: number; requestTimeoutMs: number;
+}>;
+export const sourceKey = (c: Pick<Chunk, 'ownerId' | 'noteId' | 'revision' | 'sectionId' | 'chunkId'>): string =>
+  JSON.stringify([c.ownerId, c.noteId, c.revision, c.sectionId, c.chunkId]);
