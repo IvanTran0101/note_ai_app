@@ -5,6 +5,7 @@ import '../../application/sync/sync_conflict_resolver.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'sync_localizations.dart';
+import '../../domain/notes/note_body.dart';
 import '../../application/sync/sync_metadata_projection.dart';
 import '../notes/note_security_localizations.dart';
 
@@ -109,7 +110,9 @@ final class _SyncConflictChoices extends StatelessWidget {
     final Widget local = _VersionCard(
       label: copy.localVersion,
       title: hide ? securityCopy.protectedNote : conflict.local.title,
-      content: hide ? securityCopy.locked : conflict.local.content,
+      content: hide
+          ? securityCopy.locked
+          : NoteBody.plainText(conflict.local.content),
       detail: copy.noteStatus(conflict.local.status),
     );
     final Widget server = _VersionCard(
@@ -121,7 +124,7 @@ final class _SyncConflictChoices extends StatelessWidget {
           ? copy.remoteDeleted
           : hide
           ? securityCopy.locked
-          : remote.content,
+          : NoteBody.plainText(remote.content),
       detail: remote == null
           ? copy.remoteMissing
           : 'Revision ${remote.revision}',

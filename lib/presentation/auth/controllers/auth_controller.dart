@@ -45,6 +45,12 @@ final class AuthController extends ChangeNotifier {
 
   AuthState get state => _state;
 
+  void dismissError() {
+    if (!_disposed && !_state.isBusy && _state.error != null) {
+      _emit(_stableState());
+    }
+  }
+
   void _onAuthStateChanged(AuthUserDto? user) {
     if (_disposed) {
       return;

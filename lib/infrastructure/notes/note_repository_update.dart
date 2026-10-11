@@ -87,7 +87,8 @@ extension _NoteRepositoryUpdate on NoteRepository {
     }
     if (note.title != old.title || note.content != old.content) {
       _authorizeUpdate(note, actor, NoteOperation.edit);
-      if (note.title.trim().isEmpty || note.content.trim().isEmpty) {
+      if (note.title.trim().isEmpty ||
+          NoteBody.plainText(note.content).trim().isEmpty) {
         throw ArgumentError('Note text must not be blank.');
       }
     }

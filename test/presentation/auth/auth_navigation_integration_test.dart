@@ -10,6 +10,43 @@ import 'package:note_ai_app/presentation/routing/app_router.dart';
 import 'package:note_ai_app/presentation/routing/app_routes.dart';
 
 void main() {
+  testWidgets('cancelling recovery preserves the intended protected route', (
+    tester,
+  ) async {
+    final controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    await controller.initialize();
+    final router = createAppRouter(
+      authController: controller,
+      workspaceBuilder: (_) => const Text('Workspace'),
+    );
+    addTearDown(router.dispose);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    const intended = '/notes/note-1?tab=summary';
+    for (final path in <String>[
+      AppRoutes.forgotPassword,
+      AppRoutes.resetPassword,
+    ]) {
+      router.go(
+        Uri(
+          path: path,
+          queryParameters: const <String, String>{'redirect': intended},
+        ).toString(),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Back to log in'));
+      await tester.tap(find.text('Back to log in'));
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, AppRoutes.login);
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['redirect'],
+        intended,
+      );
+    }
+  });
+
   testWidgets(
     'protected route redirects to login and returns after successful login',
     (WidgetTester tester) async {
@@ -149,6 +186,10 @@ void main() {
     expect(find.byKey(LoginPage.submitKey), findsOneWidget);
     expect(service.passwordResetRequests, 1);
     expect(service.passwordResetConfirmations, 1);
+    expect(
+      find.text('Password reset. Log in with your new password.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('change password succeeds and logout returns to login', (

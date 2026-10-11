@@ -1,4 +1,5 @@
 import 'note_access.dart';
+import '../../domain/notes/note_body.dart';
 import 'note_dto.dart';
 import 'note_editor_snapshot.dart';
 import '../../domain/notes/note_protection.dart';

@@ -8,6 +8,8 @@ import 'note_detail_summary.dart';
 import 'note_summary_availability.dart';
 import 'note_summary_feedback.dart';
 import 'notes_theme_tokens.dart';
+import 'note_rich_text.dart';
+import '../../domain/notes/note_body.dart';
 
 /// Scrollable editor content for [NoteDetailPage].
 ///
@@ -99,17 +101,17 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
     final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
     final bool animateSummary =
-        isSummarizing && !MediaQuery.disableAnimationsOf(context);
+        isSummarizing &&
+        NoteBody.delta(contentController.text) == null &&
+        !MediaQuery.disableAnimationsOf(context);
     final TextStyle contentStyle =
-        bodyStyle?.copyWith(color: tokens.textPrimary, height: 1.5) ??
-        TextStyle(color: tokens.textPrimary, height: 1.5);
-    final bool compactWeb =
-        kIsWeb &&
-        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
-    final double titleLeadingInset = compactWeb
-        ? NoteFlowLayout.compactWebEditorTitleLeadingInset
-        : 0;
-    const double titleFontSize = 40;
+        bodyStyle?.copyWith(
+          color: tokens.textPrimary,
+          height: 1.6,
+          letterSpacing: 0,
+        ) ??
+        TextStyle(color: tokens.textPrimary, height: 1.6, letterSpacing: 0);
+    const double titleFontSize = 32;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -126,6 +128,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
             fontWeight: FontWeight.w700,
             color: tokens.textPrimary,
             height: 1.2,
+            letterSpacing: 0,
           ),
           decoration: InputDecoration(
             hintText: copy.titleLabel,
@@ -138,38 +141,19 @@ final class NoteDetailEditorForm extends StatelessWidget {
             filled: false,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: tokens.focusRing, width: 1.5),
+            ),
             errorBorder: InputBorder.none,
             focusedErrorBorder: InputBorder.none,
-            contentPadding: EdgeInsets.fromLTRB(
-              titleLeadingInset,
-              NoteFlowSpacing.sm,
-              0,
-              NoteFlowSpacing.sm,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: NoteFlowSpacing.sm,
             ),
           ),
         ),
-        const SizedBox(height: NoteFlowSpacing.sm),
-        if (summaryAvailability != null)
-          NoteSummaryFeedback(
-            copy: copy,
-            availability: summaryAvailability!,
-            cloud: summaryCloud,
-            isRunning: isSummarizing,
-            onCancel: onCancelSummary,
-          ),
-        NoteDetailSummary(
-          copy: copy,
-          hasSavedNote: hasSavedNote,
-          summary: summary,
-          isStale: summaryStale,
-          isSummarizing: isSummarizing,
-          onCopy: onCopySummary,
-          onRegenerate: onRegenerateSummary,
-          copyLabel: copySummaryLabel,
-          regenerateLabel: regenerateSummaryLabel,
-        ),
-        ?attachments,
+        const SizedBox(height: NoteFlowSpacing.md),
+        Divider(height: 1, color: tokens.divider),
+        const SizedBox(height: NoteFlowSpacing.md),
         Container(
           key: contentFieldContextKey,
           child: Align(
@@ -189,32 +173,42 @@ final class NoteDetailEditorForm extends StatelessWidget {
                 active: animateSummary,
                 controller: contentController,
                 textStyle: contentStyle,
-                child: TextField(
-                  key: const ValueKey<String>('note-detail-content-field'),
-                  controller: contentController,
-                  readOnly: readOnly,
-                  focusNode: contentFocusNode,
-                  minLines: 1,
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  textCapitalization: TextCapitalization.sentences,
-                  style: animateSummary
-                      ? contentStyle.copyWith(color: Colors.transparent)
-                      : contentStyle,
-                  cursorColor: animateSummary
-                      ? Colors.transparent
-                      : tokens.textPrimary,
-                  decoration: InputDecoration(
-                    hintText: copy.contentLabel,
-                    hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: NoteFlowSpacing.sm,
+                child: NoteRichBody(
+                  fieldKey: const ValueKey<String>('note-detail-content-field'),
+                  placeholder: copy.contentLabel,
+                  style: contentStyle,
+                  plainEditor: TextField(
+                    key: const ValueKey<String>('note-detail-content-field'),
+                    controller: contentController,
+                    readOnly: readOnly,
+                    focusNode: contentFocusNode,
+                    minLines: 3,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: animateSummary
+                        ? contentStyle.copyWith(color: Colors.transparent)
+                        : contentStyle,
+                    cursorColor: animateSummary
+                        ? Colors.transparent
+                        : tokens.textPrimary,
+                    decoration: InputDecoration(
+                      hintText: copy.contentLabel,
+                      hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(
+                          color: tokens.focusRing,
+                          width: 1.5,
+                        ),
+                      ),
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: NoteFlowSpacing.sm,
+                      ),
                     ),
                   ),
                 ),
@@ -252,7 +246,9 @@ final class NoteDetailEditorForm extends StatelessWidget {
               key: const ValueKey<String>('note-detail-error'),
               padding: const EdgeInsets.all(NoteFlowSpacing.md),
               decoration: BoxDecoration(
-                color: tokens.subtleSurface,
+                color: informationalError
+                    ? tokens.subtleSurface
+                    : tokens.error.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(NoteFlowRadius.card),
                 border: Border.all(
                   color: informationalError ? tokens.divider : tokens.error,
@@ -273,9 +269,8 @@ final class NoteDetailEditorForm extends StatelessWidget {
                     child: Text(
                       error!,
                       style: TextStyle(
-                        color: informationalError
-                            ? tokens.textSecondary
-                            : tokens.error,
+                        color: tokens.textSecondary,
+                        height: 1.5,
                       ),
                     ),
                   ),
@@ -319,11 +314,35 @@ final class NoteDetailEditorForm extends StatelessWidget {
           Semantics(
             liveRegion: true,
             label: copy.actionInProgress,
-            child: const LinearProgressIndicator(
+            child: LinearProgressIndicator(
               key: ValueKey<String>('note-detail-progress'),
+              value: MediaQuery.disableAnimationsOf(context) ? 0.5 : null,
             ),
           ),
         ],
+        const SizedBox(height: NoteFlowSpacing.xl),
+        Divider(height: 1, color: tokens.divider),
+        const SizedBox(height: NoteFlowSpacing.lg),
+        if (summaryAvailability != null)
+          NoteSummaryFeedback(
+            copy: copy,
+            availability: summaryAvailability!,
+            cloud: summaryCloud,
+            isRunning: isSummarizing,
+            onCancel: onCancelSummary,
+          ),
+        NoteDetailSummary(
+          copy: copy,
+          hasSavedNote: hasSavedNote,
+          summary: summary,
+          isStale: summaryStale,
+          isSummarizing: isSummarizing,
+          onCopy: onCopySummary,
+          onRegenerate: onRegenerateSummary,
+          copyLabel: copySummaryLabel,
+          regenerateLabel: regenerateSummaryLabel,
+        ),
+        ?attachments,
         if (provisioningReader != null)
           ModelProvisioningStatusPanel(
             reader: provisioningReader!,

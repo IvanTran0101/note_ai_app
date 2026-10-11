@@ -20,21 +20,148 @@ extension _NoteDetailLabels on NoteDetailPageState {
               !_hasRemoteEditorChange,
           onChanged: _labelsSaved,
         ),
-        if (widget.notesController is AttachmentNotesController)
-          AttachmentEditorPanel(
-            key: ValueKey(note.identity),
-            note: note,
-            controller: widget.notesController as AttachmentNotesController,
-            security: _securityController,
-            onChanged: _labelsSaved,
-            onBeforePick: () async => !_isDirty || await _save(),
-            onResumeProtected: () => _resumeProtectedAttachment(note),
-            enabled:
-                !_securityBusy && !_securityLoading && _capabilities.canRead,
-          ),
       ],
     );
   }
+
+  Widget _buildAttachmentTray() {
+    final note = _note;
+    final controller = widget.notesController;
+    return ExcludeFocus(
+      excluding: !_attachmentTrayOpen,
+      child: Offstage(
+        offstage: !_attachmentTrayOpen,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 16),
+                  const Expanded(child: Text('Attachments')),
+                  IconButton(
+                    tooltip: 'Close attachments',
+                    onPressed: () => _update(() => _attachmentTrayOpen = false),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+              if (note == null || controller is! AttachmentNotesController)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Text('No attachments'),
+                )
+              else
+                AttachmentEditorPanel(
+                  key: _attachmentKey,
+                  note: note,
+                  controller:
+                      widget.notesController as AttachmentNotesController,
+                  security: _securityController,
+                  onChanged: _labelsSaved,
+                  onBeforePick: () async => !_isDirty || await _save(),
+                  showAddAction: false,
+                  compact: true,
+                  onItemsChanged: (count) {
+                    if (mounted && _attachmentCount != count) {
+                      _update(() => _attachmentCount = count);
+                    }
+                  },
+                  onBusyChanged: (busy) {
+                    if (mounted && _attachmentBusy != busy) {
+                      _update(() => _attachmentBusy = busy);
+                    }
+                  },
+                  onResumeProtected: () => _resumeProtectedAttachment(note),
+                  enabled:
+                      !_securityBusy &&
+                      !_securityLoading &&
+                      _capabilities.canRead,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromToolbar(AttachmentSource source) async {
+    if (!_canEdit ||
+        (_note != null && !_capabilities.canManage) ||
+        (_actionBusy && !_saving) ||
+        _attachmentBusy) {
+      return;
+    }
+    final editorGeneration = _editorGeneration;
+    final sessionGeneration = _securityController?.sessionGeneration;
+    // Opening a menu may already have started focus-loss autosave.
+    if ((_saving || _note == null || _isDirty) && !await _save()) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        editorGeneration != _editorGeneration ||
+        sessionGeneration != _securityController?.sessionGeneration ||
+        !_canEdit ||
+        !_capabilities.canManage ||
+        _actionBusy ||
+        _attachmentBusy) {
+      return;
+    }
+    _update(() => _attachmentTrayOpen = true);
+    await _attachmentKey.currentState?.pick(source);
+  }
+
+  Widget _attachmentToolbarAction() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      IconButton(
+        tooltip: 'Attachments',
+        isSelected: _attachmentTrayOpen,
+        onPressed:
+            _canRead && widget.notesController is AttachmentNotesController
+            ? () => _update(() => _attachmentTrayOpen = !_attachmentTrayOpen)
+            : null,
+        icon: Badge.count(
+          count: _attachmentCount ?? _note?.attachments.length ?? 0,
+          isLabelVisible:
+              (_attachmentCount ?? _note?.attachments.length ?? 0) > 0,
+          child: const Icon(Icons.attach_file, size: 21),
+        ),
+      ),
+      PopupMenuButton<AttachmentSource>(
+        requestFocus: true,
+        tooltip: Localizations.localeOf(context).languageCode == 'vi'
+            ? 'Thêm tệp đính kèm'
+            : 'Add attachment',
+        enabled:
+            !_actionBusy &&
+            !_attachmentBusy &&
+            (_note == null || _capabilities.canManage) &&
+            _canEdit &&
+            widget.notesController is AttachmentNotesController,
+        icon: const Icon(Icons.add, size: 22),
+        popUpAnimationStyle: NoteFlowMotion.dialogStyle(context),
+        onSelected: (source) => unawaited(_pickFromToolbar(source)),
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: AttachmentSource.files,
+            child: Text('Choose files'),
+          ),
+          PopupMenuItem(
+            value: AttachmentSource.gallery,
+            child: Text('Gallery'),
+          ),
+          PopupMenuItem(
+            value: AttachmentSource.cameraPhoto,
+            child: Text('Take photo'),
+          ),
+          PopupMenuItem(
+            value: AttachmentSource.cameraVideo,
+            child: Text('Record video'),
+          ),
+        ],
+      ),
+    ],
+  );
 
   void _labelsSaved(NoteDto incoming) {
     if (!_canRead || incoming.identity != _note?.identity) return;

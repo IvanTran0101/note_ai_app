@@ -9,10 +9,13 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
+import 'package:note_ai_app/application/notes/note_security_service.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/notes/animated_note_list.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 1, 1);
 
@@ -79,6 +82,163 @@ void main() {
     );
     expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(567), -56);
     expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(600), 0);
+  });
+
+  testWidgets('view preference waits for persistence and restores on remount', (
+    tester,
+  ) async {
+    final controller = _Module02NotesController(notes: [buildNote()])
+      ..layout = NoteLayoutPreference.list;
+    await pumpWorkspace(tester, controller, size: const Size(1280, 800));
+    expect(
+      tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+      NoteLayoutPreference.list,
+    );
+    controller.layoutGate = Completer<void>();
+    await tester.tap(find.byTooltip('Grid view'));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('notes-collection-progress')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<SegmentedButton<NoteLayoutPreference>>(
+            find.byKey(const ValueKey('notes-layout-control')),
+          )
+          .onSelectionChanged,
+      isNull,
+    );
+    expect(
+      tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+      NoteLayoutPreference.list,
+    );
+    controller.layoutGate!.complete();
+    await tester.pumpAndSettle();
+    expect(controller.layout, NoteLayoutPreference.grid);
+    expect(
+      tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+      NoteLayoutPreference.grid,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpWorkspace(tester, controller, size: const Size(1280, 800));
+    expect(
+      tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+      NoteLayoutPreference.grid,
+    );
+    expect(controller.layoutReads, 2);
+  });
+
+  testWidgets(
+    'failed view write keeps the old layout and offers a real retry',
+    (tester) async {
+      final controller = _Module02NotesController(notes: [buildNote()])
+        ..failLayoutWrite = true;
+      await pumpWorkspace(tester, controller, size: const Size(390, 844));
+      await tester.tap(find.byTooltip('List view'));
+      await tester.pumpAndSettle();
+      expect(controller.layout, NoteLayoutPreference.grid);
+      expect(
+        find.text('Could not save your view preference. Please retry.'),
+        findsOneWidget,
+      );
+      controller.failLayoutWrite = false;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(controller.layout, NoteLayoutPreference.list);
+      expect(
+        tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+        NoteLayoutPreference.list,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('failed preference load does not hide loaded notes', (
+    tester,
+  ) async {
+    final controller = _Module02NotesController(notes: [buildNote()])
+      ..failLayoutRead = true;
+    await pumpWorkspace(tester, controller, size: const Size(390, 844));
+    expect(find.text('First note'), findsOneWidget);
+    expect(find.text('Could not load your view preference.'), findsOneWidget);
+    controller
+      ..failLayoutRead = false
+      ..layout = NoteLayoutPreference.list;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AnimatedNoteList>(find.byType(AnimatedNoteList)).layout,
+      NoteLayoutPreference.list,
+    );
+  });
+
+  testWidgets(
+    'pin waits for confirmation, reorders, and does not open the editor',
+    (tester) async {
+      final controller = _Module02NotesController(
+        notes: [
+          buildNote(id: 'a'),
+          buildNote(id: 'b', title: 'Second note'),
+        ],
+      );
+      await pumpWorkspace(tester, controller, size: const Size(1280, 800));
+      controller.pinGate = Completer<void>();
+      await tester.tap(find.byKey(const ValueKey('pin-b')));
+      await tester.pump();
+      expect(find.text('Note pinned'), findsNothing);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('pin-b')))
+            .onPressed,
+        isNull,
+      );
+      expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
+      controller.pinGate!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AnimatedNoteList>(find.byType(AnimatedNoteList))
+            .notes
+            .first
+            .id,
+        'b',
+      );
+      expect(find.text('Note pinned'), findsOneWidget);
+      controller.pinGate = null;
+      await tester.tap(find.byKey(const ValueKey('pin-b')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AnimatedNoteList>(find.byType(AnimatedNoteList))
+            .notes
+            .first
+            .id,
+        'a',
+      );
+      expect(find.text('Note unpinned'), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed pin keeps its projection and retry uses the controller', (
+    tester,
+  ) async {
+    final controller = _Module02NotesController(notes: [buildNote()])
+      ..failPin = true;
+    await pumpWorkspace(tester, controller, size: const Size(390, 844));
+    await tester.tap(find.byKey(const ValueKey('pin-note-1')));
+    await tester.pumpAndSettle();
+    expect(controller.notes.single.isPinned, isFalse);
+    expect(
+      find.text('Could not update the pin. Please retry.'),
+      findsOneWidget,
+    );
+    expect(find.text('Note pinned'), findsNothing);
+    controller.failPin = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(controller.notes.single.isPinned, isTrue);
+    expect(find.text('Note pinned'), findsOneWidget);
   });
 
   testWidgets('workspace entry points open notes and drafts inline', (
@@ -243,7 +403,7 @@ void main() {
 
     final Finder pageTitle = find.text('Notes').last;
     expect(tester.getTopLeft(pageTitle).dx, 20);
-    expect(tester.getTopLeft(pageTitle).dy, 29);
+    expect(tester.getTopLeft(pageTitle).dy, NoteFlowSpacing.xl);
     expect(tester.takeException(), isNull);
   });
 
@@ -272,10 +432,38 @@ void main() {
     expect(find.byTooltip('New note'), findsOneWidget);
     expect(find.text('Every idea, in one calm place.'), findsNothing);
     expect(
-      firstNoteRect.top - titleRect.bottom,
-      lessThanOrEqualTo(NoteFlowSpacing.xxl),
+      firstNoteRect.top - tester.getRect(find.text('1 note')).bottom,
+      lessThanOrEqualTo(NoteFlowSpacing.xxxl),
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('security refresh during reload does not leave actions busy', (
+    tester,
+  ) async {
+    final controller = _RefreshingNotesController(notes: [buildNote()]);
+    addTearDown(controller.events.close);
+    await pumpWorkspace(tester, controller, size: const Size(1024, 700));
+    controller.listNotesGate = Completer<void>();
+    final reload = tester
+        .state<NotesWorkspacePageState>(find.byType(NotesWorkspacePage))
+        .reload();
+    await tester.pump();
+    controller.events.add(null);
+    await tester.pump();
+    controller.listNotesGate!.complete();
+    await reload;
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('notes-collection-progress')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('new-note')))
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('compact create flow returns to the note list after save', (
@@ -325,6 +513,26 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'Escape dismisses the more menu without closing the selected editor',
+    (tester) async {
+      await pumpWorkspace(
+        tester,
+        _FakeNotesController(notes: [buildNote()]),
+        size: const Size(1280, 800),
+      );
+      await tester.tap(find.byKey(const ValueKey('note-note-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-detail-more')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+      expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    },
+  );
 
   testWidgets('compact detail keeps exactly one titled AppBar', (
     WidgetTester tester,
@@ -733,7 +941,7 @@ void main() {
   });
 }
 
-final class _FakeNotesController implements NotesApplicationController {
+class _FakeNotesController implements NotesApplicationController {
   _FakeNotesController({List<NoteDto>? notes})
     : notes = List<NoteDto>.of(notes ?? <NoteDto>[]);
 
@@ -825,4 +1033,87 @@ final class _FakeNotesController implements NotesApplicationController {
     notes[notes.indexOf(current)] = updated;
     return updated;
   }
+}
+
+class _Module02NotesController extends _FakeNotesController
+    implements NotesModule02Controller {
+  _Module02NotesController({super.notes});
+  NoteLayoutPreference layout = NoteLayoutPreference.grid;
+  int layoutReads = 0;
+  bool failLayoutRead = false;
+  bool failLayoutWrite = false;
+  bool failPin = false;
+  Completer<void>? layoutGate;
+  Completer<void>? pinGate;
+  @override
+  Future<NoteLayoutPreference> getNoteLayout() async {
+    layoutReads++;
+    if (failLayoutRead) throw StateError('preference unavailable');
+    return layout;
+  }
+
+  @override
+  Future<void> setNoteLayout(NoteLayoutPreference value) async {
+    await layoutGate?.future;
+    if (failLayoutWrite) throw StateError('write failed');
+    layout = value;
+  }
+
+  @override
+  Future<NoteDto> setPinned({
+    required String noteId,
+    required bool pinned,
+  }) async {
+    await pinGate?.future;
+    if (failPin) throw StateError('pin failed');
+    final current = _find(noteId);
+    final saved = NoteDto(
+      id: current.id,
+      ownerId: current.ownerId,
+      title: current.title,
+      content: current.content,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+      pinnedAt: pinned ? _baseTime : null,
+    );
+    notes[notes.indexOf(current)] = saved;
+    return saved;
+  }
+
+  @override
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) async {
+    await renameNote(noteId: noteId, title: title);
+    return replaceContent(noteId: noteId, content: content);
+  }
+}
+
+final class _RefreshingNotesController extends _Module02NotesController
+    implements SecuredNotesController {
+  _RefreshingNotesController({required super.notes});
+  final events = StreamController<void>.broadcast();
+  @override
+  Stream<void> get securityChanges => events.stream;
+  @override
+  int get accessGeneration => 0;
+  @override
+  int get sessionGeneration => 0;
+  @override
+  bool get securityServerAvailable => false;
+  @override
+  NoteSecurityService? get noteSecurity => null;
+  @override
+  Future<NoteDto> readNote(String id) async =>
+      notes.firstWhere((note) => note.reference == id);
+  @override
+  NoteAccessCapabilities capabilitiesFor(NoteDto note) =>
+      const NoteAccessCapabilities(
+        canRead: true,
+        canEdit: true,
+        canDelete: true,
+        canManage: true,
+      );
 }

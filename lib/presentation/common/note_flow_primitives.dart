@@ -352,7 +352,7 @@ final class _NoteFlowPageStatus extends StatelessWidget {
     final Color iconColor = error
         ? Theme.of(context).colorScheme.error
         : tokens.textMuted;
-    final Widget icon = busy
+    final Widget icon = busy && !MediaQuery.disableAnimationsOf(context)
         ? SizedBox.square(
             dimension: 14,
             child: CircularProgressIndicator(
@@ -360,7 +360,11 @@ final class _NoteFlowPageStatus extends StatelessWidget {
               color: tokens.textMuted,
             ),
           )
-        : Icon(statusIcon, size: 16, color: iconColor);
+        : Icon(
+            busy ? Icons.hourglass_top : statusIcon,
+            size: 16,
+            color: iconColor,
+          );
 
     return Semantics(
       liveRegion: true,

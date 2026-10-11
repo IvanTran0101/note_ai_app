@@ -26,12 +26,32 @@ final class NotesListPanel extends StatelessWidget {
     this.allowNewNote = true,
     this.readable,
     this.queryEnabled = true,
+    this.layout = NoteLayoutPreference.list,
+    this.onLayoutChanged,
+    this.layoutBusy = false,
+    this.refreshing = false,
+    this.canPin,
+    this.onTogglePinned,
+    this.pinningNoteId,
+    this.pinEnabled = true,
+    this.queryControls,
+    this.emptyMessage,
   });
 
   final String? titleOverride;
   final bool allowNewNote;
   final bool Function(NoteDto)? readable;
   final bool queryEnabled;
+  final NoteLayoutPreference layout;
+  final ValueChanged<NoteLayoutPreference>? onLayoutChanged;
+  final bool layoutBusy;
+  final bool refreshing;
+  final bool Function(NoteDto)? canPin;
+  final ValueChanged<NoteDto>? onTogglePinned;
+  final String? pinningNoteId;
+  final bool pinEnabled;
+  final Widget? queryControls;
+  final String? emptyMessage;
   final List<NoteDto> notes;
   final String? selectedNoteId;
   final String? error;
@@ -48,7 +68,7 @@ final class NotesListPanel extends StatelessWidget {
     final bool compact =
         MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
     return Material(
-      color: tokens.pageSurface,
+      color: tokens.sidebarSurface,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -58,79 +78,170 @@ final class NotesListPanel extends StatelessWidget {
                 : NoteFlowSpacing.xl,
             compact
                 ? NoteFlowLayout.compactPageTopInset(context)
-                : NoteFlowLayout.editorTopPadding,
+                : NoteFlowSpacing.xl,
             compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
             NoteFlowSpacing.xl,
           ),
           child: Align(
-            alignment: compact ? Alignment.topLeft : Alignment.center,
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: compact
-                    ? NoteFlowLayout.compactPageMaxWidth
-                    : NoteFlowLayout.editorMaxWidth,
+                    ? NoteFlowLayout.editorMaxWidth
+                    : NoteFlowLayout.wideWebEditorMaxWidth,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints _) {
-                      final Widget title = Text(
-                        titleOverride ?? copy.notes,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineLarge
-                            ?.copyWith(
-                              fontSize: compact ? 32 : 40,
-                              height: 1.2,
-                              fontWeight: FontWeight.w700,
-                              color: tokens.textPrimary,
-                            ),
-                      );
-                      final Widget create = FilledButton.icon(
-                        key: const ValueKey<String>('new-note'),
-                        onPressed: actionBusy ? null : onNewNote,
-                        icon: const Icon(Icons.add, size: 20),
-                        label: Text(copy.newNote),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: tokens.link,
-                          foregroundColor: Theme.of(context)
-                              .colorScheme
-                              .onPrimary,
-                          minimumSize: const Size(48, 44),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: NoteFlowSpacing.md,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              NoteFlowRadius.input,
-                            ),
-                          ),
-                        ),
-                      );
-                      if (compact) {
-                        return Row(
-                          children: <Widget>[
-                            Expanded(child: title),
-                            if (allowNewNote)
-                              IconButton(
-                                key: const ValueKey<String>('new-note'),
-                                tooltip: copy.newNote,
-                                onPressed: actionBusy ? null : onNewNote,
-                                icon: const Icon(Icons.add),
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final narrow = constraints.maxWidth < 440;
+                          final Widget title = Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                titleOverride ?? copy.notes,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                      fontSize: 30,
+                                      height: 1.2,
+                                      letterSpacing: 0,
+                                      fontWeight: FontWeight.w700,
+                                      color: tokens.textPrimary,
+                                    ),
                               ),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: <Widget>[
-                          Expanded(child: title),
-                          if (allowNewNote) create,
-                        ],
-                      );
-                    },
+                              const SizedBox(height: NoteFlowSpacing.xs),
+                              Text(
+                                copy.collectionCount(
+                                  notes.length,
+                                  notes.where((note) => note.isPinned).length,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: tokens.textSecondary,
+                                      height: 1.5,
+                                    ),
+                              ),
+                            ],
+                          );
+                          final Widget create = FilledButton.icon(
+                            key: const ValueKey<String>('new-note'),
+                            onPressed: actionBusy ? null : onNewNote,
+                            icon: const Icon(Icons.add, size: 20),
+                            label: Text(copy.newNote),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: tokens.textPrimary,
+                              foregroundColor: tokens.pageSurface,
+                              minimumSize: const Size(48, 48),
+                              visualDensity: VisualDensity.standard,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: NoteFlowSpacing.md,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  NoteFlowRadius.input,
+                                ),
+                              ),
+                            ),
+                          );
+                          return Row(
+                            children: <Widget>[
+                              Expanded(child: title),
+                              if (onLayoutChanged != null) ...<Widget>[
+                                SegmentedButton<NoteLayoutPreference>(
+                                  key: const ValueKey('notes-layout-control'),
+                                  showSelectedIcon: false,
+                                  segments:
+                                      <ButtonSegment<NoteLayoutPreference>>[
+                                        ButtonSegment(
+                                          value: NoteLayoutPreference.grid,
+                                          icon: const Icon(
+                                            Icons.grid_view_outlined,
+                                            size: 18,
+                                          ),
+                                          tooltip: copy.gridView,
+                                        ),
+                                        ButtonSegment(
+                                          value: NoteLayoutPreference.list,
+                                          icon: const Icon(
+                                            Icons.view_list_outlined,
+                                            size: 18,
+                                          ),
+                                          tooltip: copy.listView,
+                                        ),
+                                      ],
+                                  selected: <NoteLayoutPreference>{layout},
+                                  onSelectionChanged: layoutBusy || actionBusy
+                                      ? null
+                                      : (selection) =>
+                                            onLayoutChanged!(selection.single),
+                                  style: SegmentedButton.styleFrom(
+                                    minimumSize: const Size(44, 48),
+                                    visualDensity: VisualDensity.standard,
+                                    padding: EdgeInsets.zero,
+                                    foregroundColor: tokens.textSecondary,
+                                    selectedForegroundColor: tokens.pageSurface,
+                                    selectedBackgroundColor: tokens.textPrimary,
+                                    side: BorderSide(color: tokens.divider),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        NoteFlowRadius.input,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: NoteFlowSpacing.sm),
+                              ],
+                              if (allowNewNote)
+                                if (narrow)
+                                  IconButton.filled(
+                                    key: const ValueKey<String>('new-note'),
+                                    tooltip: copy.newNote,
+                                    onPressed: actionBusy ? null : onNewNote,
+                                    icon: const Icon(Icons.add),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(48, 48),
+                                      visualDensity: VisualDensity.standard,
+                                      backgroundColor: tokens.textPrimary,
+                                      foregroundColor: tokens.pageSurface,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          NoteFlowRadius.input,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  create,
+                            ],
+                          );
+                        },
                   ),
-                  const SizedBox(height: NoteFlowSpacing.sm),
+                  const SizedBox(height: NoteFlowSpacing.xl),
+                  if (queryControls != null) ...[
+                    queryControls!,
+                    const SizedBox(height: NoteFlowSpacing.md),
+                  ],
+                  Divider(height: 1, color: tokens.divider),
+                  if (refreshing || layoutBusy)
+                    Semantics(
+                      key: const ValueKey('notes-collection-progress'),
+                      liveRegion: true,
+                      label: refreshing ? copy.loadingNotes : copy.savingView,
+                      child: LinearProgressIndicator(
+                        minHeight: 2,
+                        value: MediaQuery.disableAnimationsOf(context)
+                            ? 0.5
+                            : null,
+                      ),
+                    ),
                   if (error != null && notes.isNotEmpty) ...<Widget>[
                     const SizedBox(height: NoteFlowSpacing.md),
                     Text(
@@ -150,10 +261,28 @@ final class NotesListPanel extends StatelessWidget {
                         ),
                       ),
                   ],
-                  const SizedBox(height: NoteFlowSpacing.md),
+                  const SizedBox(height: NoteFlowSpacing.lg),
                   Expanded(
                     child: notes.isEmpty
-                        ? error != null
+                        ? emptyMessage != null
+                              ? Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: NoteFlowSpacing.xxl,
+                                    ),
+                                    child: Text(
+                                      emptyMessage!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: tokens.textSecondary,
+                                          ),
+                                    ),
+                                  ),
+                                )
+                              : error != null
                               ? compact
                                     ? _buildCompactErrorState(
                                         context,
@@ -217,43 +346,61 @@ final class NotesListPanel extends StatelessWidget {
                                           ),
                                         ),
                                       )
-                              : Center(
+                              : Align(
                                   key: ValueKey<String>('notes-empty'),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: <Widget>[
-                                      Icon(
-                                        Icons.note_add_outlined,
-                                        size: 32,
-                                        color: tokens.textMuted,
-                                      ),
-                                      const SizedBox(
-                                        height: NoteFlowSpacing.sm,
-                                      ),
-                                      Text(
-                                        copy.noNotes,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: tokens.textSecondary,
-                                            ),
-                                      ),
-                                      if (allowNewNote)
-                                        TextButton(
-                                          key: const ValueKey<String>(
-                                            'new-note-empty',
-                                          ),
-                                          onPressed: actionBusy
-                                              ? null
-                                              : onNewNote,
-                                          child: Text(copy.createFirstNote),
+                                  alignment: Alignment.topLeft,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: NoteFlowSpacing.xxxl,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.note_add_outlined,
+                                          size: 40,
+                                          color: tokens.textMuted,
                                         ),
-                                    ],
+                                        const SizedBox(
+                                          height: NoteFlowSpacing.sm,
+                                        ),
+                                        Text(
+                                          copy.noNotes,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                color: tokens.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        if (allowNewNote)
+                                          TextButton.icon(
+                                            key: const ValueKey<String>(
+                                              'new-note-empty',
+                                            ),
+                                            onPressed: actionBusy
+                                                ? null
+                                                : onNewNote,
+                                            icon: const Icon(
+                                              Icons.add,
+                                              size: 18,
+                                            ),
+                                            label: Text(copy.createFirstNote),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 )
                         : AnimatedNoteList(
                             notes: notes,
+                            layout: layout,
+                            canPin: canPin,
+                            onTogglePinned: onTogglePinned,
+                            pinningNoteId: pinningNoteId,
+                            pinEnabled: pinEnabled,
                             readable: readable,
                             selectedNoteId: selectedNoteId,
                             actionBusy: actionBusy,

@@ -1,0 +1,13 @@
+[
+  {"name":"legacy","content":"plain body\n","text":"plain body\n","rich":false},
+  {"name":"formatted","content":"noteflow:rich:v1\n[{\"insert\":\"Heading\",\"attributes\":{\"bold\":true,\"color\":\"#1565C0\",\"size\":\"24\"}},{\"insert\":\"\\n\",\"attributes\":{\"header\":1}},{\"insert\":\"Body\\n\"}]","text":"Heading\nBody","rich":true},
+  {"name":"unknown-version","content":"noteflow:rich:v2\n[]","text":"noteflow:rich:v2\n[]","rich":false},
+  {"name":"broken-json","content":"noteflow:rich:v1\n[","text":"noteflow:rich:v1\n[","rich":false},
+  {"name":"empty-delta","content":"noteflow:rich:v1\n[]","text":"noteflow:rich:v1\n[]","rich":false},
+  {"name":"embedded-image","content":"noteflow:rich:v1\n[{\"insert\":{\"image\":\"https://example.test/image\"}}]","text":"noteflow:rich:v1\n[{\"insert\":{\"image\":\"https://example.test/image\"}}]","rich":false},
+  {"name":"missing-terminator","content":"noteflow:rich:v1\n[{\"insert\":\"body\"}]","text":"noteflow:rich:v1\n[{\"insert\":\"body\"}]","rich":false},
+  {"name":"invalid-heading","content":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"header\":\"huge\"}}]","text":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"header\":\"huge\"}}]","rich":false},
+  {"name":"invalid-size","content":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"size\":\"999999\"}}]","text":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"size\":\"999999\"}}]","rich":false},
+  {"name":"unknown-attribute","content":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"future\":true}}]","text":"noteflow:rich:v1\n[{\"insert\":\"body\\n\",\"attributes\":{\"future\":true}}]","rich":false},
+  {"name":"formatted-empty","content":"noteflow:rich:v1\n[{\"insert\":\"\\n\",\"attributes\":{\"header\":1}}]","text":"","rich":true}
+]

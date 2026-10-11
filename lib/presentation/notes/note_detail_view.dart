@@ -123,6 +123,7 @@ extension _NoteDetailView on NoteDetailPageState {
       retryEnabled: _canSummarize,
     );
     final Widget editor = NoteDetailSurface(
+      key: _editorSurfaceKey,
       titleController: _titleController,
       contentController: _contentController,
       titleFocusNode: _titleFocusNode,
@@ -142,6 +143,9 @@ extension _NoteDetailView on NoteDetailPageState {
       actionBusy: _actionBusy,
       readOnly: _securityBusy || _securityLoading || !_canEdit,
       attachments: _buildNoteExtras(),
+      attachmentAction: _attachmentToolbarAction(),
+      attachmentTray: _buildAttachmentTray(),
+      editorIdentity: _editorGeneration,
       provisioningReader: widget.provisioningReader,
       onProvisioningRetry: _note == null ? null : _summarize,
       onProvisioningCancel: widget.onProvisioningCancel,

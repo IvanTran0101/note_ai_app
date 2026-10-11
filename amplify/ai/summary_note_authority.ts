@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { noteBodyText } from './note_body';
 import { stableDigest } from '../sync/cursor';
 import { aclCondition } from '../sharing/dynamo_note_acl';
 import { GetCommand, PutCommand, TransactWriteCommand, type DynamoDBDocumentClient,
@@ -44,7 +45,7 @@ export class DynamoSummaryNoteAuthority implements SummaryNoteAuthority {
           authority.revision !== context.protectionRevision ||
           (note.protected ?? false) !== authority.enabled ||
           (note.protectionRevision ?? 0) !== authority.revision) return changed();
-      return { text: note.content.trim(), authority };
+      return { text: noteBodyText(note.content).trim(), authority };
     } catch (error) {
       if (error instanceof SummaryFailure) throw error;
       if (error instanceof NoteSecurityError && error.code !== 'unavailable') {

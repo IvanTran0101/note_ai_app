@@ -7,6 +7,7 @@ import '../../application/notes/note_application.dart';
 import '../notes/notes_theme_tokens.dart';
 import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
+import '../../domain/notes/note_body.dart';
 
 /// Visual density used by a Dashboard note card.
 enum DashboardNoteCardLayout { list, grid }
@@ -71,7 +72,7 @@ final class DashboardNoteCard extends StatelessWidget {
         : (note.title.trim().isEmpty ? copy.untitled : note.title);
     final String preview = !_readable
         ? securityCopy.locked
-        : _preview(note.content);
+        : _preview(NoteBody.plainText(note.content));
     final String updatedDate = MaterialLocalizations.of(context)
         .formatCompactDate(note.updatedAt);
     final Color foreground = tokens.textPrimary;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
@@ -105,7 +104,7 @@ void main() {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
 
     final Text titleHint = tester.widget<Text>(find.text('Title'));
-    expect(titleHint.style?.fontSize, 40);
+    expect(titleHint.style?.fontSize, 32);
     expect(titleHint.style?.fontWeight, FontWeight.w700);
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
@@ -119,7 +118,7 @@ void main() {
     final TextField field = tester.widget<TextField>(content);
     expect(field.maxLines, isNull);
     expect(field.keyboardType, TextInputType.multiline);
-    expect(tester.getSize(content).height, lessThan(80));
+    expect(tester.getSize(content).height, inInclusiveRange(80, 112));
     expect(find.text('Content'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -167,14 +166,14 @@ void main() {
     expect(find.byKey(summarizeKey), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-      40,
+      32,
     );
 
     // The title block matches Notion's 720px block; body text uses 708px.
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getSize(form).width, 720);
     expect(tester.getCenter(form).dx, 512);
-    expect(tester.getTopLeft(form).dy, 48);
+    expect(tester.getTopLeft(form).dy, NoteFlowSpacing.xl + 48);
     expect(tester.getSize(find.byKey(contentFieldKey)).width, 708);
     expect(find.byType(Scaffold), findsNothing);
     expect(tester.takeException(), isNull);
@@ -186,12 +185,12 @@ void main() {
     await pumpSurface(tester, size: const Size(567, 694));
 
     final Finder form = find.byType(NoteDetailEditorForm);
-    expect(tester.getSize(form).width, 360);
+    expect(tester.getSize(form).width, 531);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, kIsWeb ? 36 : 24);
+    expect(tester.getTopLeft(form).dy, NoteFlowSpacing.xl);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-      40,
+      32,
     );
     expect(tester.takeException(), isNull);
   });
@@ -218,7 +217,7 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, kIsWeb ? 141 : 73);
+    expect(tester.getTopLeft(form).dy, 73);
     expect(tester.getSize(form).width, 354);
     expect(tester.takeException(), isNull);
   });

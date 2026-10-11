@@ -46,8 +46,21 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                             : null,
                         allowNewNote: !_sharedOnly,
                         selectedNoteId: _selectedNoteId,
+                        layout: _layout,
+                        onLayoutChanged: _application is NotesModule02Controller
+                            ? (layout) => unawaited(_changeLayout(layout))
+                            : null,
+                        layoutBusy: _layoutBusy,
+                        refreshing: _refreshing,
+                        canPin: _canPin,
+                        onTogglePinned: (note) => unawaited(_togglePin(note)),
+                        pinningNoteId: _pinningNoteId,
                         error: loadError,
-                        actionBusy: _detailBusy,
+                        actionBusy:
+                            _detailBusy ||
+                            _pinningNoteId != null ||
+                            _refreshing,
+                        pinEnabled: !_detailDirty,
                         onNewNote: _startNewNote,
                         onSelectNote: _selectNote,
                         onRetry: persistenceUnavailable ? null : reload,

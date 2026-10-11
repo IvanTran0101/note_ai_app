@@ -82,7 +82,7 @@ extension NoteSummaryUseCases on NoteApplicationService {
               scope: runScope,
             ),
           )
-        : await summarizeContent(note.content);
+        : await summarizeContent(NoteBody.plainText(note.content));
 
     _requireLiveRun(runScope, userId, generation, accessGeneration);
     _requireAccess(note, NoteOperation.summary);

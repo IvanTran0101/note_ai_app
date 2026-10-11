@@ -1,14 +1,230 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/auth_models.dart';
 import 'package:note_ai_app/application/auth/authentication_app_service.dart';
+import 'package:note_ai_app/domain/auth/authentication_failure.dart';
 import 'package:note_ai_app/presentation/auth/auth_localizations.dart';
 import 'package:note_ai_app/presentation/auth/auth_pages.dart';
 import 'package:note_ai_app/presentation/auth/controllers/auth_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
+  testWidgets(
+    'login freezes a pending request, dismisses failure, and retries',
+    (tester) async {
+      final service = _FakeAuthenticationAppService()
+        ..loginCompleter = Completer<AuthUserDto>();
+      final controller = AuthController(authenticationAppService: service);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: LoginPage(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(LoginPage.emailFieldKey),
+        'user@example.com',
+      );
+      await tester.tap(find.byKey(LoginPage.submitKey));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(LoginPage.passwordFieldKey),
+        'Password-1!',
+      );
+      final before = tester.getSize(find.byKey(LoginPage.submitKey));
+      await tester.tap(find.byKey(LoginPage.submitKey));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        tester.widget<FilledButton>(find.byKey(LoginPage.submitKey)).onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(LoginPage.passwordFieldKey))
+            .enabled,
+        isFalse,
+      );
+      expect(find.text('Log in'), findsOneWidget);
+      expect(tester.getSize(find.byKey(LoginPage.submitKey)), before);
+      expect(service.loginCalls, 1);
+      service.loginCompleter!.completeError(
+        const AuthenticationFailure(
+          AuthenticationFailureCode.invalidCredentials,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Email or password is incorrect.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Dismiss message'));
+      await tester.pumpAndSettle();
+      expect(controller.state.error, isNull);
+      expect(find.text('Email or password is incorrect.'), findsNothing);
+      service.loginCompleter = null;
+      await tester.tap(find.byKey(LoginPage.submitKey));
+      await tester.pumpAndSettle();
+      expect(service.loginCalls, 2);
+      expect(controller.state.isAuthenticated, isTrue);
+    },
+  );
+
+  testWidgets('system back returns to the entered email', (tester) async {
+    final controller = AuthController(
+      authenticationAppService: _FakeAuthenticationAppService(),
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pump();
+    for (final opacity in tester.widgetList<Opacity>(
+      find.ancestor(
+        of: find.byKey(LoginPage.passwordFieldKey),
+        matching: find.byType(Opacity),
+      ),
+    )) {
+      expect(opacity.opacity, 1);
+    }
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(LoginPage.passwordFieldKey), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(LoginPage.emailFieldKey))
+          .controller!
+          .text,
+      'user@example.com',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion disables auth transitions and busy spinner', (
+    tester,
+  ) async {
+    final service = _FakeAuthenticationAppService()
+      ..loginCompleter = Completer<AuthUserDto>();
+    final controller = AuthController(authenticationAppService: service);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: LoginPage(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final animation in tester.widgetList<AnimatedSize>(
+      find.byType(AnimatedSize),
+    )) {
+      expect(animation.duration, Duration.zero);
+    }
+    expect(
+      tester
+          .widget<TweenAnimationBuilder<double>>(
+            find.byType(TweenAnimationBuilder<double>),
+          )
+          .duration,
+      Duration.zero,
+    );
+    await tester.enterText(
+      find.byKey(LoginPage.emailFieldKey),
+      'user@example.com',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(LoginPage.passwordFieldKey),
+      'Password-1!',
+    );
+    await tester.tap(find.byKey(LoginPage.submitKey));
+    await tester.pumpAndSettle();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.hourglass_top), findsOneWidget);
+    service.loginCompleter!.complete(testUser);
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: RegisterPage(controller: controller),
+      ),
+    );
+    await _advanceRegistrationToDetails(tester);
+    await tester.enterText(find.byKey(RegisterPage.passwordFieldKey), 'abc');
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(RegisterPage.passwordFieldKey),
+      'Password-1!',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Password meets all requirements.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('verification resend announces only confirmed success', (
+    tester,
+  ) async {
+    final service = _FakeAuthenticationAppService()
+      ..verificationCompleter = Completer<void>();
+    final controller = AuthController(
+      authenticationAppService: service,
+      initialUser: testUser,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: VerifyEmailPage(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Resend code'));
+    await tester.pump();
+    expect(
+      find.text('Verification code sent. Check your email.'),
+      findsNothing,
+    );
+    service.verificationCompleter!.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Verification code sent. Check your email.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Dismiss message'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Verification code sent. Check your email.'),
+      findsNothing,
+    );
+    service.verificationCompleter = Completer<void>();
+    await tester.tap(find.text('Resend code'));
+    await tester.pump();
+    service.verificationCompleter!.completeError(
+      const AuthenticationFailure(
+        AuthenticationFailureCode.temporarilyUnavailable,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The service is temporarily unavailable.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Verification code sent. Check your email.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('login keeps a centered narrow form across desktop and phone', (
     WidgetTester tester,
   ) async {
@@ -252,7 +468,10 @@ void main() {
     final SemanticsHandle semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(
-      MaterialApp(home: LoginPage(controller: controller)),
+      MaterialApp(
+        theme: ThemeData(visualDensity: VisualDensity.compact),
+        home: LoginPage(controller: controller),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -266,6 +485,7 @@ void main() {
     );
 
     expect(labelRect.bottom, lessThanOrEqualTo(fieldRect.top));
+    expect(fieldRect.height, greaterThanOrEqualTo(48));
     expect(field.decoration?.hintText, 'Enter your email address');
     expect(find.bySemanticsLabel(RegExp(r'^Email\b')), findsOneWidget);
     semantics.dispose();
@@ -911,6 +1131,8 @@ Future<void> _advanceRegistrationToDetails(WidgetTester tester) async {
 }
 
 final class _FakeAuthenticationAppService implements IAuthenticationAppService {
+  Completer<AuthUserDto>? loginCompleter;
+  Completer<void>? verificationCompleter;
   int loginCalls = 0;
   int registerCalls = 0;
   LoginInput? lastLoginInput;
@@ -930,7 +1152,7 @@ final class _FakeAuthenticationAppService implements IAuthenticationAppService {
   Future<AuthUserDto> login(LoginInput input) async {
     loginCalls++;
     lastLoginInput = input;
-    return testUser;
+    return loginCompleter?.future ?? testUser;
   }
 
   @override
@@ -953,7 +1175,7 @@ final class _FakeAuthenticationAppService implements IAuthenticationAppService {
 
   @override
   Future<void> resendEmailVerification() async {
-    throw UnimplementedError();
+    await verificationCompleter?.future;
   }
 
   @override

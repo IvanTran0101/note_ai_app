@@ -30,7 +30,7 @@ final class NotesWorkspaceLoadingView extends StatelessWidget {
       label: copy.loadingNotes,
       child: ExcludeSemantics(
         child: Material(
-          color: tokens.pageSurface,
+          color: tokens.sidebarSurface,
           child: SafeArea(
             top: false,
             child: Padding(
@@ -40,68 +40,46 @@ final class NotesWorkspaceLoadingView extends StatelessWidget {
                     : NoteFlowSpacing.xl,
                 compact
                     ? NoteFlowLayout.compactPageTopInset(context)
-                    : NoteFlowLayout.editorTopPadding,
+                    : NoteFlowSpacing.xl,
                 compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
                 NoteFlowSpacing.xl,
               ),
               child: Align(
-                alignment: compact ? Alignment.topLeft : Alignment.center,
+                alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxWidth: compact
-                        ? NoteFlowLayout.compactPageMaxWidth
-                        : NoteFlowLayout.editorMaxWidth,
+                        ? NoteFlowLayout.editorMaxWidth
+                        : NoteFlowLayout.wideWebEditorMaxWidth,
                   ),
                   child: KeyedSubtree(
                     key: skeletonKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        LayoutBuilder(
-                          builder:
-                              (
-                                BuildContext context,
-                                BoxConstraints constraints,
-                              ) {
-                                if (constraints.maxWidth < 420) {
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      const _NotesSkeletonBar(
-                                        width: 120,
-                                        height: 48,
-                                      ),
-                                      const SizedBox(
-                                        height: NoteFlowSpacing.sm,
-                                      ),
-                                      const _NotesSkeletonBar(
-                                        width: 112,
-                                        height: 36,
-                                        radius: NoteFlowRadius.input,
-                                      ),
-                                    ],
-                                  );
-                                }
-                                return Row(
-                                  children: <Widget>[
-                                    const Expanded(
-                                      child: _NotesSkeletonBar(
-                                        width: 180,
-                                        height: 48,
-                                      ),
-                                    ),
-                                    const SizedBox(width: NoteFlowSpacing.md),
-                                    const _NotesSkeletonBar(
-                                      width: 112,
-                                      height: 36,
-                                      radius: NoteFlowRadius.input,
-                                    ),
-                                  ],
-                                );
-                              },
+                        Row(
+                          children: const [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _NotesSkeletonBar(width: 120, height: 36),
+                                  SizedBox(height: NoteFlowSpacing.xs),
+                                  _NotesSkeletonBar(width: 80, height: 12),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: NoteFlowSpacing.md),
+                            _NotesSkeletonBar(
+                              width: 96,
+                              height: 48,
+                              radius: NoteFlowRadius.input,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: NoteFlowSpacing.sm),
+                        const SizedBox(height: NoteFlowSpacing.xl),
+                        Divider(height: 1, color: tokens.divider),
+                        const SizedBox(height: NoteFlowSpacing.lg),
                         Expanded(
                           child: ListView.separated(
                             padding: EdgeInsets.zero,

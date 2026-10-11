@@ -49,6 +49,20 @@ async function fixture() {
 const changed = (e: unknown) => e instanceof SummaryFailure && e.code === 'noteChanged';
 const locked = (e: unknown) => e instanceof SummaryFailure && e.code === 'noteLocked';
 
+test('formatted note Summary validates readable text while retaining authority checks', async () => {
+  const { authority, request, lease, store, db } = await fixture();
+  const content = 'noteflow:rich:v1\n' + JSON.stringify([
+    { insert: 'secret alpha', attributes: { bold: true, color: '#1565C0' } },
+    { insert: '\n', attributes: { header: 1 } },
+  ]);
+  store.notes.set('alpha', { ...store.notes.get('alpha')!, content });
+  await assert.rejects(authority.begin(request, 'owner'), locked);
+  await assert.rejects(authority.begin({ ...request, inputs: [content] }, 'owner', lease.grant), changed);
+  const stage = await authority.begin(request, 'owner', lease.grant);
+  await stage.complete('readable result');
+  assert.equal(db.transactions.length, 1);
+});
+
 test('canonical Summary rejects missing grant, forged source, revision and actor before stage reservation', async () => {
   const { authority, request, lease, db } = await fixture();
   await assert.rejects(authority.begin(request, 'owner'), locked);

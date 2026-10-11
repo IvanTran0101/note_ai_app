@@ -1,5 +1,6 @@
 import '../../application/notes/note_access.dart';
 import 'summary_note_lineage.dart';
+import '../../domain/notes/note_body.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -160,7 +161,7 @@ final class SummaryRunRuntime {
           hasConsent: () => consent.isCurrent(context.consent),
         );
         final Summary result = await service.summarize(
-          context.noteSnapshot.content,
+          NoteBody.plainText(context.noteSnapshot.content),
         );
         await _guard.revalidate(context, requireConsent: true);
         return result;

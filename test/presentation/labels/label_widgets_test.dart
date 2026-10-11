@@ -112,6 +112,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No matching notes.'), findsOneWidget);
     expect(find.text('Create your first note'), findsNothing);
+    expect(find.byKey(const ValueKey('new-note')), findsOneWidget);
+    expect(find.text('0 notes'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Notes')).dy,
+      lessThan(
+        tester.getTopLeft(find.byKey(const ValueKey('notes-search-field'))).dy,
+      ),
+    );
     await tester.enterText(
       find.byKey(const ValueKey('notes-search-field')),
       'loaded',

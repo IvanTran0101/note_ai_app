@@ -11,6 +11,9 @@ import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/notes/note_rich_text.dart';
+import 'package:note_ai_app/domain/notes/note_body.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 void main() {
   final DateTime createdAt = DateTime.utc(2026, 1, 1);
@@ -51,6 +54,174 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('first draft save preserves the rich editor and open menu', (
+    tester,
+  ) async {
+    final controller = _FakeNotesController(notes: []);
+    await pumpPage(tester, controller);
+    await tester.enterText(find.byKey(NoteDetailPage.titleFieldKey), 'Draft');
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Draft body',
+    );
+    final field = tester.widget<TextField>(
+      find.byKey(NoteDetailPage.contentFieldKey),
+    );
+    field.controller!.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 5,
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Bold'));
+    await tester.pump();
+    final before = tester.state<NoteRichTextScopeState>(
+      find.byType(NoteRichTextScope),
+    );
+    await tester.tap(find.byTooltip('Text style'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    expect(controller.notes, hasLength(1));
+    expect(
+      identical(
+        before,
+        tester.state<NoteRichTextScopeState>(find.byType(NoteRichTextScope)),
+      ),
+      isTrue,
+    );
+    expect(before.editor.hasUndo, isTrue);
+    await tester.tap(
+      find
+          .ancestor(
+            of: find.text('Heading 2'),
+            matching: find.byWidgetPredicate(
+              (widget) => widget is PopupMenuItem,
+            ),
+          )
+          .first,
+    );
+    await tester.pump();
+    expect(before.editor.getSelectionStyle().attributes['header']?.value, 2);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'close request dismisses an open toolbar menu before the editor',
+    (tester) async {
+      final note = buildNote();
+      var exits = 0;
+      final pageKey = GlobalKey<NoteDetailPageState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: NoteDetailPage(
+              key: pageKey,
+              notesController: _FakeNotesController(notes: [note]),
+              note: note,
+              onEmbeddedExit: (_) => exits++,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Text style'));
+      await tester.pumpAndSettle();
+      await pageKey.currentState!.requestClose();
+      await tester.pumpAndSettle();
+      expect(find.text('Heading 2'), findsNothing);
+      expect(exits, 0);
+      expect(find.byType(NoteRichTextScope), findsOneWidget);
+    },
+  );
+
+  testWidgets('compact toolbar stays above the keyboard inset', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final note = buildNote();
+    await pumpPage(tester, _FakeNotesController(notes: [note]), note: note);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pump();
+    final toolbar = find.byType(NoteTextToolbar);
+    expect(tester.getBottomLeft(toolbar).dy, lessThanOrEqualTo(544));
+    expect(tester.getSize(toolbar).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('formatted body autosaves and reopens without changing text', (
+    tester,
+  ) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    final field = tester.widget<TextField>(
+      find.byKey(NoteDetailPage.contentFieldKey),
+    );
+    field.controller!.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 3,
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Bold'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(controller.replaceContentCalls, 1);
+    expect(
+      NoteBody.plainText(controller.notes.single.content),
+      initial.content,
+    );
+    expect(
+      NoteBody.delta(controller.notes.single.content)?.first['attributes'],
+      {'bold': true},
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpPage(tester, controller, note: controller.notes.single);
+    expect(find.byType(quill.QuillEditor), findsOneWidget);
+    final session = tester.state<NoteRichTextScopeState>(
+      find.byType(NoteRichTextScope),
+    );
+    expect(session.editor.document.toPlainText(), '${initial.content}\n');
+    expect(session.editor.hasUndo, isFalse);
+  });
+
+  testWidgets('switching notes clears plain and rich undo history', (
+    tester,
+  ) async {
+    final first = buildNote();
+    final second = buildNote(id: 'note-2', content: 'Second body');
+    final controller = _FakeNotesController(notes: [first, second]);
+    await pumpPage(tester, controller, note: first);
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Unsaved first edit',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .state<NoteRichTextScopeState>(find.byType(NoteRichTextScope))
+          .editor
+          .hasUndo,
+      isTrue,
+    );
+    await pumpPage(tester, controller, note: second);
+    var session = tester.state<NoteRichTextScopeState>(
+      find.byType(NoteRichTextScope),
+    );
+    expect(session.editor.hasUndo, isFalse);
+    expect(session.editor.document.toPlainText(), 'Second body\n');
+    session.format(quill.Attribute.h1);
+    await tester.pumpAndSettle();
+    await pumpPage(tester, controller, note: first);
+    session = tester.state<NoteRichTextScopeState>(
+      find.byType(NoteRichTextScope),
+    );
+    expect(session.editor.hasUndo, isFalse);
+    expect(session.editor.document.toPlainText(), '${first.content}\n');
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('saved editor retains focus while its dirty feedback changes', (
     tester,

@@ -1,4 +1,5 @@
 import 'note_metadata.dart';
+import 'note_body.dart';
 import 'note_protection.dart';
 import 'note_identity.dart';
 import 'note_share_grant.dart';
@@ -263,7 +264,7 @@ class Note {
 }
 
 void _requireText(String value, String field) {
-  if (value.trim().isEmpty) {
+  if ((field == 'content' ? NoteBody.plainText(value) : value).trim().isEmpty) {
     throw ArgumentError('Note $field must not be blank.');
   }
 }

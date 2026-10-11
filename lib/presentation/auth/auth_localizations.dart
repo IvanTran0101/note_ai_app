@@ -121,6 +121,24 @@ final class AuthCopy {
       _isVietnamese ? 'Đã đổi mật khẩu.' : 'Password changed.';
   String get logout => _isVietnamese ? 'Đăng xuất' : 'Log out';
 
+  String get dismiss => _isVietnamese ? 'Đóng thông báo' : 'Dismiss message';
+  String get passwordResetComplete => _isVietnamese
+      ? 'Đã đặt lại mật khẩu. Hãy đăng nhập bằng mật khẩu mới.'
+      : 'Password reset. Log in with your new password.';
+  String get verificationSent => _isVietnamese
+      ? 'Đã gửi mã xác nhận. Hãy kiểm tra email của bạn.'
+      : 'Verification code sent. Check your email.';
+  String get verificationPending => _isVietnamese
+      ? 'Email chưa được xác nhận. Nhập mã hoặc kiểm tra lại sau.'
+      : 'Your email is not verified yet. Enter your code or check again later.';
+  String get restoringSession => _isVietnamese
+      ? 'Đang khôi phục phiên đăng nhập...'
+      : 'Restoring your session...';
+  String get sessionRestoreFailed => _isVietnamese
+      ? 'Không thể khôi phục phiên đăng nhập.'
+      : 'Unable to restore your session.';
+  String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
+
   String get emailRequired =>
       _isVietnamese ? 'Vui lòng nhập email.' : 'Email is required.';
   String get displayNameRequired => _isVietnamese

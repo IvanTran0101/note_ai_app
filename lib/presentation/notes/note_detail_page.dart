@@ -3,6 +3,7 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
 import 'attachment_editor_panel.dart';
+import '../../application/attachments/attachment_input.dart';
 import 'note_security_localizations.dart';
 import 'note_security_panel.dart';
 import 'sharing_localizations.dart';
@@ -27,6 +28,7 @@ import 'note_detail_localizations.dart';
 import 'note_detail_more_actions.dart';
 import 'note_detail_route_result.dart';
 import 'note_detail_surface.dart';
+import 'notes_theme_tokens.dart';
 import 'note_flow_snackbar.dart';
 import 'note_summary_availability.dart';
 import 'note_summary_controller.dart';
@@ -94,6 +96,12 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _contentFocusNode = FocusNode();
   final GlobalKey _contentFieldContextKey = GlobalKey();
+  final GlobalKey _editorSurfaceKey = GlobalKey();
+  final GlobalKey<AttachmentEditorPanelState> _attachmentKey = GlobalKey();
+  bool _attachmentBusy = false;
+  bool _attachmentTrayOpen = false;
+  int? _attachmentCount;
+  int _editorGeneration = 0;
   Timer? _autosaveTimer;
   StreamSubscription<void>? _securitySubscription;
   bool _securityBusy = false;
@@ -117,6 +125,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   bool _lastReportedDirty = false;
   bool _backConfirmationVisible = false;
   bool _ignoreNextEditorFocusLoss = false;
+  Future<bool>? _saveInFlight;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
   int _draftRevision = 0;
@@ -181,6 +190,11 @@ final class NoteDetailPageState extends State<NoteDetailPage>
       final NoteDto? incoming = widget.note;
       final bool sameIdentity =
           incoming?.id == _note?.id && incoming?.ownerId == _note?.ownerId;
+      if (!sameIdentity) {
+        _editorGeneration++;
+        _attachmentTrayOpen = false;
+        _attachmentCount = null;
+      }
       final NoteDto? previous = oldWidget.note;
       final bool sameText =
           previous != null && incoming != null && previous == incoming;
@@ -217,6 +231,9 @@ final class NoteDetailPageState extends State<NoteDetailPage>
       }
     }
     if (oldWidget.notesController != widget.notesController) {
+      _editorGeneration++;
+      _attachmentTrayOpen = false;
+      _attachmentCount = null;
       unawaited(_securitySubscription?.cancel());
       _listenSecurity();
       _summaryController.cancelActive(
@@ -321,8 +338,14 @@ final class NoteDetailPageState extends State<NoteDetailPage>
 
   bool get hasActiveOperation => _actionBusy || _backConfirmationVisible;
 
-  Future<void> requestClose() =>
-      _backConfirmationVisible ? Future<void>.value() : _handleBack();
+  Future<void> requestClose() async {
+    // Escape dismisses the active popup before closing its embedded editor.
+    if (ModalRoute.of(context)?.isCurrent == false) {
+      await Navigator.of(context).maybePop();
+      return;
+    }
+    if (!_backConfirmationVisible) await _handleBack();
+  }
 
   bool get _canSave =>
       !_actionBusy &&

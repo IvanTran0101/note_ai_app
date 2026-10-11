@@ -11,6 +11,7 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_body.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/labels/label.dart';
 import '../../domain/labels/label_membership.dart';

@@ -1,5 +1,6 @@
 import '../../domain/labels/label_projection.dart';
 import '../notes/note_dto.dart';
+import '../../domain/notes/note_body.dart';
 import 'local_label_state.dart';
 
 typedef LabelSelection = ({String ownerId, String id});
@@ -38,7 +39,7 @@ List<NoteDto> queryNotes(
     if (!readable(note)) return query.isEmpty && selected.isEmpty;
     if (query.isNotEmpty &&
         !note.title.toLowerCase().contains(query) &&
-        !note.content.toLowerCase().contains(query)) {
+        !NoteBody.plainText(note.content).toLowerCase().contains(query)) {
       return false;
     }
     final available = labelsFor(note)

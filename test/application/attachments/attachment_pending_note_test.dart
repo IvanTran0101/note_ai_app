@@ -18,6 +18,9 @@ import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
 import 'package:note_ai_app/presentation/notes/attachment_editor_panel.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
+import 'package:note_ai_app/application/auth/current_user.dart';
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
 
 import '../../infrastructure/notes/note_repository_test_support.dart';
 
@@ -131,6 +134,179 @@ void main() {
     );
   });
   tearDown(() => security.events.close());
+
+  NoteApplicationServiceController detailController(
+    Future<List<AttachmentInput>> Function(AttachmentSource) pick,
+  ) => NoteApplicationServiceController(
+    NoteApplicationService(
+      noteRepository: repository,
+      currentUser: StaticCurrentUser(
+        identity: AuthIdentity(
+          userId: 'owner',
+          email: 'owner@example.test',
+          isEmailVerified: true,
+        ),
+      ),
+      generateId: () => 'created',
+      now: () => DateTime.utc(2026, 10, 7),
+      summarizeContent: (_) async => throw UnimplementedError(),
+    ),
+    attachmentsForCurrentAccount: () => service,
+    attachmentPicker: pick,
+  );
+
+  Future<void> flushPicker(WidgetTester tester) async {
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 2)),
+      );
+    }
+  }
+
+  testWidgets(
+    'attachment tray stays out of writing until opened and fits the keyboard',
+    (tester) async {
+      tester.view
+        ..physicalSize = const Size(390, 844)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = detailController((_) async => []);
+      final note = await tester.runAsync(() => repository.findById('note'));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NoteDetailPage(
+            notesController: controller,
+            note: NoteDto.fromDomain(note!),
+          ),
+        ),
+      );
+      await flushPicker(tester);
+      expect(find.text('offline.txt'), findsNothing);
+      await tester.tap(find.byTooltip('Attachments'));
+      await tester.pumpAndSettle();
+      expect(find.text('offline.txt'), findsOneWidget);
+      expect(find.textContaining('Images 10 MiB'), findsNothing);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Close attachments'));
+      await tester.pumpAndSettle();
+      expect(find.text('offline.txt'), findsNothing);
+      expect(uploads, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'toolbar saves new draft before picker and cancellation preserves the note',
+    (tester) async {
+      var calls = 0;
+      final controller = detailController((source) async {
+        calls++;
+        expect(source, AttachmentSource.files);
+        final saved = store.state.notes.singleWhere(
+          (note) => note.id == 'created',
+        );
+        expect(saved.title, 'Draft title');
+        expect(saved.content, 'Draft body');
+        return [];
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: NoteDetailPage(notesController: controller)),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(NoteDetailPage.titleFieldKey),
+        'Draft title',
+      );
+      await tester.enterText(
+        find.byKey(NoteDetailPage.contentFieldKey),
+        'Draft body',
+      );
+      await tester.tap(find.byTooltip('Add attachment'));
+      // The focused editor caret keeps scheduling frames while the menu opens.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Choose files'));
+      await flushPicker(tester);
+      expect(calls, 1);
+      expect(
+        store.state.notes
+            .singleWhere((note) => note.id == 'created')
+            .attachments,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+            .controller!
+            .text,
+        'Draft body',
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('toolbar blocks invalid draft before opening attachment picker', (
+    tester,
+  ) async {
+    var calls = 0;
+    final controller = detailController((_) async {
+      calls++;
+      return [];
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: NoteDetailPage(notesController: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add attachment'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose files'));
+    await flushPicker(tester);
+    expect(calls, 0);
+    expect(store.state.notes, hasLength(1));
+    expect(find.byKey(const ValueKey('note-detail-error')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'attachment toolbar is disabled during picker and reenabled after cancellation',
+    (tester) async {
+      final pending = Completer<List<AttachmentInput>>();
+      final controller = detailController((_) => pending.future);
+      final domainNote = await tester.runAsync(
+        () => repository.findById('note'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NoteDetailPage(
+            notesController: controller,
+            note: NoteDto.fromDomain(domainNote!),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add attachment'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose files'));
+      await flushPicker(tester);
+      PopupMenuButton<AttachmentSource> button() => tester.widget(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is PopupMenuButton<AttachmentSource> &&
+              widget.tooltip == 'Add attachment',
+        ),
+      );
+      expect(button().enabled, isFalse);
+      pending.complete([]);
+      await flushPicker(tester);
+      expect(button().enabled, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   test(
     'Create ACK waiting retains draft and never calls upload or Note writer',

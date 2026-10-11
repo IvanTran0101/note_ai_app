@@ -40,7 +40,11 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
     super.dispose();
   }
 
-  NotesListPanel _panel(List<NoteDto> notes) {
+  NotesListPanel _panel(
+    List<NoteDto> notes, {
+    Widget? controls,
+    String? emptyMessage,
+  }) {
     final p = widget.panel;
     return NotesListPanel(
       notes: notes,
@@ -54,6 +58,16 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
       allowNewNote: p.allowNewNote,
       readable: p.readable,
       queryEnabled: false,
+      layout: p.layout,
+      onLayoutChanged: p.onLayoutChanged,
+      layoutBusy: p.layoutBusy,
+      refreshing: p.refreshing,
+      canPin: p.canPin,
+      onTogglePinned: p.onTogglePinned,
+      pinningNoteId: p.pinningNoteId,
+      pinEnabled: p.pinEnabled,
+      queryControls: controls,
+      emptyMessage: emptyMessage,
     );
   }
 
@@ -74,56 +88,50 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
         readable: _readable(n),
       ),
     );
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            children: [
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
-                child: TextField(
-                  key: const ValueKey('notes-search-field'),
-                  controller: _search,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: copy.search,
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: copy.clear,
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => setState(_search.clear),
-                          ),
-                  ),
-                ),
+    return _panel(
+      sortNotes(filtered),
+      emptyMessage:
+          filtered.isEmpty &&
+              p.error == null &&
+              (_search.text.trim().isNotEmpty || _selected.isNotEmpty)
+          ? copy.noResults
+          : null,
+      controls: Column(
+        children: [
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            child: TextField(
+              key: const ValueKey('notes-search-field'),
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: copy.search,
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: copy.clear,
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(_search.clear),
+                      ),
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 160),
-                child: SingleChildScrollView(
-                  child: LabelFilterBar(
-                    notes: p.notes,
-                    selected: _selected,
-                    onChanged: (next) => setState(() => _selected = next),
-                    readable: _readable,
-                    allowManage: p.allowNewNote,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child:
-              filtered.isEmpty &&
-                  p.error == null &&
-                  (_search.text.trim().isNotEmpty || _selected.isNotEmpty)
-              ? Center(child: Text(copy.noResults))
-              : _panel(sortNotes(filtered)),
-        ),
-      ],
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 160),
+            child: SingleChildScrollView(
+              child: LabelFilterBar(
+                notes: p.notes,
+                selected: _selected,
+                onChanged: (next) => setState(() => _selected = next),
+                readable: _readable,
+                allowManage: p.allowNewNote,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

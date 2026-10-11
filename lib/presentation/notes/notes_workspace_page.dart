@@ -69,6 +69,11 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   bool _detailDirty = false;
   Object? _error;
   bool _loading = true;
+  bool _refreshing = false;
+  NoteLayoutPreference _layout = NoteLayoutPreference.grid;
+  bool _layoutBusy = false;
+  int _layoutSequence = 0;
+  String? _pinningNoteId;
   Future<void>? _loadInFlight;
   StreamSubscription<void>? _securitySubscription;
   int? _securitySession;
@@ -143,6 +148,10 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
             _detailDirty = false;
             _error = null;
             _loading = false;
+            _layoutSequence++;
+            _layout = NoteLayoutPreference.grid;
+            _layoutBusy = false;
+            _pinningNoteId = null;
           } else {
             _notes = _notes
                 .map(
@@ -153,11 +162,16 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
                 .toList();
           }
         });
-        if (!changed) unawaited(_refreshSecurityList());
+        if (changed) {
+          unawaited(_loadLayout());
+        } else {
+          unawaited(_refreshSecurityList());
+        }
       });
     }
     widget.syncController?.addListener(_workspaceSyncChanged);
     unawaited(reload());
+    unawaited(_loadLayout());
   }
 
   @override
@@ -199,12 +213,14 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     } finally {
       if (identical(_loadInFlight, operation)) {
         _loadInFlight = null;
+        if (mounted) setState(() => _refreshing = false);
       }
     }
   }
 
   Future<void> _loadNotesInternal() async {
     final sequence = ++_loadSequence;
+    setState(() => _refreshing = true);
     try {
       final List<NoteDto> notes = sortNotes(await _listAllNotes());
       if (!mounted || sequence != _loadSequence) {
@@ -225,6 +241,124 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadLayout() async {
+    final app = _application;
+    if (app is! NotesModule02Controller) return;
+    final sequence = ++_layoutSequence;
+    setState(() => _layoutBusy = true);
+    try {
+      final layout = await (app as NotesModule02Controller).getNoteLayout();
+      if (mounted && sequence == _layoutSequence) {
+        setState(() => _layout = layout);
+      }
+    } on Object {
+      if (mounted && sequence == _layoutSequence) {
+        _showCollectionFailure(
+          NotesCopy.of(context).layoutLoadError,
+          () => unawaited(_loadLayout()),
+        );
+      }
+    } finally {
+      if (mounted && sequence == _layoutSequence) {
+        setState(() => _layoutBusy = false);
+      }
+    }
+  }
+
+  Future<void> _changeLayout(NoteLayoutPreference layout) async {
+    final app = _application;
+    if (app is! NotesModule02Controller || _layoutBusy || layout == _layout) {
+      return;
+    }
+    final sequence = ++_layoutSequence;
+    setState(() => _layoutBusy = true);
+    try {
+      await (app as NotesModule02Controller).setNoteLayout(layout);
+      if (mounted && sequence == _layoutSequence) {
+        setState(() => _layout = layout);
+      }
+    } on Object {
+      if (mounted && sequence == _layoutSequence) {
+        _showCollectionFailure(
+          NotesCopy.of(context).layoutSaveError,
+          () => unawaited(_changeLayout(layout)),
+        );
+      }
+    } finally {
+      if (mounted && sequence == _layoutSequence) {
+        setState(() => _layoutBusy = false);
+      }
+    }
+  }
+
+  bool _canPin(NoteDto note) {
+    final app = _application;
+    return app is NotesModule02Controller &&
+        note.share == null &&
+        (app is SecuredNotesController
+            ? (app as SecuredNotesController).capabilitiesFor(note).canManage
+            : !note.isProtected && note.contentAvailable);
+  }
+
+  Future<void> _togglePin(NoteDto note) async {
+    if (!_canPin(note) ||
+        _detailBusy ||
+        _detailDirty ||
+        _pinningNoteId != null) {
+      return;
+    }
+    final session = _securitySession;
+    setState(() => _pinningNoteId = note.reference);
+    try {
+      final saved = await (_application as NotesModule02Controller).setPinned(
+        noteId: note.reference,
+        pinned: !note.isPinned,
+      );
+      if (!mounted || session != _securitySession) return;
+      setState(() {
+        _notes = List.unmodifiable(
+          sortNotes(
+            _notes.map((current) {
+              if (current.identity != saved.identity) return current;
+              return saved.isProtected ? saved.metadataOnly() : saved;
+            }),
+          ),
+        );
+      });
+      _showMessage(
+        saved.isPinned
+            ? NotesCopy.of(context).pinned
+            : NotesCopy.of(context).unpinned,
+      );
+    } on Object {
+      if (mounted && session == _securitySession) {
+        _showCollectionFailure(
+          NotesCopy.of(context).pinError,
+          () => unawaited(_togglePin(note)),
+        );
+      }
+    } finally {
+      if (mounted && session == _securitySession) {
+        setState(() => _pinningNoteId = null);
+      }
+    }
+  }
+
+  void _showCollectionFailure(String message, VoidCallback retry) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        buildNoteFlowSnackBar(
+          context: context,
+          message: message,
+          action: SnackBarAction(
+            label: NotesCopy.of(context).retry,
+            onPressed: retry,
+          ),
+        ),
+      );
   }
 
   void _selectNote(NoteDto note) {

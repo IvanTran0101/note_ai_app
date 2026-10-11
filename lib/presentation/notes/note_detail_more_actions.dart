@@ -28,6 +28,7 @@ Future<bool?> showNoteDetailMoreActions({
       color: tokens.elevatedSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 2,
+      popUpAnimationStyle: NoteFlowMotion.dialogStyle(context),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NoteFlowRadius.card),
         side: BorderSide(color: tokens.divider),
@@ -36,7 +37,7 @@ Future<bool?> showNoteDetailMoreActions({
         PopupMenuItem<bool>(
           key: const ValueKey<String>('note-detail-more-delete'),
           value: true,
-          height: 44,
+          height: 48,
           child: SizedBox(
             width: 188,
             child: Row(
@@ -59,6 +60,9 @@ Future<bool?> showNoteDetailMoreActions({
   return showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
+    useSafeArea: true,
+    constraints: const BoxConstraints(maxWidth: 560),
+    sheetAnimationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) {
       return SafeArea(
         child: Padding(

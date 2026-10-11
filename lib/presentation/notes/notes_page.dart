@@ -505,6 +505,7 @@ class _NotesPageState extends State<NotesPage> {
       onRetry: _loadNotes,
     );
     final Widget editor = NoteEditorPanel(
+      editorIdentity: _selectedNoteId,
       titleController: _titleController,
       contentController: _contentController,
       hasSelectedNote: _selectedNoteId != null,

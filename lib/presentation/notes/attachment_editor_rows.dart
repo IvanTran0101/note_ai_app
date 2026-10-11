@@ -1,47 +1,57 @@
 part of 'attachment_editor_panel.dart';
 
-extension _AttachmentEditorRows on _AttachmentEditorPanelState {
-  Widget _buildPanel(BuildContext context) => Card(
-    child: Padding(
+extension _AttachmentEditorRows on AttachmentEditorPanelState {
+  Widget _buildPanel(BuildContext context) {
+    final body = Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(child: Text('Attachments')),
-              if (_canWrite)
-                PopupMenuButton<AttachmentSource>(
-                  enabled: !_busy,
-                  tooltip: 'Add attachment',
-                  icon: const Icon(Icons.attach_file),
-                  onSelected: (source) => unawaited(_pick(source)),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: AttachmentSource.files,
-                      child: Text('Choose files'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.gallery,
-                      child: Text('Gallery'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.cameraPhoto,
-                      child: Text('Take photo'),
-                    ),
-                    PopupMenuItem(
-                      value: AttachmentSource.cameraVideo,
-                      child: Text('Record video'),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          if (_canWrite)
+          if (!widget.compact)
+            Row(
+              children: [
+                const Expanded(child: Text('Attachments')),
+                if (_canWrite && widget.showAddAction)
+                  PopupMenuButton<AttachmentSource>(
+                    enabled: !_busy,
+                    tooltip: 'Add attachment',
+                    icon: const Icon(Icons.attach_file),
+                    onSelected: (source) => unawaited(_pick(source)),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: AttachmentSource.files,
+                        child: Text('Choose files'),
+                      ),
+                      PopupMenuItem(
+                        value: AttachmentSource.gallery,
+                        child: Text('Gallery'),
+                      ),
+                      PopupMenuItem(
+                        value: AttachmentSource.cameraPhoto,
+                        child: Text('Take photo'),
+                      ),
+                      PopupMenuItem(
+                        value: AttachmentSource.cameraVideo,
+                        child: Text('Record video'),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          if (_canWrite && !widget.compact)
             const Text(
               'Images 10 MiB · MP4 50 MiB · PDF/TXT/CSV 20 MiB. Up to 10 files / 100 MiB per note.',
             ),
-          if (_busy) const LinearProgressIndicator(),
+          if (_busy)
+            LinearProgressIndicator(
+              value: MediaQuery.disableAnimationsOf(context) ? 0.5 : null,
+            ),
+          if (widget.compact &&
+              !_busy &&
+              _error == null &&
+              _pending.isEmpty &&
+              widget.note.attachments.isEmpty)
+            const Text('No attachments'),
           if (_pending.isNotEmpty && widget.note.contentRevision == 0)
             const Text(
               'Saved on this device. Attachments will upload after this note syncs.',
@@ -60,8 +70,10 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
           if (_previewItem != null) _previewWidget(),
         ],
       ),
-    ),
-  );
+    );
+    return widget.compact ? body : Card(child: body);
+  }
+
   Widget _row(_AttachmentItem item) {
     final progress = _progress[item.id], ready = _ready.contains(item.id);
     final uploading = _working.contains('upload/${item.id}');

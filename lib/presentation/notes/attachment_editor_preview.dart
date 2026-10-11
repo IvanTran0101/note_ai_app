@@ -1,6 +1,6 @@
 part of 'attachment_editor_panel.dart';
 
-extension _AttachmentEditorPreview on _AttachmentEditorPanelState {
+extension _AttachmentEditorPreview on AttachmentEditorPanelState {
   void _clearPreview() {
     final item = _previewItem;
     if (item != null && _previewReference != null) {

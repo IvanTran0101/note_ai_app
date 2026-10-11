@@ -1,7 +1,16 @@
 part of 'note_detail_page.dart';
 
 extension _NoteDetailActions on NoteDetailPageState {
-  Future<bool> _save({bool automatic = false}) async {
+  Future<bool> _save({bool automatic = false}) {
+    if (_saving) return _saveInFlight ?? Future<bool>.value(false);
+    final operation = _saveEditor(automatic: automatic);
+    _saveInFlight = operation;
+    return operation.whenComplete(() {
+      if (identical(_saveInFlight, operation)) _saveInFlight = null;
+    });
+  }
+
+  Future<bool> _saveEditor({bool automatic = false}) async {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     if (_actionBusy) {

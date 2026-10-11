@@ -32,6 +32,37 @@ final class NotesCopy {
   String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
   String get title => _isVietnamese ? 'NoteFlow · Ghi chú' : 'NoteFlow · Notes';
   String get notes => _isVietnamese ? 'Ghi chú' : 'Notes';
+  String collectionCount(int count, int pinned) {
+    final notes = _isVietnamese
+        ? '$count ghi chú'
+        : '$count ${count == 1 ? 'note' : 'notes'}';
+    if (pinned == 0) return notes;
+    return _isVietnamese
+        ? '$notes · $pinned đã ghim'
+        : '$notes · $pinned pinned';
+  }
+
+  String updatedOn(String date) =>
+      _isVietnamese ? 'Cập nhật $date' : 'Updated $date';
+  String get gridView => _isVietnamese ? 'Dạng lưới' : 'Grid view';
+  String get listView => _isVietnamese ? 'Dạng danh sách' : 'List view';
+  String get savingView =>
+      _isVietnamese ? 'Đang lưu giao diện' : 'Saving view preference';
+  String get layoutLoadError => _isVietnamese
+      ? 'Không thể tải giao diện đã lưu.'
+      : 'Could not load your view preference.';
+  String get layoutSaveError => _isVietnamese
+      ? 'Không thể lưu giao diện. Hãy thử lại.'
+      : 'Could not save your view preference. Please retry.';
+  String get pin => _isVietnamese ? 'Ghim ghi chú' : 'Pin note';
+  String get unpin => _isVietnamese ? 'Bỏ ghim ghi chú' : 'Unpin note';
+  String get pinned => _isVietnamese ? 'Đã ghim ghi chú' : 'Note pinned';
+  String get unpinned => _isVietnamese ? 'Đã bỏ ghim ghi chú' : 'Note unpinned';
+  String get sharedNote =>
+      _isVietnamese ? 'Ghi chú được chia sẻ' : 'Shared note';
+  String get pinError => _isVietnamese
+      ? 'Không thể thay đổi trạng thái ghim. Hãy thử lại.'
+      : 'Could not update the pin. Please retry.';
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
   String get noNotes => _isVietnamese ? 'Chưa có ghi chú' : 'No notes yet';
   String get createFirstNote =>

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_pages.dart';
+import '../auth/auth_localizations.dart';
+import '../notes/notes_theme_tokens.dart';
 import '../auth/controllers/auth_controller.dart';
 import '../auth/controllers/auth_state.dart';
 import 'app_routes.dart';
@@ -33,6 +35,8 @@ GoRouter createAppRouter({
         builder: (BuildContext context, GoRouterState state) {
           return LoginPage(
             controller: authController,
+            passwordResetComplete:
+                state.extra == AuthRouteNotice.passwordResetComplete,
             redirect: state.uri.queryParameters['redirect'],
           );
         },
@@ -176,22 +180,69 @@ final class _AuthStartupPage extends StatelessWidget {
         builder: (BuildContext context, Widget? child) {
           final AuthState state = controller.state;
           final AuthPresentationError? error = state.error;
+          final copy = AuthCopy.of(context);
+          final tokens = NoteFlowUiTokens.of(context);
           return Center(
-            child: error == null
-                ? const CircularProgressIndicator()
-                : Column(
+            child: Padding(
+              padding: const EdgeInsets.all(NoteFlowSpacing.xl),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      const Text('Unable to restore your session.'),
-                      const SizedBox(height: 12.0),
-                      FilledButton(
-                        onPressed: state.isBusy
-                            ? null
-                            : () => unawaited(_retry()),
-                        child: const Text('Retry'),
+                      Icon(
+                        Icons.note_alt_outlined,
+                        size: 32,
+                        color: tokens.textPrimary,
                       ),
+                      const SizedBox(height: NoteFlowSpacing.md),
+                      Text(
+                        'NoteFlow',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: NoteFlowSpacing.xl),
+                      if (error == null) ...<Widget>[
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: MediaQuery.disableAnimationsOf(context)
+                              ? Icon(
+                                  Icons.hourglass_top,
+                                  color: tokens.textSecondary,
+                                )
+                              : CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: tokens.link,
+                                ),
+                        ),
+                        const SizedBox(height: NoteFlowSpacing.lg),
+                        Text(
+                          copy.restoringSession,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: tokens.textSecondary),
+                        ),
+                      ] else ...<Widget>[
+                        Icon(Icons.error_outline, color: tokens.error),
+                        const SizedBox(height: NoteFlowSpacing.sm),
+                        Text(
+                          copy.sessionRestoreFailed,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: NoteFlowSpacing.lg),
+                        FilledButton(
+                          onPressed: state.isBusy
+                              ? null
+                              : () => unawaited(_retry()),
+                          child: Text(copy.retry),
+                        ),
+                      ],
                     ],
                   ),
+                ),
+              ),
+            ),
           );
         },
       ),

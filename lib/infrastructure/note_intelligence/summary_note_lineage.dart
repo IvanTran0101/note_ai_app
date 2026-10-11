@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../application/notes/note_application.dart';
 import 'summary_api_failure.dart';
 import 'summary_request_policy.dart';
+import '../../domain/notes/note_body.dart';
 
 /// Private transport context for one pipeline; contains no unlock grant.
 final class SummaryNoteLineage {
@@ -20,7 +21,7 @@ final class SummaryNoteLineage {
     int? start, end;
     if (stage == SummaryStage.section) {
       final text = SummaryRequestPolicy.normalizeInput(
-        context.noteSnapshot.content,
+        NoteBody.plainText(context.noteSnapshot.content),
       );
       final chunk = SummaryRequestPolicy.normalizeInput(inputs.single);
       start = text.indexOf(chunk, _end);

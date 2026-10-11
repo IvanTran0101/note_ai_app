@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type {
   APIGatewayProxyEventV2WithJWTAuthorizer,
   APIGatewayProxyStructuredResultV2,
@@ -106,7 +107,7 @@ export const check = async (name: string, run: () => Promise<void> | void): Prom
   }
 };
 
-export const wirePath = decodeURIComponent(new URL('./wire_cases.json', import.meta.url).pathname);
+export const wirePath = fileURLToPath(new URL('./wire_cases.json', import.meta.url));
 
 if (nodeFs === undefined || !nodeFs.existsSync(wirePath)) throw new Error("Required wire fixtures unavailable");
 export const wireCases = JSON.parse(nodeFs.readFileSync(wirePath, 'utf8')) as AnyRecord;

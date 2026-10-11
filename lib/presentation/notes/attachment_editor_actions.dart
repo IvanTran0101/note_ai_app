@@ -1,6 +1,6 @@
 part of 'attachment_editor_panel.dart';
 
-extension _AttachmentEditorActions on _AttachmentEditorPanelState {
+extension _AttachmentEditorActions on AttachmentEditorPanelState {
   Future<void> _perform(
     String key,
     Future<void> Function(AttachmentApplicationService) action, {

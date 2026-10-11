@@ -30,6 +30,10 @@ final class AttachmentEditorPanel extends StatefulWidget {
     this.onChanged,
     this.onResumeProtected,
     this.onBeforePick,
+    this.showAddAction = true,
+    this.onBusyChanged,
+    this.compact = false,
+    this.onItemsChanged,
   });
   final NoteDto note;
   final AttachmentNotesController controller;
@@ -38,11 +42,16 @@ final class AttachmentEditorPanel extends StatefulWidget {
   final ValueChanged<NoteDto>? onChanged;
   final Future<void> Function()? onResumeProtected;
   final Future<bool> Function()? onBeforePick;
+  final bool showAddAction;
+  final ValueChanged<bool>? onBusyChanged;
+  final bool compact;
+  final ValueChanged<int>? onItemsChanged;
   @override
-  State<AttachmentEditorPanel> createState() => _AttachmentEditorPanelState();
+  State<AttachmentEditorPanel> createState() => AttachmentEditorPanelState();
 }
 
-final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
+final class AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
+  Future<void> pick(AttachmentSource source) => _pick(source);
   StreamSubscription<void>? _securityEvents;
   StreamSubscription<AttachmentProgress>? _progressEvents;
   Timer? _refresh;
@@ -89,7 +98,29 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   bool _current(int generation) =>
       mounted && _allowed && generation == _generation;
   void _update(VoidCallback change) {
-    if (mounted) setState(change);
+    if (!mounted) return;
+    final wasBusy = _busy;
+    setState(change);
+    if (widget.onItemsChanged != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onItemsChanged?.call(
+          widget.note.attachments.length +
+              _pending
+                  .where(
+                    (draft) => !widget.note.attachments.any(
+                      (file) => file.id == draft.cacheId,
+                    ),
+                  )
+                  .length,
+        );
+      });
+    }
+    if (wasBusy != _busy) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onBusyChanged?.call(_busy);
+      });
+    }
   }
 
   @override

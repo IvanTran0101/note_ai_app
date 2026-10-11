@@ -1106,6 +1106,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 560),
+      backgroundColor: NoteFlowUiTokens.of(context).elevatedSurface,
+      sheetAnimationStyle: NoteFlowMotion.dialogStyle(context),
       builder: (BuildContext sheetContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setSheetState) {
@@ -1115,9 +1119,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    Text(
-                      copy.appearanceAndLanguage,
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.tune,
+                          color: NoteFlowUiTokens.of(context).textSecondary,
+                        ),
+                        const SizedBox(width: NoteFlowSpacing.md),
+                        Expanded(
+                          child: Text(
+                            copy.appearanceAndLanguage,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: MaterialLocalizations.of(context)
+                              .closeButtonTooltip,
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     DropdownButtonFormField<ThemeMode>(
