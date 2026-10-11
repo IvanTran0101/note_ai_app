@@ -78,6 +78,27 @@ AI or backend API capability is claimed.
 
 ## Compatibility And Limits
 
+### Local Attachment Entry-Point Follow-Up
+
+The tray now has a visible Add attachment command alongside the toolbar plus.
+Both use the same source menu, capability/busy gates and save-before-pick path.
+Gallery is labeled Photos & videos because the existing adapter already uses
+`pickMultipleMedia`; Choose files, Take photo and Record video remain available.
+No attachment service, S3 transport or backend configuration changed. This
+follow-up is prepared for publication to `final-TanMinh` at the user's request.
+Its 101-test focused run and Flutter analysis passed, and the updated local-auth
+web preview built successfully.
+Rendered Edge checks opened the visible tray source menu on desktop and touch,
+verified all source labels, dismissed it without losing the note, and retained
+successful TXT staging, tray dismissal and dark/reduced-motion layout checks.
+
+The pre-toolbar source commit already contains the attachment picker, encrypted
+cache, HTTP upload/read, retry/cancel/removal and S3 backend implementations.
+`docs/m03/PROGRESS.md` records source/local acceptance separately from the pending
+AWS deployment/live gate. Local Pending in this preview is not an S3 upload
+receipt; deployment, API/auth/permission configuration and live acceptance must
+be verified, not assumed to be only a bucket connection.
+
 The cloud summary decoder must be deployed with rich-note clients before live
 cloud summaries of formatted notes can work. No backend deployment is performed
 by this change. Older clients may display the serialized rich-note envelope.

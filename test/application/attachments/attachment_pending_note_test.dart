@@ -249,6 +249,65 @@ void main() {
     },
   );
 
+  for (final entry in const {
+    AttachmentSource.files: 'Choose files',
+    AttachmentSource.gallery: 'Photos & videos',
+    AttachmentSource.cameraPhoto: 'Take photo',
+    AttachmentSource.cameraVideo: 'Record video',
+  }.entries) {
+    testWidgets('empty tray offers ${entry.value} and saves before picking', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(360, 844)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      var calls = 0;
+      final controller = detailController((source) async {
+        calls++;
+        expect(source, entry.key);
+        expect(
+          store.state.notes.singleWhere((note) => note.id == 'created').content,
+          'Draft body',
+        );
+        return [];
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: NoteDetailPage(notesController: controller)),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(NoteDetailPage.titleFieldKey), 'Draft');
+      await tester.enterText(
+        find.byKey(NoteDetailPage.contentFieldKey),
+        'Draft body',
+      );
+      await tester.tap(find.byTooltip('Attachments'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('No attachments'), findsOneWidget);
+      expect(find.text('Add attachment'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('note-attachment-tray-add')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      for (final label in [
+        'Choose files',
+        'Photos & videos',
+        'Take photo',
+        'Record video',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+      await tester.tap(find.text(entry.value));
+      await flushPicker(tester);
+      expect(calls, 1);
+      expect(find.byTooltip('Close attachments'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
   testWidgets('toolbar blocks invalid draft before opening attachment picker', (
     tester,
   ) async {
@@ -292,17 +351,19 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose files'));
       await flushPicker(tester);
-      PopupMenuButton<AttachmentSource> button() => tester.widget(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is PopupMenuButton<AttachmentSource> &&
-              widget.tooltip == 'Add attachment',
-        ),
-      );
-      expect(button().enabled, isFalse);
+      Iterable<PopupMenuButton<AttachmentSource>> buttons() =>
+          tester.widgetList(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is PopupMenuButton<AttachmentSource> &&
+                  widget.tooltip == 'Add attachment',
+            ),
+          );
+      expect(buttons(), hasLength(2));
+      expect(buttons().every((button) => !button.enabled), isTrue);
       pending.complete([]);
       await flushPicker(tester);
-      expect(button().enabled, isTrue);
+      expect(buttons().every((button) => button.enabled), isTrue);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

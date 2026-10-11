@@ -38,7 +38,14 @@ extension _NoteDetailLabels on NoteDetailPageState {
               Row(
                 children: [
                   const SizedBox(width: 16),
-                  const Expanded(child: Text('Attachments')),
+                  const Expanded(
+                    child: Text(
+                      'Attachments',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Flexible(flex: 2, child: _attachmentAddMenu(labeled: true)),
                   IconButton(
                     tooltip: 'Close attachments',
                     onPressed: () => _update(() => _attachmentTrayOpen = false),
@@ -127,41 +134,79 @@ extension _NoteDetailLabels on NoteDetailPageState {
           child: const Icon(Icons.attach_file, size: 21),
         ),
       ),
-      PopupMenuButton<AttachmentSource>(
-        requestFocus: true,
-        tooltip: Localizations.localeOf(context).languageCode == 'vi'
-            ? 'Thêm tệp đính kèm'
-            : 'Add attachment',
-        enabled:
-            !_actionBusy &&
-            !_attachmentBusy &&
-            (_note == null || _capabilities.canManage) &&
-            _canEdit &&
-            widget.notesController is AttachmentNotesController,
-        icon: const Icon(Icons.add, size: 22),
-        popUpAnimationStyle: NoteFlowMotion.dialogStyle(context),
-        onSelected: (source) => unawaited(_pickFromToolbar(source)),
-        itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: AttachmentSource.files,
-            child: Text('Choose files'),
-          ),
-          PopupMenuItem(
-            value: AttachmentSource.gallery,
-            child: Text('Gallery'),
-          ),
-          PopupMenuItem(
-            value: AttachmentSource.cameraPhoto,
-            child: Text('Take photo'),
-          ),
-          PopupMenuItem(
-            value: AttachmentSource.cameraVideo,
-            child: Text('Record video'),
-          ),
-        ],
-      ),
+      _attachmentAddMenu(),
     ],
   );
+
+  Widget _attachmentAddMenu({bool labeled = false}) {
+    final enabled =
+        !_actionBusy &&
+        !_attachmentBusy &&
+        (_note == null || _capabilities.canManage) &&
+        _canEdit &&
+        widget.notesController is AttachmentNotesController;
+    final label = Localizations.localeOf(context).languageCode == 'vi'
+        ? 'Thêm tệp đính kèm'
+        : 'Add attachment';
+    return PopupMenuButton<AttachmentSource>(
+      key: labeled ? const ValueKey('note-attachment-tray-add') : null,
+      requestFocus: true,
+      tooltip: label,
+      enabled: enabled,
+      icon: labeled ? null : const Icon(Icons.add, size: 22),
+      popUpAnimationStyle: NoteFlowMotion.dialogStyle(context),
+      onSelected: (source) => unawaited(_pickFromToolbar(source)),
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: AttachmentSource.files,
+          child: Text('Choose files'),
+        ),
+        PopupMenuItem(
+          value: AttachmentSource.gallery,
+          child: Text('Photos & videos'),
+        ),
+        PopupMenuItem(
+          value: AttachmentSource.cameraPhoto,
+          child: Text('Take photo'),
+        ),
+        PopupMenuItem(
+          value: AttachmentSource.cameraVideo,
+          child: Text('Record video'),
+        ),
+      ],
+      child: labeled
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.add,
+                      size: 20,
+                      color: enabled
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).disabledColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: enabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).disabledColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+    );
+  }
 
   void _labelsSaved(NoteDto incoming) {
     if (!_canRead || incoming.identity != _note?.identity) return;
