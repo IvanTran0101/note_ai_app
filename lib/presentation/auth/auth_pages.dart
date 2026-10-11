@@ -337,7 +337,9 @@ final class _RegisterPageState extends State<RegisterPage> {
                     hintText: copy.displayNameHint,
                     textInputAction: TextInputAction.next,
                     validator: (String? value) =>
-                        _required(value, copy.displayNameRequired),
+                        (value?.trim().runes.length ?? 0) > 100
+                        ? copy.displayNameTooLong
+                        : _required(value, copy.displayNameRequired),
                   ),
                   const SizedBox(height: 12.0),
                   _authField(

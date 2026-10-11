@@ -45,10 +45,13 @@ final class AuthController extends ChangeNotifier {
 
   AuthState get state => _state;
 
+  String? pendingProfileDisplayName;
+
   void _onAuthStateChanged(AuthUserDto? user) {
     if (_disposed) {
       return;
     }
+    if (user?.userId != _state.user?.userId) pendingProfileDisplayName = null;
     _initializationCompleted = true;
     _emit(
       user == null
@@ -109,6 +112,9 @@ final class AuthController extends ChangeNotifier {
     return _execute(
       operation: () => _service.register(input),
       onSuccess: (RegistrationResult result) {
+        pendingProfileDisplayName = result.profileSetupPending
+            ? input.displayName.trim()
+            : null;
         _initializationCompleted = true;
         return AuthState.authenticated(user: result.user);
       },
@@ -116,6 +122,7 @@ final class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    pendingProfileDisplayName = null;
     _ensureActive();
     _ensureNotBusy();
     if (authenticationAppService == null) {

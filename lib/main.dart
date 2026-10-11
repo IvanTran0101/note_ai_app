@@ -1,3 +1,10 @@
+import 'application/users/profile_app_service.dart';
+import 'application/users/profile_snapshot.dart';
+import 'domain/users/profile_failure.dart';
+import 'infrastructure/users/http_user_profile_repository.dart';
+import 'infrastructure/users/http_profile_avatar_gateway.dart';
+import 'infrastructure/users/profile_avatar_picker.dart';
+import 'presentation/profile/profile_page.dart';
 import 'application/labels/label_application.dart';
 import 'presentation/labels/label_catalog_scope.dart';
 import 'infrastructure/security/note_security_runtime.dart';
@@ -98,6 +105,29 @@ const String _noteFlowSyncApi = String.fromEnvironment('NOTEFLOW_SYNC_API');
 const Color _noteFlowSeedColor = Color(0xFF0F766E);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
+
+Future<String> _profileAccessToken({bool forceRefresh = false}) async {
+  final token = await const CognitoAccessTokenProvider().call(
+    forceRefresh: forceRefresh,
+  );
+  if (token == null) {
+    throw const ProfileFailure(ProfileFailureCode.unauthorized);
+  }
+  return token;
+}
+
+Uri? _configuredSyncUri() {
+  try {
+    final config = jsonDecode(amplifyConfig) as Map;
+    final endpoint = _noteFlowSyncApi.trim().isNotEmpty
+        ? _noteFlowSyncApi.trim()
+        : (config['custom'] as Map?)?['syncApiEndpoint'];
+    final uri = endpoint is String ? Uri.tryParse(endpoint) : null;
+    return uri?.scheme == 'https' && uri!.host.isNotEmpty ? uri : null;
+  } on Object {
+    return null;
+  }
+}
 
 ThemeData _buildNoteFlowTheme(Brightness brightness) {
   final bool isDark = brightness == Brightness.dark;
@@ -339,8 +369,16 @@ _bootstrapAuth() async {
       AuthenticationAppService(
         authenticationService: const CognitoAuthenticationService(),
         currentUserSession: session,
-        userProfileRepository: user_profile_infrastructure
-            .createUserProfileRepository(),
+        userProfileRepository: _configuredSyncUri() == null
+            ? user_profile_infrastructure.createUserProfileRepository()
+            : HttpUserProfileRepository(
+                baseUri: _configuredSyncUri()!,
+                accessTokenProvider: _profileAccessToken,
+                authenticatedUserId: () async =>
+                    (await const CognitoAuthenticationService()
+                            .getCurrentIdentity())
+                        ?.userId,
+              ),
       );
   return (
     currentUserSession: session,
@@ -418,9 +456,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final gateway = _sharingGateway = HttpShareGateway(
       baseUri: uri,
       actorId: actor,
-      tokenProvider:
-          widget.connection?.tokenProvider ??
-          const CognitoAccessTokenProvider().call,
+      tokenProvider: widget.connection?.tokenProvider ?? _profileAccessToken,
       client: widget.connection?.client,
       isCurrent: () =>
           !_disposed &&
@@ -597,7 +633,169 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     modelProvisioningReporter: _modelProvisioningStatus,
   );
   late final GoRouter _router;
+  ProfileAppService? _profileService;
+  ProfileAppService? _profilePageService;
+  HttpUserProfileRepository? _profileRepository;
+  HttpProfileAvatarGateway? _profileAvatarGateway;
+
+  void _closeProfileClients() {
+    _profileRepository?.close();
+    _profileAvatarGateway?.close();
+    _profileRepository = null;
+    _profileAvatarGateway = null;
+    _profileService = null;
+    _profilePageService = null;
+  }
+
+  final _profileView =
+      ValueNotifier<
+        ({ProfileSnapshot? snapshot, bool loaded, bool unavailable})
+      >((snapshot: null, loaded: false, unavailable: false));
+  ProfileSnapshot? get _profile => _profileView.value.snapshot;
+  bool get _profileUnavailable => _profileView.value.unavailable;
+  bool get _profileLoaded => _profileView.value.loaded;
+  int? _presentationGeneration;
+  int _profileRequest = 0;
+  int _themeRequest = 0;
   bool _disposed = false;
+
+  ProfileAppService? _profileForCurrentAccount() {
+    if (!_remoteEnabled ||
+        widget.connection != null ||
+        _currentUserSession.userId == null) {
+      return null;
+    }
+    final uri = _syncApiBaseUri();
+    if (uri == null) return null;
+    final generation = _currentUserSession.sessionGeneration;
+    Future<String?> authenticatedActor() async {
+      if (generation != _currentUserSession.sessionGeneration) return null;
+      final identity = await const CognitoAuthenticationService()
+          .getCurrentIdentity();
+      return generation == _currentUserSession.sessionGeneration
+          ? identity?.userId
+          : null;
+    }
+
+    return _profileService ??= ProfileAppService(
+      repository: _profileRepository = HttpUserProfileRepository(
+        baseUri: uri,
+        accessTokenProvider: _profileAccessToken,
+        authenticatedUserId: authenticatedActor,
+      ),
+      avatarGateway: _profileAvatarGateway = HttpProfileAvatarGateway(
+        baseUri: uri,
+        accessTokenProvider: _profileAccessToken,
+        authenticatedUserId: authenticatedActor,
+      ),
+      session: _currentUserSession,
+    );
+  }
+
+  Future<void> _refreshProfile() async {
+    final service = _profileForCurrentAccount();
+    if (service == null) return;
+    final generation = _currentUserSession.sessionGeneration;
+    final request = ++_profileRequest;
+    try {
+      final snapshot = await service.load();
+      if (!mounted ||
+          _disposed ||
+          generation != _currentUserSession.sessionGeneration ||
+          request != _profileRequest) {
+        return;
+      }
+      _profileView.value = (
+        snapshot: snapshot,
+        loaded: true,
+        unavailable: false,
+      );
+    } on Object {
+      if (!mounted ||
+          _disposed ||
+          generation != _currentUserSession.sessionGeneration ||
+          request != _profileRequest) {
+        return;
+      }
+      _profileView.value = (
+        snapshot: _profile,
+        loaded: true,
+        unavailable: true,
+      );
+    }
+  }
+
+  Future<void> _restoreTheme() async {
+    final generation = _currentUserSession.sessionGeneration;
+    final request = ++_themeRequest;
+    try {
+      final theme = await _noteApplicationService.getTheme();
+      if (!mounted ||
+          _disposed ||
+          generation != _currentUserSession.sessionGeneration ||
+          request != _themeRequest) {
+        return;
+      }
+      setState(() => _themeMode = ThemeMode.values.byName(theme.name));
+    } on Object {
+      // A failed preference read leaves notes usable with the system theme.
+    }
+  }
+
+  Widget _buildProfile(BuildContext context) {
+    final service = _profileForCurrentAccount();
+    final vi = Localizations.localeOf(context).languageCode == 'vi';
+    if (service == null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: () => context.go(AppRoutes.home)),
+          title: Text(vi ? 'Hồ sơ' : 'Profile'),
+        ),
+        body: Center(
+          child: Text(
+            vi
+                ? 'Chưa cấu hình dịch vụ hồ sơ.'
+                : 'Profile service is not configured.',
+          ),
+        ),
+      );
+    }
+    final generation = _currentUserSession.sessionGeneration;
+    final page = ProfilePage(
+      key: ValueKey('profile-$generation'),
+      service: _profilePageService ??= ProfileAppService(
+        repository: service.repository,
+        avatarGateway: service.avatarGateway,
+        session: _currentUserSession,
+      ),
+      pickAvatar: ProfileAvatarPicker().pick,
+      initialDisplayName: widget.authController.pendingProfileDisplayName,
+      onBack: () => context.go(AppRoutes.home),
+      onChanged: (snapshot) {
+        if (!mounted ||
+            _disposed ||
+            generation != _currentUserSession.sessionGeneration) {
+          return;
+        }
+        _profileRequest++;
+        _profileView.value = (
+          snapshot: snapshot,
+          loaded: true,
+          unavailable: false,
+        );
+        if (snapshot.profile != null) {
+          widget.authController.pendingProfileDisplayName = null;
+        }
+      },
+    );
+    return Column(
+      children: [
+        EmailVerificationBanner(controller: widget.authController),
+        Expanded(child: page),
+      ],
+    );
+  }
+
   // ponytail: one local model worker; per-model latches if multiple runtimes exist.
   bool _localSummaryRunning = false;
 
@@ -611,7 +809,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _onAuthenticationChanged();
     _router = createAppRouter(
       authController: widget.authController,
-      workspaceBuilder: _buildWorkspace,
+      workspaceBuilder: (context) => ValueListenableBuilder(
+        valueListenable: _profileView,
+        builder: (context, _, _) => _buildWorkspace(context),
+      ),
+      profileBuilder: _buildProfile,
     );
     unawaited(_initializeAuth());
   }
@@ -692,6 +894,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   void _onAuthenticationChanged() {
     final int generation = _currentUserSession.sessionGeneration;
     final int? previous = _lastSummarySessionGeneration;
+    final presentationChanged = _presentationGeneration != generation;
+    if (presentationChanged) {
+      _presentationGeneration = generation;
+      _profileRequest++;
+      _themeRequest++;
+      _closeProfileClients();
+      _profileView.value = (snapshot: null, loaded: false, unavailable: false);
+      _themeMode = ThemeMode.system;
+      if (mounted) setState(() {});
+    }
     if (previous != null && previous != generation) {
       _stopRealtime();
       _invalidateSummaryRuns();
@@ -710,6 +922,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       }
     }
     _lastSummarySessionGeneration = generation;
+    if (presentationChanged && _currentUserSession.userId != null) {
+      unawaited(_restoreTheme());
+      unawaited(_refreshProfile());
+    }
 
     final String? accountUserId = _currentUserSession.userId;
     if (accountUserId == null) {
@@ -783,6 +999,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       if (accountUserId != null) {
         _requestSyncForAccount(accountUserId);
         _startRealtime(accountUserId);
+        unawaited(_refreshProfile());
       }
     }
   }
@@ -1102,6 +1319,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
     final NotesCopy copy = NotesCopy.of(context);
     final AuthCopy authCopy = AuthCopy.of(context);
+    final generation = _currentUserSession.sessionGeneration;
+    bool savingTheme = false;
+    String? themeError;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1141,14 +1361,61 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                           child: Text(copy.themeDark),
                         ),
                       ],
-                      onChanged: (ThemeMode? value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setSheetState(() => selectedTheme = value);
-                        setState(() => _themeMode = value);
-                      },
+                      onChanged: savingTheme
+                          ? null
+                          : (ThemeMode? value) async {
+                              if (value == null ||
+                                  generation !=
+                                      _currentUserSession.sessionGeneration) {
+                                return;
+                              }
+                              final request = ++_themeRequest;
+                              setSheetState(() {
+                                savingTheme = true;
+                                themeError = null;
+                              });
+                              try {
+                                await _noteApplicationService.setTheme(
+                                  AppThemePreference.values.byName(value.name),
+                                );
+                                if (!mounted ||
+                                    generation !=
+                                        _currentUserSession.sessionGeneration ||
+                                    request != _themeRequest) {
+                                  return;
+                                }
+                                setState(() => _themeMode = value);
+                                if (sheetContext.mounted) {
+                                  setSheetState(() => selectedTheme = value);
+                                }
+                              } on Object {
+                                if (sheetContext.mounted &&
+                                    generation ==
+                                        _currentUserSession.sessionGeneration) {
+                                  setSheetState(
+                                    () => themeError =
+                                        Localizations.localeOf(context)
+                                                .languageCode ==
+                                            'vi'
+                                        ? 'Chưa lưu được giao diện. Hãy thử lại.'
+                                        : 'Theme was not saved. Please try again.',
+                                  );
+                                }
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setSheetState(() => savingTheme = false);
+                                }
+                              }
+                            },
                     ),
+                    if (savingTheme) const LinearProgressIndicator(),
+                    if (themeError != null)
+                      Text(
+                        themeError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<_NoteFlowLanguageChoice>(
                       key: ValueKey<_NoteFlowLanguageChoice>(selectedLanguage),
@@ -1185,6 +1452,19 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                       SummaryCloudSettingsTile(service: _summaryConsentService),
                       const SizedBox(height: 24),
                     ],
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.person_outline),
+                      label: Text(
+                        Localizations.localeOf(context).languageCode == 'vi'
+                            ? 'Hồ sơ'
+                            : 'Profile',
+                      ),
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(AppRoutes.profile);
+                      },
+                    ),
+                    const SizedBox(height: 8),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.lock_outline),
                       label: Text(authCopy.changePassword),
@@ -1245,12 +1525,39 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     return Column(
       children: <Widget>[
         EmailVerificationBanner(controller: widget.authController),
+        if (_remoteEnabled &&
+            (_profileUnavailable ||
+                (_profileLoaded && _profile?.profile == null)))
+          MaterialBanner(
+            content: Text(
+              Localizations.localeOf(context).languageCode == 'vi'
+                  ? (_profileUnavailable
+                        ? 'Hồ sơ hiện không tải được. Ghi chú vẫn dùng được.'
+                        : 'Hoàn tất tên và ảnh hồ sơ của bạn.')
+                  : (_profileUnavailable
+                        ? 'Profile is unavailable. You can still use your notes.'
+                        : 'Complete your name and profile photo.'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => context.go(AppRoutes.profile),
+                child: Text(
+                  Localizations.localeOf(context).languageCode == 'vi'
+                      ? 'Mở hồ sơ'
+                      : 'Open Profile',
+                ),
+              ),
+            ],
+          ),
         Expanded(
           child: WorkspaceShell(
             key: _workspaceShellKey,
-            accountName: widget.currentUserSession.identity?.email
-                .split('@')
-                .first,
+            accountAvatar: _profile?.avatarBytes == null
+                ? null
+                : MemoryImage(_profile!.avatarBytes!),
+            accountName:
+                _profile?.profile?.displayName ??
+                widget.currentUserSession.identity?.email.split('@').first,
             onDestinationChanged: (WorkspaceDestination destination) {
               if (destination != WorkspaceDestination.dashboard) {
                 _dashboardPageKey.currentState?.closeSearch();
@@ -1309,10 +1616,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _closeProfileClients();
     _stopRealtime();
     _noteSecurityRuntime.dispose();
     if (widget.enableLabels) unawaited(_labelApplication.dispose());
     _disposed = true;
+    _profileView.dispose();
     for (final store in _localSyncStores.values) {
       if (store is ILocalNoteVault) {
         (store as ILocalNoteVault).dispose();

@@ -33,6 +33,23 @@ void main() {
     expect(redirect.queryParameters['redirect'], '/notes/note-1?tab=summary');
   });
 
+  test('profile is protected and keeps a safe login redirect', () {
+    final result = redirectForAuth(
+      state: const AuthState.unauthenticated(),
+      uri: Uri.parse(AppRoutes.profile),
+    );
+    final redirect = Uri.parse(result!);
+    expect(redirect.path, AppRoutes.login);
+    expect(redirect.queryParameters['redirect'], AppRoutes.profile);
+    expect(
+      redirectForAuth(
+        state: AuthState.authenticated(user: testUser),
+        uri: Uri.parse(AppRoutes.profile),
+      ),
+      isNull,
+    );
+  });
+
   test('unauthenticated public route is allowed', () {
     expect(
       redirectForAuth(

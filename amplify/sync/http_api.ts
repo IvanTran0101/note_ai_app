@@ -108,6 +108,7 @@ export const createSyncHttpApi = ({
   }
   api.addRoutes({path: '/sync/v2/changes', methods: [HttpMethod.GET], integration, authorizer});
   api.addRoutes({path: '/sync/v2/label-projections', methods: [HttpMethod.POST], integration, authorizer});
+  api.addRoutes({ path: '/me/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: '/notes/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
 
   return { api, authorizer };

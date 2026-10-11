@@ -274,6 +274,7 @@ void main() {
         expect(authentication.calls, <String>[
           'register',
           'login',
+          'getCurrentIdentity',
           'requestEmailVerification',
         ]);
         expect(authentication.input('register.email'), 'new@example.com');
@@ -297,7 +298,11 @@ void main() {
 
         final RegistrationResult result = await service.register(input);
 
-        expect(authentication.calls, <String>['register', 'login']);
+        expect(authentication.calls, <String>[
+          'register',
+          'login',
+          'getCurrentIdentity',
+        ]);
         expect(
           result.verificationDispatchStatus,
           VerificationDispatchStatus.notRequired,
@@ -362,6 +367,68 @@ void main() {
       expect(profiles.saved.single.userId, 'user-1');
     });
 
+    test('SDK intended sign-in event waits for profile; logout invalidates registration', () async {
+      final subscription = service.observeAuthState().listen((_) {});
+      addTearDown(subscription.cancel);
+      authentication.loginResult = identity(
+        email: 'new@example.com',
+        isEmailVerified: true,
+      );
+      profiles.saveGate = Completer<void>();
+      final registration = service.register(input);
+      await pumpEventQueue();
+      authentication.authState.add(authentication.loginResult);
+      await pumpEventQueue();
+      expect(session.isAuthenticated, isFalse);
+      authentication.authState.add(null);
+      await pumpEventQueue();
+      final check = expectLater(
+        registration,
+        throwsA(isA<AuthenticationFailure>()),
+      );
+      profiles.saveGate!.complete();
+      await check;
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test(
+      'SDK intended sign-in event is published once the profile finishes',
+      () async {
+        final delivered = <AuthUserDto?>[];
+        final subscription = service.observeAuthState().listen(delivered.add);
+        addTearDown(subscription.cancel);
+        authentication.loginResult = identity(
+          email: 'new@example.com',
+          isEmailVerified: true,
+        );
+        profiles.saveGate = Completer<void>();
+        final registration = service.register(input);
+        await pumpEventQueue();
+        authentication.authState.add(authentication.loginResult);
+        await pumpEventQueue();
+        expect(delivered, isEmpty);
+        profiles.saveGate!.complete();
+        final result = await registration;
+        expect(result.profileSetupPending, isFalse);
+        expect(session.userId, 'user-1');
+      },
+    );
+
+    test('SDK account switch without a delivered Hub event cannot publish old registration', () async {
+      authentication.loginResult = identity(isEmailVerified: true);
+      profiles.saveGate = Completer<void>();
+      final registration = service.register(input);
+      await pumpEventQueue();
+      authentication.storedIdentity = identity(userId: 'other-user');
+      final check = expectLater(
+        registration,
+        throwsA(isA<AuthenticationFailure>()),
+      );
+      profiles.saveGate!.complete();
+      await check;
+      expect(session.isAuthenticated, isFalse);
+    });
+
     test('publishes the session only after the profile is saved', () async {
       authentication.loginResult = identity(isEmailVerified: true);
       bool authenticatedDuringSave = true;
@@ -373,21 +440,16 @@ void main() {
       expect(session.isAuthenticated, isTrue);
     });
 
-    test(
-      'leaves the session unauthenticated when the profile save fails',
-      () async {
-        authentication.loginResult = identity(isEmailVerified: true);
-        profiles.saveFailure = Exception('storage failed');
-
-        await expectLater(
-          () => service.register(input),
-          throwsA(isA<Exception>()),
-        );
-
-        expect(session.isAuthenticated, isFalse);
-        expect(profiles.saved, isEmpty);
-      },
-    );
+    test('reports profile setup pending after Cognito succeeds without signing up again', () async {
+      authentication.loginResult = identity(isEmailVerified: true);
+      profiles.saveFailure = Exception('storage failed');
+      final result = await service.register(input);
+      expect(result.profileSetupPending, isTrue);
+      expect(session.isAuthenticated, isTrue);
+      expect(authentication.countOf('register'), 1);
+      expect(authentication.countOf('login'), 1);
+      expect(profiles.saved, isEmpty);
+    });
 
     test(
       'leaves the session unauthenticated when provider registration fails',
@@ -663,6 +725,7 @@ final class FakeAuthenticationService implements IAuthenticationService {
       'login.email': email,
       'login.password': password,
     });
+    storedIdentity = loginResult;
     return loginResult;
   }
 
@@ -748,6 +811,7 @@ final class FakeUserProfileRepository implements IUserProfileRepository {
 
   Object? saveFailure;
   void Function()? onSave;
+  Completer<void>? saveGate;
 
   @override
   Future<UserProfile?> findByUserId(String userId) async {
@@ -757,6 +821,7 @@ final class FakeUserProfileRepository implements IUserProfileRepository {
   @override
   Future<void> save(UserProfile profile) async {
     onSave?.call();
+    await saveGate?.future;
     final Object? failure = saveFailure;
     if (failure != null) {
       throw failure;

@@ -34,6 +34,7 @@ class WorkspaceShell extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.accountName,
+    this.accountAvatar,
   });
 
   /// Width below which navigation chrome is hidden (compact). Inclusive lower
@@ -162,6 +163,7 @@ class WorkspaceShell extends StatefulWidget {
   /// Display name used for the compact avatar initial. Email/local identity
   /// may be supplied by the composition root when no profile image exists.
   final String? accountName;
+  final ImageProvider? accountAvatar;
 
   @override
   WorkspaceShellState createState() => WorkspaceShellState();
@@ -466,13 +468,16 @@ class WorkspaceShellState extends State<WorkspaceShell>
                     radius: 19,
                     backgroundColor: tokens.selectedSurface,
                     foregroundColor: tokens.textPrimary,
-                    child: Text(
-                      _avatarInitial,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    backgroundImage: widget.accountAvatar,
+                    child: widget.accountAvatar != null
+                        ? null
+                        : Text(
+                            _avatarInitial,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -696,11 +701,16 @@ class WorkspaceShellState extends State<WorkspaceShell>
                         children: <Widget>[
                           Row(
                             children: <Widget>[
-                              _buildBrandMark(28),
+                              widget.accountAvatar == null
+                                  ? _buildBrandMark(28)
+                                  : CircleAvatar(
+                                      radius: 14,
+                                      backgroundImage: widget.accountAvatar,
+                                    ),
                               const SizedBox(width: NoteFlowSpacing.sm),
                               Expanded(
                                 child: Text(
-                                  copy.workspaceTitle,
+                                  widget.accountName ?? copy.workspaceTitle,
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
@@ -951,11 +961,19 @@ class WorkspaceShellState extends State<WorkspaceShell>
               onTap: () => showDestination(WorkspaceDestination.dashboard),
               child: Row(
                 children: <Widget>[
-                  Semantics(excludeSemantics: true, child: _buildBrandMark(24)),
+                  Semantics(
+                    excludeSemantics: true,
+                    child: widget.accountAvatar == null
+                        ? _buildBrandMark(24)
+                        : CircleAvatar(
+                            radius: 12,
+                            backgroundImage: widget.accountAvatar,
+                          ),
+                  ),
                   const SizedBox(width: NoteFlowSpacing.sm),
                   Expanded(
                     child: Text(
-                      copy.workspaceTitle,
+                      widget.accountName ?? copy.workspaceTitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: titleStyle?.copyWith(

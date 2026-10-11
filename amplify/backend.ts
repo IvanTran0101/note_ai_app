@@ -26,7 +26,7 @@ const notesTable = createNotesTable(syncStack);
 const realtime = createRealtimeInfrastructure(syncStack, notesTable,
   backend.auth.resources.userPool.userPoolId, backend.auth.resources.userPoolClient.userPoolClientId);
 const syncFunction = createSyncFunction(syncStack, notesTable, backend.auth.resources.userPool.userPoolId);
-const attachmentOrigins = String(syncStack.node.tryGetContext('attachmentUploadOrigins') ?? '').split(',').map(x => x.trim()).filter(Boolean);
+const attachmentOrigins = String(process.env.NOTEFLOW_ATTACHMENT_UPLOAD_ORIGINS ?? syncStack.node.tryGetContext('attachmentUploadOrigins') ?? '').split(',').map(x => x.trim()).filter(Boolean);
 const attachments = createAttachmentStorage(syncStack, syncFunction.lambda, attachmentOrigins);
 syncFunction.lambda.addEnvironment('ATTACHMENT_BUCKET', attachments.bucketName);
 const syncHttpApi = createSyncHttpApi({

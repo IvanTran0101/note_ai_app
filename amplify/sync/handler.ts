@@ -1,3 +1,4 @@
+import { createProfileService, handleProfile } from '../profile/http_routes';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { DynamoLabelStore } from '../labels/dynamo_label_store';
@@ -114,6 +115,9 @@ const labels = new DynamoLabelStore(NOTES_TABLE_NAME, documentClient);
 const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
   new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
 const recoveryMailbox = new CognitoRecoveryMailbox();
+const profileService = process.env.ATTACHMENT_BUCKET
+  ? createProfileService(documentClient, NOTES_TABLE_NAME, process.env.ATTACHMENT_BUCKET)
+  : undefined;
 
 const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
   event.requestContext?.http?.method?.toUpperCase() ?? '';
@@ -252,6 +256,14 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
   let route: SyncRoute = 'unknown';
   try {
     route = routeOf(methodOf(event), event.rawPath);
+    if (event.rawPath.startsWith('/me/')) {
+      const actor = ownerSubOf(event);
+      if (!actor || event.requestContext.authorizer?.jwt?.claims?.token_use !== 'access') {
+        return unauthorizedResponse();
+      }
+      return profileService ? await handleProfile(event, actor, profileService)
+        : jsonResponse(503, {code: 'PROFILE_UNAVAILABLE'});
+    }
     if (event.rawPath.startsWith('/notes/')) {
       const actor = ownerSubOf(event);
       if (!actor) return unauthorizedResponse();

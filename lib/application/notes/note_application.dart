@@ -88,6 +88,18 @@ final class NoteApplicationService {
   });
 
   final IUserPreferencesRepository? userPreferencesRepository;
+  Future<void> _preferenceWrite = Future<void>.value();
+
+  // Theme and layout share one snapshot; serialize both read-modify-write operations.
+  Future<void> _writePreference(Future<void> Function() write) {
+    final operation = _preferenceWrite.then((_) => write());
+    _preferenceWrite = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
   final INoteRepository noteRepository;
   final ICurrentUser currentUser;
   final NoteIdGenerator generateId;

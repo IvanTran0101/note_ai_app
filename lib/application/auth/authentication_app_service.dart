@@ -67,7 +67,7 @@ abstract interface class IAuthenticationAppService {
 /// Coordinates the authentication provider, the profile store, and the session.
 final class AuthenticationAppService implements IAuthenticationAppService {
   /// Creates the service over its three collaborators.
-  const AuthenticationAppService({
+  AuthenticationAppService({
     required this.authenticationService,
     required this.currentUserSession,
     required this.userProfileRepository,
@@ -82,6 +82,10 @@ final class AuthenticationAppService implements IAuthenticationAppService {
   /// NoteFlow-owned profile persistence.
   final IUserProfileRepository userProfileRepository;
 
+  String? _registrationEmail;
+  String? _registrationActor;
+  int _authEpoch = 0;
+
   @override
   Future<RegistrationResult> register(RegisterInput input) async {
     final String email = _requireText(
@@ -95,33 +99,67 @@ final class AuthenticationAppService implements IAuthenticationAppService {
     _requirePassword(input.password);
     _requireMatchingConfirmation(input.password, input.confirmPassword);
 
-    await authenticationService.register(
-      email: email,
-      password: input.password,
-    );
-    final AuthIdentity identity = await authenticationService.login(
-      email: email,
-      password: input.password,
-    );
-
-    // The profile owns the display name, so it must exist before the rest of
-    // the application can observe an authenticated session.
-    await userProfileRepository.save(
-      UserProfile.create(userId: identity.userId, displayName: displayName),
-    );
-    currentUserSession.setIdentity(identity);
-
-    final AuthUserDto user = AuthUserDto.fromIdentity(identity);
-    if (identity.isEmailVerified) {
-      return RegistrationResult(
-        user: user,
-        verificationDispatchStatus: VerificationDispatchStatus.notRequired,
+    // Validate the profile before Cognito creates an account.
+    UserProfile.create(userId: 'validation', displayName: displayName);
+    final epoch = _authEpoch;
+    final generation = currentUserSession.sessionGeneration;
+    _registrationEmail = email.toLowerCase();
+    try {
+      await authenticationService.register(
+        email: email,
+        password: input.password,
       );
+      final identity = await authenticationService.login(
+        email: email,
+        password: input.password,
+      );
+      _registrationActor = identity.userId;
+      void requireRegistration() {
+        if (_authEpoch != epoch ||
+            currentUserSession.sessionGeneration != generation) {
+          throw const AuthenticationFailure(
+            AuthenticationFailureCode.unauthenticated,
+          );
+        }
+      }
+
+      requireRegistration();
+      bool profileSetupPending = false;
+      try {
+        await userProfileRepository.save(
+          UserProfile.create(userId: identity.userId, displayName: displayName),
+        );
+      } on Object {
+        requireRegistration();
+        // Auth and Profile are separate writes. Keep the signed-in account usable.
+        profileSetupPending = true;
+      }
+      requireRegistration();
+      final activeIdentity = await authenticationService.getCurrentIdentity();
+      requireRegistration();
+      if (activeIdentity == null || activeIdentity.userId != identity.userId) {
+        throw const AuthenticationFailure(
+          AuthenticationFailureCode.unauthenticated,
+        );
+      }
+      currentUserSession.setIdentity(activeIdentity);
+      final dispatch = activeIdentity.isEmailVerified
+          ? VerificationDispatchStatus.notRequired
+          : await _dispatchEmailVerification();
+      if (_authEpoch != epoch || currentUserSession.userId != identity.userId) {
+        throw const AuthenticationFailure(
+          AuthenticationFailureCode.unauthenticated,
+        );
+      }
+      return RegistrationResult(
+        user: AuthUserDto.fromIdentity(activeIdentity),
+        verificationDispatchStatus: dispatch,
+        profileSetupPending: profileSetupPending,
+      );
+    } finally {
+      _registrationEmail = null;
+      _registrationActor = null;
     }
-    return RegistrationResult(
-      user: user,
-      verificationDispatchStatus: await _dispatchEmailVerification(),
-    );
   }
 
   @override
@@ -142,6 +180,7 @@ final class AuthenticationAppService implements IAuthenticationAppService {
 
   @override
   Future<void> logout() async {
+    _authEpoch++;
     try {
       await authenticationService.logout();
     } finally {
@@ -165,16 +204,27 @@ final class AuthenticationAppService implements IAuthenticationAppService {
 
   @override
   Stream<AuthUserDto?> observeAuthState() {
-    return authenticationService.observeAuthState().map((
-      AuthIdentity? identity,
-    ) {
-      if (identity == null) {
-        currentUserSession.clear();
-        return null;
-      }
-      currentUserSession.setIdentity(identity);
-      return AuthUserDto.fromIdentity(identity);
-    });
+    return authenticationService
+        .observeAuthState()
+        .where((identity) {
+          if (_registrationEmail == null) return true;
+          final intended =
+              identity != null &&
+              identity.email.toLowerCase() == _registrationEmail &&
+              (_registrationActor == null ||
+                  identity.userId == _registrationActor);
+          if (intended) return false;
+          _authEpoch++;
+          return true;
+        })
+        .map((identity) {
+          if (identity == null) {
+            currentUserSession.clear();
+            return null;
+          }
+          currentUserSession.setIdentity(identity);
+          return AuthUserDto.fromIdentity(identity);
+        });
   }
 
   @override
