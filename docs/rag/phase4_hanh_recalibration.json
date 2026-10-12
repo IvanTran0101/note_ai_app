@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-12",
+  "status": "OFFLINE_RECALIBRATED_REQUIRES_FRESH_CONFIRMATION",
+  "reviewedCase": {
+    "originalId": "fx-dev-vi-ins-03",
+    "correctedId": "fx-dev-vi-ans-05",
+    "category": "answerable",
+    "answerable": true,
+    "conflict": false,
+    "expectedAnswer": "Chị Hạnh chưa hoàn thành khóa đào tạo an toàn.",
+    "approval": "user explicitly approved this case; other labels not independently human-reviewed"
+  },
+  "model": "jev-1.13.0",
+  "questionSetVersion": "rag-evidence.v2",
+  "fixtureVersion": "rag-phase4-fixtures.v2-gold1",
+  "calibrationVersion": "rag-phase4-calibration.v2-gold1",
+  "thresholds": {
+    "answerabilityMin": 0.85,
+    "conflictMax": 0.1
+  },
+  "selectedFrom": "development only",
+  "development": {
+    "gridSize": 100,
+    "eligibleUnsafeAllowZero": 36,
+    "unsafeAllow": 0,
+    "answerableAllowed": 8,
+    "answerableTotal": 9,
+    "answerableAllowRate": 0.8889,
+    "errors": 0,
+    "tieBreak": "max-answerabilityMin-then-min-conflictMax"
+  },
+  "seenRegression": {
+    "answerableAllowed": 7,
+    "answerableTotal": 8,
+    "answerableRate": 0.875,
+    "unsafeAllow": 0,
+    "byLanguage": {
+      "vi": {
+        "fixtures": 16,
+        "verdicts": 16,
+        "errors": 0,
+        "unsafeAllow": 0,
+        "answerableAllowed": 3,
+        "answerableTotal": 4,
+        "answerableAllowRate": 0.75,
+        "refusedNonAnswerable": 12,
+        "nonAnswerableVerdicts": 12
+      },
+      "en": {
+        "fixtures": 16,
+        "verdicts": 16,
+        "errors": 0,
+        "unsafeAllow": 0,
+        "answerableAllowed": 4,
+        "answerableTotal": 4,
+        "answerableAllowRate": 1,
+        "refusedNonAnswerable": 12,
+        "nonAnswerableVerdicts": 12
+      }
+    },
+    "freshConfirmation": false,
+    "promotionAllowed": false
+  },
+  "reuse": {
+    "providerInputProofs": 64,
+    "allInputHashesMatch": true,
+    "originalResponsesPreserved": true,
+    "newProviderCalls": 0
+  },
+  "verification": {
+    "focusedTests": 49,
+    "pass": 49,
+    "skip": 0,
+    "typecheck": "PASS",
+    "liveRunnerRegressionRefusal": "PASS beforeAWS/network",
+    "fullSuiteRun": false,
+    "phase1Checker": "PASS",
+    "preservedRequestBuilderHashesVerified": 3,
+    "originalConfirmationBytesVerified": true
+  },
+  "livePolicyUpdated": false,
+  "cloudDeploymentRun": false,
+  "approvalPublished": false,
+  "commitOrPush": false,
+  "providerUsage": "unchanged bythisofflinework; last verified128/144Jev0DS0Cohere, notqueriedagain",
+  "sourceFiles": {
+    "test/fixtures/rag/phase4/fixtures.json": "45189bc051ebf630009b381107d2218f01b5bad1c9a08c8eaf2128be7c2a09fe",
+    "amplify/rag/calibration/fixtures.ts": "1f50bb02c21adffd9bd6c6e7da00e0fbe92a9b928eabf805caacc7affee2b59e",
+    "amplify/rag/calibration/evaluate.ts": "95ab67f6cc4ff1d7c9164973ecb0d7ace319353321b92017fba706903a67c4e4",
+    "amplify/rag/calibration/reuse_recordings.ts": "b6969c5c998adb7d98f5047c54621ed2c92a1329290b088050b587dce85b868b",
+    "tool/rag/recalibrate_hanh.ts": "644409a3691516f652d800f3a314caa806131263810233c4620ce84ad7c4caa8"
+  },
+  "policyHash": "sha256:c61d40302f825cc8d1cf6c7926b5acfafa67dd3b1e1413cfb2573a55ed3e6de4",
+  "next": "Freeze32genuinelynewconfirmationcases before anynewcalls; existing16remainingcalls insufficientfor32. No promotion fromseenregression."
+}

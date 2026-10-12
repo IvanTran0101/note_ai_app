@@ -5,13 +5,16 @@ export class RequestDeadline {
   private readonly controller = new AbortController();
   private readonly end: number;
   private readonly timer: ReturnType<typeof setTimeout>;
+  private readonly onParentAbort = () => this.controller.abort();
   readonly signal = this.controller.signal;
-  constructor(duration: number, private readonly now: () => number = Date.now) {
+  constructor(duration: number, private readonly now: () => number = Date.now, private readonly parent?: AbortSignal) {
     if (!Number.isSafeInteger(duration) || duration <= 0 || duration > 26_000) {
       throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
     }
     this.end = now() + duration;
     this.timer = setTimeout(() => this.controller.abort(), duration);
+    if (parent?.aborted) this.controller.abort();
+    else parent?.addEventListener('abort', this.onParentAbort, { once: true });
   }
   check(): void {
     if (this.signal.aborted || this.now() >= this.end) throw new RagFailure('TIMEOUT');
@@ -32,5 +35,5 @@ export class RequestDeadline {
       return value;
     } finally { this.signal.removeEventListener('abort', onAbort); }
   }
-  close(): void { clearTimeout(this.timer); this.controller.abort(); }
+  close(): void { clearTimeout(this.timer); this.parent?.removeEventListener('abort', this.onParentAbort); this.controller.abort(); }
 }

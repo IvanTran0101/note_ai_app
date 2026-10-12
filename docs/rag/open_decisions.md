@@ -32,3 +32,35 @@ NFKC/lower Unicode word analyzer (rag-analyzer.v1), BM25 k1=1.2/b=.75 and versio
 lexical snapshot codec with complete chunk-policy identity; live search quality
 and storage/SDK compatibility remain unverified. See PHASE2_HANDOFF.md and
 phase2_receipt.json. Policy runtimeEnabled remains false and Jev live values null.
+
+## Phase4 current receipt — 2026-10-12
+Phase3 indexing/storage/consent-CAS has synthetic AWS proof; old deferred rows
+above are historical. Phase4 provider/runtime/budget/evaluator code is now
+implemented and private-deployed. JEV64calls succeed, but frozenconfirmation
+acceptance2/8=25% fails75% gate. OPEN04 remainsBLOCKING, OPEN02 exactJevtokenizer
+andOPEN05 fullgeneration latency remainunverified. No liveDeepSeek/CoherePhase4
+calls or publicRAGroute. See PHASE4_HANDOFF.md andphase4_receipt.json. Userreview
+ofphase4_remediation_v2.md pending; no retune/counterreset/modelbudgetincrease.
+
+## V2 result — 12 October 2026
+V2 wording and64 additional calls approved and executed, cap144, used128. Fresh
+confirmation allowed5/8=62.5%, VI2/4 andEN3/4,0unsafeallow. OPEN04 remainsblocking;
+no calibration row published, noDeepSeek/Cohere calls, noPhase5/publicrelease.
+See phase4_calibration_review.md. EarlierV1receipt above is historical.
+
+## Hạnh gold review and offline recalibration — 12 October 2026
+User correctedHạnh toanswerable(negativeanswer), nofact/source/questionchange.
+Development9answerable/23unsafe; frozenofflinecandidate.85/.10 allows8/9=88.9%,
+0unsafe. Seenregression7/8=87.5%,0unsafe; NOTfreshconfirmation. Guardblocks
+promotion andlive runner before network.0newcalls/deploy/publishedapproval.
+OPEN04stillneedsfresh32-caseconfirmation; historical128/144counter notqueried
+again. See phase4_hanh_recalibration.md/json.
+
+## Current Phase4 final gates — 12 October2026
+User approved fresh32confirmation and cap176. Candidate.85/.10 retained, fresh7/8=87.5%,
+0unsafe, approvalpublished;8/8DSfixtureanswers and2native-language fullAWSqueryanswers
+verified. OPEN04 nowPASS_SYNTHETIC_PRIVATE, notproductionaccuracy. OPEN02 exactJev
+admission/promptoverhead andOPEN05large-corpus/realuserlatency remainreleasechecks.
+176Jev/15DS/4Cohere/4queries, noreset. MappingDisabled(Functioncallfailed) remainsa
+Phase5preflight/recoverygate. No publicroute/Flutterenable orreal-user data. See
+phase4_final_gates.md/json forlatestreceipt; allprecedingreceipts arehistorical.

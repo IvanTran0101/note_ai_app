@@ -94,3 +94,18 @@ GoogleService-Info.plist
 /ui-audit-scorecard.md
 /docs/
 /docs/rag/
+
+# Publish only the Phase4 contract/manifests; raw cloud receipts remain in ignored output.
+!/docs/
+/docs/*
+!/docs/rag/
+/docs/rag/*
+!/docs/rag/deepseek_tokenizer_manifest.json
+!/docs/rag/PHASE4_HANDOFF.md
+!/docs/rag/phase4_policy_v1.json
+!/docs/rag/phase4_receipt.json
+!/docs/rag/phase4_remediation_v2.md
+!/docs/rag/phase4_calibration_review.md
+
+!/docs/rag/phase4_hanh_recalibration.json
+!/docs/rag/phase4_hanh_recalibration.md

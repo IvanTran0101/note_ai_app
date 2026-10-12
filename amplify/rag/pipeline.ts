@@ -1,3 +1,4 @@
+import { LIVE_QUESTION_SET } from './question_set';
 // Canonical authority → retrieval → immutable evidence → Jev gate → authorized answer release.
 import { policy, RagFailure, sourceKey } from './types';
 import type {
@@ -28,9 +29,12 @@ import {
 } from './chunking';
 import { OUTPUT_MAX_TOKENS, WIRE_VERSION, decideNoul, isValidIdentifier, validateGenerated, validateNoul } from './contract';
 import { RequestDeadline } from './deadline';
+import { readRuntimeConfig, type RuntimeValues } from './live_policy';
 import { mmr, rrf, validateVector } from './retrieval';
 
 export type PipelineDeps = Readonly<{
+  /** Optional enclosing handler deadline; cancellation must stop downstream paid stages. */
+  signal?: AbortSignal;
   authority: AuthorityStore;
   retrieval: RetrievalDeps;
   providers: Providers;
@@ -38,18 +42,13 @@ export type PipelineDeps = Readonly<{
   config: RuntimeConfig;
   /** Mandatory quota port: runs after authorization and before any provider call. */
   consumeQuota: (actor: string, signal: AbortSignal) => Promise<boolean>;
+  /**
+   * Optional private live approval. Absent (the default) live mode stays refused; when present it
+   * must be one immutable calibrated approval for a `rag-smoke-` actor whose model and thresholds
+   * exactly restate the runtime config. No public flag opens live mode.
+   */
+  liveApproval?: unknown;
 }>;
-
-type RuntimeValues = Readonly<{
-  model: string;
-  thresholds: Readonly<{ answerabilityMin: number; conflictMax: number }>;
-  jevMaxTokens: number;
-  requestTimeoutMs: number;
-}>;
-
-const POLICY_RUNTIME_ENABLED: boolean = policy.runtimeEnabled;
-const POLICY_LIVE_MODEL: string | null = policy.jev.liveModel;
-const POLICY_LIVE_THRESHOLDS: unknown = policy.jev.liveThresholds;
 
 const deepFreeze = <T>(value: T): T => {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -100,47 +99,6 @@ const cloneConfig = (config: RuntimeConfig): RuntimeConfig | null => {
 };
 
 /**
- * Validates the fixed model, threshold pair and both budgets before any egress. Live mode is
- * refused unconditionally; policy gates (runtimeEnabled false, liveModel/liveThresholds null)
- * mean no server-supplied config can open a live path in this slice.
- */
-const readRuntimeConfig = (config: RuntimeConfig): RuntimeValues => {
-  if (config === null || typeof config !== 'object') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  if (config.mode !== 'mock') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  if (POLICY_RUNTIME_ENABLED !== false || POLICY_LIVE_MODEL !== null || POLICY_LIVE_THRESHOLDS !== null) {
-    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  }
-  const model = config.model;
-  if (typeof model !== 'string' || !isValidIdentifier(model)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  const thresholds = config.thresholds;
-  if (thresholds === null || typeof thresholds !== 'object') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  const answerabilityMin = thresholds.answerabilityMin;
-  const conflictMax = thresholds.conflictMax;
-  if (typeof answerabilityMin !== 'number' || !Number.isFinite(answerabilityMin) || !(answerabilityMin > 0.5 && answerabilityMin <= 1)) {
-    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  }
-  if (typeof conflictMax !== 'number' || !Number.isFinite(conflictMax) || !(conflictMax >= 0 && conflictMax < 0.5)) {
-    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  }
-  if (!Number.isSafeInteger(config.jevMaxTokens) || config.jevMaxTokens <= 0) {
-    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  }
-  if (
-    !Number.isSafeInteger(config.requestTimeoutMs) ||
-    config.requestTimeoutMs <= 0 ||
-    config.requestTimeoutMs > 26_000
-  ) {
-    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
-  }
-  return Object.freeze({
-    model,
-    thresholds: Object.freeze({ answerabilityMin, conflictMax }),
-    jevMaxTokens: config.jevMaxTokens,
-    requestTimeoutMs: config.requestTimeoutMs,
-  });
-};
-
-/**
  * Runs one port inside the shared deadline. Typed RagFailures pass through; an unknown failure is
  * mapped to the stage's fallback code and anything observed after the signal aborted is TIMEOUT, so
  * a timeout can never be downgraded into an abstention or a success.
@@ -170,6 +128,48 @@ const stage = async <T>(
 const revalidate = (deadline: RequestDeadline, context: RequestContext): Promise<void> =>
   stage(deadline, 'PROVIDER_UNAVAILABLE', () => context.revalidate());
 
+type StageRunner = <T>(fallback: ErrorCode, operation: () => Promise<T>) => Promise<T>;
+
+/** Runs one port under both the phase budget and the shared deadline; the budget can only shorten. */
+const stageBounded = async <T>(
+  deadline: RequestDeadline,
+  budgetMs: number,
+  fallback: ErrorCode,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new RagFailure('TIMEOUT')), budgetMs);
+  });
+  try {
+    return await stage(deadline, fallback, () => Promise.race([operation(), expired]));
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
+/**
+ * The retrieval-phase runner. In mock mode it is exactly the P2 stage. In approved live mode every
+ * retrieval call gets at most the remaining part of the pinned 6s phase, always inside the shared
+ * 26s deadline; the provider ports carry their own 4s/13s root bounds.
+ */
+const retrievalRunner = (
+  runtime: RuntimeValues,
+  deadline: RequestDeadline,
+  now: () => number = Date.now,
+): StageRunner => {
+  if (runtime.retrievalStageMs === null) {
+    return (fallback, operation) => stage(deadline, fallback, operation);
+  }
+  const budgetMs = runtime.retrievalStageMs;
+  const end = now() + budgetMs;
+  return async (fallback, operation) => {
+    const remaining = end - now();
+    if (remaining <= 0) throw new RagFailure('TIMEOUT');
+    return stageBounded(deadline, remaining, fallback, operation);
+  };
+};
+
 /** Every returned entry must be an exact current own scoped span: a bad entry is an error,
  * while an empty branch is a legitimate empty result (never the same outcome). */
 const assertRanked = (entries: readonly Ranked[], context: RequestContext): void => {
@@ -187,6 +187,7 @@ const askQuota = async (deadline: RequestDeadline, deps: PipelineDeps, actor: st
 };
 
 const embedQuery = async (
+  run: StageRunner,
   deadline: RequestDeadline,
   deps: PipelineDeps,
   context: RequestContext,
@@ -198,22 +199,20 @@ const embedQuery = async (
     throw new RagFailure('INPUT_TOO_LONG');
   }
   if (countUnicodeCharacters(question) > MAX_EMBEDDING_CHARACTERS) throw new RagFailure('INPUT_TOO_LONG');
-  const vector = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
-    deps.retrieval.embedQuery(question, context.signal),
-  );
+  const vector = await run('PROVIDER_UNAVAILABLE', () => deps.retrieval.embedQuery(question, context.signal));
   validateVector(vector);
   return vector;
 };
 
 /** One batched getVectors call for the whole union; no candidate is ever re-embedded. */
 const selectAnchors = async (
-  deadline: RequestDeadline,
+  run: StageRunner,
   deps: PipelineDeps,
   context: RequestContext,
   candidates: readonly Candidate[],
 ): Promise<readonly Chunk[]> => {
   const expected = new Set(candidates.map((candidate) => sourceKey(candidate.chunk)));
-  const vectors = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
+  const vectors = await run('PROVIDER_UNAVAILABLE', () =>
     deps.retrieval.getVectors(
       Object.freeze(candidates.map((candidate) => candidate.chunk)),
       context,
@@ -244,25 +243,23 @@ const selectAnchors = async (
 };
 
 const collectEvidence = async (
-  deadline: RequestDeadline,
+  run: StageRunner,
   deps: PipelineDeps,
   context: RequestContext,
   anchors: readonly Chunk[],
 ): Promise<Evidence> => {
-  const neighbors = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
-    deps.retrieval.neighbors(anchors, context),
-  );
+  const neighbors = await run('PROVIDER_UNAVAILABLE', () => deps.retrieval.neighbors(anchors, context));
   if (!Array.isArray(neighbors)) throw new RagFailure('PROVIDER_UNAVAILABLE');
   for (const neighbor of neighbors) assertChunkAuthority(neighbor, context);
   return buildEvidence(anchors, neighbors, context.notes, deps.counters.evidence);
 };
 
 /** Minimal Jev state: model, fixed question set criteria and question/evidence text only. */
-const buildJevInput = (model: string, question: string, evidence: Evidence): JevInput =>
+const buildJevInput = (model: string, question: string, evidence: Evidence, live: boolean): JevInput =>
   deepFreeze({
     model,
-    questionSetVersion: policy.jev.questionSetVersion,
-    questions: structuredClone(policy.jev.questions),
+    questionSetVersion: live ? LIVE_QUESTION_SET.questionSetVersion : policy.jev.questionSetVersion,
+    questions: structuredClone(live ? LIVE_QUESTION_SET.questions : policy.jev.questions),
     state: { question, evidence: evidence.text },
   });
 
@@ -283,11 +280,14 @@ export function createQuery(
     let runtime: RuntimeValues;
     let deadline: RequestDeadline;
     try {
-      runtime = readRuntimeConfig(config);
-      deadline = new RequestDeadline(runtime.requestTimeoutMs);
+      // Approval and config are validated before the first port call, so an invalid approval
+      // never reaches the authority store, quota, retrieval or a provider.
+      runtime = readRuntimeConfig(config, actor, deps.liveApproval);
+      deadline = new RequestDeadline(runtime.requestTimeoutMs, Date.now, deps.signal);
     } catch (error) {
       return errorResponse(requestId, failureCode(error));
     }
+    const runRetrieval = retrievalRunner(runtime, deadline);
 
     try {
       const context = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
@@ -297,15 +297,21 @@ export function createQuery(
       if ((await askQuota(deadline, deps, actor)) !== true) return errorResponse(requestId, 'RATE_LIMITED');
       await revalidate(deadline, context);
 
-      const embedding = await embedQuery(deadline, deps, context);
+      // An empty eligible scope can never yield evidence: abstain before any embedding egress.
+      if (context.notes.length === 0) {
+        await revalidate(deadline, context);
+        return abstention(requestId, 'INSUFFICIENT_EVIDENCE');
+      }
+
+      const embedding = await embedQuery(runRetrieval, deadline, deps, context);
       await revalidate(deadline, context);
 
-      const vectorBranch = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
+      const vectorBranch = await runRetrieval('PROVIDER_UNAVAILABLE', () =>
         deps.retrieval.vectorSearch(embedding, context),
       );
       assertRanked(vectorBranch, context);
       await revalidate(deadline, context);
-      const keywordBranch = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
+      const keywordBranch = await runRetrieval('PROVIDER_UNAVAILABLE', () =>
         deps.retrieval.keywordSearch(context.request.question, context),
       );
       assertRanked(keywordBranch, context);
@@ -317,10 +323,10 @@ export function createQuery(
       }
       await revalidate(deadline, context);
 
-      const anchors = await selectAnchors(deadline, deps, context, candidates);
+      const anchors = await selectAnchors(runRetrieval, deps, context, candidates);
       await revalidate(deadline, context);
 
-      const evidence = await collectEvidence(deadline, deps, context, anchors);
+      const evidence = await collectEvidence(runRetrieval, deps, context, anchors);
       if (evidence.sources.length === 0) {
         await revalidate(deadline, context);
         return abstention(requestId, 'INSUFFICIENT_EVIDENCE');
@@ -328,7 +334,7 @@ export function createQuery(
 
       // Separate Jev preflight: the counter measures the whole serialized payload, criteria and
       // question included; an over-budget payload fails before the single Jev call.
-      const jevInput = buildJevInput(runtime.model, context.request.question, evidence);
+      const jevInput = buildJevInput(runtime.model, context.request.question, evidence, config.mode === 'live');
       if (countTokens(deps.counters.jev, JSON.stringify(jevInput)) > runtime.jevMaxTokens) {
         throw new RagFailure('EVIDENCE_VALIDATION_UNAVAILABLE');
       }
