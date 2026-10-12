@@ -171,7 +171,7 @@
     "provider-tokenizers-and-fit-proof",
     "bm25-analyzer-codec",
     "jev-model-and-calibration",
-    "n8n-host-auth-trigger",
+    "dynamodb-stream-lambda-indexing-wiring",
     "index-retention-and-cleanup",
     "external-provider-budget-and-live-authorization"
   ]

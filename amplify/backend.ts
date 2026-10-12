@@ -1,3 +1,4 @@
+import { createRagInfrastructure } from './rag/infrastructure';
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { summary } from './ai/resource';
@@ -23,6 +24,8 @@ const backend = defineBackend({
 
 const syncStack = backend.createStack('SyncStack');
 const notesTable = createNotesTable(syncStack);
+// Keep RAG resources declared on every deploy; its synthetic stream mapping defaults disabled.
+createRagInfrastructure(syncStack, notesTable);
 const realtime = createRealtimeInfrastructure(syncStack, notesTable,
   backend.auth.resources.userPool.userPoolId, backend.auth.resources.userPoolClient.userPoolClientId);
 const syncFunction = createSyncFunction(syncStack, notesTable, backend.auth.resources.userPool.userPoolId);

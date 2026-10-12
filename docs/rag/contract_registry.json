@@ -219,9 +219,9 @@
     {
       "id": "C23",
       "status": "A/E",
-      "rule": "n8n async indexing ngoài query path; index/snapshot/cache publication chống replay/stale jobs",
+      "rule": "DynamoDB Stream → Lambda indexing worker ngoài query path; index/snapshot/cache publication chống replay/stale jobs",
       "plannedSteps": "P1.1 / P3.3–5",
-      "requiredEvidence": "OPEN06/08 được giải quyết; out-of-order/partial-failure receipts",
+      "requiredEvidence": "OPEN06/08: IAM event source mapping/filtering, bounded retry/failure recovery, backfill, out-of-order/partial-failure receipts",
       "phase1Evidence": "policy + fixture consistency; see acceptance_matrix.md",
       "runtimeVerification": "UNVERIFIED"
     },

@@ -26,6 +26,7 @@
     "@aws-sdk/credential-provider-node": "3.972.84",
     "@aws-sdk/lib-dynamodb": "^3.1139.0",
     "@aws-sdk/s3-request-presigner": "3.1145.0",
+    "@huggingface/tokenizers": "0.2.0",
     "@noble/hashes": "^2.4.0",
     "@smithy/signature-v4": "5.7.3"
   }

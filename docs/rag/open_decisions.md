@@ -8,7 +8,7 @@ Approved core choices are unchanged. Technical defaults below make a concrete re
 | OPEN03 | TECHNICAL_DRAFT | RRF/max pool score relevance; maximum positive cosine redundancy; source-key tie proposed. λ=0.7 and max 8 approved. Validate selection behavior in Phase 2. |
 | OPEN04 | DEFERRED_PHASE4 | Exact two Nouls/criteria approved. liveModel/liveThresholds NULL; mock 0.9/0.1 never treated as calibration. Pin/evaluate VI/EN before live gate. |
 | OPEN05 | TECHNICAL_DRAFT + LIVE_MEASUREMENT | Wire limits 16 KiB/4096 bytes/2048 code points; response 64 KiB/output 1024; total deadline 26 s proposed. Per-stage budgets, concurrency and external bill caps need review/measurement. |
-| OPEN06 | DEFERRED_PHASE3 | n8n host, trusted auth/trigger/transport and publication ownership not configured. |
+| OPEN06 | TRANSPORT_APPROVED + DEFERRED_PHASE3 | User approved DynamoDB Stream → Lambda indexing worker on 2026-10-12. Event source mapping/IAM, filters, bounded retries, failed-event recovery and backfill remain to specify/implement. No n8n host needed. |
 | OPEN07 | TECHNICAL_DRAFT | /ai/rag/query request/response/error mapping in rag_api_v1.md proposed; no endpoint created. |
 | OPEN08 | TECHNICAL_DRAFT + DEFERRED_PHASE3 | Canonical RAG consent row/CAS generation/revalidation proposed. Retention/physical cleanup and manifest publication implementation remain open. |
 | OPEN09 | DEFERRED_PHASE2_TO4 | No new dependencies/key/install. Select a VI BM25 analyzer/snapshot codec and compatible AWS/provider adapters after contract review. |

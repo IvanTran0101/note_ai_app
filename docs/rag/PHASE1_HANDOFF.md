@@ -31,7 +31,7 @@ No MMR/BM25/application/cloud runtime or provider-quality claim.
 - Wire DTO/HTTP errors and technical sizing/deadline defaults.
 - UTF-16 source spans, title-prefix accounting, RRF normalization/cosine tie rules.
 - Proposed canonical consent row/generation/index-readiness semantics.
-- Live tokenizers, BM25 analyzer, Jev model/thresholds, n8n/IAM/retention and
+- Live tokenizers, BM25 analyzer, Jev model/thresholds, Stream/Lambda/IAM/retention and
   external-provider budgets remain deferred to appropriate later gates.
 
 ## Next

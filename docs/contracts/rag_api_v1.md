@@ -82,7 +82,12 @@ Typed output/high probability does not guarantee correctness. VI/EN and adversar
 ## 7. Index, consent and release — engineering proposals
 Consent record proposal in existing notes table: partition owner key OWNER#<verified-sub>, sort key RAG#CONSENT. Use existing canonical namespace helper, not raw client owner.
 Record accepted/version/generation/updatedAt/provider purposes; CAS generation on grant/revoke; no TTL or note feed/relay fields. This is design only, no table mutation in Phase 1.
-Index jobs bind canonical owner/note/revision, consent generation, chunking/model policy. n8n is async orchestration, not synchronous answer pipeline.
+Index jobs bind canonical owner/note/revision, consent generation, chunking/model policy.
+Approved C23 amendment 2026-10-12: DynamoDB Stream → Lambda indexing worker replaces n8n for the MVP. Indexing stays asynchronous, outside the synchronous answer pipeline.
+- Worker rereads canonical data/consent; stream NewImage text/flags are not authority.
+- Preserve the realtime consumer; filter RAG events and exclude worker status/manifest writes to prevent self-trigger loops.
+- Bounded retry, partial-batch handling, failed-event recovery/backfill and monotonic publication require Phase 3 receipts. IAM/event source mapping/filter/retention details remain OPEN06/08; no extra SQS/Pipes service is implied.
+- Wire v1 and chunk/embedding policy are unchanged.
 Publish coherent vector/BM25 manifest only after required artifacts are ready; reject older jobs replacing newer revision. Cache scope + manifest version, cache miss is not no evidence.
 Revoke/delete/protect blocks subsequent use immediately through canonical guard; physical artifact removal is async with retention/cleanup policy still pending.
 INDEX_NOT_READY is distinct from a completed search with no evidence. Release revalidation prevents stale answer across session/consent/source changes.

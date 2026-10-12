@@ -49,7 +49,7 @@ Commands: python3 -B tool/rag/check_phase1.py --root . ; python3 -B -m unittest 
 | --- | --- | --- | --- |
 | C21 | q10/11/12/18/20 + authority units | UNVERIFIED | P1.1 / P2.1 / P3.4 / P4.4 / P5.1–3 |
 | C22 | q19 + consent/session units | UNVERIFIED | P1.1 / P2.1 / P3.4 / P5.1 |
-| C23 | index lifecycle specification only; no job runtime | UNVERIFIED | P1.1 / P3.3–5 |
+| C23 | approved Stream → Lambda lifecycle specification; no job runtime | UNVERIFIED | P1.1 / P3.3–5 |
 | C24 | q18..24 + wire errors | UNVERIFIED | P1.2 / P2.5 / P3.3 / P4.1–5 / P5.2 |
 | C25 | synthetic provenance + runtimeEnabled false + review/live blockers | UNVERIFIED | P1.5 / P2.5 / P3 / P4 / P5 |
 ## Bounded negative verification
@@ -61,6 +61,6 @@ Commands: python3 -B tool/rag/check_phase1.py --root . ; python3 -B -m unittest 
 
 ## Phase 1 exit
 - Artifacts/checks can be complete while contract-review gate remains open.
-- Live Jev model/thresholds, actual tokenizers/BM25 runtime and n8n/IAM/cloud wiring remain deferred to their gates.
+- Live Jev model/thresholds, actual tokenizers/BM25 runtime and Stream/Lambda/IAM/cloud wiring remain deferred to their gates.
 - User must review newly proposed wire/offset/normalization/consent-row defaults; reading earlier plan did not approve every new field.
 - Do not tick Phase 2–5 gates or run paid calls because this checker passed.

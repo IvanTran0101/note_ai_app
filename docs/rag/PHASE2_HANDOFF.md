@@ -51,7 +51,7 @@ model output. Jev model/thresholds in policy_v1.json remain null.
 
 The authority adapter simulates canonical state and session/consent generation.
 Real JWT signature validation is an API Gateway/Cognito deployment gate.
-DynamoDB/S3/S3 Vectors, coherent manifest publication/cleanup and n8n indexing
+DynamoDB/S3/S3 Vectors, coherent manifest publication/cleanup and Stream → Lambda indexing
 belong to Phase 3; real Jev/DeepSeek adapters and evaluation belong to Phase 4;
 Flutter consent/citations and live staging acceptance belong to Phase 5.
 

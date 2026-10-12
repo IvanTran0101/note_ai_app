@@ -19,4 +19,10 @@ Fixtures contain no credentials or real user notes.
 
 Approved constants: Cohere V3/1024; 400/512 tokens/0 overlap; Top-20 + Top-20; RRF60 equal weights; MMR0.7/max8; expansion±1/no recursion; source dedupe; 6000 evidence tokens; two Noul criteria.
 Runtime remains disabled; live model/thresholds NULL. Code in amplify/lib, cloud, secrets and dependencies are untouched by this phase.
+C23 amendment approved 2026-10-12: DynamoDB Stream → Lambda indexing worker replaces n8n in the MVP. Phase 3.5 covers AWS event triggering/backfill/replay and synthetic indexing smoke. Runtime/IAM wiring is not implemented by this plan update; historical Phase 1/2 receipts remain unchanged.
 Notion plan: https://app.notion.com/p/3f625edc9a2580ec9630e8f7bfa9ef49
+
+Phase 3 update (2026-10-12): root275 RAG tests/typecheck and25 Python checks PASS.
+AWS synthetic indexing/hybrid retrieval/lifecycle/CAS/failure/backfill gates PASS.
+Cohere used8/20 reserved calls; final mappingDisabled/publicruntimeoff.
+See PHASE3_HANDOFF.md andphase3_receipt.json; nextPhase4Jev/DeepSeek remainsseparate.

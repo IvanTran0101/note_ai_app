@@ -49,7 +49,7 @@ A = user-approved choice. E = engineering obligation derived from that choice. T
 | --- | --- | --- | --- |
 | C21 | E | Canonical actor/consent/source status/revision checks ở indexing, retrieval, egress và release | P1.1 / P2.1 / P3.4 / P4.4 / P5.1–3 |
 | C22 | E | RAG consent riêng, default off; không reuse Summary grant; account/session/version binding | P1.1 / P2.1 / P3.4 / P5.1 |
-| C23 | A/E | n8n async indexing ngoài query path; index/snapshot/cache publication chống replay/stale jobs | P1.1 / P3.3–5 |
+| C23 | A/E | DynamoDB Stream → Lambda indexing worker ngoài query path; index/snapshot/cache publication chống replay/stale jobs | P1.1 / P3.3–5 |
 | C24 | E | Absence/uncertainty khác index-not-ready, auth, provider/validation và source-changed errors | P1.2 / P2.5 / P3.3 / P4.1–5 / P5.2 |
 | C25 | E | Secrets backend; focused tests; mock/live receipts riêng; AWS staging target 5 USD, external AI cost riêng | P1.5 / P2.5 / P3 / P4 / P5 |
 
