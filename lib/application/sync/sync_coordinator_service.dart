@@ -256,16 +256,17 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     while (true) {
       state = await _reconciliation.read();
       final String? requestCursor = state.cursor?.value;
-      final SyncChangesPage page = await remote.pull(
-        cursor: labelsEnabled && state.syncWireVersion == 1
-            ? null
-            : requestCursor,
-      );
+      // A legacy label backfill starts at the beginning. Progress is measured
+      // against the cursor actually requested, while CAS keeps the stored one.
+      final String? pullCursor = labelsEnabled && state.syncWireVersion == 1
+          ? null
+          : requestCursor;
+      final SyncChangesPage page = await remote.pull(cursor: pullCursor);
       if (labelsEnabled && page.wireVersion != 2) {
         throw const SyncFailure(code: SyncErrorCode.invalidMutation);
       }
       requireSession?.call();
-      if (page.hasMore && page.nextCursor == requestCursor) {
+      if (page.hasMore && page.nextCursor == pullCursor) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       for (final snapshot in page.snapshots) {
