@@ -28,6 +28,7 @@ void main() {
 }
 
 Future<void> _removeFixture(Directory support) async {
+  if (!await support.exists()) return;
   final resolved = Directory(await support.resolveSymbolicLinks());
   final root = Directory(await Directory.systemTemp.resolveSymbolicLinks());
   final name = resolved.path.split(RegExp(r'[/\\]')).last;
