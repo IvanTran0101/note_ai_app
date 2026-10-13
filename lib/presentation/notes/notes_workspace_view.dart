@@ -164,6 +164,9 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
       showAppBar: showAppBar,
       onEmbeddedExit: _handleDetailExit,
       onDirtyChanged: _handleDetailDirtyChanged,
+      initialContentSelection: _pendingSelectionRequest,
+      onNoteEdited: widget.onNoteEdited,
+      onOpenNoteRag: widget.onOpenNoteRag,
       syncController: widget.syncController,
     );
   }

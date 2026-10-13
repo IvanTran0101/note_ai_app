@@ -75,9 +75,10 @@ type JsonFrame = { kind: 'object' | 'array'; state: number; keys: Set<string> | 
 /**
  * Refuses duplicate object keys after JSON escape decoding and nesting beyond MAX_JSON_DEPTH.
  * Anything the scanner cannot follow is left to `JSON.parse`, so malformed JSON still fails as
- * INVALID_INPUT without a second, competing syntax opinion.
+ * INVALID_INPUT without a second, competing syntax opinion. Exported so every JSON body the
+ * backend parses (query and consent) runs the same scanner instead of keeping a second copy.
  */
-const assertNoDuplicateKeys = (text: string): void => {
+export const assertNoDuplicateKeys = (text: string): void => {
   const stack: JsonFrame[] = [];
   let index = 0;
 

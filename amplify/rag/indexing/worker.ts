@@ -207,8 +207,11 @@ const embedMissing = async (
     await reread(run);
     // Budget is reserved before every paid call; the store decides the shared allowance.
     await guard(deps.store.reserveEmbedding(run.bound.ownerId, signal), signal, check);
+    // The reservation is async: re-read the canonical state once more before the paid embed so a
+    // consent/epoch/protection/text change that landed during the reservation cannot be embedded.
+    await reread(run);
     const produced = await guard(
-      deps.embedding.embed(batch.map((entry) => entry.text), 'search_document', signal),
+      deps.embedding.embed(batch.map((entry) => entry.text), 'search_document', signal, () => reread(run)),
       signal,
       check,
     );

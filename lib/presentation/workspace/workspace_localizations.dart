@@ -52,6 +52,10 @@ final class WorkspaceCopy {
   /// Existing create-note action.
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
 
+  /// Account-wide "ask my notes" action. It is shown only when the composition
+  /// root supplies an [onOpenRag] callback (RAG endpoint/feature available).
+  String get askNotes => _isVietnamese ? 'Hỏi ghi chú' : 'Ask notes';
+
   /// Accessible label describing the shell's primary navigation region.
   String get navigationLabel =>
       _isVietnamese ? 'Điều hướng chính' : 'Primary navigation';

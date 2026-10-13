@@ -7,8 +7,9 @@
  * The canonical state is read only after the verified actor boundary and is cloned and frozen
  * before any provider sees it: a provider may never mutate the snapshot the verdict was based
  * on. `revalidate()` re-reads the store and blocks egress when consent, session generation,
- * index readiness or any snapshotted source note changed. Store failures surface as
- * PROVIDER_UNAVAILABLE; an aborted signal is always TIMEOUT. No note is ever written.
+ * index readiness or any snapshotted source note changed. Untyped store failures surface as
+ * PROVIDER_UNAVAILABLE while a typed `RagFailure` (SOURCE_CHANGED/INDEX_NOT_READY/CONSENT_REQUIRED)
+ * is preserved; an aborted signal is always TIMEOUT. No note is ever written.
  */
 import { RagFailure } from './types';
 import type { AuthorityStore, CanonicalNote, CanonicalState, Chunk, RagRequest, RequestContext } from './types';
@@ -84,9 +85,12 @@ const readState = async (store: AuthorityStore, actor: string, signal: AbortSign
   try {
     state = await store.read(actor, signal);
   } catch (error) {
+    // Preserve an already-typed, text-free RagFailure (SOURCE_CHANGED/INDEX_NOT_READY/CONSENT_*):
+    // the store boundary is the authority source, and flattening it would lose the safe code.
     if (signal.aborted || (error instanceof RagFailure && error.code === 'TIMEOUT')) {
       throw new RagFailure('TIMEOUT');
     }
+    if (error instanceof RagFailure) throw error;
     throw new RagFailure('PROVIDER_UNAVAILABLE');
   }
   assertLive(signal);

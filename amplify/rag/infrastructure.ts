@@ -12,9 +12,59 @@ import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import jobs from '../../docs/rag/index_job_policy_v1.json';
 import tokenizerManifest from '../../docs/rag/tokenizer_manifest.json';
+import {isValidIdentifier} from './contract';
+import {CONSENT_SORT_KEY,NOTE_KEY_PREFIX,OWNER_KEY_PREFIX,PROTECTION_KEY_PREFIX} from './indexing/jobs';
+import {MAX_PILOT_OWNERS,isCognitoSub} from './phase5/pilot_policy';
+
+/** One reviewed pilot account and the exact note ids its stream records may carry. */
+export type RagPilotOwner=Readonly<{ownerId:string;noteIds:readonly string[]}>;
+export type RagPilotScope=Readonly<{owners:readonly RagPilotOwner[]}>;
+
+const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==='object'&&value!==null&&!Array.isArray(value);
+const hasExactKeys=(value:Record<string,unknown>,required:readonly string[]):boolean=>
+  Object.keys(value).length===required.length&&required.every(key=>Object.prototype.hasOwnProperty.call(value,key));
+
+/**
+ * Validates the reviewed pilot scope compiled into the ESM filters. Omitting the scope keeps the
+ * exact legacy `OWNER#rag-smoke-` smoke path; supplying one must be one to five unique lowercase
+ * Cognito-sub owners, each with a non-empty unique list of safe note ids. A zero-owner scope fails
+ * closed here rather than producing no filters, which would match every partition.
+ */
+export function readRagPilotScope(value:unknown):RagPilotScope{
+  if(!isRecord(value)||!hasExactKeys(value,['owners']))
+    throw Error('RAG pilot scope must be an exact {owners} object');
+  const rawOwners=value['owners'];
+  if(!Array.isArray(rawOwners)||rawOwners.length===0||rawOwners.length>MAX_PILOT_OWNERS)
+    throw Error('RAG pilot scope needs one to five owners');
+  const owners:RagPilotOwner[]=[];
+  const seenOwners=new Set<string>();
+  for(const raw of rawOwners){
+    if(!isRecord(raw)||!hasExactKeys(raw,['ownerId','noteIds']))
+      throw Error('each RAG pilot owner needs exact ownerId/noteIds');
+    const ownerId=raw['ownerId'];
+    if(!isCognitoSub(ownerId)||seenOwners.has(ownerId))
+      throw Error('RAG pilot owner must be a unique lowercase Cognito sub');
+    seenOwners.add(ownerId);
+    const rawNotes=raw['noteIds'];
+    if(!Array.isArray(rawNotes)||rawNotes.length===0)
+      throw Error('each RAG pilot owner needs at least one approved note id');
+    const noteIds:string[]=[];
+    const seenNotes=new Set<string>();
+    for(const noteId of rawNotes){
+      if(!isValidIdentifier(noteId)||seenNotes.has(noteId))
+        throw Error('RAG pilot note ids must be safe and unique per owner');
+      seenNotes.add(noteId);
+      noteIds.push(noteId);
+    }
+    owners.push(Object.freeze({ownerId,noteIds:Object.freeze(noteIds)}));
+  }
+  return Object.freeze({owners:Object.freeze(owners)});
+}
 
 // Additive resources in SyncStack: existing Notes/Auth/Attachment IDs stay intact.
-export function createRagInfrastructure(scope:Stack,notes:Table){
+export function createRagInfrastructure(scope:Stack,notes:Table,pilot?:RagPilotScope){
+  // Re-validate the supplied scope (never trust a caller cast) before anything is created.
+  const approved=pilot===undefined?undefined:readRagPilotScope(pilot);
   const tokenizerDir=resolve(fileURLToPath(new URL('../../output/rag/tokenizer/',import.meta.url)));
   for(const [file,digest] of Object.entries(tokenizerManifest.files)){
     const path=resolve(tokenizerDir,file);
@@ -76,12 +126,22 @@ export function createRagInfrastructure(scope:Stack,notes:Table){
     conditions:{StringEquals:{'s3:ResourceAccount':scope.account}}}));
   worker.addToRolePolicy(new PolicyStatement({actions:['s3:ListBucket'],resources:[failures.bucketArn],
     conditions:{StringEquals:{'s3:ResourceAccount':scope.account}}}));
+  // Pilot mode selects the adapter in the worker; the mapping itself always stays disabled.
+  if(approved!==undefined)worker.addEnvironment('RAG_PILOT_PHASE5','synthetic-only');
+  // One filter per approved owner: exact partition plus the approved note/protection sort keys and
+  // the one consent row. No `beginsWith` note prefix and no cross-owner OR, so an unreviewed row
+  // can never enter a batch/failure payload. Absent scope keeps the exact legacy smoke filter.
+  const filters=approved===undefined
+    ?[FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{ownerId:{S:FilterRule.beginsWith('OWNER#rag-smoke-')},
+      noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}}})]
+    :approved.owners.map(owner=>FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{
+      ownerId:{S:[`${OWNER_KEY_PREFIX}${owner.ownerId}`]},
+      noteId:{S:[...owner.noteIds.map(id=>`${NOTE_KEY_PREFIX}${id}`),
+        ...owner.noteIds.map(id=>`${PROTECTION_KEY_PREFIX}${id}`),CONSENT_SORT_KEY]}}}}));
   const mapping=new EventSourceMapping(scope,'RagNoteStream',{target:worker,eventSourceArn:notes.tableStreamArn!,
     enabled:jobs.stream.enabledByDefault,startingPosition:StartingPosition.TRIM_HORIZON,batchSize:jobs.stream.batchSize,maxBatchingWindow:Duration.seconds(jobs.stream.batchingWindowSeconds),
     parallelizationFactor:jobs.stream.parallelizationFactor,retryAttempts:jobs.stream.maximumRetryAttempts,maxRecordAge:Duration.seconds(jobs.stream.maximumRecordAgeSeconds),reportBatchItemFailures:true,
-    onFailure:{bind:()=>({destination:failures.bucketArn})},filters:[FilterCriteria.filter({
-      eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{ownerId:{S:FilterRule.beginsWith('OWNER#rag-smoke-')},
-        noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}}})]});
+    onFailure:{bind:()=>({destination:failures.bucketArn})},filters});
   streamGrant.applyBefore(mapping);
   return {worker,probe,mapping,state,snapshots,failures,vectors,index};
 }

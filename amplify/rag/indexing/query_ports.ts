@@ -70,6 +70,10 @@ const toRagFailure = (error: unknown, signal: AbortSignal): RagFailure => {
       case 'SOURCE_CHANGED': return new RagFailure('SOURCE_CHANGED');
       case 'INVALID_INPUT': return new RagFailure('INVALID_INPUT');
       case 'PROVIDER_UNAVAILABLE': return new RagFailure('PROVIDER_UNAVAILABLE');
+      // The Phase 5 guarded store adds these two typed refusals; keep their safe codes instead of
+      // flattening them into INDEX_NOT_READY, which would hide a revoked/stale pilot permit.
+      case 'LIVE_POLICY_NOT_CONFIGURED': return new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+      case 'CONSENT_REQUIRED': return new RagFailure('CONSENT_REQUIRED');
       default: return new RagFailure('INDEX_NOT_READY');
     }
   }
@@ -229,7 +233,11 @@ export function createQueryPorts(deps: IndexDeps): QueryPorts {
   });
 
   const retrieval: RetrievalDeps = Object.freeze({
-    embedQuery: async (question: string, signal: AbortSignal): Promise<readonly number[]> => {
+    embedQuery: async (
+      question: string,
+      signal: AbortSignal,
+      beforeDispatch?: () => Promise<void>,
+    ): Promise<readonly number[]> => {
       const io = requireSignal(signal);
       const binding = requests.get(io);
       if (binding === undefined) throw new RagFailure('INDEX_NOT_READY');
@@ -241,7 +249,21 @@ export function createQueryPorts(deps: IndexDeps): QueryPorts {
       try {
         // The shared smoke counter is reserved before the single query call, failures included.
         await deps.store.reserveEmbedding(binding.ownerId, io);
-        const produced = await deps.embedding.embed([question], 'search_query', io);
+        // The reservation is async: a permit/consent/source change that lands while it is in
+        // flight must be observed before the paid embedding call. The pipeline supplies the
+        // captured `context.revalidate`; a direct caller without one gets a fresh re-read and
+        // must still present the exact canonical fingerprint. The same callback is forwarded into
+        // the embedding port, which re-runs it after its own reservation/signing window.
+        const revalidateBeforeEmbed: () => Promise<void> = typeof beforeDispatch === 'function'
+          ? beforeDispatch
+          : async () => {
+              const latest = await deps.store.load(binding.ownerId, io);
+              if (fingerprint(latest) !== fingerprint(binding.state)) {
+                throw new IndexFailure('SOURCE_CHANGED', false);
+              }
+            };
+        await revalidateBeforeEmbed();
+        const produced = await deps.embedding.embed([question], 'search_query', io, revalidateBeforeEmbed);
         if (!Array.isArray(produced) || produced.length !== 1) {
           throw new IndexFailure('INVALID_PROVIDER_OUTPUT', false);
         }

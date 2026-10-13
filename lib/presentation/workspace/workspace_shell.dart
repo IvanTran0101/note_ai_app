@@ -33,6 +33,7 @@ class WorkspaceShell extends StatefulWidget {
     this.onCreateNote,
     this.onOpenSettings,
     this.onOpenDiagnostics,
+    this.onOpenRag,
     this.accountName,
     this.accountAvatar,
   });
@@ -128,6 +129,19 @@ class WorkspaceShell extends StatefulWidget {
     'workspace-open-diagnostics',
   );
 
+  /// Account-wide "ask my notes" action in the sidebar and compact menu.
+  static const Key askNotesKey = ValueKey<String>('workspace-open-rag');
+
+  /// Account-wide "ask my notes" action in the compact navigation menu.
+  static const Key compactMenuAskNotesKey = ValueKey<String>(
+    'workspace-compact-menu-ask-notes',
+  );
+
+  /// Account-wide "ask my notes" action in the medium navigation rail.
+  static const Key railAskNotesKey = ValueKey<String>(
+    'workspace-rail-ask-notes',
+  );
+
   /// Key for the navigation item that represents [destination].
   static Key destinationKey(WorkspaceDestination destination) {
     return switch (destination) {
@@ -159,6 +173,11 @@ class WorkspaceShell extends StatefulWidget {
 
   /// Optional local-AI diagnostics action for the navigation footer.
   final VoidCallback? onOpenDiagnostics;
+
+  /// Optional account-wide "ask my notes" action. Supplied by the composition
+  /// root only when the RAG endpoint/feature is configured; it is not a new
+  /// destination and adds no shell state.
+  final VoidCallback? onOpenRag;
 
   /// Display name used for the compact avatar initial. Email/local identity
   /// may be supplied by the composition root when no profile image exists.
@@ -748,6 +767,19 @@ class WorkspaceShellState extends State<WorkspaceShell>
                                 },
                               ),
                             ),
+                          if (widget.onOpenRag != null)
+                            KeyedSubtree(
+                              key: WorkspaceShell.askNotesKey,
+                              child: NoteFlowSidebarRow(
+                                key: WorkspaceShell.compactMenuAskNotesKey,
+                                label: copy.askNotes,
+                                icon: Icons.forum_outlined,
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  widget.onOpenRag?.call();
+                                },
+                              ),
+                            ),
                           NoteFlowSectionLabel(label: copy.pagesSection),
                           for (final WorkspaceDestination destination
                               in WorkspaceDestination.values)
@@ -829,6 +861,19 @@ class WorkspaceShellState extends State<WorkspaceShell>
         onDestinationSelected: (int index) {
           showDestination(WorkspaceDestination.values[index]);
         },
+        trailing: widget.onOpenRag == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: NoteFlowSpacing.sm,
+                ),
+                child: IconButton(
+                  key: WorkspaceShell.railAskNotesKey,
+                  tooltip: copy.askNotes,
+                  onPressed: widget.onOpenRag,
+                  icon: const Icon(Icons.forum_outlined),
+                ),
+              ),
         destinations: <NavigationRailDestination>[
           for (final WorkspaceDestination destination
               in WorkspaceDestination.values)
@@ -1000,7 +1045,9 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildSidebarFooter(WorkspaceCopy copy) {
-    if (widget.onOpenSettings == null && widget.onOpenDiagnostics == null) {
+    if (widget.onOpenRag == null &&
+        widget.onOpenSettings == null &&
+        widget.onOpenDiagnostics == null) {
       return const SizedBox.shrink();
     }
     return Column(
@@ -1015,6 +1062,14 @@ class WorkspaceShellState extends State<WorkspaceShell>
           ),
           child: Column(
             children: <Widget>[
+              if (widget.onOpenRag != null)
+                NoteFlowSidebarRow(
+                  key: WorkspaceShell.askNotesKey,
+                  label: copy.askNotes,
+                  icon: Icons.forum_outlined,
+                  onTap: widget.onOpenRag,
+                  dense: true,
+                ),
               if (widget.onOpenSettings != null)
                 NoteFlowSidebarRow(
                   key: WorkspaceShell.settingsKey,

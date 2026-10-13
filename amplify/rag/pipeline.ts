@@ -48,6 +48,12 @@ export type PipelineDeps = Readonly<{
    * exactly restate the runtime config. No public flag opens live mode.
    */
   liveApproval?: unknown;
+  /**
+   * Optional Phase 5 pilot policy. When supplied, live admission is the enabled+listed Cognito
+   * `sub` gate instead of the private `rag-smoke-` prefix; an invalid explicit policy refuses and
+   * never falls back to the smoke seam. Absent keeps the exact Phase 4 behavior.
+   */
+  pilotPolicy?: unknown;
 }>;
 
 const deepFreeze = <T>(value: T): T => {
@@ -199,7 +205,9 @@ const embedQuery = async (
     throw new RagFailure('INPUT_TOO_LONG');
   }
   if (countUnicodeCharacters(question) > MAX_EMBEDDING_CHARACTERS) throw new RagFailure('INPUT_TOO_LONG');
-  const vector = await run('PROVIDER_UNAVAILABLE', () => deps.retrieval.embedQuery(question, context.signal));
+  const vector = await run('PROVIDER_UNAVAILABLE', () =>
+    deps.retrieval.embedQuery(question, context.signal, () => revalidate(deadline, context)),
+  );
   validateVector(vector);
   return vector;
 };
@@ -282,7 +290,7 @@ export function createQuery(
     try {
       // Approval and config are validated before the first port call, so an invalid approval
       // never reaches the authority store, quota, retrieval or a provider.
-      runtime = readRuntimeConfig(config, actor, deps.liveApproval);
+      runtime = readRuntimeConfig(config, actor, deps.liveApproval, deps.pilotPolicy);
       deadline = new RequestDeadline(runtime.requestTimeoutMs, Date.now, deps.signal);
     } catch (error) {
       return errorResponse(requestId, failureCode(error));
@@ -342,7 +350,7 @@ export function createQuery(
       await revalidate(deadline, context);
       deadline.check();
       const rawJev = await stage(deadline, 'EVIDENCE_VALIDATION_UNAVAILABLE', () =>
-        deps.providers.jev(jevInput, deadline.signal),
+        deps.providers.jev(jevInput, deadline.signal, () => revalidate(deadline, context)),
       );
       const envelope = validateNoul(rawJev, runtime.model);
       if (envelope.usage.input_tokens + envelope.usage.output_tokens > runtime.jevMaxTokens) {
@@ -357,7 +365,7 @@ export function createQuery(
       await revalidate(deadline, context);
       const generateInput = buildGenerateInput(context.request.question, evidence);
       const rawGenerated = await stage(deadline, 'PROVIDER_UNAVAILABLE', () =>
-        deps.providers.generate(generateInput, deadline.signal),
+        deps.providers.generate(generateInput, deadline.signal, () => revalidate(deadline, context)),
       );
       const generated = validateGenerated(rawGenerated, evidence, deps.counters.output);
       // Release revalidation: a source changed after generation is reported, never released.

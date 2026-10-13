@@ -40,7 +40,19 @@ export type Artifacts = Readonly<{
 }>;
 export type Embedding = Readonly<{
   count: Counter;
-  embed(texts: readonly string[], purpose: 'search_document' | 'search_query', signal: AbortSignal): Promise<readonly (readonly number[])[]>;
+  /**
+   * `beforeDispatch` is an optional captured revalidation callback. A port that awaits its own
+   * reservation or signing window must forward it into the signed transport, which re-runs it
+   * immediately before the actual fetch, so a permit/consent/source withdrawal during that
+   * window can never reach the provider. Optional so every existing three-argument caller and
+   * direct probe keeps its exact behavior.
+   */
+  embed(
+    texts: readonly string[],
+    purpose: 'search_document' | 'search_query',
+    signal: AbortSignal,
+    beforeDispatch?: () => Promise<void>,
+  ): Promise<readonly (readonly number[])[]>;
 }>;
 export type IndexDeps = Readonly<{
   store: IndexStore; artifacts: Artifacts; embedding: Embedding;

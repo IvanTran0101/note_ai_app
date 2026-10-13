@@ -73,13 +73,42 @@ const outcomeOf = (result: JobResult | null, thrown: unknown): Readonly<{ replay
   return { replay: false, code: '' };
 };
 
+/** The fixed worker invocation cap (120s) and the margin reserved before the Lambda hard cutoff. */
+export const WORKER_MARGIN_MS = 10_000;
+
+const fixedWorkerBudget = (): number => WORKER_MS - WORKER_MARGIN_MS;
+
+/**
+ * Bounds an optional trusted absolute deadline (epoch ms) by the fixed worker budget. A missing
+ * deadline keeps the exact legacy window; a present one must be finite and can never extend the
+ * fixed cap. Only trusted composition ever supplies it, never an event/body/settings value.
+ */
+export const boundDeadlineAt = (now: () => number, deadlineAt?: number): number => {
+  const fixed = now() + fixedWorkerBudget();
+  if (deadlineAt === undefined) return fixed;
+  if (typeof deadlineAt !== 'number' || !Number.isFinite(deadlineAt)) {
+    throw new IndexFailure('INVALID_STATE', false);
+  }
+  return Math.min(fixed, deadlineAt);
+};
+
+/** Remaining budget until an absolute deadline; never negative and never above the fixed cap. */
+export const remainingUntil = (deadlineAt: number, now: () => number = Date.now): number => {
+  if (typeof deadlineAt !== 'number' || !Number.isFinite(deadlineAt)) {
+    throw new IndexFailure('INVALID_STATE', false);
+  }
+  const remaining = Math.floor(deadlineAt - now());
+  if (!Number.isFinite(remaining)) throw new IndexFailure('INVALID_STATE', false);
+  return Math.max(0, Math.min(fixedWorkerBudget(), remaining));
+};
+
 export function createStreamHandler(
   worker: IndexWorker,
   log?: StreamLog,
-): (event: DynamoDBStreamEvent) => Promise<StreamResult> {
+): (event: DynamoDBStreamEvent, deadlineAt?: number) => Promise<StreamResult> {
   if (typeof worker !== 'function') throw new TypeError('index worker is required');
-  return async (event: DynamoDBStreamEvent): Promise<StreamResult> => {
-    const deadline = Date.now() + WORKER_MS - 10_000;
+  return async (event: DynamoDBStreamEvent, deadlineAt?: number): Promise<StreamResult> => {
+    const deadline = boundDeadlineAt(Date.now, deadlineAt);
     const records = event !== null && typeof event === 'object' && Array.isArray(event.Records)
       ? (event.Records as readonly unknown[])
       : [];
@@ -171,15 +200,19 @@ export function createStreamHandler(
 /**
  * Manual/backfill invocation: the raw value goes through the same worker path, so `parseJob`
  * validates the identifier and safe-integer semantics before anything is loaded. Retryable
- * failures are rethrown to the caller, which owns the retry decision for a manual run.
+ * failures are rethrown to the caller, which owns the retry decision for a manual run. An optional
+ * trusted absolute deadline is forwarded as the remaining worker budget; without one the worker
+ * keeps its exact legacy default.
  */
 export async function runManualJob(
   worker: IndexWorker,
   value: unknown,
   log?: StreamLog,
+  deadlineAt?: number,
 ): Promise<JobResult> {
   try {
-    return await worker(value as Job);
+    const remainingMs = deadlineAt === undefined ? undefined : remainingUntil(deadlineAt);
+    return await worker(value as Job, remainingMs);
   } catch (error) {
     const failure = error instanceof IndexFailure ? error : new IndexFailure('PORT_FAILURE', true);
     emit(log, {

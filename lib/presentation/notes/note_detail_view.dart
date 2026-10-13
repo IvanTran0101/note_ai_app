@@ -10,11 +10,15 @@ extension _NoteDetailView on NoteDetailPageState {
         ? currentTitle
         : (_note == null ? copy.newNote : copy.editNote);
     final Widget surface = _buildSurface(copy, pageTitle);
+    final Widget? noteRagAction = _canOpenNoteRag
+        ? _buildNoteRagAction(context)
+        : null;
     final Widget content = widget.onEmbeddedExit != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               if (widget.showAppBar) _buildAppBar(copy, pageTitle),
+              ?noteRagAction,
               Expanded(child: surface),
             ],
           )
@@ -46,6 +50,20 @@ extension _NoteDetailView on NoteDetailPageState {
 
   PreferredSizeWidget _buildAppBar(NoteDetailCopy copy, String pageTitle) {
     final VoidCallback? moreAction = _moreAction(copy);
+    final List<Widget> actions = <Widget>[
+      if (_canOpenNoteRag) _buildNoteRagAction(context),
+      if (moreAction != null)
+        Builder(
+          builder: (BuildContext buttonContext) => IconButton(
+            key: const ValueKey<String>('note-detail-more'),
+            tooltip: copy.more,
+            onPressed: () => unawaited(
+              _showMoreActions(copy, anchorContext: buttonContext),
+            ),
+            icon: const Icon(Icons.more_horiz),
+          ),
+        ),
+    ];
     return AppBar(
       leading: IconButton(
         key: NoteDetailPage.backKey,
@@ -54,20 +72,7 @@ extension _NoteDetailView on NoteDetailPageState {
         icon: const Icon(Icons.arrow_back),
       ),
       title: Text(pageTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      actions: moreAction == null
-          ? null
-          : <Widget>[
-              Builder(
-                builder: (BuildContext buttonContext) => IconButton(
-                  key: const ValueKey<String>('note-detail-more'),
-                  tooltip: copy.more,
-                  onPressed: () => unawaited(
-                    _showMoreActions(copy, anchorContext: buttonContext),
-                  ),
-                  icon: const Icon(Icons.more_horiz),
-                ),
-              ),
-            ],
+      actions: actions.isEmpty ? null : actions,
     );
   }
 

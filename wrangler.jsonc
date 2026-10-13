@@ -1,0 +1,14 @@
+{
+  // Cloudflare Workers Static Assets config for the NoteFlow staging web build.
+  //
+  // Preview only: this declares no Worker script, no binding, no environment
+  // variable, no account id, no route and no custom domain. Attaching
+  // noteflow.trananhminh.uk requires a reviewed DNS diff first because an
+  // existing A record (42.116.13.152) must be backed up and reviewed.
+  "name": "noteflow-staging",
+  "compatibility_date": "2026-10-13",
+  "assets": {
+    "directory": "./build/web",
+    "not_found_handling": "single-page-application"
+  }
+}

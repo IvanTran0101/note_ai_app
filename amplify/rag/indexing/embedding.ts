@@ -88,7 +88,7 @@ export function createEmbedding(region: string, count: Counter, request?: AwsJso
 
   return Object.freeze({
     count,
-    embed: async (texts, purpose, signal) => {
+    embed: async (texts, purpose, signal, beforeDispatch) => {
       if (purpose !== 'search_document' && purpose !== 'search_query') invalidInput();
       if (!Array.isArray(texts) || texts.length === 0 || texts.length > EMBED_BATCH_LIMIT) {
         invalidInput();
@@ -105,7 +105,7 @@ export function createEmbedding(region: string, count: Counter, request?: AwsJso
         texts: inputs,
         input_type: INPUT_TYPES[purpose],
         truncate: EMBEDDING_TRUNCATE,
-      }, signal);
+      }, signal, beforeDispatch);
       return requireEmbeddings(payload, inputs.length);
     },
   });

@@ -32,6 +32,8 @@ class MemoryStore implements IndexStore {
   publishes = 0;
   finishes: Readonly<{ status: string; code: string }>[] = [];
   beforeLoad: (() => void) | null = null;
+  /** Runs inside `reserveEmbedding`, i.e. while the async paid reservation is in flight. */
+  reserveHook: (() => void) | null = null;
   private counter = 0;
   constructor(public state: IndexState) {}
   async load(): Promise<IndexState> {
@@ -70,6 +72,9 @@ class MemoryStore implements IndexStore {
   }
   async reserveEmbedding(): Promise<void> {
     this.reserves += 1;
+    const hook = this.reserveHook;
+    this.reserveHook = null;
+    hook?.();
     if (this.reserves > this.budget) throw new IndexFailure('BUDGET_EXHAUSTED', true);
   }
 }
@@ -129,9 +134,17 @@ class MemoryEmbedding implements Embedding {
   count: Counter = (text) => Array.from(text).length;
   hook: (() => void | Promise<void>) | null = null;
   respond: ((texts: readonly string[]) => readonly (readonly number[])[]) | null = null;
-  async embed(texts: readonly string[]): Promise<readonly (readonly number[])[]> {
+  /** Simulates the signed transport invoking the forwarded post-reservation dispatch callback. */
+  dispatch: ((beforeDispatch?: () => Promise<void>) => Promise<void>) | null = null;
+  async embed(
+    texts: readonly string[],
+    _purpose?: 'search_document' | 'search_query',
+    _signal?: AbortSignal,
+    beforeDispatch?: () => Promise<void>,
+  ): Promise<readonly (readonly number[])[]> {
     this.calls.push([...texts]);
     if (this.hook !== null) await this.hook();
+    if (this.dispatch !== null) await this.dispatch(beforeDispatch);
     if (this.respond !== null) return this.respond(texts);
     return texts.map(() => unitWith(this.calls.length));
   }
@@ -241,6 +254,40 @@ test('a consent revoke before publish aborts instead of publishing stale readine
     });
   };
   assert.deepEqual(await rigged.worker(job()), { status: 'SUPERSEDED', code: 'SOURCE_CHANGED' });
+  assert.equal(rigged.store.publishes, 0);
+  assert.equal(rigged.store.state.manifest, null);
+});
+
+/**
+ * Group 3 worker race regression: the canonical state moves while `reserveEmbedding` is in
+ * flight. The reservation is consumed, but the worker re-reads the fingerprint after it and
+ * before `embedding.embed`, so the paid provider is never called and nothing is published.
+ */
+test('a canonical change during the embedding reservation blocks the paid embed and READY', async () => {
+  const rigged = rig();
+  rigged.store.reserveHook = () => update(rigged, { notes: [note({ revision: 2 })] });
+  const result = await rigged.worker(job());
+  assert.deepEqual(result, { status: 'SUPERSEDED', code: 'SOURCE_CHANGED' });
+  assert.equal(rigged.store.reserves, 1, 'the reservation is still consumed');
+  assert.equal(rigged.embedding.calls.length, 0, 'no paid embed after the canonical move');
+  assert.equal(rigged.store.publishes, 0);
+  assert.equal(rigged.store.state.manifest, null);
+});
+
+test('the worker forwards a post-reservation dispatch callback into the paid embed', async () => {
+  const rigged = rig();
+  let forwarded: unknown;
+  rigged.embedding.dispatch = async (beforeDispatch) => {
+    forwarded = beforeDispatch;
+    // The canonical state moves during the signed transport's own signing window; the forwarded
+    // callback must observe it before the produced vector can be accepted.
+    update(rigged, { notes: [note({ revision: 2 })] });
+    if (typeof beforeDispatch === 'function') await beforeDispatch();
+  };
+  const result = await rigged.worker(job());
+  assert.equal(typeof forwarded, 'function', 'the worker forwards its reread callback');
+  assert.deepEqual(result, { status: 'SUPERSEDED', code: 'SOURCE_CHANGED' });
+  assert.equal(rigged.store.reserves, 1, 'the reservation is still consumed');
   assert.equal(rigged.store.publishes, 0);
   assert.equal(rigged.store.state.manifest, null);
 });

@@ -38,6 +38,8 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.provisioningReader,
     this.onProvisioningCancel,
     this.syncController,
+    this.onNoteEdited,
+    this.onOpenNoteRag,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -52,6 +54,14 @@ final class NotesWorkspacePage extends StatefulWidget {
   final VoidCallback? onProvisioningCancel;
   final SyncPresentationController? syncController;
 
+  /// Forwards a real saved-note edit from the embedded editor to the host, so
+  /// the composition root can invalidate stale citations without the workspace
+  /// knowing anything about RAG.
+  final ValueChanged<NoteDto>? onNoteEdited;
+
+  /// Opens the ask-notes screen for the current note when the host supports it.
+  final ValueChanged<NoteDto>? onOpenNoteRag;
+
   @override
   NotesWorkspacePageState createState() => NotesWorkspacePageState();
 }
@@ -65,6 +75,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   NoteDto? _unavailableSelection;
   bool _editingNewNote = false;
   bool _sharedOnly = false;
+  NoteDetailSelectionRequest? _pendingSelectionRequest;
   Object? _lastSyncState;
   bool _detailDirty = false;
   Object? _error;
@@ -238,6 +249,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _selectedNoteId = note.reference;
       _editingNewNote = false;
       _error = null;
+      _pendingSelectionRequest = null;
     });
   }
 
@@ -252,6 +264,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _selectedNoteId = null;
       _sharedOnly = false;
       _editingNewNote = true;
+      _pendingSelectionRequest = null;
     });
   }
 
@@ -283,7 +296,51 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _editingNewNote = false;
       _error = null;
       _loading = false;
+      _pendingSelectionRequest = null;
     });
+  }
+
+  /// Opens [note] and reveals the exact [selection] span in its editor.
+  ///
+  /// This is the citation-open commit: it is synchronous, validates the span
+  /// against the content the caller resolved from the local store, and reports
+  /// `true` only when the note is actually shown. It never saves, never unlocks
+  /// protection, and never writes the repository. A dirty editor or an active
+  /// operation refuses the open without changing the displayed note.
+  bool openSource(NoteDto note, TextSelection selection) {
+    if (_detailBusy) return false;
+    if (note.isProtected) note = note.metadataOnly();
+    if (_detailDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return false;
+    }
+    if (!note.contentAvailable) return false;
+    final String content = note.content;
+    if (selection.start < 0 ||
+        selection.end > content.length ||
+        selection.end <= selection.start) {
+      return false;
+    }
+    final List<NoteDto> next = List<NoteDto>.of(_notes);
+    final int index = next.indexWhere(
+      (NoteDto item) => item.identity == note.identity,
+    );
+    if (index == -1) {
+      next.add(note);
+    } else {
+      next[index] = note;
+    }
+    setState(() {
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
+      _selectedNoteId = note.reference;
+      _sharedOnly = note.share != null;
+      _unavailableSelection = null;
+      _editingNewNote = false;
+      _error = null;
+      _loading = false;
+      _pendingSelectionRequest = NoteDetailSelectionRequest(selection);
+    });
+    return true;
   }
 
   void _handleDetailDirtyChanged(bool dirty) {

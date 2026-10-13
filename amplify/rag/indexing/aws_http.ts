@@ -53,6 +53,13 @@ export type AwsJson = (
   path: string,
   body: unknown,
   signal: AbortSignal,
+  /**
+   * Optional captured revalidation. Credential resolution and signing are awaited first, then
+   * this callback runs, then the deadline is checked again, and only then does the transport
+   * fetch. A callback failure (a typed SOURCE_CHANGED/CONSENT refusal) passes through untouched:
+   * it is never remapped to UNAUTHORIZED by the credential/signing catch.
+   */
+  beforeDispatch?: () => Promise<void>,
 ) => Promise<unknown>;
 
 /** The only Bedrock operation this code may invoke; embedding.ts reuses the constant. */
@@ -157,7 +164,7 @@ export function createAwsJson(region: string, options?: AwsJsonOptions): AwsJson
     }),
   });
 
-  return async (service, path, body, signal) => {
+  return async (service, path, body, signal, beforeDispatch) => {
     if (service !== 'bedrock' && service !== 's3vectors') invalidInput();
     if (typeof path !== 'string' || !OPERATIONS[service].has(path)) invalidInput();
     const deadline = requireSignal(signal);
@@ -180,6 +187,13 @@ export function createAwsJson(region: string, options?: AwsJsonOptions): AwsJson
       if (deadline.aborted) throw new IndexFailure('TIMEOUT', true);
       throw new IndexFailure('UNAUTHORIZED', false);
     }
+
+    // Signing is async (credential resolution included): the captured revalidation runs here,
+    // after the signature exists and immediately before the fetch, so a withdrawal during that
+    // window is refused with its own typed code rather than mapped to an access failure.
+    if (deadline.aborted) throw new IndexFailure('TIMEOUT', true);
+    if (typeof beforeDispatch === 'function') await beforeDispatch();
+    if (deadline.aborted) throw new IndexFailure('TIMEOUT', true);
 
     let response: Response;
     try {

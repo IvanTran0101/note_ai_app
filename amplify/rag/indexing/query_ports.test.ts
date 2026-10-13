@@ -410,3 +410,79 @@ test('a retrieval Ranked entry is returned unmodified: no fusion or evidence wor
     ['embedQuery', 'getVectors', 'keywordSearch', 'neighbors', 'vectorSearch'],
   );
 });
+
+test('embedQuery awaits the dispatch callback after reservation and before the paid embed', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const ports = createQueryPorts(fixture.deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  const vector = await ports.retrieval.embedQuery(ACCOUNT.question, context.signal, async () => {
+    fixture.counts.order.push('dispatch');
+  });
+  assert.equal(vector.length, policy.embedding.dimensions);
+  assert.deepEqual(fixture.counts.order, ['reserve', 'dispatch', 'embed']);
+  assert.equal(fixture.counts.reserves, 1);
+  assert.equal(fixture.counts.embeds, 1);
+});
+
+test('embedQuery without a dispatch callback fails closed on a canonical fingerprint move', async () => {
+  const notes = [noteOf('rag-smoke-a', 'n-a', longContent('a'))];
+  const fixture = fixtureFor({ 'rag-smoke-a': notes });
+  const ports = createQueryPorts(fixture.deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  // The canonical state moves after authorization; a direct caller has no captured revalidate,
+  // so the port must re-read and demand the exact fingerprint before the paid embed.
+  fixture.states.set(
+    'rag-smoke-a',
+    Object.freeze({
+      ...fixture.states.get('rag-smoke-a')!,
+      notes: Object.freeze([Object.freeze({ ...notes[0]!, content: longContent('changed'), protectionRevision: 0 })]),
+    }),
+  );
+  await assert.rejects(
+    () => ports.retrieval.embedQuery(ACCOUNT.question, context.signal),
+    (error: unknown) => (error as { code?: string }).code === 'SOURCE_CHANGED',
+  );
+  assert.equal(fixture.counts.reserves, 1, 'the reservation still ran');
+  assert.equal(fixture.counts.embeds, 0, 'no paid embed after the fingerprint moved');
+});
+
+test('embedQuery forwards the dispatch callback into the embedding port reservation window', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  let dispatches = 0;
+  let rawEmbeds = 0;
+  let forwarded: unknown;
+  const deps: IndexDeps = {
+    ...fixture.deps,
+    embedding: {
+      count: fixture.deps.embedding.count,
+      embed: async (texts, _purpose, _signal, beforeDispatch) => {
+        forwarded = beforeDispatch;
+        // Simulate the private Cohere reservation: an async window before the raw paid call.
+        await Promise.resolve();
+        if (typeof beforeDispatch === 'function') {
+          dispatches += 1;
+          await beforeDispatch();
+        }
+        rawEmbeds += 1;
+        return texts.map((_text, index) => vector1024(index));
+      },
+    },
+  };
+  const ports = createQueryPorts(deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  let calls = 0;
+  // The first invocation is the port's own pre-embed revalidation; the second is the forwarded
+  // one after the embedding port's async reservation window, where the permit is withdrawn.
+  const callback = async () => {
+    calls += 1;
+    if (calls >= 2) throw new IndexFailure('SOURCE_CHANGED', false);
+  };
+  await assert.rejects(
+    () => ports.retrieval.embedQuery(ACCOUNT.question, context.signal, callback),
+    (error: unknown) => (error as { code?: string }).code === 'SOURCE_CHANGED',
+  );
+  assert.equal(typeof forwarded, 'function', 'the callback is forwarded to the embedding port');
+  assert.equal(dispatches, 1, 'the embedding port re-runs the revalidation before the raw call');
+  assert.equal(rawEmbeds, 0, 'no raw embed after the withdrawal during the reservation window');
+  assert.equal(fixture.counts.reserves, 1, 'the reservation is retained, never refunded');
+});

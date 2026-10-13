@@ -228,3 +228,62 @@ test('one invocation shares the 120-second budget across all jobs', async () => 
     assert.deepEqual(result,{batchItemFailures:[{itemIdentifier:'2'}]});
   } finally { Date.now = original; }
 });
+
+test('an explicit trusted deadline is shared across jobs, never reset per job', async () => {
+  const original = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    const budgets: number[] = [];
+    const handler = createStreamHandler(async (_job, budget) => {
+      budgets.push(budget!); now += 10_001;
+      return { status: 'SUCCEEDED', code: 'READY' };
+    });
+    const result = await handler({ Records: [record({sequence:'1'}),
+      record({ownerId:'OWNER#u2',sequence:'2'})] } as never, 10_000);
+    assert.deepEqual(budgets,[10_000]);
+    assert.deepEqual(result,{batchItemFailures:[{itemIdentifier:'2'}]});
+  } finally { Date.now = original; }
+});
+
+test('an explicit deadline can never extend the fixed 110-second worker cap', async () => {
+  const original = Date.now;
+  Date.now = () => 0;
+  try {
+    const budgets: number[] = [];
+    const handler = createStreamHandler(async (_job, budget) => {
+      budgets.push(budget!);
+      return { status: 'SUCCEEDED', code: 'READY' };
+    });
+    await handler({ Records: [record({ sequence: '1' })] } as never, 5_000_000);
+    assert.deepEqual(budgets, [110_000]);
+  } finally { Date.now = original; }
+});
+
+test('a non-finite explicit deadline fails closed before any worker call', async () => {
+  let calls = 0;
+  const handler = createStreamHandler(async () => {
+    calls += 1;
+    return { status: 'SUCCEEDED', code: 'READY' };
+  });
+  await assert.rejects(
+    handler({ Records: [record({ sequence: '1' })] } as never, Number.NaN),
+    (error: unknown) => error instanceof IndexFailure && error.code === 'INVALID_STATE',
+  );
+  assert.equal(calls, 0);
+});
+
+test('manual backfill forwards the remaining budget only for a trusted deadline', async () => {
+  const original = Date.now;
+  Date.now = () => 0;
+  try {
+    const seen: Array<number | undefined> = [];
+    const worker = async (_value: unknown, remainingMs?: number): Promise<JobResult> => {
+      seen.push(remainingMs);
+      return { status: 'SUCCEEDED', code: 'READY' };
+    };
+    await runManualJob(worker, job('u1', 'n1'), undefined, 7_000);
+    await runManualJob(worker, job('u1', 'n1'), undefined);
+    assert.deepEqual(seen, [7_000, undefined]);
+  } finally { Date.now = original; }
+});

@@ -1,4 +1,5 @@
 import '../labels/note_label_editor.dart';
+import 'notes_theme_tokens.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
@@ -40,6 +41,7 @@ import '../sync/sync_widgets.dart';
 
 part 'note_detail_actions.dart';
 part 'note_detail_conflicts.dart';
+part 'note_detail_rag_part.dart';
 part 'note_detail_view.dart';
 part 'note_detail_labels.dart';
 part 'note_detail_security.dart';
@@ -60,6 +62,9 @@ final class NoteDetailPage extends StatefulWidget {
     this.showAppBar = true,
     this.onEmbeddedExit,
     this.onDirtyChanged,
+    this.initialContentSelection,
+    this.onNoteEdited,
+    this.onOpenNoteRag,
     this.syncController,
   });
 
@@ -70,6 +75,27 @@ final class NoteDetailPage extends StatefulWidget {
   final bool showAppBar;
   final ValueChanged<NoteDetailRouteResult>? onEmbeddedExit;
   final ValueChanged<bool>? onDirtyChanged;
+
+  /// A one-shot citation reveal applied after this editor is laid out.
+  ///
+  /// The value is presentation-only: a raw [TextSelection] into the content
+  /// editor. It carries no RAG/domain type and never mutates the saved note.
+  final NoteDetailSelectionRequest? initialContentSelection;
+
+  /// Reports a real title/text edit of the saved note before autosave.
+  ///
+  /// It is not fired for a selection move, focus change, or initial hydration;
+  /// the composition root uses it to invalidate stale citations and, when an
+  /// account query is live, to cancel it conservatively.
+  final ValueChanged<NoteDto>? onNoteEdited;
+
+  /// Opens the ask-notes screen for the current saved note.
+  ///
+  /// Supplied only when the composition root offers the feature. The action is
+  /// rendered for a saved, owned, synced, unprotected, unshared, clean note
+  /// with no active operation; the application service remains the authority
+  /// for the local preconditions.
+  final ValueChanged<NoteDto>? onOpenNoteRag;
   final SyncPresentationController? syncController;
   static const Key titleFieldKey = ValueKey<String>('note-detail-title-field');
   static const Key contentFieldKey = ValueKey<String>(
@@ -80,6 +106,7 @@ final class NoteDetailPage extends StatefulWidget {
   static const Key moreDeleteKey = ValueKey<String>('note-detail-more-delete');
   static const Key deleteKey = ValueKey<String>('note-detail-delete');
   static const Key backKey = ValueKey<String>('note-detail-back');
+  static const Key askNotesKey = ValueKey<String>('note-detail-ask-notes');
 
   @override
   NoteDetailPageState createState() => NoteDetailPageState();
@@ -121,6 +148,14 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   bool _resolvingConflict = false;
   int _draftRevision = 0;
 
+  /// Last text observed from the editor fields, so a listener firing for a
+  /// selection/cursor change is not mistaken for a title/content edit.
+  String? _lastEditorTitle;
+  String? _lastEditorContent;
+
+  /// Monotonic token that lets a stale reveal callback stand down.
+  int _selectionRequestToken = 0;
+
   /// Owns the whole Summary lifecycle for this page: scope, consent capture,
   /// revalidation, result, typed failure, and the rate-limit countdown.
   late final NoteSummaryController _summaryController = NoteSummaryController(
@@ -142,6 +177,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _savedContent = widget.note?.content ?? '';
     _titleController.text = _savedTitle;
     _contentController.text = _savedContent;
+    _lastEditorTitle = _titleController.text;
+    _lastEditorContent = _contentController.text;
     _titleController.addListener(_editorChanged);
     _contentController.addListener(_editorChanged);
     _titleFocusNode.addListener(_titleFocusChanged);
@@ -149,6 +186,9 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _summaryController.addListener(_summaryChanged);
     widget.syncController?.addListener(_syncStateChanged);
     _listenSecurity();
+    final NoteDetailSelectionRequest? selection =
+        widget.initialContentSelection;
+    if (selection != null) _applySelectionRequest(selection);
   }
 
   @override
@@ -167,6 +207,14 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   @override
   void didUpdateWidget(covariant NoteDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final NoteDetailSelectionRequest? selection =
+        widget.initialContentSelection;
+    if (selection != null &&
+        !identical(oldWidget.initialContentSelection, selection)) {
+      // The same note may already be open (same key, updated widget); a fresh
+      // citation request still has to reveal its span exactly once.
+      _applySelectionRequest(selection);
+    }
     if (oldWidget.syncController != widget.syncController) {
       oldWidget.syncController?.removeListener(_syncStateChanged);
       widget.syncController?.addListener(_syncStateChanged);
@@ -240,6 +288,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     if (_contentController.text != _savedContent) {
       _contentController.text = _savedContent;
     }
+    _lastEditorTitle = _titleController.text;
+    _lastEditorContent = _contentController.text;
     _titleController.addListener(_editorChanged);
     _contentController.addListener(_editorChanged);
     _summaryController.clearFailure();
@@ -350,6 +400,15 @@ final class NoteDetailPageState extends State<NoteDetailPage>
 
   void _editorChanged() {
     if (!mounted) return;
+    final String title = _titleController.text;
+    final String content = _contentController.text;
+    if (title == _lastEditorTitle && content == _lastEditorContent) {
+      // A selection, cursor, or composing-only update is not an edit: it must
+      // not move the draft revision, cancel a run, schedule a save, or report.
+      return;
+    }
+    _lastEditorTitle = title;
+    _lastEditorContent = content;
     _draftRevision++;
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
@@ -360,6 +419,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _ignoreNextEditorFocusLoss = false;
     setState(() {});
     _notifyDirtyChanged();
+    _notifyNoteEdited();
     _scheduleAutosave();
   }
 

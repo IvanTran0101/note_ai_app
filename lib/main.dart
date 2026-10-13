@@ -34,6 +34,8 @@ import 'application/note_intelligence/model_provisioning/model_provisioning_stat
 import 'application/note_intelligence/summary_run_context.dart';
 import 'application/note_intelligence/summary_consent_app_service.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
+import 'application/note_intelligence/rag_app_service.dart';
+import 'application/note_intelligence/rag_state.dart';
 import 'application/notes/note_application.dart';
 import 'application/notes/note_sharing_app_service.dart';
 import 'infrastructure/notes/http_share_gateway.dart';
@@ -42,6 +44,8 @@ import 'application/notes/local_note_vault.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/auth/auth_identity.dart';
 import 'domain/note_intelligence/summary.dart';
+import 'domain/note_intelligence/i_rag_gateway.dart';
+import 'domain/note_intelligence/rag_models.dart';
 import 'domain/notes/note_repository.dart';
 import 'domain/users/user_preferences_repository.dart';
 import 'infrastructure/ai/llm_worker_client.dart';
@@ -62,6 +66,7 @@ import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/note_intelligence/summary_run_runtime.dart';
 import 'infrastructure/note_intelligence/summary_failure_mapper.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
+import 'infrastructure/note_intelligence/rag_http_gateway.dart';
 import 'infrastructure/sync/account_sync_runtime.dart';
 import 'infrastructure/sync/local_sync_store.dart' as local_sync_infrastructure;
 import 'infrastructure/users/user_profile_repository.dart'
@@ -83,6 +88,9 @@ import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/summary_cloud_settings_tile.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
+import 'presentation/rag/rag_consent_settings_tile.dart';
+import 'presentation/rag/rag_copy.dart';
+import 'presentation/rag/rag_page.dart';
 import 'presentation/sync/sync_localizations.dart';
 import 'presentation/sync/sync_presentation_controller.dart';
 import 'presentation/routing/app_router.dart';
@@ -91,6 +99,8 @@ import 'presentation/workspace/workspace_localizations.dart';
 import 'presentation/workspace/workspace_shell.dart';
 
 part 'main_realtime.dart';
+part 'main_rag_part.dart';
+part 'main_rag_navigation_part.dart';
 
 // Public deployment outputs only; AWS operator credentials never enter Flutter.
 const String amplifyConfig = String.fromEnvironment(
@@ -404,6 +414,8 @@ class NoteFlowApp extends StatefulWidget {
     this.enableSync = true,
     this.enableLabels = const bool.fromEnvironment('NOTEFLOW_LABELS_ENABLED'),
     this.connection,
+    this.ragGateway,
+    this.ragApiBaseUri,
   });
 
   final AuthController authController;
@@ -419,6 +431,15 @@ class NoteFlowApp extends StatefulWidget {
   final bool enableSync;
   final bool enableLabels;
   final NoteConnection? connection;
+
+  /// Optional RAG collaborators for offline composition tests.
+  ///
+  /// When [ragGateway] is supplied, the root owns its lifetime and closes it
+  /// once on dispose (a gateway over a borrowed HTTP client keeps that client
+  /// open). When only [ragApiBaseUri] is supplied, the root builds an HTTP
+  /// gateway over it with the sync connection's client/token when compatible.
+  final IRagGateway? ragGateway;
+  final Uri? ragApiBaseUri;
 
   @override
   State<NoteFlowApp> createState() => _NoteFlowAppState();
@@ -611,6 +632,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       GlobalKey<DashboardPageState>();
   final GlobalKey<NotesWorkspacePageState> _notesPageKey =
       GlobalKey<NotesWorkspacePageState>();
+
+  /// Lazily created root owner of the shared RAG service/gateway. Kept nullable
+  /// so a session that never touches ask-notes never constructs it.
+  _RagRoot? _ragRootInstance;
+  _RagRoot get _ragRoot => _ragRootInstance ??= _RagRoot(this);
   late final IModelStorage _modelStorage = createModelStorage(
     overrideModelPath: _aiConfiguration.modelPathOverride,
   );
@@ -922,6 +948,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       }
     }
     _lastSummarySessionGeneration = generation;
+    _ragRoot.onAuthenticationChanged(
+      sessionChanged: previous != generation,
+    );
     if (presentationChanged && _currentUserSession.userId != null) {
       unawaited(_restoreTheme());
       unawaited(_refreshProfile());
@@ -949,9 +978,19 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   void _disposeSyncPresentationController() {
-    _syncPresentationController?.dispose();
+    _ragRootInstance?.attachSyncController(null);
+    final SyncPresentationController? controller = _syncPresentationController;
     _syncPresentationController = null;
     _syncPresentationAccountUserId = null;
+    if (controller == null) return;
+    // The workspace route subtree is built by the router, not by this state's
+    // build, so a sign-out/account rebuild can still attach to the controller
+    // in the current frame. Retire it after the frame instead of disposing it
+    // synchronously, so a disposed controller is never handed to a new
+    // listener during the route teardown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
   }
 
   SyncPresentationController? _syncPresentationControllerForCurrentAccount() {
@@ -969,26 +1008,32 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     );
     _syncPresentationAccountUserId = accountUserId;
     final int generation = _currentUserSession.sessionGeneration;
-    return _syncPresentationController = SyncPresentationController(
-      accountUserId: accountUserId,
-      localStore: localStore,
-      coordinator: runtime.coordinatorFor(accountUserId),
-      securityEvents: _noteSecurityRuntime.changes,
-      isCurrentSession: () =>
-          _currentUserSession.userId == accountUserId &&
-          _currentUserSession.sessionGeneration == generation,
-      conflictResolver: SyncConflictResolver(
-        localSyncStore: localStore,
-        generateNoteId: _generateNoteId,
-        generateMutationId: _generateMutationId,
-        now: _nowUtc,
-        accessGuard: _noteSecurityRuntime,
-      ),
-    );
+    final SyncPresentationController controller =
+        _syncPresentationController = SyncPresentationController(
+          accountUserId: accountUserId,
+          localStore: localStore,
+          coordinator: runtime.coordinatorFor(accountUserId),
+          securityEvents: _noteSecurityRuntime.changes,
+          isCurrentSession: () =>
+              _currentUserSession.userId == accountUserId &&
+              _currentUserSession.sessionGeneration == generation,
+          conflictResolver: SyncConflictResolver(
+            localSyncStore: localStore,
+            generateNoteId: _generateNoteId,
+            generateMutationId: _generateMutationId,
+            now: _nowUtc,
+            accessGuard: _noteSecurityRuntime,
+          ),
+        );
+    // The RAG root revalidates its answer on the same sync changes without
+    // duplicating any business state.
+    _ragRoot.attachSyncController(controller);
+    return controller;
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _ragRootInstance?.onLifecycle(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _noteSecurityRuntime.lockAll();
@@ -1322,6 +1367,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     final generation = _currentUserSession.sessionGeneration;
     bool savingTheme = false;
     String? themeError;
+    // Ask-notes consent is shown separately from cloud Summary consent. The
+    // service is created only when the feature is actually configured.
+    final RagAppService? ragService = _ragRoot.ensureService();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1452,6 +1500,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                       SummaryCloudSettingsTile(service: _summaryConsentService),
                       const SizedBox(height: 24),
                     ],
+                    if (ragService != null) ...<Widget>[
+                      RagConsentSettingsTile(
+                        key: const ValueKey<String>('settings-rag-consent'),
+                        service: ragService,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     OutlinedButton.icon(
                       icon: const Icon(Icons.person_outline),
                       label: Text(
@@ -1512,6 +1567,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         SyncCopy.delegate,
         DashboardCopy.delegate,
         WorkspaceCopy.delegate,
+        RagCopy.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -1572,6 +1628,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             },
             onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
             onOpenSettings: () => _showAppearanceSettings(context),
+            onOpenRag: _ragRoot.available
+                ? () => _ragRoot.openAccountScope(context)
+                : null,
             onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
                 ? () => _openLocalDiagnostics(context)
                 : null,
@@ -1603,6 +1662,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   ? _cancelModelProvisioning
                   : null,
               syncController: _syncPresentationControllerForCurrentAccount(),
+              onNoteEdited: _ragRoot.onNoteEdited,
+              onOpenNoteRag: _ragRoot.available
+                  ? (NoteDto note) =>
+                        _ragRoot.openNoteScope(context, note)
+                  : null,
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
                   ? () => _openLocalDiagnostics(context)
@@ -1632,6 +1696,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     widget.authController.removeListener(_onAuthenticationChanged);
     _disposeSyncPresentationController();
+    _ragRootInstance?.dispose();
     _router.dispose();
     widget.authController.dispose();
     final LlmWorkerClient? client = _workerClient;

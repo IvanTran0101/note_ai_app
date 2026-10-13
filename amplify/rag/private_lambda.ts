@@ -13,6 +13,7 @@ import { createQuery } from './pipeline';
 import { readLiveApproval, type LiveApproval } from './live_policy';
 import { createQueryPorts } from './indexing/query_ports';
 import { runtime } from './indexing/runtime';
+import type { Embedding } from './indexing/types';
 import { policy, RagFailure, type Providers } from './types';
 
 export const CALIBRATION_KEY = { ownerId: 'CONFIG#PHASE4', noteId: 'CALIBRATION' } as const;
@@ -29,6 +30,27 @@ function freeze<T>(value: T): T {
     for (const child of Object.values(value)) freeze(child);
   }
   return value;
+}
+
+/**
+ * Wraps a runtime embedding with the Phase 4 Cohere reservation. The reservation is async, so a
+ * permit/consent/source change that lands while it is in flight must be revalidated by the
+ * forwarded `beforeDispatch` callback before the raw paid embed; the callback is then forwarded
+ * into the signed transport, which re-runs it after signing and immediately before the fetch.
+ * `reserve` is called exactly once per embed and is never refunded.
+ */
+export function reserveCohere(
+  embedding: Embedding,
+  reserve: (signal: AbortSignal) => Promise<void>,
+): Embedding {
+  return Object.freeze({
+    ...embedding,
+    embed: async (texts, purpose, signal, beforeDispatch) => {
+      await reserve(signal);
+      if (typeof beforeDispatch === 'function') await beforeDispatch();
+      return embedding.embed(texts, purpose, signal, beforeDispatch);
+    },
+  });
 }
 
 type ApprovalStore = {
@@ -87,21 +109,22 @@ function compose() {
     if (!ports) {
       const index = runtime();
       cohereCount = index.embedding.count;
-      const embedding = { ...index.embedding, embed: async (...args: Parameters<typeof index.embedding.embed>) => {
-        await budget.reserve('cohere', 0, args[2]);
-        return index.embedding.embed(...args);
-      } };
+      // One Cohere reservation, then the captured revalidation, then the raw signed embed: a
+      // withdrawal during the Phase 4 counter window can never reach the provider.
+      const embedding = reserveCohere(index.embedding, (io) => budget.reserve('cohere', 0, io));
       ports = createQueryPorts({ ...index, embedding });
     }
     const providers: Providers = {
-      jev: async (input, signal) => {
+      jev: async (input, signal, beforeDispatch) => {
         await budget.reserve('jev', jevInputUpperBound(JSON.stringify(input)), signal);
+        if (typeof beforeDispatch === 'function') await beforeDispatch();
         return rawProviders.jev(input, signal);
       },
-      generate: async (input, signal) => {
+      generate: async (input, signal, beforeDispatch) => {
         const bound = deepSeekInputUpperBound(DEEPSEEK_SYSTEM_PROMPT + JSON.stringify({ question: input.question, evidence: input.evidence.text }));
         if (bound > 32_000) throw new RagFailure('INPUT_TOO_LONG');
         await budget.reserve('deepseek', bound, signal);
+        if (typeof beforeDispatch === 'function') await beforeDispatch();
         return rawProviders.generate(input, signal);
       },
     };

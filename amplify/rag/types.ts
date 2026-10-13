@@ -40,7 +40,13 @@ export type RequestContext = Readonly<{
   signal: AbortSignal; revalidate(): Promise<void>;
 }>;
 export type RetrievalDeps = Readonly<{
-  embedQuery(question: string, signal: AbortSignal): Promise<readonly number[]>;
+  /**
+   * `beforeDispatch` is the pipeline's captured `RequestContext.revalidate`. It must be awaited
+   * after the reservation and immediately before the paid provider call, so a permit/consent/
+   * source change that lands during an async reservation can never be followed by egress.
+   * It is optional so every existing direct caller keeps its two-argument signature.
+   */
+  embedQuery(question: string, signal: AbortSignal, beforeDispatch?: () => Promise<void>): Promise<readonly number[]>;
   vectorSearch(vector: readonly number[], context: RequestContext): Promise<readonly Ranked[]>;
   keywordSearch(question: string, context: RequestContext): Promise<readonly Ranked[]>;
   getVectors(chunks: readonly Chunk[], context: RequestContext): Promise<ReadonlyMap<string, readonly number[]>>;
@@ -53,8 +59,14 @@ export type JevInput = Readonly<{
 }>;
 export type GenerateInput = Readonly<{ question: string; evidence: Evidence; maxOutputTokens: number }>;
 export type Providers = Readonly<{
-  jev(input: JevInput, signal: AbortSignal): Promise<unknown>;
-  generate(input: GenerateInput, signal: AbortSignal): Promise<unknown>;
+  /**
+   * `beforeDispatch` is the pipeline's captured `RequestContext.revalidate`. A quota-reserving
+   * wrapper must await it after the reservation and immediately before the raw paid call, so a
+   * permit/consent/source change during the reservation never reaches the provider. Optional so
+   * every existing two-argument implementation and direct caller is unchanged.
+   */
+  jev(input: JevInput, signal: AbortSignal, beforeDispatch?: () => Promise<void>): Promise<unknown>;
+  generate(input: GenerateInput, signal: AbortSignal, beforeDispatch?: () => Promise<void>): Promise<unknown>;
 }>;
 export type RuntimeConfig = Readonly<{
   mode: 'mock' | 'live'; model: string | null;

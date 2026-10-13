@@ -14,6 +14,7 @@
  * bounds belong to the root adapter that wraps the provider ports.
  */
 import { isValidIdentifier } from './contract';
+import { assertPilotActor, readPilotPolicy } from './phase5/pilot_policy';
 import { policy, RagFailure, type RuntimeConfig } from './types';
 
 /** The private synthetic-account namespace; mirrors index_job_policy_v1.smoke.ownerPrefix. */
@@ -135,11 +136,23 @@ const POLICY_LIVE_THRESHOLDS: unknown = policy.jev.liveThresholds;
 
 /**
  * Validates the fixed model, threshold pair and both budgets before any egress. Mock mode needs
- * no approval. Live mode is private: the shipped policy gates must still be closed, the actor
- * must be a `rag-smoke-` synthetic account, and exactly one immutable calibrated approval must
- * restate the model and threshold pair. Anything else is refused before the first port call.
+ * no approval. Live mode is private: the shipped policy gates must still be closed, exactly one
+ * immutable calibrated approval must restate the model and threshold pair, and admission is one
+ * of two mutually exclusive gates:
+ *
+ *  - no explicit pilot policy (the Phase 4 default): the actor must be a `rag-smoke-` account;
+ *  - an explicit Phase 5 pilot policy: the actor must be an enabled, listed Cognito `sub`, the
+ *    frozen policy model/thresholds must restate the runtime config, and an invalid explicit
+ *    policy refuses instead of ever falling back to the smoke branch.
+ *
+ * Anything else is refused before the first port call.
  */
-export const readRuntimeConfig = (config: RuntimeConfig, actor: string, approval: unknown): RuntimeValues => {
+export const readRuntimeConfig = (
+  config: RuntimeConfig,
+  actor: string,
+  approval: unknown,
+  pilotPolicy?: unknown,
+): RuntimeValues => {
   if (config === null || typeof config !== 'object') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   if (config.mode !== 'mock' && config.mode !== 'live') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   if (POLICY_RUNTIME_ENABLED !== false || POLICY_LIVE_MODEL !== null || POLICY_LIVE_THRESHOLDS !== null) {
@@ -162,6 +175,9 @@ export const readRuntimeConfig = (config: RuntimeConfig, actor: string, approval
     throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   }
   const bound = Object.freeze({ answerabilityMin, conflictMax });
+  // An explicit pilot policy is validated before any branch: an invalid explicit value never
+  // silently falls back to the Phase 4 smoke seam and mock mode cannot smuggle an unusable one.
+  const pilot = pilotPolicy === undefined ? null : readPilotPolicy(pilotPolicy);
   if (config.mode === 'mock') {
     return Object.freeze({
       model,
@@ -171,7 +187,20 @@ export const readRuntimeConfig = (config: RuntimeConfig, actor: string, approval
       retrievalStageMs: null,
     });
   }
-  if (!isSmokeActor(actor)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  if (pilot !== null) {
+    assertPilotActor(pilot, actor);
+    // The frozen pilot policy may only restate the same runtime model/thresholds; together with
+    // `matchesRuntime` below that pins policy == runtime == approval, never a retune.
+    if (
+      pilot.model !== model ||
+      pilot.thresholds.answerabilityMin !== answerabilityMin ||
+      pilot.thresholds.conflictMax !== conflictMax
+    ) {
+      throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+    }
+  } else if (!isSmokeActor(actor)) {
+    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  }
   const live = readLiveApproval(approval);
   if (!matchesRuntime(live, model, bound)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   if (live.retrievalStageMs >= config.requestTimeoutMs) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');

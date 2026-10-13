@@ -222,3 +222,27 @@ test('construction validates region, counter and injected request', () => {
   // A valid region with no injected request builds the real signed port without any IO.
   assert.equal(createEmbedding('ap-southeast-1', counter).count, counter);
 });
+
+test('the embedding port forwards the optional dispatch callback into the signed transport', async () => {
+  let dispatched = 0;
+  let seen: unknown;
+  const request: AwsJson = async (_service, _path, _body, _signal, beforeDispatch) => {
+    seen = beforeDispatch;
+    if (typeof beforeDispatch === 'function') {
+      dispatched += 1;
+      await beforeDispatch();
+    }
+    return { embeddings: [vector()] };
+  };
+  const embedding = createEmbedding('us-east-1', counter, request);
+  const callback = async () => {};
+  const produced = await embedding.embed(['alpha'], 'search_query', SIGNAL, callback);
+  assert.equal(dispatched, 1);
+  assert.equal(seen, callback, 'the exact callback reaches the signed transport');
+  assert.equal(produced.length, 1);
+
+  // The three-argument form stays valid and leaves the transport callback absent.
+  seen = 'unset';
+  await embedding.embed(['beta'], 'search_document', SIGNAL);
+  assert.equal(seen, undefined);
+});

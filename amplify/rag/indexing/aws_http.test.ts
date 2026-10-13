@@ -5,6 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { RagFailure } from '../types';
 import { IndexFailure } from './types';
 import {
   BEDROCK_INVOKE_MODEL_PATH, createAwsJson, failureForStatus, isAwsRegion,
@@ -216,5 +217,66 @@ test('body and signal validation fail closed before signing or fetching', async 
   const noSignal = await failureOf(() =>
     call('s3vectors', '/PutVectors', {}, undefined as unknown as AbortSignal));
   assert.equal(noSignal.code, 'INVALID_INPUT');
+  assert.equal(io.calls.length, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * The post-sign dispatch window: credentials and signing are awaited
+ * before the callback and the transport fetch, so a permit revoked
+ * during that window must never produce an egress.
+ * ------------------------------------------------------------------ */
+
+test('the post-sign dispatch callback runs immediately before fetch and can refuse with no fetch', async () => {
+  const io = transport(() => json({}));
+  let release!: (value: typeof CREDENTIALS) => void;
+  const credentials = new Promise<typeof CREDENTIALS>((resolve) => { release = resolve; });
+  let dispatched = 0;
+  const pending = createAwsJson('us-east-1', {
+    fetch: io.fetch,
+    credentials: async () => credentials,
+  })('bedrock', BEDROCK_INVOKE_MODEL_PATH, {}, SIGNAL, async () => {
+    dispatched += 1;
+    throw new RagFailure('SOURCE_CHANGED');
+  });
+  // The callback belongs after signing: while the credential promise is pending it must not run.
+  await Promise.resolve();
+  assert.equal(dispatched, 0);
+  assert.equal(io.calls.length, 0);
+  release(CREDENTIALS);
+  await assert.rejects(pending, (error: unknown) =>
+    error instanceof RagFailure && error.code === 'SOURCE_CHANGED');
+  assert.equal(dispatched, 1);
+  assert.equal(io.calls.length, 0, 'a refused dispatch never reaches the transport');
+});
+
+test('the post-sign dispatch callback runs once after signing and before exactly one signed fetch', async () => {
+  const order: string[] = [];
+  const calls: Captured[] = [];
+  const fetch: AwsFetch = async (url, init) => {
+    order.push('fetch');
+    calls.push({ url, init });
+    return json({});
+  };
+  const call = createAwsJson('us-east-1', {
+    fetch,
+    credentials: async () => {
+      order.push('credentials');
+      return CREDENTIALS;
+    },
+  });
+  await call('bedrock', BEDROCK_INVOKE_MODEL_PATH, {}, SIGNAL, async () => { order.push('dispatch'); });
+  assert.deepEqual(order, ['credentials', 'dispatch', 'fetch']);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.init.headers['authorization'] ?? '', /^AWS4-HMAC-SHA256 /);
+});
+
+test('an abort inside the post-sign dispatch callback is a timeout with no fetch', async () => {
+  const io = transport(() => json({}));
+  const controller = new AbortController();
+  const pending = createAwsJson('us-east-1', { fetch: io.fetch, credentials: CREDENTIALS })(
+    'bedrock', BEDROCK_INVOKE_MODEL_PATH, {}, controller.signal, async () => { controller.abort(); },
+  );
+  const error = await failureOf(() => pending);
+  assert.deepEqual([error.code, error.retryable], ['TIMEOUT', true]);
   assert.equal(io.calls.length, 0);
 });
