@@ -59,7 +59,13 @@ export const handleProtection = async (event: Event, actor: string, service: Pro
     const method = event.requestContext.http.method.toUpperCase();
     const action = match[3];
     const grant = unlockGrantOf(event);
-    if (method === 'GET' && match[2] === 'content') return jsonResponse(200, noteBodyOf(await service.content(actor, owner, noteId, grant), true));
+    if (method === 'GET' && match[2] === 'content') {
+      const wireVersion = event.queryStringParameters?.wireVersion;
+      if (wireVersion !== undefined && wireVersion !== '1' && wireVersion !== '2') {
+        throw new NoteSecurityError('invalidInput');
+      }
+      return jsonResponse(200, noteBodyOf(await service.content(actor, owner, noteId, grant), true, wireVersion === '2'));
+    }
     if (method === 'GET' && !action) return jsonResponse(200, await service.metadata(actor, owner, noteId));
     if (method !== 'POST' || !action) return notFoundResponse();
     return jsonResponse(200, await dispatch(action, event, actor, owner, noteId, grant, service, resolveMailbox));

@@ -272,10 +272,11 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
           baseUri.replace(
             path:
                 '${prefix}notes/${Uri.encodeComponent(NoteIdentity.resolve(id, accountId).noteId)}/$action',
-            queryParameters:
-                NoteIdentity.resolve(id, accountId).ownerId == accountId
-                ? null
-                : {'ownerId': NoteIdentity.resolve(id, accountId).ownerId},
+            queryParameters: {
+              if (NoteIdentity.resolve(id, accountId).ownerId != accountId)
+                'ownerId': NoteIdentity.resolve(id, accountId).ownerId,
+              if (action == 'content') 'wireVersion': '2',
+            },
           ),
         );
         request.followRedirects = false;
