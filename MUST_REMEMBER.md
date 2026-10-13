@@ -1,5 +1,29 @@
 # MUST REMEMBER
 
+## Active request — Integration then complete M09 (2026-10-13)
+
+The user approved updating final-tuankiet, integrating all of anhminh-final,
+fixing conflicts/regressions with automated and actual Chrome/Android emulator
+QA, then implementing M09 through acceptance. This supersedes every historical
+M09 deferred instruction below. Current integrated baseline is 75a90b0.
+Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
+all existing module data, session/access guards and unrelated local files.
+No C: worktrees. Use docs/m09/CURRENT_WORK.md for active continuity.
+
+M09 uses hinhanh/UI_web_ref and UI_android_ref for mapped NoteFlow screens.
+Keep 13 Basic blocks, no Page/Link to page or child-note flow. Selection toolbar:
+Text/H1-H4, colors/highlight, B/I/U/strike, link, inline code, inline math, clear,
+font sizes 12/14/16/18/24/32 plus custom 12-48 applied to selected text.
+Persist/sync document, marks and size without losing existing data. Follow DDD.
+Each platform must reach >=95/100: visual60/UX20/adaptive10/states10, with
+paired references/screenshots and mandatory flows working. Never invent scores.
+Update Notion/checkboxes only for verified scope and push final-tuankiet after
+each accepted milestone. User has authorized testing/fixes and required schema
+work; source/local results remain distinct from live AWS deployment acceptance.
+Editor plan: https://app.notion.com/p/3f5f9c7a1aa0817f9e0bdbe52bb091fe
+Scorecards: https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
+
+
 ## Active request — Finish M03 (2026-10-05)
 
 The user now authorizes completing all remaining M03 implementation after M04,

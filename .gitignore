@@ -109,3 +109,10 @@ GoogleService-Info.plist
 
 !/docs/rag/phase4_hanh_recalibration.json
 !/docs/rag/phase4_hanh_recalibration.md
+
+# Required RAG inputs and reviewable M09 implementation records.
+!/docs/rag/tokenizer_manifest.json
+!/docs/rag/index_job_policy_v1.json
+!/docs/m09/
+/docs/m09/*
+!/docs/m09/*.md
