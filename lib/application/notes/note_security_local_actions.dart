@@ -9,6 +9,15 @@ extension LocalNoteSecurityActions on NoteSecurityService {
   ) async {
     try {
       await vault.unlock(id, password, p);
+      // A valid cached key can outlive its payload after a newer protected
+      // revision is pulled. Online unlock must hydrate that revision through
+      // server authority; an offline unlock cannot expose the old payload.
+      if (localFirst &&
+          !offline &&
+          !(await _note(id)).contentAvailable &&
+          !await hasPendingProtection(id)) {
+        return false;
+      }
       return true;
     } on NoteSecurityFailure catch (failure) {
       // No cached key on a new device: provision only through online authority.
