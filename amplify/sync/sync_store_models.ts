@@ -4,11 +4,13 @@ import type { ShareRecord } from '../sharing/share_models';
 import type { LabelSnapshot } from '../labels/label_models';
 import type { AttachmentDescriptor } from '../attachments/models';
 import type { AttachmentAttemptStore } from '../attachments/attempt_store';
+import type { NoteDocument } from '../documents/document_models';
 
 export type NoteSnapshot = Readonly<{
   id: string;
   title: string;
   content: string;
+  document?: NoteDocument | null;
   revision: number;
   createdAt: string;
   serverUpdatedAt: string;
@@ -35,11 +37,11 @@ export type ProtectionSyncChange = Readonly<{
 export type SyncOperation = 'create' | 'update' | 'delete';
 
 /** `create` and `update` require this; `delete` ignores it. */
-export type MutationPayload = Readonly<{ title: string; content: string; pinnedAt?: string | null; labelIds?: readonly string[]; attachments?: readonly AttachmentDescriptor[] }>;
+export type MutationPayload = Readonly<{ title: string; content: string; document?: NoteDocument | null; pinnedAt?: string | null; labelIds?: readonly string[]; attachments?: readonly AttachmentDescriptor[] }>;
 
 /** One client mutation, already stripped of transport concerns. */
 export type SyncMutation = Readonly<{
-  wireVersion?: 2;
+  wireVersion?: 2 | 3;
   mutationId: string;
   noteId: string;
   operation: SyncOperation;
@@ -68,7 +70,7 @@ export type ConflictedMutation = Readonly<{
 export type ApplyMutationResult = AppliedMutation | ConflictedMutation;
 
 export type ChangesPage = Readonly<{
-  wireVersion?: 2;
+  wireVersion?: 2 | 3;
   labels?: readonly LabelSnapshot[];
   items: readonly NoteSnapshot[];
   /** Always minted: the caller stores it and sends it back on the next poll. */
@@ -99,7 +101,7 @@ export interface SyncStore {
    * @throws SyncInvalidCursorError when the cursor is not this account's.
    * @throws SyncStorageError when storage failed.
    */
-  listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion?: 1 | 2): Promise<ChangesPage>;
+  listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion?: 1 | 2 | 3): Promise<ChangesPage>;
 }
 
 export type InvalidMutationReason =
@@ -111,7 +113,8 @@ export type InvalidMutationReason =
   | 'PAYLOAD_REQUIRED'
   | 'PAYLOAD_INVALID'
   | 'PAYLOAD_TOO_LARGE'
-  | 'ATTACHMENTS_UNSUPPORTED';
+  | 'ATTACHMENTS_UNSUPPORTED'
+  | 'DOCUMENTS_UNSUPPORTED';
 
 /** The request is not applicable as sent; the handler maps this to a client error. */
 export class SyncInvalidMutationError extends Error {
@@ -150,7 +153,7 @@ export type DynamoSyncStoreOptions = Readonly<{
 }>;
 
 export type NormalizedMutation = Readonly<{
-  wireVersion?: 2;
+  wireVersion?: 2 | 3;
   mutationId: string;
   noteId: string;
   operation: SyncOperation;

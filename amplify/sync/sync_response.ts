@@ -25,6 +25,7 @@ export type SyncErrorCode =
   | 'NOT_FOUND'
   | 'INVALID_REQUEST'
   | 'INVALID_MUTATION'
+  | 'DOCUMENT_REQUIRES_UPGRADE'
   | 'INVALID_CURSOR'
   | 'REVISION_CONFLICT'
   | 'SERVER_UNAVAILABLE'
@@ -54,6 +55,7 @@ export type NoteBody = Readonly<{
   labelIds?: readonly string[];
   labelProjections?: NoteSnapshot['labelProjections'];
   attachments?: NoteSnapshot['attachments'];
+  document?: NoteSnapshot['document'];
 }>;
 
 export type AppliedMutationBody = Readonly<{
@@ -95,6 +97,7 @@ const MUTATION_MESSAGES: Readonly<Record<MutationProblem, string>> = {
   PAYLOAD_INVALID: 'A payload needs a string title and content.',
   PAYLOAD_TOO_LARGE: 'The note payload is too large to store.',
   ATTACHMENTS_UNSUPPORTED: 'Attachment synchronization requires the verified-object backend. Local data is retained.',
+  DOCUMENTS_UNSUPPORTED: 'Rich document synchronization requires the updated client and backend. Local data is retained.',
 };
 
 const CURSOR_MESSAGES: Readonly<Record<InvalidCursorReason, string>> = {
@@ -115,10 +118,12 @@ const errorResponse = (statusCode: number, body: SyncErrorBody): APIGatewayProxy
   jsonResponse(statusCode, body);
 
 /** Projects a stored snapshot onto the wire shape, so storage fields cannot leak. */
-export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false, labels = false): NoteBody => ({
+export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false, labels = false, documents = false): NoteBody => ({
   id: note.id,
+  ...(documents ? {document: note.deletedAt === null &&
+    (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.document ?? null : null} : {}),
   ...((!note.protected || authorizedContent) && note.contentAvailable !== false ? { title: note.title, content: note.content } : {}),
-  ...(note.protected || note.protectionRevision ? { protected: note.protected ?? false,
+  ...(note.protected || note.protectionRevision || note.contentAvailable === false ? { protected: note.protected ?? false,
     protectionRevision: note.protectionRevision ?? 0,
     contentAvailable: (!note.protected || authorizedContent) && note.contentAvailable !== false } : {}),
   ...(note.ownerId && note.share ? { ownerId: note.ownerId } : {}),
@@ -177,17 +182,18 @@ export const conflictResponse = (result: ConflictedMutation): APIGatewayProxyStr
   jsonResponse(409, conflictBody(result));
 
 export const changesResponse = (page: ChangesPage): APIGatewayProxyStructuredResultV2 =>
-  jsonResponse(200, page.wireVersion === 2 ? {wireVersion: 2,
-    items: [...page.items.map(note => ({entityType: 'note', note: noteBodyOf(note, false, true)})),
+  jsonResponse(200, page.wireVersion === 2 || page.wireVersion === 3 ? {wireVersion: page.wireVersion,
+    ...(page.wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}),
+    items: [...page.items.map(note => ({entityType: 'note', note: noteBodyOf(note, false, true, page.wireVersion === 3)})),
       ...(page.labels ?? []).map(label => ({entityType: 'label', label}))],
     nextCursor: page.nextCursor, hasMore: page.hasMore,
     ...(page.catchUpPending ? {catchUpPending: true} : {})} : changesPageBody(page));
 
-export function noteV2MutationResponse(result: AppliedMutation | ConflictedMutation): APIGatewayProxyStructuredResultV2 {
+export function noteV2MutationResponse(result: AppliedMutation | ConflictedMutation, wireVersion: 2 | 3 = 2): APIGatewayProxyStructuredResultV2 {
   return jsonResponse(result.status === 'applied' ? 200 : 409,
-    result.status === 'applied' ? {wireVersion: 2, entityType: 'note', status: 'applied', mutationId: result.mutationId,
-      note: noteBodyOf(result.note, false, true)} : {wireVersion: 2, entityType: 'note', code: 'REVISION_CONFLICT',
-      retryable: false, mutationId: result.mutationId, remoteNote: result.remoteNote ? noteBodyOf(result.remoteNote, false, true) : null});
+    result.status === 'applied' ? {wireVersion, ...(wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}), entityType: 'note', status: 'applied', mutationId: result.mutationId,
+      note: noteBodyOf(result.note, false, true, wireVersion === 3)} : {wireVersion, ...(wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}), entityType: 'note', code: 'REVISION_CONFLICT',
+      retryable: false, mutationId: result.mutationId, remoteNote: result.remoteNote ? noteBodyOf(result.remoteNote, false, true, wireVersion === 3) : null});
 }
 
 /**
@@ -210,7 +216,7 @@ export const notFoundResponse = (): APIGatewayProxyStructuredResultV2 =>
 
 export const invalidMutationResponse = (problem: MutationProblem): APIGatewayProxyStructuredResultV2 =>
   errorResponse(422, {
-    code: 'INVALID_MUTATION',
+    code: problem === 'DOCUMENTS_UNSUPPORTED' ? 'DOCUMENT_REQUIRES_UPGRADE' : 'INVALID_MUTATION',
     message: MUTATION_MESSAGES[problem],
     retryable: false,
   });

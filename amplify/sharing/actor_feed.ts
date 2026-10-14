@@ -50,7 +50,7 @@ export class ActorFeed {
         ConditionExpression: 'attribute_not_exists(lastSequence) OR lastSequence = :seen',
         ExpressionAttributeValues: { ':next': seen + 1, ':seen': seen } } },
       { Put: { TableName: this.table, Item: { ...key(actor, `CHANGE#${seen + 1}`),
-        ...attributes, ...(privateContent ? { title: '', content: '', ...(snapshot.attachments !== undefined ? {attachments: []} : {}) } : {}),
+        ...attributes, ...(privateContent ? { title: '', content: '', ...(snapshot.document !== undefined ? {document: null} : {}), ...(snapshot.attachments !== undefined ? {attachments: []} : {}) } : {}),
         changeOwnerId: `OWNER#${actor}`, changeSequence: seen + 1 } } },
     ];
   }

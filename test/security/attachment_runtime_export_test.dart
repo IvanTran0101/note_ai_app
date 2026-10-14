@@ -56,6 +56,10 @@ void main() {
         } else if (path.endsWith('/content')) {
           response = {
             'id': 'alpha',
+            if (request.url.queryParameters['wireVersion'] == '3') ...{
+              'documentCapability': 'basicBlocksV1',
+              'document': null,
+            },
             'ownerId': actor,
             'title': privateTitle,
             'content': privateBody,

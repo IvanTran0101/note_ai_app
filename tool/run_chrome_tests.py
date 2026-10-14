@@ -18,6 +18,8 @@ from urllib.parse import urljoin
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--sdk', required=True)
+    parser.add_argument('--dart-define', action='append', default=[],
+                        help='Explicit compile-time configuration for authorized local tests')
     parser.add_argument('--aggregate', action='store_true',
                         help='Register each target main in its own group in one Chrome compilation')
     parser.add_argument('targets', nargs='*', default=['test'])
@@ -71,7 +73,8 @@ def main():
     dart = sdk / 'bin/cache/dart-sdk/bin/dart.exe'
     command = [str(dart), f'--packages={config_path}', str(overlay / 'bin/flutter_tools.dart'),
                'test', '--platform', 'chrome', '--no-pub', '--reporter', 'expanded',
-               f'--file-reporter=json:{temp_root / "m05-chrome-results.jsonl"}', *targets]
+               f'--file-reporter=json:{temp_root / "m05-chrome-results.jsonl"}',
+               *[f'--dart-define={value}' for value in args.dart_define], *targets]
     print(f'Isolated Flutter tools: {overlay}', flush=True)
     return subprocess.call(command, env=env)
 

@@ -902,6 +902,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     }
     return _syncRuntime ??= AccountSyncRuntime(
       baseUri: baseUri,
+      documentsEnabled: true,
       labelsEnabled: widget.enableLabels,
       projectionGrant: _noteSecurityRuntime.labelProjectionGrant,
       onCatalogChanged: (_) => _labelApplication.notifyChanged(),

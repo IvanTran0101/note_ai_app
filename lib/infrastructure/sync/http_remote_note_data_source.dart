@@ -28,6 +28,8 @@ import '../../application/sync/sync_snapshot.dart';
 import 'sync_http_mapper.dart';
 import '../../application/notes/note_access.dart';
 
+part 'http_sync_transport.dart';
+
 /// Supplies the bearer token for one sync call.
 ///
 /// `forceRefresh` asks the provider to ignore any cached session and re-issue
@@ -45,7 +47,10 @@ typedef SyncAccessTokenProvider = Future<String?> Function({
 /// Routes: `POST /sync/mutations` (one mutation per request, idempotent by
 /// `mutationId`) and `GET /sync/changes` (opaque cursor paging).
 final class HttpRemoteNoteDataSource
-    implements IRemoteNoteDataSource, ISharedLabelProjectionSource {
+    implements
+        IRemoteNoteDataSource,
+        ISharedLabelProjectionSource,
+        ISyncWireNegotiation {
   /// Creates the adapter over [baseUri], for example
   /// `https://abc123.execute-api.ap-southeast-1.amazonaws.com/prod`.
   ///
@@ -62,6 +67,7 @@ final class HttpRemoteNoteDataSource
     Future<String?> Function(SyncMutation)? mutationGrant,
     void Function()? requireSession,
     bool labelsEnabled = false,
+    bool documentsEnabled = false,
     String? Function(LocalNoteState)? projectionGrant,
   }) {
     return HttpRemoteNoteDataSource._(
@@ -74,6 +80,7 @@ final class HttpRemoteNoteDataSource
       mutationGrant: mutationGrant,
       requireSession: requireSession,
       labelsEnabled: labelsEnabled,
+      documentsEnabled: documentsEnabled,
       projectionGrant: projectionGrant,
     );
   }
@@ -90,11 +97,9 @@ final class HttpRemoteNoteDataSource
     required this.mutationGrant,
     required this.requireSession,
     required this.labelsEnabled,
+    required this.documentsEnabled,
     required this.projectionGrant,
   });
-
-  /// Async mutation route.
-  static const String _mutationsPath = 'sync/mutations';
 
   /// Change-feed route.
   static const String _changesPath = 'sync/changes';
@@ -111,7 +116,29 @@ final class HttpRemoteNoteDataSource
   final Future<String?> Function(SyncMutation)? mutationGrant;
   final void Function()? requireSession;
   final bool labelsEnabled;
+  final bool documentsEnabled;
+  int? _negotiatedVersion;
   final String? Function(LocalNoteState)? projectionGrant;
+
+  @override
+  Future<int> negotiateWireVersion() => _classify(() async {
+    final legacyVersion = labelsEnabled ? 2 : 1;
+    if (!documentsEnabled) return _negotiatedVersion = legacyVersion;
+    final response = await _send(
+      method: 'GET',
+      uri: _endpoint('sync/v3/changes', query: {'limit': '1'}),
+    );
+    if (const [404, 405, 501].contains(response.statusCode)) {
+      return _negotiatedVersion = legacyVersion;
+    }
+    if (!_isSuccess(response.statusCode)) throw _decodeError(response);
+    final page = decodeChangesPage(_readBody(response));
+    if (page.wireVersion != 3) {
+      throw const FormatException('V3 capability negotiation failed.');
+    }
+    // This probe is intentionally not applied and never advances the cursor.
+    return _negotiatedVersion = 3;
+  });
 
   @override
   Future<List<SyncNoteSnapshot>> refreshLabels(
@@ -183,21 +210,15 @@ final class HttpRemoteNoteDataSource
   @override
   Future<SyncMutationResult> push(SyncMutation mutation) {
     return _classify(() async {
+      if (requiresSyncWireV3(mutation)) {
+        final version = _negotiatedVersion ?? await negotiateWireVersion();
+        if (version != 3) {
+          throw const SyncFailure(code: SyncErrorCode.documentRequiresUpgrade);
+        }
+      }
       final http.Response response = await _send(
         method: 'POST',
-        uri: _endpoint(
-          requiresSyncWireV2(mutation)
-              ? mutation.ownerId != null
-                    ? 'sync/v2/shared-mutations'
-                    : mutation.protectionChange != null
-                    ? 'sync/v2/protected-mutations'
-                    : 'sync/v2/mutations'
-              : mutation.ownerId != null
-              ? 'sync/shared-mutations'
-              : mutation.protectionChange == null
-              ? _mutationsPath
-              : 'sync/protected-mutations',
-        ),
+        uri: _endpoint(syncMutationPath(mutation)),
         body: encodeSyncMutation(mutation),
         mutation: mutation,
       );
@@ -223,6 +244,11 @@ final class HttpRemoteNoteDataSource
             result.isApplied) {
           throw const SyncFailure(code: SyncErrorCode.invalidMutation);
         }
+        if (requiresSyncWireV3(mutation) &&
+            result.isApplied &&
+            result.note?.includesDocument != true) {
+          throw const SyncFailure(code: SyncErrorCode.documentRequiresUpgrade);
+        }
         if (mutation.ownerId != null) {
           final snapshot = result.note ?? result.conflictRemote;
           if (result.mutationId != mutation.mutationId ||
@@ -245,10 +271,15 @@ final class HttpRemoteNoteDataSource
   @override
   Future<SyncChangesPage> pull({String? cursor, int limit = 50}) {
     return _classify(() async {
+      final version = _negotiatedVersion ?? await negotiateWireVersion();
       final http.Response response = await _send(
         method: 'GET',
         uri: _endpoint(
-          labelsEnabled ? 'sync/v2/changes' : _changesPath,
+          version == 3
+              ? 'sync/v3/changes'
+              : labelsEnabled
+              ? 'sync/v2/changes'
+              : _changesPath,
           query: <String, String>{
             // The cursor is opaque: it is forwarded exactly as the caller
             // stored it, never parsed, rebuilt, or truncated here.
@@ -263,8 +294,8 @@ final class HttpRemoteNoteDataSource
       // The page is returned untouched, so a final page keeps the server's
       // `nextCursor` together with `hasMore == false`.
       final page = decodeChangesPage(_readBody(response));
-      if (labelsEnabled && page.wireVersion != 2) {
-        throw const FormatException('V2 negotiation failed.');
+      if ((labelsEnabled || version == 3) && page.wireVersion != version) {
+        throw const FormatException('Typed negotiation failed.');
       }
       return page;
     });
@@ -280,194 +311,4 @@ final class HttpRemoteNoteDataSource
       _client.close();
     }
   }
-
-  /// Sends one request with a bearer token, refreshing the session at most once.
-  ///
-  /// A `401` triggers exactly one forced refresh and exactly one retry. A
-  /// second `401` is returned to the caller as-is instead of looping, and a
-  /// refresh that yields no token fails as unauthorized without a second
-  /// request.
-  Future<http.Response> _send({
-    required String method,
-    required Uri uri,
-    Map<String, Object?>? body,
-    SyncMutation? mutation,
-  }) async {
-    requireSession?.call();
-    final String? token = await _tokenProvider(forceRefresh: false)
-        .timeout(_timeout);
-    requireSession?.call();
-    if (token == null) {
-      throw const SyncFailure(code: SyncErrorCode.unauthorized);
-    }
-    _requireExpectedAccount(token);
-
-    http.Response response = await _dispatch(
-      method: method,
-      uri: uri,
-      body: body,
-      accessToken: token,
-      mutation: mutation,
-    );
-    if (response.statusCode != 401) {
-      return response;
-    }
-
-    final String? refreshed = await _tokenProvider(forceRefresh: true)
-        .timeout(_timeout);
-    requireSession?.call();
-    if (refreshed == null) {
-      throw const SyncFailure(code: SyncErrorCode.unauthorized);
-    }
-    _requireExpectedAccount(refreshed);
-    response = await _dispatch(
-      method: method,
-      uri: uri,
-      body: body,
-      accessToken: refreshed,
-      mutation: mutation,
-    );
-    return response;
-  }
-
-  /// Stops a token for another signed-in account before it can carry this
-  /// account's local notes to the API. This is a client-side consistency guard,
-  /// not JWT verification; API Gateway still verifies the token signature.
-  void _requireExpectedAccount(String token) {
-    final String? expected = _expectedAccountUserId;
-    if (expected != null && _jwtSubject(token) != expected) {
-      throw const SyncFailure(code: SyncErrorCode.forbidden);
-    }
-  }
-
-  /// Performs one HTTP round trip under [_timeout].
-  Future<http.Response> _dispatch({
-    required String method,
-    required Uri uri,
-    required String accessToken,
-    Map<String, Object?>? body,
-    SyncMutation? mutation,
-  }) async {
-    requireSession?.call();
-    String? grant;
-    try {
-      grant = mutation == null ? null : await mutationGrant?.call(mutation);
-    } on NoteSecurityFailure catch (failure) {
-      if (failure.code != NoteSecurityFailureCode.pendingSync) rethrow;
-      return _dispatch(
-        method: 'POST',
-        uri: _endpoint(
-          mutation?.payload?.includesLabels == true
-              ? 'sync/v2/protection-predecessor'
-              : 'sync/protection-predecessor',
-        ),
-        accessToken: accessToken,
-        body: body,
-      );
-    }
-    requireSession?.call();
-    final http.Request request = http.Request(method, uri);
-    request.followRedirects = false;
-    request.maxRedirects = 0;
-    request.headers['Authorization'] = 'Bearer $accessToken';
-    request.headers['Content-Type'] = _jsonContentType;
-    request.headers['Accept'] = _jsonContentType;
-    if (grant != null) request.headers['X-Note-Unlock-Grant'] = grant;
-    if (body != null) {
-      // `bodyBytes` instead of `body` keeps the content type exactly
-      // `application/json`; the string setter appends a charset parameter.
-      request.bodyBytes = utf8.encode(jsonEncode(body));
-    }
-    // The timeout covers reading the response body as well as the headers.
-    final response = await _client
-        .send(request)
-        .then(http.Response.fromStream)
-        .timeout(_timeout);
-    requireSession?.call();
-    if (mutation != null) await mutationGrant?.call(mutation);
-    requireSession?.call();
-    return response;
-  }
-
-  /// Runs one sync call and classifies every failure it can produce.
-  ///
-  /// A [SyncFailure] raised by the mapper is preserved; transport failures map
-  /// to [SyncErrorCode.timeout] and [SyncErrorCode.networkUnavailable]. The
-  /// remaining errors collapse to [SyncErrorCode.unexpected] and the original
-  /// error is dropped rather than attached, because its text can carry a
-  /// token, a URL, note content, or provider internals.
-  Future<T> _classify<T>(Future<T> Function() call) async {
-    try {
-      return await call();
-    } on SyncFailure {
-      rethrow;
-    } on NoteSecurityFailure {
-      throw const SyncFailure(code: SyncErrorCode.forbidden);
-    } on TimeoutException {
-      throw const SyncFailure(code: SyncErrorCode.timeout);
-    } on http.ClientException {
-      // `package:http` wraps socket-level failures in this type on IO
-      // platforms and raises it directly on Web, which is what keeps this
-      // adapter platform-neutral. TLS handshake failures are not wrapped; they
-      // fall through to the generic case below.
-      throw const SyncFailure(code: SyncErrorCode.networkUnavailable);
-    } catch (_) {
-      throw const SyncFailure(code: SyncErrorCode.unexpected);
-    }
-  }
-
-  /// Builds an absolute URL from the base URI and a route [path].
-  ///
-  /// The base path is preserved whether or not it ends in a slash, so
-  /// `https://host/api` and `https://host/api/` both reach
-  /// `/api/sync/mutations`. Any query on the base URI is ignored: only the
-  /// per-request [query] is sent.
-  Uri _endpoint(String path, {Map<String, String>? query}) {
-    final String basePath = _baseUri.path.endsWith('/')
-        ? _baseUri.path
-        : '${_baseUri.path}/';
-    return Uri(
-      scheme: _baseUri.scheme,
-      userInfo: _baseUri.userInfo.isEmpty ? null : _baseUri.userInfo,
-      host: _baseUri.host,
-      port: _baseUri.hasPort ? _baseUri.port : null,
-      path: '$basePath$path',
-      queryParameters: query == null || query.isEmpty ? null : query,
-    );
-  }
-
-  /// Reads the response body as UTF-8.
-  ///
-  /// JSON is UTF-8 by definition, but `http.Response.body` falls back to
-  /// latin1 when the server omits a charset, which would corrupt non-ASCII
-  /// note content.
-  static String _readBody(http.Response response) =>
-      utf8.decode(response.bodyBytes);
-
-  /// Classifies a non-success response through the wire mapper.
-  static SyncFailure _decodeError(http.Response response) =>
-      decodeError(statusCode: response.statusCode, body: _readBody(response));
-
-  /// Whether [statusCode] is a 2xx success.
-  static bool _isSuccess(int statusCode) =>
-      statusCode >= 200 && statusCode < 300;
-}
-
-String? _jwtSubject(String token) {
-  final List<String> parts = token.split('.');
-  if (parts.length != 3) {
-    return null;
-  }
-  try {
-    final Object? payload = jsonDecode(
-      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-    );
-    if (payload is Map<String, dynamic>) {
-      final Object? subject = payload['sub'];
-      return subject is String && subject.isNotEmpty ? subject : null;
-    }
-  } on Object {
-    return null;
-  }
-  return null;
 }

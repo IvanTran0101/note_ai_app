@@ -71,7 +71,8 @@ final class SyncPresentationController extends ChangeNotifier {
           .where(
             (entry) =>
                 entry.blocked &&
-                entry.lastError == SyncErrorCode.invalidMutation,
+                (entry.lastError == SyncErrorCode.invalidMutation ||
+                    entry.lastError == SyncErrorCode.documentRequiresUpgrade),
           )
           .length ??
       0;

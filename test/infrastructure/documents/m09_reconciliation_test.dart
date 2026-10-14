@@ -37,16 +37,21 @@ void main() {
     );
   });
 
-  test('rich payload never passes through plain wire encoder before P3', () {
-    expect(
-      () => encodeSyncMutation(fixture.pending().toMutation()),
-      throwsA(isA<SyncFailure>()),
-    );
-    expect(
-      encodeSyncMutation(fixture.pending(rich: false).toMutation())['payload'],
-      {'title': 'Title', 'content': fixture.doc().plainText},
-    );
-  });
+  test(
+    'rich payload uses explicit V3; frozen plain payload stays unchanged',
+    () {
+      final rich = encodeSyncMutation(fixture.pending().toMutation());
+      expect(rich['wireVersion'], 3);
+      expect(rich['documentCapability'], 'basicBlocksV1');
+      expect((rich['payload'] as Map).containsKey('document'), true);
+      expect(
+        encodeSyncMutation(
+          fixture.pending(rich: false).toMutation(),
+        )['payload'],
+        {'title': 'Title', 'content': fixture.doc().plainText},
+      );
+    },
+  );
 
   test(
     'ACK without typed document refuses and leaves the complete pending state',

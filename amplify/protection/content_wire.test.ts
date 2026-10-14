@@ -49,5 +49,5 @@ test('V2 content labels remain behind the current protected read grant', async (
 
 test('unsupported content wire negotiation is rejected explicitly', async () => {
   const { read } = fixture();
-  assert.equal((await read('3')).statusCode, 422);
+  assert.equal((await read('4')).statusCode, 422);
 });

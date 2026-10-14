@@ -11,7 +11,11 @@ and dev M01 setup gates are explicitly recorded. M09 P0 engine/ref proof is
 accepted in a separate synthetic-only app (VM10/Chrome10). P1 pure document and
 P2 encrypted local/schema7 pipeline are accepted: VM1752/4 configured skips,
 Chrome93 and native storage2/2. Typed cloud transport is P3, production rich UI
-is P4-P6; no final UI score yet. Preserve packet/AAD3 and exact attempted legacy
+is P4-P6; no final UI score yet. P3 source/local typed transport now accepted:
+VM1772/4 configured skips, Chrome66, backend outside RAG145, native transport1/1;
+publication is in progress. V3 capability/document1 preserves formatting,
+same-revision backfill, exact rich retries and explicit legacy conflict recovery.
+AWS live and missing exact RAG manifests remain separate gates. Preserve packet/AAD3 and exact attempted legacy
 payloads. Do not mistake foundation receipts for full M09 acceptance. Playwright
 with installed Chrome local is explicitly authorized for real browser QA.
 Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,

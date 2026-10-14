@@ -21,6 +21,7 @@
 import { parseProtectionChange } from './sync_protection_change';
 import { labelIds } from '../labels/label_models';
 import { manifest } from '../attachments/models';
+import { parseNoteDocument, projectDocument } from '../documents/note_document';
 import type { InvalidMutationReason, SyncMutation, SyncOperation } from './dynamo_sync_store';
 
 /** Contract defaults for `GET /sync/changes`; the store clamps to the same window. */
@@ -98,7 +99,7 @@ const readBaseRevision = (value: unknown): number | null =>
  * Unknown fields are ignored, so a later additive contract change does not
  * break older servers.
  */
-export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false, wireVersion: 1 | 2 = 1): MutationParseResult => {
+export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false, wireVersion: 1 | 2 | 3 = 1): MutationParseResult => {
   if (typeof body !== 'string' || body.length === 0) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
@@ -112,8 +113,9 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   if (!isRecord(decoded)) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
-  if (wireVersion === 2 ? decoded.wireVersion !== 2 || decoded.entityType !== 'note' :
+  if (wireVersion >= 2 ? decoded.wireVersion !== wireVersion || decoded.entityType !== 'note' :
       'wireVersion' in decoded || 'entityType' in decoded) return {ok: false, problem: 'PAYLOAD_INVALID'};
+  if (wireVersion === 3 && decoded.documentCapability !== 'basicBlocksV1') return {ok: false, problem: 'DOCUMENTS_UNSUPPORTED'};
   const ownerId = readIdentifier(decoded.ownerId);
   const accessRevision = decoded.accessRevision;
   if (sharedRoute ? !ownerId || typeof accessRevision !== 'number' || !Number.isSafeInteger(accessRevision) ||
@@ -148,7 +150,7 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
 
   if (operation === 'delete') {
     if (protectionChange) return { ok: false, problem: 'PAYLOAD_INVALID' };
-    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision, ...(wireVersion === 2 ? {wireVersion: 2} : {}) } };
+    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision, ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3} : {}) } };
   }
 
   const payload = decoded.payload;
@@ -157,14 +159,21 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
   }
 
   const { title, content } = payload;
+  const hasDocument = Object.hasOwn(payload, 'document');
+  if (hasDocument && wireVersion !== 3) return {ok: false, problem: 'DOCUMENTS_UNSUPPORTED'};
+  if (wireVersion === 3 && !hasDocument) return {ok: false, problem: 'PAYLOAD_INVALID'};
+  let document;
+  try { document = hasDocument ? payload.document === null ? null : parseNoteDocument(payload.document) : undefined; }
+  catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
+  if (document && projectDocument(document) !== content) return {ok: false, problem: 'PAYLOAD_INVALID'};
   let ids: readonly string[] | undefined;
   if (Object.hasOwn(payload, 'labelIds')) {
-    if (wireVersion !== 2 || sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
+    if (wireVersion < 2 || sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
     try { ids = labelIds(payload.labelIds); } catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
   }
   let attachments;
   if (Object.hasOwn(payload, 'attachments')) {
-    if (wireVersion !== 2) return {ok: false, problem: 'ATTACHMENTS_UNSUPPORTED'};
+    if (wireVersion < 2) return {ok: false, problem: 'ATTACHMENTS_UNSUPPORTED'};
     if (sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
     try { attachments = manifest(payload.attachments, noteId); }
     catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
@@ -173,7 +182,7 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
     typeof title !== 'string' ||
     typeof content !== 'string' ||
     title.trim().length === 0 ||
-    content.trim().length === 0
+    (!document && content.trim().length === 0)
   ) {
     return { ok: false, problem: 'PAYLOAD_INVALID' };
   }
@@ -191,8 +200,8 @@ export const parseMutationBody = (body: string | null | undefined, protectedRout
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}), ...(attachments ? {attachments} : {}) },
-      ...(wireVersion === 2 ? {wireVersion: 2} : {}),
+    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasDocument ? {document} : {}), ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}), ...(attachments ? {attachments} : {}) },
+      ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3} : {}),
       ...(sharedRoute ? { ownerId: ownerId!, accessRevision: accessRevision as number } : {}),
       ...(protectionChange ? { protectionChange } : {}) },
   };

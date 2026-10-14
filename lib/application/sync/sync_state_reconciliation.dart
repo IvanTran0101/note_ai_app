@@ -13,6 +13,8 @@ import 'sync_document_projection.dart';
 import '../labels/local_label_state.dart';
 import 'label_sync_reconciliation.dart';
 
+part 'sync_document_recovery.dart';
+
 /// Applies remote outcomes to fresh local state inside store transactions.
 final class SyncStateReconciliation {
   SyncStateReconciliation({
@@ -56,10 +58,12 @@ final class SyncStateReconciliation {
               lastError: failure.code,
               blocked:
                   failure.code == SyncErrorCode.invalidMutation ||
+                  failure.code == SyncErrorCode.documentRequiresUpgrade ||
                   failure.code == SyncErrorCode.forbidden,
             );
       final List<LocalNoteState> notes =
           (failure.code == SyncErrorCode.invalidMutation ||
+              failure.code == SyncErrorCode.documentRequiresUpgrade ||
               failure.code == SyncErrorCode.forbidden)
           ? current.notes
                 .map(
@@ -263,7 +267,7 @@ final class SyncStateReconciliation {
           labels.length == current.labels.length &&
           Iterable<int>.generate(labels.length)
               .every((i) => labels[i] == current.labels[i]) &&
-          (page.wireVersion != 2 || current.syncWireVersion == 2)) {
+          page.wireVersion <= current.syncWireVersion) {
         return current;
       }
       return copyState(
@@ -273,7 +277,9 @@ final class SyncStateReconciliation {
         conflicts: projection.conflicts,
         cursor: cursor,
         labels: labels,
-        syncWireVersion: page.wireVersion == 2 ? 2 : current.syncWireVersion,
+        syncWireVersion: page.wireVersion > current.syncWireVersion
+            ? page.wireVersion
+            : current.syncWireVersion,
       );
     });
     final bool cursorMatched =

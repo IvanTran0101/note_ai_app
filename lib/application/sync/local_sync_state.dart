@@ -43,7 +43,7 @@ final class LocalSyncState {
        outbox = List<PendingMutation>.unmodifiable(outbox),
        conflicts = List<SyncConflict>.unmodifiable(conflicts),
        labels = List<LocalLabelState>.unmodifiable(labels) {
-    if (syncWireVersion != 1 && syncWireVersion != 2 ||
+    if (syncWireVersion != 1 && syncWireVersion != 2 && syncWireVersion != 3 ||
         this.labels.any((l) => l.ownerId != accountUserId)) {
       throw ArgumentError('Catalog and wire version must belong to the actor.');
     }

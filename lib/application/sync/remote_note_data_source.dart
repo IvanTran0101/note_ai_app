@@ -10,3 +10,9 @@ abstract interface class IRemoteNoteDataSource {
 
   Future<SyncChangesPage> pull({String? cursor, int limit = 50});
 }
+
+/// Negotiate before choosing a pull cursor, so old cached notes are backfilled.
+/// The probe never owns or advances the account cursor.
+abstract interface class ISyncWireNegotiation {
+  Future<int> negotiateWireVersion();
+}

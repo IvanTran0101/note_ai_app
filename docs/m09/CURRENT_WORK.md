@@ -2,6 +2,46 @@
 
 ## Active receipt — 2026-10-14
 
+Latest: P3 source/local accepted; publication now in progress. Final VM1772/4
+configured skips, installed Chrome66, non-RAG backend145, strict tsc/analyzer
+clean, actual Android HTTP transport1/1 (build409.3s/test7s) with real file/device
+keys. Harness APK62F63BF0635ED760435E559F693DE3704476A68CCE916FA164605EAB5606939F.
+Restore main_dev product after publication, then P4 production rich editor;
+P5/P6/ref grades remain pending. No live AWS/RAG claim. Details below are
+chronological history; this receipt overrides earlier pending P3 statements.
+P2 published3f5a5e7/remote verified, Notion P0-P2 checked. Main_dev owner
+product APK restored at that exact Flutter HEAD (build35.6s/install-r), SHA256
+3E66FCA200F7FA01C4A6D72928CA0762849C30E9127A9246C8D3833EFD89D8A6;
+native test harness replaced; emulator5554 remains running/data retained.
+P3 is uncommitted: backend document1/V3 codec/store/fingerprint/routes/response,
+masked feeds, legacy lost-ACK replay, bounded rich feed prefix/cursor; Flutter
+V3 capability probe before backfill, same-revision document/conflict enrichment,
+exact upgrade retry, security-content V3/fallback and local fixture now wired.
+Focused Flutter40/40 PASS, backend non-RAG145/145 PASS on33 files, focused
+backend24/24+feed2/2 PASS. Scoped backend tsc clean; latest client lint repaired,
+retest pending. An earlier broad Node run accidentally included RAG and fails
+the existing missing-manifest gate; it is not acceptance. Correct non-RAG run
+is145 PASS. Account encrypted encode/decode32MiB cap already exists; no change
+needed. Added opt-in actual local HTTP two-actor transport/platform scenarios;
+VM/browser/native runs and full fresh VM regression remain next. Dev services
+session89109 now on8796/8797/8798 with QA-only dynamic loopback-origin flag.
+Actual HTTP local VM1/1 PASS (p3-local-http-vm.txt) through real two-actor
+production adapters/store/share/revoke/protection. First full VM1764/7fail/4skip:
+four crypto timeouts under emulator/concurrent load and three old mock transport
+contracts; fixtures corrected (V3 capability/null for content, explicit404 older
+RAG sync probe), emulator stopped preserving data. Affected focused28/28 PASS.
+Added typed conflict recovery for rejected frozen legacy drafts: backfill retains
+local draft/payload, explicit cloud choice keeps rich data; explicit local choice
+creates a typed paragraph/new mutation. New full VM with concurrency2 finished
+1772 PASS/4 configured skips (p3-full-vm-final.txt); installed Chrome66/66 PASS
+across12 mains including IndexedDB/reseal and latest actual local HTTP negative
+legacy/revoke/locked-write tests. Client analyzer + backend source/tests tsc
+clean; fresh Dart/backend golden and document Node14/14 PASS. Native transport
+session66797 starting as emulator boots hidden/data retained; reverse8796
+must be reapplied once online. P3 receipt/publication still pending native.
+No product rich UI/no final grade yet. Earlier P2-uncommitted/ready statements
+below are history; P2 is published, do not republish those patches.
+
 P0 engine/ref proof accepted: final VM10/10 + installed Chrome10/10 through the
 existing Windows SDK-overlay runner, scoped analyzer clean. Actual installed
 Chrome and native table/selection/size/readonly/roundtrip/rotation proof is in

@@ -26,6 +26,7 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
     required this.accountId,
     required this.tokenProvider,
     required this.isCurrentSession,
+    this.documentsEnabled = false,
     http.Client? client,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null {
@@ -41,6 +42,7 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
   final String accountId;
   final Future<String?> Function({required bool forceRefresh}) tokenProvider;
   final bool Function() isCurrentSession;
+  final bool documentsEnabled;
   final http.Client _client;
   final bool _ownsClient;
   final _proofs = <String, _Proof>{};
@@ -88,10 +90,41 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
   Future<NoteProtection> metadata(String id) async =>
       _metadata(await _request(id, 'protection'));
   @override
-  Future<SyncNoteSnapshot> content(String id) async => decodeSyncNoteSnapshot(
-    await _request(id, 'content', operation: NoteOperation.read),
-    authorizedContent: true,
-  );
+  Future<SyncNoteSnapshot> content(String id) async {
+    var version = documentsEnabled ? 3 : 2;
+    Map<String, Object?> result;
+    try {
+      result = await _request(
+        id,
+        'content',
+        operation: NoteOperation.read,
+        contentVersion: version,
+      );
+    } on NoteSecurityFailure catch (failure) {
+      if (version != 3 ||
+          failure.code != NoteSecurityFailureCode.invalidInput) {
+        rethrow;
+      }
+      version = 2;
+      result = await _request(
+        id,
+        'content',
+        operation: NoteOperation.read,
+        contentVersion: version,
+      );
+    }
+    if (version == 3 && result['documentCapability'] != 'basicBlocksV1') {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+    }
+    return _decode(
+      () => decodeSyncNoteSnapshot(
+        result,
+        authorizedContent: true,
+        documents: version == 3,
+      ),
+    );
+  }
+
   @override
   Future<NoteProtection> enable(
     String id,
@@ -240,6 +273,7 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
     String action, {
     Map<String, Object?>? body,
     NoteOperation? operation,
+    int contentVersion = 2,
   }) async {
     final start = _generation;
     void requireSession() {
@@ -275,7 +309,7 @@ final class HttpNoteSecurityGateway implements INoteSecurityGateway {
             queryParameters: {
               if (NoteIdentity.resolve(id, accountId).ownerId != accountId)
                 'ownerId': NoteIdentity.resolve(id, accountId).ownerId,
-              if (action == 'content') 'wireVersion': '2',
+              if (action == 'content') 'wireVersion': '$contentVersion',
             },
           ),
         );

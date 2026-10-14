@@ -78,7 +78,7 @@ export class DynamoProtectionStore implements ProtectionStore {
           { Put: { TableName: this.table, Item: { ...note,
             ...key(next.ownerId, `CHANGE#${sequence + 1}`), serverUpdatedAt: now,
             protected: next.enabled, protectionRevision: next.revision,
-            ...(next.enabled ? { title: '', content: '' } : {}),
+            ...(next.enabled ? { title: '', content: '', ...(note.document !== undefined ? {document: null} : {}) } : {}),
             changeOwnerId: `OWNER#${next.ownerId}`, changeSequence: sequence + 1 } } },
         ];
         if (this.sharing) writes.push(...await new ActorFeed(this.table, this.db).fanout(next.ownerId,
