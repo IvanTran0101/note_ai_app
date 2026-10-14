@@ -8,6 +8,7 @@ export '../../domain/users/user_preferences.dart';
 
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
 import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_repository.dart';
 import '../../domain/users/user_preferences.dart';

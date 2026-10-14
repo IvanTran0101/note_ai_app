@@ -7,8 +7,9 @@ existing Windows SDK-overlay runner, scoped analyzer clean. Actual installed
 Chrome and native table/selection/size/readonly/roundtrip/rotation proof is in
 P0_ENGINE_PROOF.md; native artifact predates final autofill getter-only shim,
 whose VM/Chrome proof passes. No UI grading or production engine wiring yet.
-Publish P0 now. P1 focused Domain/Application+legacy27/27 PASS and scoped
-analysis clean; full root VM started session51666 before P2 state changes.
+P0 published8d363b5, remote SHA verified. P1 focused Domain/Application+legacy
+27/27 PASS and scoped analysis clean; publish P1 foundation now. Full root VM
+session51666 is rebuilding native hooks, not a completed receipt yet.
 P2 document codec is uncommitted; production writer capability stays disabled
 until the entire encrypted pipeline passes. Next: snapshot/draft/outbox/version7
 and redaction, preserving exact attempted payloads. Graph generation02:27:51Z
