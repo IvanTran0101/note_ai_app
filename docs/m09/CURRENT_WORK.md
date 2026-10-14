@@ -1,5 +1,21 @@
 # M09 current work
 
+## Active receipt — 2026-10-14
+
+P0 engine/ref proof accepted: final VM10/10 + installed Chrome10/10 through the
+existing Windows SDK-overlay runner, scoped analyzer clean. Actual installed
+Chrome and native table/selection/size/readonly/roundtrip/rotation proof is in
+P0_ENGINE_PROOF.md; native artifact predates final autofill getter-only shim,
+whose VM/Chrome proof passes. No UI grading or production engine wiring yet.
+Publish P0 now. P1 focused Domain/Application+legacy27/27 PASS and scoped
+analysis clean; full root VM started session51666 before P2 state changes.
+P2 document codec is uncommitted; production writer capability stays disabled
+until the entire encrypted pipeline passes. Next: snapshot/draft/outbox/version7
+and redaction, preserving exact attempted payloads. Graph generation02:27:51Z
+has metadata_changed signals; exact source fallback read for all evidence paths.
+Android013 is actually home; use inspected Android215 search ref. Earlier
+checkpoint statements below are history and do not override this receipt.
+
 ## Latest checkpoint — overrides historical pending entries below
 
 Source/local integration accepted as bounded in INTEGRATION.md: VM1709/4 skips,
@@ -7,15 +23,55 @@ Chrome1505/2 +browser-only3/3, backend outside RAG131/131, config14/14, analyzer
 clean177.9s; actual fixed Chrome/Android protected unlock keeps body/label/file,
 protected export hash matches and Lock/revoke mask private content. AWS/RAG/M01
 setup gates remain open. Product commits e53e698,134d910,7577456,96d375e,c3b4cd2,
-278add3 are made. Publish docs/push/verify remote, then M09 P0 engine/ref proof.
-Active restarted runtimes: backend16945, Web TTY47238, emulator6681/5554. R: alias
-restored to this D: checkout; ADB reverse8796/8797/8798 set. Chrome pw/ctx/page
-live in Node REPL with preserved owned profile and --disable-gpu.
-Native APK448B83F20C715402B389D672388371F0C603B0055669883C1D7B9CC47813F80A includes
-all fixes but predates publication; refresh exact-commit provenance afterward.
+278add3 are made. Integration docs3718a60 pushed; remote full SHA verified.
+M09 P0 engine/ref proof is active. Created tool/m09_editor_spike (separate app ID,
+synthetic data only; main app dependency/storage remain unchanged). Rejected
+forced Win32v6 override: old file_picker10 fails HRESULT/COM compilation.
+Vendored upstream AppFlowy6.2 lib/assets/license to packages/noteflow_editor_engine:
+modern picker13 +path-only file_selector save bridge, device_info13.2, keyboard
+height0.3 (old compileSdk31 failed native AAR checks), SDK onFocusReceived default
+false callback. Editing algorithms unchanged; see NOTEFLOW_PATCHES.md.
+Prototype VM9/9 and analyzer clean. Actual Chrome semantic typing is fixed by
+deferring semantic DOM focus until framework/view focus settles. Confirmed text
+model62->67->75, painted FRESH +Vietnamese/emoji, selected Size24 and Undo/Redo,
+math glyph retained, JSON round-trip PASS. Temporary diagnostics were removed.
+Public builder decorators cover nested paragraphs/table cells without forking
+input algorithms. Host readonly renders static semantics; SDK input config now
+honors readonly and reconfigures after access change with a post-frame fence.
+Native metrics debounce gets per-instance key/cancel/mounted+selection guards.
+Host table Tab/ShiftTab delegates row-major navigation to engine; real Chrome
+found loss of B1 buffer switching semantic DOM fields under one client. Web now
+reopens connection on start-block change. VM9 includes real keyboard Tab +B1
+retention; actual compiled Chrome confirmed buffer B1 and SECOND B1 painted.
+Native table confirmed A1NATIVE_CELL and SECOND_NATIVEB1, size/undo/readonly;
+final5DA7C48... APK installed-r, FINAL_NATIVE text kept through rotation, scoped
+Flutter error lines0. Native IME composing remains framework-driven test proof,
+not manually typed Telex. Debug diagnostics removed. Final static build77543
+Web162.9s/APK46.1s; hash5DA7C48BA81501114116FB3CC45AD71CAA513E46D9A8C41C248BB8C294F41774.
+Chrome widget runner29540/15187 stopped before suite loaded; no product assertion
+ran. D: TEMP and native launcher (source in ignored output/m09) did not yet yield
+a suite result; last50139 was interrupted with the environment, log remains only
+loading. Do not count it as passing. Actual installed Chrome proof is the current
+Web evidence. Check process/service state before reusing any sessions after reset.
+Main Web/proofTTY/interactive browser are stopped; emulator5554 shut down preserving
+data after rotation. C: pagefile shrank/free space recovered22GB. Ref mapping and
+contract files created; P0 not ticked/published yet. P1 model12 tests passed, then
+Domain/Application snapshot +legacy regression26/26 passed. Added a typed writer
+capability guard so a text-only repository cannot strip a document; unsupported
+version fails before mutation. New27-test retest is pending after async error fix.
+Pure Domain blocks/runs/math/marks/rows +Note.document and DTO are uncommitted.
+saveDocumentSnapshot reuses _mutateNote session/access/snapshot fences. Production
+repository does not advertise INoteDocumentRepository until P2 is complete.
+No encrypted/wire/editor production adoption or UI score yet. New tests split
+by model/aggregate/Application responsibility; largest owned test is under400.
+Exact3718a60 APK refreshed/cached14.4s, installed-r, hash unchanged448B83...
+Historical runtimes16945/47238/6681 and R: alias may be absent after interruption.
+Verify them before reuse; preserve owned Chrome profile and Android data.
+Native main APK448B83F20C715402B389D672388371F0C603B0055669883C1D7B9CC47813F80A
+was rebuilt at published3718a60 and installed-r; exact source receipt recorded.
 Graph refresh is pending another index operation; verify current source for
-stale/partial graph evidence. AppFlowy6.2.0 remains only a cached candidate,
-with no project dependency/spike yet. M09 itself is not implemented or scored.
+stale/partial graph evidence. M09 production editor/data are not implemented or
+scored yet; only the separate engine proof is in progress.
 
 ## Historical continuity
 

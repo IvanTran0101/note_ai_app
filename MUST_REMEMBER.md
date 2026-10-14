@@ -6,6 +6,11 @@ The user approved updating final-tuankiet, integrating all of anhminh-final,
 fixing conflicts/regressions with automated and actual Chrome/Android emulator
 QA, then implementing M09 through acceptance. This supersedes every historical
 M09 deferred instruction below. Current integrated baseline is 75a90b0.
+Integration3718a60 is published with verified source/local fixes; live AWS/RAG
+and dev M01 setup gates are explicitly recorded. M09 P0 engine/ref proof is
+accepted in a separate synthetic-only app (VM10/Chrome10); P1/P2 production
+document work continues. Do not mistake proof for full M09 acceptance. Playwright
+with installed Chrome local is explicitly authorized for real browser QA.
 Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
 all existing module data, session/access guards and unrelated local files.
 No C: worktrees. Use docs/m09/CURRENT_WORK.md for active continuity.
