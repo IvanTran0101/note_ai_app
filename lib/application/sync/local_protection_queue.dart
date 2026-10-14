@@ -86,6 +86,8 @@ abstract final class LocalProtectionQueue {
       payload: SyncNotePayload(
         title: note.title,
         content: note.content,
+        document: note.document,
+        includesDocument: note.document != null,
         labelMembership: LabelMembership(note.labelIds),
         includesLabels:
             note.labelIds.isNotEmpty || last?.payload?.includesLabels == true,
@@ -118,6 +120,7 @@ abstract final class LocalProtectionQueue {
         ownerId: n.ownerId,
         title: n.title,
         content: n.content,
+        document: n.document,
         createdAt: n.createdAt,
         updatedAt: timestamp,
         serverRevision: n.serverRevision,

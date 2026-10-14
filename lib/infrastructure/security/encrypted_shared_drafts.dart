@@ -5,12 +5,28 @@ extension EncryptedSharedDrafts on EncryptedStateCodec {
   Future<void> retainEditorEvidence(
     NoteDto selected,
     String title,
-    String content,
-  ) async {
+    String content, {
+    NoteDocument? document,
+  }) async {
     if (selected.share?.recipientId != namespace.accountUserId ||
         selected.ownerId == namespace.accountUserId ||
         !selected.contentAvailable) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    if (document != null && content != document.plainText) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.invalidInput);
+    }
+    final evidence = <String, Object?>{
+      'ownerId': selected.ownerId,
+      'noteId': selected.id,
+      'contentRevision': selected.contentRevision,
+      'title': title,
+      'content': content,
+      if (document != null) 'document': NoteDocumentCodec.encode(document),
+      'capturedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (document != null && utf8.encode(jsonEncode(evidence)).length > 300000) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
     }
     await _ensureDeviceKey();
     final reference = selected.identity.referenceFor(namespace.accountUserId);
@@ -20,14 +36,7 @@ extension EncryptedSharedDrafts on EncryptedStateCodec {
         'kind': 'editorDraft',
         'accessRevision': selected.share!.accessRevision,
         'box': await crypto.encryptJson(
-          {
-            'ownerId': selected.ownerId,
-            'noteId': selected.id,
-            'contentRevision': selected.contentRevision,
-            'title': title,
-            'content': content,
-            'capturedAt': DateTime.now().toUtc().toIso8601String(),
-          },
+          evidence,
           _deviceKey!,
           '$_accountAad/shared-editor/${jsonEncode(reference)}',
         ),

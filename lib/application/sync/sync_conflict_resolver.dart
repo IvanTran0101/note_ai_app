@@ -13,6 +13,7 @@ import 'sync_conflict.dart';
 import 'sync_mutation.dart';
 import 'protection_sync_change.dart';
 import 'sync_snapshot.dart';
+import 'sync_document_projection.dart';
 import '../notes/note_access.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_access_policy.dart';
@@ -197,6 +198,7 @@ final class SyncConflictResolver {
           ownerId: accountUserId,
           title: local.title,
           content: local.content,
+          document: local.document,
           createdAt: local.createdAt,
           updatedAt: timestamp,
           pinnedAt: local.pinnedAt,
@@ -278,6 +280,8 @@ final class SyncConflictResolver {
         : SyncNotePayload(
             title: local.title,
             content: local.content,
+            document: local.document,
+            includesDocument: local.document != null,
             labelMembership: LabelMembership(local.labelIds),
             includesLabels:
                 local.share == null &&
@@ -308,6 +312,7 @@ LocalNoteState _pendingNote(
   share: note.share,
   title: note.title,
   content: note.content,
+  document: note.document,
   createdAt: note.createdAt,
   updatedAt: note.updatedAt,
   pinnedAt: note.pinnedAt,
@@ -331,6 +336,7 @@ LocalNoteState _fromRemote(
   share: note.share,
   title: note.title,
   content: note.content,
+  document: projectSyncDocument(note, previous),
   createdAt: note.createdAt,
   updatedAt: note.serverUpdatedAt,
   pinnedAt: note.pinnedAt,

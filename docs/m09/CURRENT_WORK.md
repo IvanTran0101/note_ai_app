@@ -8,11 +8,34 @@ Chrome and native table/selection/size/readonly/roundtrip/rotation proof is in
 P0_ENGINE_PROOF.md; native artifact predates final autofill getter-only shim,
 whose VM/Chrome proof passes. No UI grading or production engine wiring yet.
 P0 published8d363b5, remote SHA verified. P1 focused Domain/Application+legacy
-27/27 PASS and scoped analysis clean; publish P1 foundation now. Full root VM
-session51666 is rebuilding native hooks, not a completed receipt yet.
-P2 document codec is uncommitted; production writer capability stays disabled
-until the entire encrypted pipeline passes. Next: snapshot/draft/outbox/version7
-and redaction, preserving exact attempted payloads. Graph generation02:27:51Z
+27/27 PASS and scoped analysis clean; P1 published8efb66c/remote verified. Root
+VM launched at P1 finished1732/4 configured skips; P2 needs fresh regression.
+P2 is uncommitted: typed document codec/budgets, schema7/AAD3 migration, local
+state/payload/snapshot/DTO, canonical writer, drafts/redaction and every observed
+ACK/pull/hydrate/protection/conflict/label-copy path. Production repository now
+advertises documentVersion1 locally; legacy wire encoding refuses rich payload
+before sending, pending P3 typed transport. Focused76/76 PASS. Full VM4979 is
+ran with three failures (two obsolete optional-field assertions and Undo adapter
+compile gap), fixed. Final full VM1752/4 skips PASS (77572); scoped analyzer clean.
+First Chrome47374 stopped on missing typed-error import, now fixed; fresh Chrome
+aggregate (nine target mains including actual IndexedDB) passes93/93. Native
+emulator5554 booted with preserved NoteFlow_API35 data; R: alias recreated.
+integration_test/m09_document_storage_test.dart session49708 finished2/2 PASS
+on actual native file/device-key APIs. P2 is ready to publish/tick. This installed
+APK is the integration harness, not final M09 product UI; restore/build product
+main_dev before next actual UI work. Native data and synthetic namespaces kept.
+P3 independent backend codec source in amplify/documents + shared JSON golden
+is uncommitted; Node6/6 + scoped tsc PASS, direct Dart shared golden PASS. Tool
+m09_verify_document_golden.dart uses actual codec without native runtime/model
+inference. Do not stage these P3 files in P2. Transport/store/replay not
+yet wired; server/client integration remains next after P2 platform receipt.
+Added real platform rich persistence and encrypted v6 reseal scenarios (browser
+mock key channel vs native real key custody). Native emulator remains stopped;
+start after VM/Chrome to bound RAM. Fresh copy/Undo/empty-note tests are included.
+Repository mapping/direct-save and encrypted legacy migration are split by
+responsibility to keep touched core files under400. Need inspect final root
+logs and run Chrome aggregate + native storage integration. Next P3 typed server
+wire/replay; then P4-P6 production UI/ref/actual scoring. Graph generation02:27:51Z
 has metadata_changed signals; exact source fallback read for all evidence paths.
 Android013 is actually home; use inspected Android215 search ref. Earlier
 checkpoint statements below are history and do not override this receipt.

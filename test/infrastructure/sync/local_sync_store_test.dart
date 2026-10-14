@@ -283,7 +283,7 @@ void main() {
         await fixture.store.replace(state);
 
         expect(await fixture.store.read(), state);
-        expect(LocalSyncStateCodec.schemaVersion, 6);
+        expect(LocalSyncStateCodec.schemaVersion, 7);
         expect(_relativePaths(fixture.supportDirectory), <String>[
           '${LocalSyncAccountNamespace.accountsDirectoryName}'
               '${_separator()}${LocalSyncAccountNamespace(_account).hash}'

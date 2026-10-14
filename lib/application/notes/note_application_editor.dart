@@ -6,11 +6,7 @@ extension NoteEditorUseCase on NoteApplicationService {
     String title,
     NoteDocument document,
   ) async {
-    final Object repository = noteRepository;
-    if (repository is! INoteDocumentRepository ||
-        repository.documentVersion != NoteDocument.version) {
-      throw const NoteDocumentStorageUnavailable();
-    }
+    _requireDocumentStorage();
     return _mutateNote(
       selected.reference,
       NoteOperation.edit,

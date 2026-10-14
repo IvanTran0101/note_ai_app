@@ -78,9 +78,10 @@ extension _NoteDetailConflicts on NoteDetailPageState {
       _error = null;
     });
     try {
-      copy = await widget.notesController.createNote(
+      copy = await widget.notesController.createSnapshotNote(
         title: _titleController.text,
         content: _contentController.text,
+        document: _note?.document,
       );
       if (!mounted) return;
       _update(() => _saving = false);

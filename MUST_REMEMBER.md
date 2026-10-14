@@ -8,8 +8,11 @@ QA, then implementing M09 through acceptance. This supersedes every historical
 M09 deferred instruction below. Current integrated baseline is 75a90b0.
 Integration3718a60 is published with verified source/local fixes; live AWS/RAG
 and dev M01 setup gates are explicitly recorded. M09 P0 engine/ref proof is
-accepted in a separate synthetic-only app (VM10/Chrome10); P1/P2 production
-document work continues. Do not mistake proof for full M09 acceptance. Playwright
+accepted in a separate synthetic-only app (VM10/Chrome10). P1 pure document and
+P2 encrypted local/schema7 pipeline are accepted: VM1752/4 configured skips,
+Chrome93 and native storage2/2. Typed cloud transport is P3, production rich UI
+is P4-P6; no final UI score yet. Preserve packet/AAD3 and exact attempted legacy
+payloads. Do not mistake foundation receipts for full M09 acceptance. Playwright
 with installed Chrome local is explicitly authorized for real browser QA.
 Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
 all existing module data, session/access guards and unrelated local files.

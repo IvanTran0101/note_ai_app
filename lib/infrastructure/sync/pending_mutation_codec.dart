@@ -11,6 +11,7 @@ import '../attachments/attachment_codec.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/labels/label_membership.dart';
 import '../labels/label_codec.dart';
+import '../documents/note_document_codec.dart';
 
 /// Maps a [PendingMutation] to and from one stored outbox record.
 ///
@@ -133,6 +134,7 @@ abstract final class PendingMutationCodec {
         LocalSyncSchema.pinnedAt,
         LocalSyncSchema.attachments,
         'labelIds',
+        LocalSyncSchema.document,
       },
     );
     if (payload == null) {
@@ -141,6 +143,10 @@ abstract final class PendingMutationCodec {
     return SyncNotePayload(
       title: payload.requireString(LocalSyncSchema.title),
       content: payload.requireString(LocalSyncSchema.content),
+      document: NoteDocumentCodec.decodeOptional(
+        payload.rawValue(LocalSyncSchema.document),
+      ),
+      includesDocument: payload.contains(LocalSyncSchema.document),
       labelMembership: payload.contains('labelIds')
           ? LabelMembership(LabelCodec.ids(payload.rawValue('labelIds')))
           : const LabelMembership.empty(),
@@ -163,6 +169,10 @@ abstract final class PendingMutationCodec {
       <String, Object?>{
         LocalSyncSchema.title: payload.title,
         LocalSyncSchema.content: payload.content,
+        if (payload.includesDocument)
+          LocalSyncSchema.document: payload.document == null
+              ? null
+              : NoteDocumentCodec.encode(payload.document!),
         if (payload.includesLabels) 'labelIds': payload.labelIds,
         if (payload.includesAttachments)
           LocalSyncSchema.attachments: payload.attachments

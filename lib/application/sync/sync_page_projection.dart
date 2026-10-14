@@ -108,6 +108,7 @@ final class SyncPageProjection {
       ownerId: old.ownerId,
       title: old.title,
       content: old.content,
+      document: old.document,
       createdAt: old.createdAt,
       updatedAt: old.updatedAt,
       pinnedAt: old.pinnedAt,

@@ -9,6 +9,7 @@ import 'sync_failure.dart';
 import 'sync_result.dart';
 import 'sync_snapshot.dart';
 import 'sync_page_projection.dart';
+import 'sync_document_projection.dart';
 import '../labels/local_label_state.dart';
 import 'label_sync_reconciliation.dart';
 
@@ -160,6 +161,12 @@ final class SyncStateReconciliation {
     if (requested.payload?.includesLabels == true && !snapshot.includesLabels) {
       throw const SyncFailure(code: SyncErrorCode.invalidMutation);
     }
+    if (requested.payload?.includesDocument == true &&
+        (!snapshot.includesDocument ||
+            snapshot.contentAvailable &&
+                snapshot.document != requested.payload!.document)) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(
@@ -203,6 +210,7 @@ final class SyncStateReconciliation {
               share: snapshot.share ?? local.share,
               title: local.title,
               content: local.content,
+              document: local.document,
               createdAt: local.createdAt,
               updatedAt: local.updatedAt,
               pinnedAt: local.pinnedAt,
@@ -325,6 +333,7 @@ final class SyncStateReconciliation {
         share: note.share,
         title: note.title,
         content: note.content,
+        document: note.document,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
         pinnedAt: note.pinnedAt,
@@ -348,6 +357,7 @@ final class SyncStateReconciliation {
     share: snapshot.share,
     title: snapshot.title,
     content: snapshot.content,
+    document: projectSyncDocument(snapshot, previous),
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.serverUpdatedAt,
     pinnedAt: snapshot.pinnedAt,

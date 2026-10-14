@@ -35,6 +35,8 @@ PendingMutation normalizeLabelDispatch(
     payload: SyncNotePayload(
       title: payload.title,
       content: payload.content,
+      document: payload.document,
+      includesDocument: payload.includesDocument,
       pinnedAt: payload.pinnedAt,
       includesPinnedAt: payload.includesPinnedAt,
       attachmentManifest: payload.attachmentManifest,

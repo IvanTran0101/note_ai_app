@@ -43,7 +43,7 @@ abstract final class LocalSyncStateCodec {
     LocalSyncSchema.syncWireVersion: state.syncWireVersion,
   };
 
-  /// Decodes schema 6, migrating supported schema 2/3/4/5 envelopes in memory.
+  /// Decodes schema 7, migrating supported schema 2/3/4/5/6 envelopes in memory.
   /// Existing attempted mutations retain their old payload shape and ID.
   static LocalSyncState decode(Object? data) {
     final Map<String, Object?> raw = _asObject(data, _rootPath);
@@ -73,6 +73,7 @@ abstract final class LocalSyncStateCodec {
     if (version == 3) return _decodeCurrent(migrateLocalSyncV3(raw));
     if (version == 4) return _decodeCurrent(migrateLocalSyncV4(raw));
     if (version == 5) return _decodeCurrent(migrateLocalSyncV5(raw));
+    if (version == 6) return _decodeCurrent(migrateLocalSyncV6(raw));
     if (version != schemaVersion) {
       throw LocalSyncCodecException(
         'must be schemaVersion $schemaVersion or a supported older version.',

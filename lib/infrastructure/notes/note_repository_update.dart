@@ -32,7 +32,7 @@ extension _NoteRepositoryUpdate on NoteRepository {
             'Resolve the sync conflict before editing this note.',
           );
         }
-        final fresh = NoteRepository._toDomain(existing);
+        final fresh = _domainNoteFromLocal(existing);
         _authorizeUpdate(fresh, expectedAccountUserId, NoteOperation.read);
         if (!identical(change(fresh), fresh)) {
           throw ArgumentError('Note change must return its fresh instance.');
@@ -43,6 +43,7 @@ extension _NoteRepositoryUpdate on NoteRepository {
         result = fresh;
         if (fresh.title == existing.title &&
             fresh.content == existing.content &&
+            fresh.document == existing.document &&
             sameAttachments(fresh.attachments, existing.attachments) &&
             sameLabelIds(fresh.labelIds, existing.labelIds) &&
             fresh.pinnedAt == existing.pinnedAt) {
@@ -85,9 +86,15 @@ extension _NoteRepositoryUpdate on NoteRepository {
     if (!sameAttachments(note.attachments, old.attachments)) {
       _authorizeUpdate(note, actor, NoteOperation.attachmentWrite);
     }
-    if (note.title != old.title || note.content != old.content) {
+    if (old.document != null && note.document == null) {
+      throw ArgumentError('A legacy writer cannot discard a rich document.');
+    }
+    if (note.title != old.title ||
+        note.content != old.content ||
+        note.document != old.document) {
       _authorizeUpdate(note, actor, NoteOperation.edit);
-      if (note.title.trim().isEmpty || note.content.trim().isEmpty) {
+      if (note.title.trim().isEmpty ||
+          (note.document == null && note.content.trim().isEmpty)) {
         throw ArgumentError('Note text must not be blank.');
       }
     }

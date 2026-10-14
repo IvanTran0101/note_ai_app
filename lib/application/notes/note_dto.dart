@@ -64,6 +64,7 @@ final class NoteDto {
     ownerId: note.ownerId,
     title: note.contentAvailable ? note.title : '',
     content: note.contentAvailable ? note.content : '',
+    document: note.contentAvailable ? note.document : null,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     pinnedAt: note.pinnedAt,

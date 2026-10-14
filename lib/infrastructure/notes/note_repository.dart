@@ -11,6 +11,8 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
+import '../sync/local_note_state_codec.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/labels/label.dart';
 import '../../domain/labels/label_membership.dart';
@@ -20,6 +22,8 @@ import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
 
 part 'note_repository_mutations.dart';
+part 'note_repository_mapping.dart';
+part 'note_repository_save.dart';
 part 'note_repository_access.dart';
 part 'note_repository_delete.dart';
 part 'note_repository_update.dart';
@@ -40,7 +44,7 @@ part 'note_repository_update.dart';
 /// mutations that a later sync coordinator pushes.
 final class NoteRepository
     implements
-        domain.INoteRepository,
+        domain.INoteDocumentRepository,
         domain.INoteMetadataRepository,
         domain.ISharedNoteRepository,
         domain.INoteSnapshotRepository {
@@ -71,6 +75,8 @@ final class NoteRepository
   final INoteAccessGuard? accessGuard;
   final int Function()? sessionGeneration;
   final bool labelsEnabled;
+  @override
+  int get documentVersion => NoteDocument.version;
 
   /// One store instance per account, created on first use and reused after.
   final Map<String, ILocalSyncStore> _storesByAccount =
@@ -88,7 +94,7 @@ final class NoteRepository
       if (note == null || note.isDeleted) {
         return null;
       }
-      return _toDomain(
+      return _domainNoteFromLocal(
         note,
         metadataOnly:
             note.protection.enabled &&
@@ -119,7 +125,10 @@ final class NoteRepository
                   !note.isDeleted && note.ownerId == ownerId,
             )
             .map(
-              (note) => _toDomain(note, metadataOnly: note.protection.enabled),
+              (note) => _domainNoteFromLocal(
+                note,
+                metadataOnly: note.protection.enabled,
+              ),
             ),
       );
     });
@@ -137,7 +146,7 @@ final class NoteRepository
               n.share?.isActive == true &&
               n.share?.recipientId == actorId,
         )
-        .map((n) => _toDomain(n, metadataOnly: n.protection.enabled))
+        .map((n) => _domainNoteFromLocal(n, metadataOnly: n.protection.enabled))
         .toList(growable: false);
   });
 
@@ -158,90 +167,6 @@ final class NoteRepository
   @override
   Future<void> saveSnapshot(Note note, Note expected) =>
       _save(note, expected: expected);
-
-  Future<void> _save(Note note, {Note? expected}) async {
-    final context = _captureWrite();
-    return _enqueue<void>(() async {
-      final String accountUserId = _requireActiveAccountUserId();
-      if (note.ownerId != accountUserId && note.share == null) {
-        throw ArgumentError.value(
-          note.ownerId,
-          'note',
-          'belongs to another account',
-        );
-      }
-      final ILocalSyncStore store = _storeFor(accountUserId);
-      await store.update((LocalSyncState current) {
-        _requireWrite(context);
-        if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.identity == note.identity,
-        )) {
-          throw StateError(
-            'Resolve the sync conflict before editing this note.',
-          );
-        }
-        final LocalNoteState? existing = _findNote(current, note.reference);
-        if (expected != null &&
-            (existing == null ||
-                existing.identity != expected.identity ||
-                existing.serverRevision != expected.contentRevision ||
-                existing.updatedAt != expected.updatedAt ||
-                existing.title != expected.title ||
-                existing.content != expected.content ||
-                existing.pinnedAt != expected.pinnedAt ||
-                !sameAttachments(existing.attachments, expected.attachments) ||
-                existing.share != expected.share ||
-                existing.protection != expected.protection ||
-                !existing.contentAvailable)) {
-          throw const domain.NoteSnapshotChanged();
-        }
-        if (!const NoteAccessPolicy().allows(
-              actorId: accountUserId,
-              note: note.identity,
-              share: existing?.share,
-              operation: NoteOperation.edit,
-            ) ||
-            (note.ownerId != accountUserId &&
-                (existing == null || existing.share != note.share))) {
-          throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
-        }
-        _requireNoteAccess(
-          note.id,
-          note.ownerId,
-          note.protection,
-          NoteOperation.edit,
-        );
-        if (!note.contentAvailable ||
-            (existing != null && !existing.contentAvailable)) {
-          throw const NoteContentUnavailable();
-        }
-        if (existing != null && existing.protection != note.protection) {
-          throw StateError('Refresh note protection before saving.');
-        }
-        if (existing?.isDeleted ?? false) {
-          throw StateError(
-            'A deleted note cannot be restored with the same id.',
-          );
-        }
-        if (note.pinnedAt != existing?.pinnedAt) {
-          _authorizeUpdate(note, accountUserId, NoteOperation.manage);
-        }
-        if (!sameAttachments(
-          note.attachments,
-          existing?.attachments ?? const [],
-        )) {
-          _authorizeUpdate(note, accountUserId, NoteOperation.attachmentWrite);
-        }
-        _validateLabels(
-          note,
-          existing?.labelIds ?? const [],
-          current,
-          accountUserId,
-        );
-        return _stateAfterSave(current, note, now());
-      });
-    });
-  }
 
   @override
   Future<Note> updateById({
@@ -362,73 +287,6 @@ final class NoteRepository
       conflicts: current.conflicts,
       cursor: current.cursor,
       userPreferences: current.userPreferences,
-    );
-  }
-
-  SyncNotePayload _payloadOf(
-    Note note, {
-    bool includePin = false,
-    bool includeAttachments = false,
-  }) {
-    return SyncNotePayload(
-      title: note.title,
-      content: note.content,
-      attachmentManifest: AttachmentManifest(note.attachments, noteId: note.id),
-      labelMembership: LabelMembership(note.labelIds),
-      includesLabels: labelsEnabled && note.share == null,
-      includesAttachments:
-          note.share == null &&
-          (includeAttachments || note.attachments.isNotEmpty),
-      pinnedAt: note.pinnedAt,
-      includesPinnedAt:
-          note.share == null && (includePin || note.pinnedAt != null),
-    );
-  }
-
-  static LocalNoteState _toLocalNote(
-    Note note, {
-    required int serverRevision,
-    required NoteSyncStatus status,
-  }) {
-    return LocalNoteState(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      pinnedAt: note.pinnedAt,
-      serverRevision: serverRevision,
-      attachments: note.attachments,
-      labelIds: note.labelIds,
-      labelProjections: note.labelProjections,
-      status: status,
-      protection: note.protection,
-      contentAvailable: note.contentAvailable,
-      share: note.share,
-    );
-  }
-
-  static Note _toDomain(LocalNoteState note, {bool metadataOnly = false}) {
-    final bool available =
-        note.contentAvailable &&
-        !metadataOnly &&
-        (note.share?.isActive ?? true);
-    return Note.reconstitute(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: available ? note.title : '',
-      attachments: available ? note.attachments : const [],
-      labelIds: available ? note.labelIds : const [],
-      labelProjections: available ? note.labelProjections : const [],
-      content: available ? note.content : '',
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      protection: note.protection,
-      contentAvailable: available,
-      contentRevision: note.serverRevision,
-      share: note.share,
-      pinnedAt: note.pinnedAt,
     );
   }
 

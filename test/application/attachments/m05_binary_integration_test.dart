@@ -88,7 +88,7 @@ void main() {
     expect(restored.labels.single.name, 'Private label');
     expect(await cipher.open(binding, 'a' * 64, 0, packet), [1, 2, 3]);
     expect(jsonDecode(backing.encoded!)['schemaVersion'], 3);
-    expect(LocalSyncStateCodec.encode(restored)['schemaVersion'], 6);
+    expect(LocalSyncStateCodec.encode(restored)['schemaVersion'], 7);
     expect(backing.encoded, isNot(contains('file.txt')));
     expect(backing.encoded, isNot(contains('Private label')));
   });

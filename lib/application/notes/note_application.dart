@@ -108,6 +108,13 @@ final class NoteApplicationService {
   final SummarizeNoteContent summarizeContent;
   final RequestNoteSync? requestSync;
   final INoteAccessGuard? security;
+  void _requireDocumentStorage() {
+    final Object repository = noteRepository;
+    if (repository is! INoteDocumentRepository ||
+        repository.documentVersion != NoteDocument.version) {
+      throw const NoteDocumentStorageUnavailable();
+    }
+  }
 
   /// Optional note-snapshot-aware dispatcher supplied by the composition root.
   ///
@@ -190,7 +197,9 @@ final class NoteApplicationService {
   Future<NoteDto> createNote({
     required String title,
     required String content,
+    NoteDocument? document,
   }) async {
+    if (document != null) _requireDocumentStorage();
     final context = _captureContext();
     final String userId = context.userId;
     final Note note = Note.create(
@@ -198,6 +207,7 @@ final class NoteApplicationService {
       ownerId: userId,
       title: title,
       content: content,
+      document: document,
       now: now().toUtc(),
     );
     await noteRepository.save(note);

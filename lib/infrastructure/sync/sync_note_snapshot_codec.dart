@@ -8,6 +8,7 @@ import 'local_sync_codec_schema.dart';
 import 'note_share_grant_codec.dart';
 import '../attachments/attachment_codec.dart';
 import '../labels/label_codec.dart';
+import '../documents/note_document_codec.dart';
 
 /// Maps a [SyncNoteSnapshot] to and from its stored form.
 ///
@@ -29,6 +30,10 @@ abstract final class SyncNoteSnapshotCodec {
         LocalSyncSchema.share: NoteShareGrantCodec.encode(snapshot.share!),
       LocalSyncSchema.title: snapshot.title,
       LocalSyncSchema.content: snapshot.content,
+      if (snapshot.includesDocument)
+        LocalSyncSchema.document: snapshot.document == null
+            ? null
+            : NoteDocumentCodec.encode(snapshot.document!),
       'labelIds': snapshot.labelIds,
       'labelProjections': LabelCodec.projections(snapshot.labelProjections),
       'includesLabels': snapshot.includesLabels,
@@ -84,6 +89,10 @@ abstract final class SyncNoteSnapshotCodec {
         share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
+        document: NoteDocumentCodec.decodeOptional(
+          record.rawValue(LocalSyncSchema.document),
+        ),
+        includesDocument: record.containsField(LocalSyncSchema.document),
         labelIds: LabelCodec.ids(record.rawValue('labelIds')),
         labelProjections: LabelCodec.decodeProjections(
           record.rawValue('labelProjections'),

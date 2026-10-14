@@ -183,9 +183,10 @@ extension _NoteDetailActions on NoteDetailPageState {
       }
       _update(() => _saving = true);
       try {
-        final NoteDto copy = await widget.notesController.createNote(
+        final NoteDto copy = await widget.notesController.createSnapshotNote(
           title: _titleController.text,
           content: _contentController.text,
+          document: _note?.document,
         );
         if (mounted) {
           _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);

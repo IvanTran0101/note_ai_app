@@ -81,6 +81,14 @@ bool requiresSyncWireV2(SyncMutation mutation) =>
 /// `payload` is omitted for a content-free delete; `ownerId` identifies a
 /// canonical shared update, while the authenticated actor remains separate.
 Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
+  // P2 can commit rich local state; P3 must provide typed server transport.
+  // Never send its derived plain text through the legacy encoder.
+  if (mutation.payload?.includesDocument == true) {
+    throw const SyncFailure(
+      code: SyncErrorCode.invalidMutation,
+      detail: 'documentRequiresUpgrade',
+    );
+  }
   if (mutation.isLabel) {
     return {
       'wireVersion': 2,

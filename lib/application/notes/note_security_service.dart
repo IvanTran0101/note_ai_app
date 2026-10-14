@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
 import '../../domain/notes/note_access_policy.dart';
@@ -206,6 +207,8 @@ final class NoteSecurityService implements INoteAccessGuard {
         share: note.share,
         title: content.title,
         content: content.content,
+        document: content.document,
+        includesDocument: content.includesDocument,
         createdAt: content.createdAt,
         serverUpdatedAt: content.serverUpdatedAt,
         revision: content.revision,
@@ -338,6 +341,20 @@ final class NoteSecurityService implements INoteAccessGuard {
   }
 
   bool retainedPending(String id) => vault.hasRetainedCiphertext(id);
+  Future<void> retainDocumentDraft(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  ) async {
+    final captured = _capture(), generation = _generation;
+    final Object adapter = vault;
+    if (adapter is! IRichLocalDraftVault) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
+    }
+    await adapter.retainDocumentDraft(selected, title, document);
+    _live(captured, generation);
+  }
+
   Future<void> retainEditorDraft(
     NoteDto selected,
     String title,
