@@ -1,5 +1,4 @@
 import '../labels/note_label_editor.dart';
-import 'notes_theme_tokens.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
@@ -11,6 +10,11 @@ import 'share_management_dialog.dart';
 import '../../application/notes/note_editor_snapshot.dart';
 
 import 'dart:async';
+
+import '../../domain/notes/note_document.dart';
+import '../editor/rich_editor_adapter.dart';
+import '../editor/rich_note_editor.dart';
+import '../editor/editor_projection_map.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,6 +50,9 @@ part 'note_detail_view.dart';
 part 'note_detail_labels.dart';
 part 'note_detail_security.dart';
 part 'note_detail_sharing.dart';
+part 'note_detail_document.dart';
+part 'note_detail_autosave.dart';
+part 'note_detail_sync_state.dart';
 
 /// Focused mobile-first editor for one note.
 ///
@@ -121,6 +128,9 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _contentFocusNode = FocusNode();
   final GlobalKey _contentFieldContextKey = GlobalKey();
+  RichEditorAdapter? _richEditor;
+  NoteDocument? _savedDocument;
+  int _editorEpoch = 0;
   Timer? _autosaveTimer;
   StreamSubscription<void>? _securitySubscription;
   bool _securityBusy = false;
@@ -179,6 +189,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _contentController.text = _savedContent;
     _lastEditorTitle = _titleController.text;
     _lastEditorContent = _contentController.text;
+    _resetRichEditor();
     _titleController.addListener(_editorChanged);
     _contentController.addListener(_editorChanged);
     _titleFocusNode.addListener(_titleFocusChanged);
@@ -271,28 +282,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
         reason: SummaryRunFailureCode.sessionChanged,
       );
       _summaryController.clearResult();
+      _resetRichEditor();
     }
-  }
-
-  void _adoptSavedNote(NoteDto? incoming) {
-    _pendingSavedNote = null;
-    _autosaveTimer?.cancel();
-    _titleController.removeListener(_editorChanged);
-    _contentController.removeListener(_editorChanged);
-    _note = incoming;
-    _savedTitle = incoming?.title ?? '';
-    _savedContent = incoming?.content ?? '';
-    if (_titleController.text != _savedTitle) {
-      _titleController.text = _savedTitle;
-    }
-    if (_contentController.text != _savedContent) {
-      _contentController.text = _savedContent;
-    }
-    _lastEditorTitle = _titleController.text;
-    _lastEditorContent = _contentController.text;
-    _titleController.addListener(_editorChanged);
-    _contentController.addListener(_editorChanged);
-    _summaryController.clearFailure();
   }
 
   void _summaryChanged() {
@@ -309,57 +300,10 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     return showSummaryConsentDialog(context);
   }
 
-  void _syncStateChanged() {
-    if (!mounted) return;
-    _refreshAcknowledgedNote();
-    if (_currentConflict != null) {
-      _summaryController.cancelActive(reason: SummaryRunFailureCode.conflict);
-      _autosaveTimer?.cancel();
-      _autosaveTimer = null;
-    } else if (_isDirty) {
-      _scheduleAutosave();
-    }
-    setState(() {});
-  }
-
-  void _refreshAcknowledgedNote() {
-    final note = _note;
-    final state = widget.syncController?.localState;
-    if (note == null ||
-        state == null ||
-        note.share != null ||
-        state.accountUserId != note.ownerId) {
-      return;
-    }
-    for (final saved in state.notes) {
-      if (saved.id == note.id &&
-          saved.ownerId == note.ownerId &&
-          saved.deletedAt == null) {
-        // A new embedded editor has no parent selection yet. Accept only an
-        // ACK for the same saved text/protection/access, retaining any draft.
-        final fresh = NoteDto.fromLocalState(saved);
-        if (fresh.contentRevision > note.contentRevision &&
-            (_pendingSavedNote == null ||
-                fresh.contentRevision >= _pendingSavedNote!.contentRevision) &&
-            _rebaseUnchangedSavedText(fresh)) {
-          _summaryController.cancelActive(
-            reason: SummaryRunFailureCode.noteChanged,
-          );
-          _summaryController.markStaleIfResult();
-        }
-        return;
-      }
-    }
-  }
-
-  SyncConflict? get _currentConflict {
-    final String? noteId = _note?.reference;
-    return noteId == null ? null : widget.syncController?.conflictFor(noteId);
-  }
-
   bool get _isDirty =>
       _titleController.text != _savedTitle ||
-      _contentController.text != _savedContent;
+      _contentController.text != _savedContent ||
+      _editorDocument != _savedDocument;
 
   bool get _actionBusy =>
       _saving ||
@@ -370,6 +314,9 @@ final class NoteDetailPageState extends State<NoteDetailPage>
       _securityLoading;
 
   bool get hasActiveOperation => _actionBusy || _backConfirmationVisible;
+
+  /// Layout fact for the workspace; includes a new note not yet in its list.
+  bool get rendersSyncHeader => mounted && !widget.showAppBar && _canRead;
 
   Future<void> requestClose() =>
       _backConfirmationVisible ? Future<void>.value() : _handleBack();
@@ -397,92 +344,6 @@ final class NoteDetailPageState extends State<NoteDetailPage>
       (_note == null || _capabilities.canSummarize) &&
       _summaryController.canStart &&
       _summaryAvailability.canStart;
-
-  void _editorChanged() {
-    if (!mounted) return;
-    final String title = _titleController.text;
-    final String content = _contentController.text;
-    if (title == _lastEditorTitle && content == _lastEditorContent) {
-      // A selection, cursor, or composing-only update is not an edit: it must
-      // not move the draft revision, cancel a run, schedule a save, or report.
-      return;
-    }
-    _lastEditorTitle = title;
-    _lastEditorContent = content;
-    _draftRevision++;
-    _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
-    if (_isDirty) {
-      _summaryController.markStaleIfResult();
-    } else if (_pendingSavedNote != null) {
-      _adoptSavedNote(_pendingSavedNote);
-    }
-    _ignoreNextEditorFocusLoss = false;
-    setState(() {});
-    _notifyDirtyChanged();
-    _notifyNoteEdited();
-    _scheduleAutosave();
-  }
-
-  void _notifyDirtyChanged() {
-    final bool dirty = _isDirty;
-    if (dirty == _lastReportedDirty) {
-      return;
-    }
-    _lastReportedDirty = dirty;
-    widget.onDirtyChanged?.call(dirty);
-  }
-
-  void _contentFocusChanged() {
-    scheduleNoteDetailContentFocus(
-      focusNode: _contentFocusNode,
-      fieldKey: _contentFieldContextKey,
-    );
-    _saveWhenEditorLosesFocus();
-  }
-
-  void _titleFocusChanged() {
-    _saveWhenEditorLosesFocus();
-  }
-
-  void _saveWhenEditorLosesFocus() {
-    if (_ignoreNextEditorFocusLoss &&
-        !_titleFocusNode.hasFocus &&
-        !_contentFocusNode.hasFocus) {
-      _ignoreNextEditorFocusLoss = false;
-      return;
-    }
-    if (!_backConfirmationVisible &&
-        !_titleFocusNode.hasFocus &&
-        !_contentFocusNode.hasFocus) {
-      _scheduleAutosave(immediate: true);
-    }
-  }
-
-  void _scheduleAutosave({bool immediate = false}) {
-    _autosaveTimer?.cancel();
-    _autosaveTimer = null;
-    if (!mounted ||
-        !_isDirty ||
-        !_canEdit ||
-        _backConfirmationVisible ||
-        _conflictFlowActive ||
-        _currentConflict != null) {
-      return;
-    }
-    if (immediate) {
-      // A back click also moves focus. Let its confirmation cancel this save
-      // before persisting, so Discard remains meaningful on every platform.
-      _autosaveTimer = Timer(Duration.zero, () {
-        _autosaveTimer = null;
-        if (!_backConfirmationVisible) unawaited(_save(automatic: true));
-      });
-      return;
-    }
-    _autosaveTimer = Timer(_autosaveDelay, () {
-      _autosaveTimer = null;
-      unawaited(_save(automatic: true));
-    });
-  }
 
   void _pop({NoteDetailExitReason? reason, NoteDto? noteOverride}) {
     _autosaveTimer?.cancel();
@@ -525,6 +386,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _contentFocusNode.removeListener(_contentFocusChanged);
     _titleController.dispose();
     _contentController.dispose();
+    _editorEpoch++;
+    _richEditor?.dispose();
     _titleFocusNode.dispose();
     _contentFocusNode.dispose();
     super.dispose();

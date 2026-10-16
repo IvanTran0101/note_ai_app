@@ -126,7 +126,7 @@ class _TableColState extends State<TableCol> {
 
   void updateRowHeightCallback(int row) =>
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (row >= widget.tableNode.rowsLen) {
+        if (!mounted || row >= widget.tableNode.rowsLen) {
           return;
         }
 
@@ -138,7 +138,12 @@ class _TableColState extends State<TableCol> {
         );
         if (transaction.operations.isNotEmpty) {
           transaction.afterSelection = transaction.beforeSelection;
-          widget.editorState.apply(transaction);
+          // Measured geometry is derived view state, not a user edit.
+          // Recording it traps Undo in layout and discards the user's Redo.
+          widget.editorState.apply(
+            transaction,
+            options: const ApplyOptions(recordUndo: false, recordRedo: false),
+          );
         }
       });
 }

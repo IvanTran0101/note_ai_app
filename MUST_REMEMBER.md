@@ -1,5 +1,22 @@
 # MUST REMEMBER
 
+## Latest rule — UI/UX uses existing features only (2026-10-16)
+
+For every UI/UX change, use the app's existing features only. Adjust layout,
+typography, colors, icons, spacing, responsive behavior, safe areas and
+accessibility while preserving existing functionality, data, access guards,
+local-first persistence and sync. Reference images or plan entries do not
+automatically authorize adding a capability that is absent from the app.
+Before adding any new feature, flow, command or block type, record a concrete
+proposal on Notion with purpose, scope, impact and acceptance criteria; mark
+it "Chờ người dùng duyệt" (waiting for user approval). Implement it only after
+the user explicitly approves. Silence is not approval. Fixing an existing
+feature is allowed; adding new behavior still requires this proposal gate.
+This is the latest user instruction for UI/UX work and takes precedence over
+earlier wording that could imply unrestricted feature additions during M09.
+Full policy and proposal register:
+https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
+
 ## Active request — Integration then complete M09 (2026-10-13)
 
 The user approved updating final-tuankiet, integrating all of anhminh-final,
@@ -13,7 +30,16 @@ P2 encrypted local/schema7 pipeline are accepted: VM1752/4 configured skips,
 Chrome93 and native storage2/2. Typed cloud transport is P3, production rich UI
 is P4-P6; no final UI score yet. P3 source/local typed transport now accepted:
 VM1772/4 configured skips, Chrome66, backend outside RAG145, native transport1/1;
-publication is in progress. V3 capability/document1 preserves formatting,
+published23f3652, remote SHA confirmed. P4 rich editor now has verified source/local
+checkpoint807: full VM1898/5 configured skips/0fail, installed Chrome1700/2 skips/
+0fail on199 mains including actual local HTTP, static checks clean. Matching
+APK A76328E3 retains rich data; physical row Undo/Redo and popup position pass.
+P5 Native phone-landscape/spacing and final full UI matrix/scoring remain open.
+Read docs/m09/CURRENT_WORK.md for exact current source,
+runtimes, tests and next steps. Final P4/P5 UI acceptance, P6 and
+platform scores remain pending. Continue through all M09; do not treat partial
+source/UI checkpoints as full M09 completion.
+V3 capability/document1 preserves formatting,
 same-revision backfill, exact rich retries and explicit legacy conflict recovery.
 AWS live and missing exact RAG manifests remain separate gates. Preserve packet/AAD3 and exact attempted legacy
 payloads. Do not mistake foundation receipts for full M09 acceptance. Playwright

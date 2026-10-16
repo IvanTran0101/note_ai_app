@@ -72,6 +72,34 @@ extension _NoteDetailRag on NoteDetailPageState {
   void _revealSelection(TextSelection selection) {
     final String content = _contentController.text;
     if (!_isRevealableSelection(selection, content)) return;
+    final rich = _richEditor;
+    if (rich != null) {
+      final projection = EditorProjectionMap(rich.editor.document);
+      if (projection.plainText != content) return;
+      final mapped = projection.selection(selection.start, selection.end);
+      if (mapped == null) return;
+      for (final node in rich.editor.getNodesInSelection(mapped)) {
+        for (var parent = node.parent; parent != null; parent = parent.parent) {
+          if (parent.type == 'm09_toggle') {
+            rich.expandedToggles[parent.attributes['m09_id'] as String] = true;
+          }
+        }
+      }
+      rich.refreshAccess();
+      rich.editor.selection = mapped;
+      _contentFocusNode.requestFocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !identical(rich, _richEditor)) return;
+        final target = rich.editor.document
+            .nodeAtPath(mapped.start.path)
+            ?.key
+            .currentContext;
+        if (target != null) {
+          unawaited(Scrollable.ensureVisible(target, alignment: .35));
+        }
+      });
+      return;
+    }
     _contentController.removeListener(_editorChanged);
     try {
       _contentController.selection = selection;
@@ -141,25 +169,14 @@ extension _NoteDetailRag on NoteDetailPageState {
   /// The compact ask-notes action shown next to the editor.
   Widget _buildNoteRagAction(BuildContext context) {
     final bool vi = Localizations.localeOf(context).languageCode == 'vi';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        NoteFlowSpacing.lg,
-        NoteFlowSpacing.xs,
-        NoteFlowSpacing.lg,
-        0,
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          key: NoteDetailPage.askNotesKey,
-          onPressed: () {
-            final NoteDto? note = _note;
-            if (note != null) widget.onOpenNoteRag?.call(note);
-          },
-          icon: const Icon(Icons.forum_outlined, size: 18),
-          label: Text(vi ? 'Hỏi ghi chú' : 'Ask notes'),
-        ),
-      ),
+    return IconButton(
+      key: NoteDetailPage.askNotesKey,
+      tooltip: vi ? 'Hỏi ghi chú' : 'Ask notes',
+      onPressed: () {
+        final NoteDto? note = _note;
+        if (note != null) widget.onOpenNoteRag?.call(note);
+      },
+      icon: const Icon(Icons.forum_outlined, size: 18),
     );
   }
 }

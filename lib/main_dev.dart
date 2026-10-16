@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
@@ -58,33 +59,54 @@ class _LocalDevRootState extends State<_LocalDevRoot> {
   late final client = M06LoopbackClient();
   late final connection = devConnection(widget.session.requiredUserId, client);
   @override
-  Widget build(BuildContext context) => Directionality(
-    textDirection: TextDirection.ltr,
-    child: Column(
-      children: [
-        Material(
+  Widget build(BuildContext context) => MediaQuery.fromView(
+    view: View.of(context),
+    child: Directionality(
+      textDirection: TextDirection.ltr,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Material(
           color: const Color(0xFFFFE3A3),
-          child: SizedBox(
-            width: double.infinity,
-            height: 32,
-            child: Center(
-              child: Text(
-                'LOCAL DEV · ${devEmails[widget.selected]} · '
-                'Owner: ?devUser=owner / Recipient: ?devUser=recipient',
-                style: const TextStyle(fontSize: 12, color: Colors.black),
-              ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Material(
+                  color: const Color(0xFFFFE3A3),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    constraints: const BoxConstraints(minHeight: 24),
+                    child: Center(
+                      child: Text(
+                        'LOCAL DEV · ${widget.selected}'
+                        '${kIsWeb ? ' · ?devUser=owner / ?devUser=recipient' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: NoteFlowApp(
+                    authController: widget.controller,
+                    currentUserSession: widget.session,
+                    connection: connection,
+                    enableLabels: true,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        Expanded(
-          child: NoteFlowApp(
-            authController: widget.controller,
-            currentUserSession: widget.session,
-            connection: connection,
-            enableLabels: true,
-          ),
-        ),
-      ],
+      ),
     ),
   );
   @override

@@ -1,4 +1,8 @@
 import 'application/users/profile_app_service.dart';
+
+import 'package:appflowy_editor/appflowy_editor.dart'
+    show AppFlowyEditorLocalizations;
+
 import 'application/users/profile_snapshot.dart';
 import 'domain/users/profile_failure.dart';
 import 'infrastructure/users/http_user_profile_repository.dart';
@@ -949,9 +953,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       }
     }
     _lastSummarySessionGeneration = generation;
-    _ragRoot.onAuthenticationChanged(
-      sessionChanged: previous != generation,
-    );
+    _ragRoot.onAuthenticationChanged(sessionChanged: previous != generation);
     if (presentationChanged && _currentUserSession.userId != null) {
       unawaited(_restoreTheme());
       unawaited(_refreshProfile());
@@ -1009,8 +1011,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     );
     _syncPresentationAccountUserId = accountUserId;
     final int generation = _currentUserSession.sessionGeneration;
-    final SyncPresentationController controller =
-        _syncPresentationController = SyncPresentationController(
+    final SyncPresentationController controller = _syncPresentationController =
+        SyncPresentationController(
           accountUserId: accountUserId,
           localStore: localStore,
           coordinator: runtime.coordinatorFor(accountUserId),
@@ -1552,6 +1554,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'NoteFlow',
+      debugShowCheckedModeBanner: false,
       builder: (context, child) => LabelCatalogHost(
         application: widget.enableLabels ? _labelApplication : null,
         securityChanges: _noteSecurityRuntime.changes,
@@ -1562,6 +1565,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       themeMode: _themeMode,
       locale: _selectedLocale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppFlowyEditorLocalizations.delegate,
         AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,
@@ -1654,6 +1658,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             ),
             notes: NotesWorkspacePage(
               key: _notesPageKey,
+              onDetailVisibilityChanged: (visible) =>
+                  _workspaceShellKey.currentState?.setNoteEditorActive(visible),
               embeddedInWorkspace: true,
               controller: _notesController,
               provisioningReader: _summaryRunRuntime.configuration.isLocal
@@ -1665,8 +1671,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
               syncController: _syncPresentationControllerForCurrentAccount(),
               onNoteEdited: _ragRoot.onNoteEdited,
               onOpenNoteRag: _ragRoot.available
-                  ? (NoteDto note) =>
-                        _ragRoot.openNoteScope(context, note)
+                  ? (NoteDto note) => _ragRoot.openNoteScope(context, note)
                   : null,
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal

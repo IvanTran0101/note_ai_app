@@ -70,8 +70,10 @@ class NonDeltaTextInputService extends TextInputService with TextInputClient {
     TextInputConfiguration configuration,
   ) {
     final formattedValue = textEditingValue.format();
+    // A title/dialog can replace this platform client without changing the
+    // cached value. Equal text only permits a no-op for an attached client.
     if (!formattedValue.isValid() ||
-        currentTextEditingValue == formattedValue) {
+        attached && currentTextEditingValue == formattedValue) {
       return;
     }
 

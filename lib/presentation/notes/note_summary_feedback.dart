@@ -154,6 +154,7 @@ final class NoteSummaryFeedback extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       label: notice,
+      excludeSemantics: true,
       child: Container(
         key: availabilityKey,
         padding: const EdgeInsets.all(NoteFlowSpacing.md),

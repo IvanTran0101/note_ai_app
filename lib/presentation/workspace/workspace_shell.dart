@@ -198,6 +198,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   late WorkspaceDestination _destination = widget.initialDestination;
   bool _sidebarCollapsed = false;
   bool _compactSearchActive = false;
+  bool _noteEditorActive = false;
   late final AnimationController _pageMotionController = AnimationController(
     vsync: this,
     duration: NoteFlowMotion.standard,
@@ -216,6 +217,12 @@ class WorkspaceShellState extends State<WorkspaceShell>
       return;
     }
     setState(() => _compactSearchActive = active);
+  }
+
+  /// The note already owns Back and page actions while its editor is open.
+  void setNoteEditorActive(bool active) {
+    if (!mounted || _noteEditorActive == active) return;
+    setState(() => _noteEditorActive = active);
   }
 
   /// Selects [destination], rebuilding the shell and notifying
@@ -282,6 +289,10 @@ class WorkspaceShellState extends State<WorkspaceShell>
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
         final bool compact = width < WorkspaceShell.compactBreakpoint;
+        final bool compactEditor =
+            compact &&
+            _destination == WorkspaceDestination.notes &&
+            _noteEditorActive;
         final bool medium = width < WorkspaceShell.expandedBreakpoint;
         final bool collapsedDesktop = !compact && !medium && _sidebarCollapsed;
         final Widget? navigation = compact
@@ -319,8 +330,10 @@ class WorkspaceShellState extends State<WorkspaceShell>
                 right: compact,
                 bottom: false,
                 child: SizedBox(
-                  height: compact && !_compactSearchActive ? 48 : 0,
-                  child: compact && !_compactSearchActive
+                  height: compact && !_compactSearchActive && !compactEditor
+                      ? 48
+                      : 0,
+                  child: compact && !_compactSearchActive && !compactEditor
                       ? _buildCompactTopBar(copy)
                       : const SizedBox.shrink(),
                 ),
@@ -511,10 +524,9 @@ class WorkspaceShellState extends State<WorkspaceShell>
 
   Widget? _buildCompactBottomBar(WorkspaceCopy copy) {
     final bool canSearch = widget.onOpenSearch != null;
-    final bool canCreate =
-        _destination == WorkspaceDestination.dashboard &&
-        widget.onCreateNote != null;
-    if (!canSearch && !canCreate) {
+    final bool canCreate = widget.onCreateNote != null;
+    final bool canAsk = widget.onOpenRag != null;
+    if (!canSearch && !canCreate && !canAsk) {
       return null;
     }
 
@@ -548,6 +560,28 @@ class WorkspaceShellState extends State<WorkspaceShell>
                       child: SizedBox.square(
                         dimension: 48,
                         child: Icon(Icons.search, color: tokens.textSecondary),
+                      ),
+                    ),
+                  ),
+                ),
+              if (canAsk)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('workspace-bottom-ask-notes'),
+                      onPressed: widget.onOpenRag,
+                      icon: const Icon(Icons.forum_outlined, size: 20),
+                      label: Text(
+                        copy.askNotes,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        foregroundColor: tokens.textSecondary,
+                        side: BorderSide(color: tokens.divider),
+                        shape: const StadiumBorder(),
                       ),
                     ),
                   ),

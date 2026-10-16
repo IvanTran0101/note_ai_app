@@ -17,6 +17,7 @@ final class ResponsiveNotesWorkspace extends StatefulWidget {
     this.onCompactBack,
     this.onDismiss,
     this.compactBackLabel = 'Back to notes',
+    this.preferFullPage = false,
   });
 
   static const double compactBreakpoint = NoteFlowLayout.compactBreakpoint;
@@ -33,6 +34,7 @@ final class ResponsiveNotesWorkspace extends StatefulWidget {
   static const Key expandedKey = ValueKey<String>(
     'responsive-notes-expanded-surface',
   );
+  static const Key fullPageKey = ValueKey<String>('responsive-notes-full-page');
   static const Key listPaneKey = ValueKey<String>('responsive-notes-list-pane');
   static const Key detailPaneKey = ValueKey<String>(
     'responsive-notes-detail-pane',
@@ -45,6 +47,7 @@ final class ResponsiveNotesWorkspace extends StatefulWidget {
   final VoidCallback? onCompactBack;
   final VoidCallback? onDismiss;
   final String compactBackLabel;
+  final bool preferFullPage;
 
   @override
   State<ResponsiveNotesWorkspace> createState() =>
@@ -94,14 +97,18 @@ final class _ResponsiveNotesWorkspaceState
         final double width = constraints.maxWidth;
         final bool compact = width < ResponsiveNotesWorkspace.compactBreakpoint;
         final bool expanded =
+            !widget.preferFullPage &&
             width >= ResponsiveNotesWorkspace.expandedBreakpoint;
-        final bool centerPeek = !compact && !expanded;
-        final Key surfaceKey = compact
+        final bool fullWidth = compact || widget.preferFullPage;
+        final bool centerPeek = !fullWidth && !expanded;
+        final Key surfaceKey = widget.preferFullPage
+            ? ResponsiveNotesWorkspace.fullPageKey
+            : compact
             ? ResponsiveNotesWorkspace.compactKey
             : centerPeek
             ? ResponsiveNotesWorkspace.mediumKey
             : ResponsiveNotesWorkspace.expandedKey;
-        final double paneWidth = compact
+        final double paneWidth = fullWidth
             ? width
             : centerPeek
             ? (width - NoteFlowSpacing.xxxl).clamp(0, 680).toDouble()
@@ -128,7 +135,7 @@ final class _ResponsiveNotesWorkspaceState
                 Positioned.fill(
                   right: expanded ? paneWidth * progress : 0,
                   child: Offstage(
-                    offstage: compact && widget.hasSelection && progress == 1,
+                    offstage: fullWidth && widget.hasSelection && progress == 1,
                     child: ExcludeFocus(
                       excluding: blockList,
                       child: ExcludeSemantics(
@@ -178,7 +185,7 @@ final class _ResponsiveNotesWorkspaceState
                           opacity: centerPeek ? progress : 1,
                           child: Material(
                             color: tokens.pageSurface,
-                            elevation: compact ? 0 : 8,
+                            elevation: fullWidth ? 0 : 8,
                             shadowColor: Colors.black26,
                             borderRadius: BorderRadius.circular(
                               centerPeek ? NoteFlowRadius.dialog : 0,

@@ -11,14 +11,16 @@ extension _NoteDetailSecurity on NoteDetailPageState {
       return;
     }
     final title = _titleController.text, content = _contentController.text;
+    final document = _editorDocument;
     unawaited(
-      service.retainEditorDraft(selected, title, content).catchError((
-        Object _,
-      ) {
-        if (mounted) {
-          _update(() => _error = NoteSecurityCopy(context).unavailable);
-        }
-      }),
+      (document == null
+              ? service.retainEditorDraft(selected, title, content)
+              : service.retainDocumentDraft(selected, title, document))
+          .catchError((Object _) {
+            if (mounted) {
+              _update(() => _error = NoteSecurityCopy(context).unavailable);
+            }
+          }),
     );
   }
 
@@ -200,6 +202,7 @@ extension _NoteDetailSecurity on NoteDetailPageState {
     Widget panel(bool pending) => NoteSecurityPanel(
       localFirst: controller?.noteSecurity?.localFirst ?? false,
       pendingProtection: pending,
+      compact: _canRead,
       note: _note!,
       locked: !_canRead,
       busy: _actionBusy,

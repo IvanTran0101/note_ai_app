@@ -323,6 +323,10 @@ class _PositionedListState extends State<PositionedList> {
     if (!updateScheduled) {
       updateScheduled = true;
       SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          updateScheduled = false;
+          return;
+        }
         final elements = registeredElements.value;
         if (elements == null) {
           updateScheduled = false;

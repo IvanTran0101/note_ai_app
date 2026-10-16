@@ -105,7 +105,7 @@ void main() {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
 
     final Text titleHint = tester.widget<Text>(find.text('Title'));
-    expect(titleHint.style?.fontSize, 40);
+    expect(titleHint.style?.fontSize, 32);
     expect(titleHint.style?.fontWeight, FontWeight.w700);
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
@@ -191,7 +191,7 @@ void main() {
     expect(tester.getTopLeft(form).dy, kIsWeb ? 36 : 24);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-      40,
+      32,
     );
     expect(tester.takeException(), isNull);
   });
@@ -218,7 +218,7 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, kIsWeb ? 141 : 73);
+    expect(tester.getTopLeft(form).dy, kIsWeb ? 148 : 80);
     expect(tester.getSize(form).width, 354);
     expect(tester.takeException(), isNull);
   });

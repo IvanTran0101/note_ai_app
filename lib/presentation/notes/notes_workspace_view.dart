@@ -2,6 +2,7 @@ part of 'notes_workspace_page.dart';
 
 extension _NotesWorkspaceView on NotesWorkspacePageState {
   Widget _buildWorkspace(BuildContext context) {
+    _reportDetailVisibility();
     final NotesCopy copy = NotesCopy.of(context);
     final bool persistenceUnavailable = _error is UnsupportedError;
     final String? loadError = _error == null
@@ -22,8 +23,12 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
               children: <Widget>[
                 if (widget.syncController
                     case final SyncPresentationController sync)
-                  SyncStatusPanel(controller: sync),
-                if (_application is SharingNotesController) _sharingTabs(),
+                  Offstage(
+                    offstage: _hasEmbeddedSyncHeader,
+                    child: SyncStatusPanel(controller: sync, compact: true),
+                  ),
+                if (_application is SharingNotesController)
+                  Offstage(offstage: _showDetail, child: _sharingTabs()),
                 Expanded(
                   child: CallbackShortcuts(
                     bindings: {
@@ -31,13 +36,9 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                           unawaited(_requestDetailClose()),
                     },
                     child: ResponsiveNotesWorkspace(
+                      preferFullPage: widget.embeddedInWorkspace,
                       list: NotesListPanel(
-                        readable: (note) =>
-                            _application is SecuredNotesController
-                            ? (_application as SecuredNotesController)
-                                  .capabilitiesFor(note)
-                                  .canRead
-                            : !note.isProtected && note.contentAvailable,
+                        readable: _readableNote,
                         notes: _notes
                             .where((n) => (n.share != null) == _sharedOnly)
                             .toList(),

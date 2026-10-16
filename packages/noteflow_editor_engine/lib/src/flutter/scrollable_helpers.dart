@@ -10,6 +10,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 export 'package:flutter/physics.dart' show Tolerance;
 
@@ -179,8 +180,8 @@ class EdgeDraggingAutoScroller {
   /// The least amount of scroll delta applied per auto scroll tick.
   ///
   /// When the calculated scroll distance is smaller than this value (but still
-  /// non-zero), the auto scroller will nudge by this minimum to keep the view
-  /// moving rather than treat it as too small to scroll.
+  /// non-zero), the auto scroller nudges up to this minimum, bounded by the
+  /// remaining distance to the viewport edge so it cannot overshoot the target.
   final double _minimumAutoScrollDelta;
   final double _maxAutoScrollDelta;
   final Duration _animationDuration;
@@ -238,6 +239,10 @@ class EdgeDraggingAutoScroller {
   }
 
   Future<void> _scroll() async {
+    if (!scrollable.mounted) {
+      _scrolling = false;
+      return;
+    }
     try {
       final RenderBox scrollRenderBox =
           scrollable.context.findRenderObject()! as RenderBox;
@@ -251,17 +256,21 @@ class EdgeDraggingAutoScroller {
           scrollRenderBox.size.height,
         ),
       );
-      final Rect transformedDragTarget = MatrixUtils.transformRect(
-        transform,
-        _dragTargetRelatedToScrollOrigin,
-      );
-
-      if ((globalRect.size.width + precisionErrorTolerance) >=
-              transformedDragTarget.size.width &&
-          (globalRect.size.height + precisionErrorTolerance) >=
-              transformedDragTarget.size.height) {
-        // do nothing.
+      if (globalRect.size.isEmpty) {
+        return;
       }
+
+      // Keyboard resizing can leave less space than the caret's edge padding.
+      // A target larger than the viewport can never fit: zero-duration moves
+      // then alternate between its two edges in an endless microtask loop.
+      // Keep its center and only reduce the padding to the available viewport.
+      final Rect target = Rect.fromCenter(
+        center: _dragTargetRelatedToScrollOrigin.center,
+        width:
+            math.min(_dragTargetRelatedToScrollOrigin.width, globalRect.width),
+        height: math.min(
+            _dragTargetRelatedToScrollOrigin.height, globalRect.height),
+      );
 
       _scrolling = true;
       double? newOffset;
@@ -276,11 +285,11 @@ class EdgeDraggingAutoScroller {
           viewportStart + _sizeExtent(globalRect.size, _scrollDirection);
 
       final double proxyStart = _offsetExtent(
-        _dragTargetRelatedToScrollOrigin.topLeft,
+        target.topLeft,
         _scrollDirection,
       );
       final double proxyEnd = _offsetExtent(
-        _dragTargetRelatedToScrollOrigin.bottomRight,
+        target.bottomRight,
         _scrollDirection,
       );
       switch (_axisDirection) {
@@ -291,7 +300,8 @@ class EdgeDraggingAutoScroller {
                   scrollable.position.minScrollExtent) {
             final double overDrag =
                 math.min(proxyEnd - viewportEnd, overDragMax);
-            final double delta = _smoothScrollDelta(overDrag);
+            final double delta =
+                math.min(_smoothScrollDelta(overDrag), overDrag);
             newOffset = math.max(
               scrollable.position.minScrollExtent,
               scrollable.position.pixels - delta,
@@ -301,7 +311,8 @@ class EdgeDraggingAutoScroller {
                   scrollable.position.maxScrollExtent) {
             final double overDrag =
                 math.min(viewportStart - proxyStart, overDragMax);
-            final double delta = _smoothScrollDelta(overDrag);
+            final double delta =
+                math.min(_smoothScrollDelta(overDrag), overDrag);
             newOffset = math.min(
               scrollable.position.maxScrollExtent,
               scrollable.position.pixels + delta,
@@ -315,7 +326,8 @@ class EdgeDraggingAutoScroller {
                   scrollable.position.minScrollExtent) {
             final double overDrag =
                 math.min(viewportStart - proxyStart, overDragMax);
-            final double delta = _smoothScrollDelta(overDrag);
+            final double delta =
+                math.min(_smoothScrollDelta(overDrag), overDrag);
             newOffset = math.max(
               scrollable.position.minScrollExtent,
               scrollable.position.pixels - delta,
@@ -325,7 +337,8 @@ class EdgeDraggingAutoScroller {
                   scrollable.position.maxScrollExtent) {
             final double overDrag =
                 math.min(proxyEnd - viewportEnd, overDragMax);
-            final double delta = _smoothScrollDelta(overDrag);
+            final double delta =
+                math.min(_smoothScrollDelta(overDrag), overDrag);
             newOffset = math.min(
               scrollable.position.maxScrollExtent,
               scrollable.position.pixels + delta,
@@ -340,24 +353,9 @@ class EdgeDraggingAutoScroller {
         _scrolling = false;
         return;
       }
-      double delta = newOffset - currentPixels;
-      if (delta.abs() < _minimumAutoScrollDelta) {
-        if (delta.abs() <= precisionErrorTolerance) {
-          _scrolling = false;
-          return;
-        }
-        final double direction = delta.sign;
-        final double target =
-            (currentPixels + direction * _minimumAutoScrollDelta).clamp(
-          scrollable.position.minScrollExtent,
-          scrollable.position.maxScrollExtent,
-        );
-        newOffset = target.toDouble();
-        delta = newOffset - currentPixels;
-        if (delta.abs() <= precisionErrorTolerance) {
-          _scrolling = false;
-          return;
-        }
+      if ((newOffset - currentPixels).abs() <= precisionErrorTolerance) {
+        _scrolling = false;
+        return;
       }
       await scrollable.position.moveTo(
         newOffset,
@@ -365,7 +363,19 @@ class EdgeDraggingAutoScroller {
         curve: Curves.linear,
         // clamp: true,
       );
+      if ((scrollable.position.pixels - currentPixels).abs() <=
+          precisionErrorTolerance) {
+        _scrolling = false;
+        return;
+      }
       onScrollViewScrolled?.call();
+      // Instant caret scrolling must let the indexed viewport lay out before
+      // sampling its next origin/extent. Recursing only through microtasks can
+      // keep using stale geometry and starve native input and frame delivery.
+      if ((_currentDuration ?? _animationDuration) == Duration.zero &&
+          _scrolling) {
+        await SchedulerBinding.instance.endOfFrame;
+      }
       if (_scrolling) {
         await _scroll();
       }

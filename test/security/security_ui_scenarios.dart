@@ -15,6 +15,7 @@ import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'security_fixtures.dart';
 import 'local_first_scenarios.dart';
 import 'security_harness.dart';
+import '../presentation/editor/rich_editor_test_support.dart';
 
 Future<void> _settleUntil(WidgetTester tester, bool Function() ready) async {
   for (var i = 0; i < 1200; i++) {
@@ -66,16 +67,29 @@ Future<void> _show(
   await _idle(tester);
 }
 
-Future<void> _dialog(WidgetTester tester, String action) async {
+Future<void> _securityAction(WidgetTester tester, String action) async {
   final button = find.byKey(ValueKey('note-security-$action'));
-  await _settleUntil(
-    tester,
-    () =>
-        button.evaluate().isNotEmpty &&
-        tester.widget<TextButton>(button).onPressed != null,
-  );
+  if (button.evaluate().isEmpty) {
+    final menu = find.byKey(const ValueKey('note-security-menu'));
+    await _settleUntil(tester, () => menu.evaluate().isNotEmpty);
+    await tester.tap(menu);
+    await tester.pump(const Duration(milliseconds: 350));
+  }
+  await _settleUntil(tester, () {
+    if (button.evaluate().isEmpty) return false;
+    final widget = tester.widget(button);
+    return widget is TextButton
+        ? widget.onPressed != null
+        : (widget as PopupMenuItem).enabled;
+  });
   await tester.ensureVisible(button);
+  await tester.pump(const Duration(milliseconds: 350));
   await tester.tap(button);
+  await tester.pump(const Duration(milliseconds: 350));
+}
+
+Future<void> _dialog(WidgetTester tester, String action) async {
+  await _securityAction(tester, action);
   await _settleUntil(
     tester,
     () => find.byType(AlertDialog).evaluate().isNotEmpty,
@@ -184,7 +198,7 @@ void registerSecurityUiScenarios({bool includeLocalFirst = false}) {
         () => find.byType(AlertDialog).evaluate().isEmpty,
       );
       await _idle(tester);
-      await tester.tap(find.byKey(const ValueKey('note-security-lock')));
+      await _securityAction(tester, 'lock');
       await _idle(tester);
       expect(find.byKey(NoteDetailPage.contentFieldKey), findsNothing);
       expect(find.text(privateTitle), findsNothing);
@@ -207,10 +221,7 @@ void registerSecurityUiScenarios({bool includeLocalFirst = false}) {
         tester,
         () => find.byKey(NoteDetailPage.contentFieldKey).evaluate().isNotEmpty,
       );
-      final field = tester.widget<TextField>(
-        find.byKey(NoteDetailPage.contentFieldKey),
-      );
-      expect(field.controller!.text, privateBody);
+      expect(visibleRichEditor(tester).plainText, privateBody);
       h.session.clear();
       h.security.lock(null);
       await _idle(tester);
@@ -298,13 +309,7 @@ void registerSecurityUiScenarios({bool includeLocalFirst = false}) {
     );
     await _idle(tester);
     expect(h.gateway.protection.enabled, false);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-          .controller!
-          .text,
-      privateBody,
-    );
+    expect(visibleRichEditor(tester).plainText, privateBody);
     await _dialog(tester, 'enable');
     await _passwords(tester, [securityPassword, securityPassword]);
     await _confirm(tester);
@@ -319,7 +324,7 @@ void registerSecurityUiScenarios({bool includeLocalFirst = false}) {
         content: 'synthetic unsynced edit',
       ),
     );
-    await tester.tap(find.byKey(const ValueKey('note-security-lock')));
+    await _securityAction(tester, 'lock');
     await _idle(tester);
     await _dialog(tester, 'recover');
     await _settleUntil(

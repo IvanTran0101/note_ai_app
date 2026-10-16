@@ -8,7 +8,8 @@ import 'package:note_ai_app/domain/notes/note.dart';
 import 'package:note_ai_app/domain/notes/note_repository.dart' as domain;
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
-import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
+
+import '../presentation/editor/rich_editor_test_support.dart';
 
 import 'm06_application_test.dart' as f;
 
@@ -91,10 +92,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Shared title'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(NoteDetailPage.contentFieldKey),
-        'unsaved editor body',
-      );
+      await replaceRichText(visibleRichEditor(tester), 'unsaved editor body');
       final old = h.store.state.notes.last;
       await h.store.replace(
         LocalSyncState(
@@ -116,13 +114,7 @@ void main() {
       );
       await key.currentState!.reload();
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-            .controller!
-            .text,
-        'unsaved editor body',
-      );
+      expect(visibleRichEditor(tester).plainText, 'unsaved editor body');
       expect(
         find.byKey(const ValueKey('editor-remote-change')),
         findsOneWidget,
@@ -135,13 +127,7 @@ void main() {
         find.textContaining('This note changed on another device'),
         findsNothing,
       );
-      expect(
-        tester
-            .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-            .controller!
-            .text,
-        'remote fresh body',
-      );
+      expect(visibleRichEditor(tester).plainText, 'remote fresh body');
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

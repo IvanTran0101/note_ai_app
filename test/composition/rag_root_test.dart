@@ -22,6 +22,7 @@ import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
 
 import '../application/note_intelligence/rag_test_support.dart';
 import '../infrastructure/notes/note_repository_test_support.dart';
+import '../presentation/editor/rich_editor_test_support.dart';
 
 final class _SilentSource implements IRevisionSource {
   @override
@@ -267,12 +268,18 @@ void main() {
 
       // The RAG route is gone and the cited note is open with the exact span.
       expect(find.byKey(RagPage.questionFieldKey), findsNothing);
-      final TextEditingController controller = tester
-          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-          .controller!;
-      final TextSelection selection = controller.selection;
-      expect(controller.text.substring(selection.start, selection.end), quote);
-      expect(selection.start, content.indexOf(quote));
+      final editor = visibleRichEditor(tester);
+      final selection = editor.editor.selection!.normalized;
+      expect(selection.isSingle, true);
+      expect(
+        editor.editor.document
+            .nodeAtPath(selection.start.path)!
+            .delta!
+            .toPlainText()
+            .substring(selection.start.offset, selection.end.offset),
+        quote,
+      );
+      expect(selection.start.offset, content.indexOf(quote));
 
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();
@@ -312,10 +319,7 @@ void main() {
     await tester.tap(find.text('Title').first);
     await tester.pumpAndSettle();
     expect(find.byKey(NoteDetailPage.contentFieldKey), findsOneWidget);
-    await tester.enterText(
-      find.byKey(NoteDetailPage.contentFieldKey),
-      'draft in progress',
-    );
+    await replaceRichText(visibleRichEditor(tester), 'draft in progress');
     await tester.pump();
     // Force the autosave that a focus loss triggers to fail, so the draft stays
     // dirty (and the stored note keeps its original text/revision).
@@ -578,9 +582,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Second').first);
     await tester.pumpAndSettle();
-    final TextEditingController content = tester
-        .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-        .controller!;
+    final content = visibleRichEditor(tester);
 
     await openAccountRag(tester);
     await askAndDisplaySource(tester, harness);
@@ -595,7 +597,7 @@ void main() {
     // while the fresh sync is in flight marks the workspace dirty, so the late
     // completion must not reach the canonical GET.
     harness.store.failure = StateError('offline');
-    content.text = 'draft during sync';
+    await replaceRichText(content, 'draft during sync');
     await tester.pump();
     expect(
       find.byKey(RagPage.answerKey),

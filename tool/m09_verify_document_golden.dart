@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../lib/infrastructure/documents/note_document_codec.dart';
+import 'package:note_ai_app/infrastructure/documents/note_document_codec.dart';
 
 /// Direct Dart runner for the same provider-neutral fixture used by backend
 /// tests; no Flutter runtime, platform store, native hook or model inference.

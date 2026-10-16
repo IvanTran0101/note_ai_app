@@ -1,258 +1,127 @@
 # M09 current work
 
-## Active receipt — 2026-10-14
+## Active request and boundary
 
-Latest: P3 source/local accepted; publication now in progress. Final VM1772/4
-configured skips, installed Chrome66, non-RAG backend145, strict tsc/analyzer
-clean, actual Android HTTP transport1/1 (build409.3s/test7s) with real file/device
-keys. Harness APK62F63BF0635ED760435E559F693DE3704476A68CCE916FA164605EAB5606939F.
-Restore main_dev product after publication, then P4 production rich editor;
-P5/P6/ref grades remain pending. No live AWS/RAG claim. Details below are
-chronological history; this receipt overrides earlier pending P3 statements.
-P2 published3f5a5e7/remote verified, Notion P0-P2 checked. Main_dev owner
-product APK restored at that exact Flutter HEAD (build35.6s/install-r), SHA256
-3E66FCA200F7FA01C4A6D72928CA0762849C30E9127A9246C8D3833EFD89D8A6;
-native test harness replaced; emulator5554 remains running/data retained.
-P3 is uncommitted: backend document1/V3 codec/store/fingerprint/routes/response,
-masked feeds, legacy lost-ACK replay, bounded rich feed prefix/cursor; Flutter
-V3 capability probe before backfill, same-revision document/conflict enrichment,
-exact upgrade retry, security-content V3/fallback and local fixture now wired.
-Focused Flutter40/40 PASS, backend non-RAG145/145 PASS on33 files, focused
-backend24/24+feed2/2 PASS. Scoped backend tsc clean; latest client lint repaired,
-retest pending. An earlier broad Node run accidentally included RAG and fails
-the existing missing-manifest gate; it is not acceptance. Correct non-RAG run
-is145 PASS. Account encrypted encode/decode32MiB cap already exists; no change
-needed. Added opt-in actual local HTTP two-actor transport/platform scenarios;
-VM/browser/native runs and full fresh VM regression remain next. Dev services
-session89109 now on8796/8797/8798 with QA-only dynamic loopback-origin flag.
-Actual HTTP local VM1/1 PASS (p3-local-http-vm.txt) through real two-actor
-production adapters/store/share/revoke/protection. First full VM1764/7fail/4skip:
-four crypto timeouts under emulator/concurrent load and three old mock transport
-contracts; fixtures corrected (V3 capability/null for content, explicit404 older
-RAG sync probe), emulator stopped preserving data. Affected focused28/28 PASS.
-Added typed conflict recovery for rejected frozen legacy drafts: backfill retains
-local draft/payload, explicit cloud choice keeps rich data; explicit local choice
-creates a typed paragraph/new mutation. New full VM with concurrency2 finished
-1772 PASS/4 configured skips (p3-full-vm-final.txt); installed Chrome66/66 PASS
-across12 mains including IndexedDB/reseal and latest actual local HTTP negative
-legacy/revoke/locked-write tests. Client analyzer + backend source/tests tsc
-clean; fresh Dart/backend golden and document Node14/14 PASS. Native transport
-session66797 starting as emulator boots hidden/data retained; reverse8796
-must be reapplied once online. P3 receipt/publication still pending native.
-No product rich UI/no final grade yet. Earlier P2-uncommitted/ready statements
-below are history; P2 is published, do not republish those patches.
+Continue through ALL M09, including actual Chrome/Android QA, fixes, separate
+>=95/100 reference scoring, Notion updates and final-tuankiet pushes. Do not
+stop at a source checkpoint. UI/UX uses existing features only; new capabilities
+need a concrete Notion proposal and explicit user approval. Read MUST_REMEMBER.md.
+Keep local-first, the single encrypted actor store/writer/outbox/cursor, all
+access/session fences and unrelated work. No C worktrees or unrequested deploys.
 
-P0 engine/ref proof accepted: final VM10/10 + installed Chrome10/10 through the
-existing Windows SDK-overlay runner, scoped analyzer clean. Actual installed
-Chrome and native table/selection/size/readonly/roundtrip/rotation proof is in
-P0_ENGINE_PROOF.md; native artifact predates final autofill getter-only shim,
-whose VM/Chrome proof passes. No UI grading or production engine wiring yet.
-P0 published8d363b5, remote SHA verified. P1 focused Domain/Application+legacy
-27/27 PASS and scoped analysis clean; P1 published8efb66c/remote verified. Root
-VM launched at P1 finished1732/4 configured skips; P2 needs fresh regression.
-P2 is uncommitted: typed document codec/budgets, schema7/AAD3 migration, local
-state/payload/snapshot/DTO, canonical writer, drafts/redaction and every observed
-ACK/pull/hydrate/protection/conflict/label-copy path. Production repository now
-advertises documentVersion1 locally; legacy wire encoding refuses rich payload
-before sending, pending P3 typed transport. Focused76/76 PASS. Full VM4979 is
-ran with three failures (two obsolete optional-field assertions and Undo adapter
-compile gap), fixed. Final full VM1752/4 skips PASS (77572); scoped analyzer clean.
-First Chrome47374 stopped on missing typed-error import, now fixed; fresh Chrome
-aggregate (nine target mains including actual IndexedDB) passes93/93. Native
-emulator5554 booted with preserved NoteFlow_API35 data; R: alias recreated.
-integration_test/m09_document_storage_test.dart session49708 finished2/2 PASS
-on actual native file/device-key APIs. P2 is ready to publish/tick. This installed
-APK is the integration harness, not final M09 product UI; restore/build product
-main_dev before next actual UI work. Native data and synthetic namespaces kept.
-P3 independent backend codec source in amplify/documents + shared JSON golden
-is uncommitted; Node6/6 + scoped tsc PASS, direct Dart shared golden PASS. Tool
-m09_verify_document_golden.dart uses actual codec without native runtime/model
-inference. Do not stage these P3 files in P2. Transport/store/replay not
-yet wired; server/client integration remains next after P2 platform receipt.
-Added real platform rich persistence and encrypted v6 reseal scenarios (browser
-mock key channel vs native real key custody). Native emulator remains stopped;
-start after VM/Chrome to bound RAM. Fresh copy/Undo/empty-note tests are included.
-Repository mapping/direct-save and encrypted legacy migration are split by
-responsibility to keep touched core files under400. Need inspect final root
-logs and run Chrome aggregate + native storage integration. Next P3 typed server
-wire/replay; then P4-P6 production UI/ref/actual scoring. Graph generation02:27:51Z
-has metadata_changed signals; exact source fallback read for all evidence paths.
-Android013 is actually home; use inspected Android215 search ref. Earlier
-checkpoint statements below are history and do not override this receipt.
+## Verified editor checkpoint — 17 October 2026
 
-## Latest checkpoint — overrides historical pending entries below
+Runtime807-file fingerprint:
+4ee0a0ed21eedc8093b7ad92ab2d7c1bba11a7beeb269013195bc1ef6baa2101.
+Source manifest output/m09/p5-oct17-source.json rechecked:0 mismatches.
 
-Source/local integration accepted as bounded in INTEGRATION.md: VM1709/4 skips,
-Chrome1505/2 +browser-only3/3, backend outside RAG131/131, config14/14, analyzer
-clean177.9s; actual fixed Chrome/Android protected unlock keeps body/label/file,
-protected export hash matches and Lock/revoke mask private content. AWS/RAG/M01
-setup gates remain open. Product commits e53e698,134d910,7577456,96d375e,c3b4cd2,
-278add3 are made. Integration docs3718a60 pushed; remote full SHA verified.
-M09 P0 engine/ref proof is active. Created tool/m09_editor_spike (separate app ID,
-synthetic data only; main app dependency/storage remain unchanged). Rejected
-forced Win32v6 override: old file_picker10 fails HRESULT/COM compilation.
-Vendored upstream AppFlowy6.2 lib/assets/license to packages/noteflow_editor_engine:
-modern picker13 +path-only file_selector save bridge, device_info13.2, keyboard
-height0.3 (old compileSdk31 failed native AAR checks), SDK onFocusReceived default
-false callback. Editing algorithms unchanged; see NOTEFLOW_PATCHES.md.
-Prototype VM9/9 and analyzer clean. Actual Chrome semantic typing is fixed by
-deferring semantic DOM focus until framework/view focus settles. Confirmed text
-model62->67->75, painted FRESH +Vietnamese/emoji, selected Size24 and Undo/Redo,
-math glyph retained, JSON round-trip PASS. Temporary diagnostics were removed.
-Public builder decorators cover nested paragraphs/table cells without forking
-input algorithms. Host readonly renders static semantics; SDK input config now
-honors readonly and reconfigures after access change with a post-frame fence.
-Native metrics debounce gets per-instance key/cancel/mounted+selection guards.
-Host table Tab/ShiftTab delegates row-major navigation to engine; real Chrome
-found loss of B1 buffer switching semantic DOM fields under one client. Web now
-reopens connection on start-block change. VM9 includes real keyboard Tab +B1
-retention; actual compiled Chrome confirmed buffer B1 and SECOND B1 painted.
-Native table confirmed A1NATIVE_CELL and SECOND_NATIVEB1, size/undo/readonly;
-final5DA7C48... APK installed-r, FINAL_NATIVE text kept through rotation, scoped
-Flutter error lines0. Native IME composing remains framework-driven test proof,
-not manually typed Telex. Debug diagnostics removed. Final static build77543
-Web162.9s/APK46.1s; hash5DA7C48BA81501114116FB3CC45AD71CAA513E46D9A8C41C248BB8C294F41774.
-Chrome widget runner29540/15187 stopped before suite loaded; no product assertion
-ran. D: TEMP and native launcher (source in ignored output/m09) did not yet yield
-a suite result; last50139 was interrupted with the environment, log remains only
-loading. Do not count it as passing. Actual installed Chrome proof is the current
-Web evidence. Check process/service state before reusing any sessions after reset.
-Main Web/proofTTY/interactive browser are stopped; emulator5554 shut down preserving
-data after rotation. C: pagefile shrank/free space recovered22GB. Ref mapping and
-contract files created; P0 not ticked/published yet. P1 model12 tests passed, then
-Domain/Application snapshot +legacy regression26/26 passed. Added a typed writer
-capability guard so a text-only repository cannot strip a document; unsupported
-version fails before mutation. New27-test retest is pending after async error fix.
-Pure Domain blocks/runs/math/marks/rows +Note.document and DTO are uncommitted.
-saveDocumentSnapshot reuses _mutateNote session/access/snapshot fences. Production
-repository does not advertise INoteDocumentRepository until P2 is complete.
-No encrypted/wire/editor production adoption or UI score yet. New tests split
-by model/aggregate/Application responsibility; largest owned test is under400.
-Exact3718a60 APK refreshed/cached14.4s, installed-r, hash unchanged448B83...
-Historical runtimes16945/47238/6681 and R: alias may be absent after interruption.
-Verify them before reuse; preserve owned Chrome profile and Android data.
-Native main APK448B83F20C715402B389D672388371F0C603B0055669883C1D7B9CC47813F80A
-was rebuilt at published3718a60 and installed-r; exact source receipt recorded.
-Graph refresh is pending another index operation; verify current source for
-stale/partial graph evidence. M09 production editor/data are not implemented or
-scored yet; only the separate engine proof is in progress.
+- Full VM1898 pass/5 configured skips/0 failures,2m46.
+- Installed Chrome1700 pass/2 configured skips/0 failures on199 original mains,
+  with M09_LOCAL_HTTP=true;2m01 test runtime after cold tools/DDC compile.
+- Static lib/test/integration_test/golden tool/modified TableCol: No issues found.
+- Matching x64 APK built63.7s; installed-r and on-device hash matched:
+  A76328E3ACC42C6B648018D7A3AA1D5F9CF644E1F56FA00662175BE134379096.
+- Web debug build104.2s; JS succeeded. Wasm dry-run universal_html warning is
+  pre-existing and does not mean the JS build failed.
+- New AX reproduction4/4 failed before, focused82/82 after.
+- Table rendered-history reproduction2/2 failed before, focused54/54 after.
+- Editor/popup/layout subset144/144 passes.
 
-## Historical continuity
+Read P4_EDITOR_CHECKPOINT.md and P4_UI_QA.md for evidence and limits. Publish
+this verified checkpoint next, then continue P5/P6. No final UI scores or full
+M09 acceptance yet. Before publication branch/remote were final-tuankiet at
+23f3652145e3592b5e2f8a398b0d221300b412ae; recheck before mutation.
 
-## Active authorization — 2026-10-13
+## Fixes and actual UI receipts
 
-Integrate `anhminh-final` into `final-tuankiet`, verify/fix the integrated
-application, then complete M09, real Chrome/Android QA and per-platform >=95/100
-scorecards. Push accepted milestones and update Notion after each.
+- Table post-frame height measurement now uses recordUndo:false/recordRedo:false
+  and a mounted fence. It previously refilled history and cleared Redo.
+- Actual matching APK Add row/Undo/Redo/Undo gives4->5->4->5->4 rows; XML total
+  EditText counts10->12->10->12->10. Fresh open has Undo/Redo disabled, as expected.
+- EditorPopupArea subtracts root-overlay origin and clamps slash/selection to
+  actual overlay/keyboard/safe bounds. Short popups scroll. Matching longpress
+  Q controls endy677 before selected fieldy750; selected Q is no longer covered.
+- Matching cold open retains blue/yellow sqrt{x}+4row table in QA-M09-Blocks17,
+  and Q28/H4/A1 tiếng việt 😀/B1 in QA-M09-P4-Sheet-Android-16 (title trailing space).
+- Earlier Native core captures cover13 touch choices, todo/Undo, five marks and
+  clear, colors/highlight, size49 refusal/28 apply, invalid URL/valid HTTPS reopen,
+  invalid equation/painted root. These are preceding-build functional receipts;
+  final adaptive/permission UI matrix still needs matching current-source QA.
+- Native Telex/emoji/offline/cold reopen/reconnect and Chrome cross-device table
+  sync have receipts. Do not claim full browser offline cold boot/PWA support.
+- New header is single-owner accessible, right-aligned, compact sync punctuation
+  fixed, title/body centered with metadata after content. EN/VI display strings
+  preserve stored keys/commands. DEBUG ribbon removed; LOCAL DEV marker retained.
 
-## Integration checkpoint
+Screenshots/JSON/logs live in ignored output/m09 and output/playwright. Do not
+publish raw logs, reference images, keys or user data. Earlier detailed journal
+is preserved locally at output/m09/CURRENT_WORK-20261017-0225.md.
 
-- Original checkout: `8ec767d`; remote final-tuankiet: `f6e188e`.
-- Fetched explicit refs (origin fetch configuration omits anhminh-final).
-- Both integrations fast-forwarded; current HEAD `75a90b0`. No text conflicts.
-- Local generated macOS registrant had identical canonical Git content to HEAD,
-  but LF differed from configured CRLF. Preserved original bytes plus
-  `final_project.md` in D:/kiet/hk7/flutter/midterm/note_ai_app-backups/
-  2026-10-13-m09-preintegration, normalized only line endings, then integrated.
-- Backup branch: `codex/m09-pre-integration-20261013`.
-- `.playwright-cli/` and `final_project.md` remain untracked and preserved.
-- Incoming source includes M01 profile, AI Summary tests and RAG Phases1-5;
-  final incoming commit explicitly labels Phase5 incomplete. Git integration is
-  not application acceptance; regressions/runtime setup are next.
+## Next P5 adaptive work, then full P6
 
-## Work next
+1. Publish807 checkpoint after explicit staged-path review; preserve unrelated
+   .playwright-cli/ and final_project.md. Never git add . or force push.
+2. Actual phone landscape914x411 currently chooses desktop sidebar280 and
+   desktop title/top padding; keyboard leaves only a clipped title. Data and Q
+   focus survive restoration. Prefer mobile UI for Native handsets by shortest
+   side, leaving Web width-based. Inspect graph/coverage and shared layout first.
+3. Native permanent48dp Plus/Undo/Redo/Table-options row between title/body
+   pushes first body about48dp below Android014 reference. Move these EXISTING
+   controls to a rail above keyboard/existing bottom actions, with same focus,
+   snapshot and callbacks; no feature addition. Web may keep its current header.
+4. Regress/build and test actual keyboard/rotation/text scale1/1.6/2, narrow320,
+   gesture/3-button insets, light/dark; restore original emulator settings.
+5. Finish actual protection/share/revoke/drafts/files/labels/search/settings and
+   remaining editor clipboard/nesting/mixed-format cases on Chrome and Android.
+6. Fill11 scored criteria separately, paired refs/captures/build provenance;
+   fix/retest until each >=95 with mandatory flows working. Update all relevant
+   Notion ticks and push verified milestones through final completion.
 
-1. Integrated Flutter VM baseline passed: 1702 tests, four configured skips.
-   npm ci restored the new tokenizer dependency. Full analyzer PASS (178.6s).
-   Non-RAG backend 128/128 PASS after fixing Windows file URL resolution in
-   amplify/ai/test_support.ts; fixture file was present, URL.pathname was wrong.
-2. Backend typecheck is blocked by incoming missing tracked source inputs:
-   docs/rag/tokenizer_manifest.json and index_job_policy_v1.json. Neither exists
-   in known Git history/backups; the referenced collaborator Notion page is not
-   accessible to this connector. Requested original files from the user to keep
-   tokenizer pins/policy identity compatible. User says originals are on AWS.
-   No usable AWS CLI/config/profile/session is present locally; cannot retrieve
-   deployed bytes. Do not invent production pins or mark RAG verification passed.
-3. Actual Chrome/Android integrated QA continues using production local-dev
-   composition; existing NoteFlow_API35 data is preserved. Services session95318.
-   Then fix/retest and publish integration receipt before M09 implementation.
-   Web actual: Unicode autosave, labels, TXT upload48bytes Ready, Viewer grant
-   confirmed to recipient; recipient shared-note/label list verified. Existing
-   data retained. Export opens a guarded iframe; IAB download event not observed,
-   so final byte/hash export acceptance remains pending. Found stale previous
-   upload phase when opening cached attachment; cleared progress at preview start
-   in attachment_editor_preview.dart, actual hot-reload/retest still needed.
-   Baseline Android build1142.3s installed-r; hash63BBF3EEC36F7CE946DC8F31A3974C53591B1C68091EFE56AE3290F752166CA7.
-   Native found a real legacy-label backfill bug: wireVersion1 with stored
-   cursor50 intentionally sends a null cursor, but coordinator compared the
-   returned page50 to the stored cursor and refused before V2 upgrade. Backend
-   paging is correct. Compare to actual pullCursor; keep stored cursor for CAS.
-   New regression tests prove multi-page upgrade and unchanged blocked draft/
-   attempted mutation, plus genuine non-progress refusal. Fix VM39/39 PASS.
-   Chrome selected matrix1498/2 configured skips across156 compatible targets;
-   first broad run wrongly included13 filesystem/isolate targets (102 failures),
-   separately covered by full VM baseline. Receipt output/m09/chrome-matrix.json.
-   Actual Web offline edit/reload kept body, labels, file and queued mutations.
-   Fixed Android APK built44.8s (x64), installed-r without data reset. Actual
-   cold-start backfill now goes null->50->77, wireVersion2, blocked draft1
-   unchanged, loadError null. Fresh shared note/body/label/file appears Viewer.
-   Focused Chrome27/27 PASS. Final full VM now running session51500.
-   User explicitly authorized Playwright Chrome local. CLI downloaded no event;
-   direct persistent Chrome with --disable-gpu successfully exported48 bytes,
-   SHA256715b31e28904ac2abc57a78f6fc9d9c9f406557c1d9c4c7b91fb8c6a47f726ce.
-   Actual cached preview retest no longer shows stale upload status. Keep owned
-   QA profile output/playwright/m09-chrome-owner; never reset user profiles.
-   Actual Viewer->Editor reflected on native; protected Android Editor wrote
-   ANDROID-EDITOR-QA-20261013; Chrome focused body confirms exact text received.
-   Owner offline lock/wrong-password/right-password works. Found cached valid
-   key with newer metadata-only body could never online unlock; local unlock
-   now falls through to authorized cloud hydration only for online/no pending
-   protection. Wrong password/offline still fail closed. New VM3 +Chrome11 pass,
-   actual fixed Chrome online unlock/disable preserves Android text and file.
-   Revoke masks native immediately and retains encrypted drafts. Native owner
-   export48bytes SHA256 matches; APKFB590A27F06EA61E97077530D22B817F8FC8E795F7EC07829B3CB78F9FDA3C48 includes unlock fix, not newer label fix.
-   Found label hydration contract gap: protected /content returned legacy
-   shape, and Application omitted includesLabels/includesAttachments flags.
-   Negotiate wireVersion2 query on authorized content, preserve legacy response
-   and grant guard, forward both presence flags. Backend regression3/3 pass;
-   VM focused pending a Windows native hook rebuild, session28285. Full earlier
-   VM1706 pass/4skip had one fixture-cleanup error (missing already-removed temp
-   directory); cleanup now idempotent for absent fixture, deletion guards kept.
-   Full label-fix Chrome now session81775. No final acceptance/push yet.
-   Source-local profile in main_dev says service not configured; RAG permission
-   transport unavailable here. These are setup/live gates, not verified AWS.
-   After tool interruption the owned runtimes were gone; restarted preserved
-   backend16945, Web TTY47238, emulator6681. Reestablish ADB reverse ports.
-   Real Chrome profile output/playwright/m09-chrome-owner retained. Reopen it
-   using installed Chrome executable and --disable-gpu, not user profiles.
-   Local server with metadata-only trace is session94919; no body/id/token logs.
-4. M09.RT.P0 engine/IME/round-trip proof and ref map, then P1-P6 implementation,
-   regression/UI QA, scored ref comparison, fixes and final handoff.
+Ref mapping: REF_MAPPING.md. Web007 title nearx460/y164, column704-720,
+sidebar270-280, header44-48. Android014 gutter20-24dp/title32/header56 and bottom
+Search/Ask/Create. Record/subtract dev marker/insets honestly. Actual807 Web
+field bbox462.1/177/725.6/61.6 (dev strip24); More ends1363.2, one Summary/More.
+No final grade has been assigned. Do not derive UI grades from unit-test counts.
 
-## Final integration source/local receipt
+## Current owned runtimes and tools
 
-All product fixes now verified: VM1709/4 configured skips; Chrome1505/2 on159
-targets; non-RAG backend131/131; dev-config14/14; analyzer clean177.9s.
-Explicit browser-only entrypoints additionally pass3/3 (hardware + real encrypted
-platform storage/migration). All browser-compatible entrypoints now covered. Actual
-Chrome and matching Android APK cold online unlock preserve current body/label/
-file. Native protected export saved a new qa-integration (1).txt,48bytes/hash
-matches original. Native Lock masks body/labels/preview. Read INTEGRATION.md for
-bounded scope and unresolved AWS/RAG/M01 setup gates. Publish explicit patch and
-docs to final-tuankiet next; remote remainsf6e188e (fetched/rechecked), HEAD75a90b0.
-After publication, refresh APK exact-commit provenance, then implement M09 P0.
+- Local fixture exec97072 serves8796/8797/8798 with M09_QA_BROWSER_ORIGINS=1.
+  Same encrypted snapshot/key retained. Random test-port preflight now204.
+  Earlier197 opt-in Chrome run failed only because the restarted fixture lacked
+  this existing QA flag; final199 actual HTTP passes. No deployed CORS change.
+- Static Web exec43738 serves output/m09/p6-final-web on8776.
+- Chrome199 exec76071 completed; close its session via write_stdin if needed.
+- Native AVD NoteFlow_API35 deliberately STOPPED to free RAM during Chrome.
+  Restart -no-snapshot -no-audio -no-window -gpu host, WindowStyle Hidden and
+  keep launcher exec alive. No wipe/reset. Restore ADB reverse8796/8797/8798.
+- SDK D:/tools/AndroidSdk; ADB C:/platform-tools/adb.exe. Flutter C:/Users/meow/flutter.
+  JDK17 C:/Program Files/Eclipse Adoptium/jdk-17.0.11.9-hotspot. R: aliases THIS D
+  checkout. Native builds use R:, Gradle3GB/workers2, CMAKE parallel2, TEMP/TMP
+  output/m09/runtime-temp. Serialize heavy Flutter jobs (16GB host).
+- Emulator original state:1080x2400,420dpi,fontScale1.0,gesture navigation,
+  accelerometer_rotation1/user_rotation0, Vietnamese Gboard+English retained.
+- Node cpM/fsP5/reqM/pwP5 available; ctxP5 CLOSED, profile m09-chrome-owner kept.
+  Reopen installed Chrome with explicit executablePath, --disable-gpu,1363x936.
+  channel:'chrome' points to a wrong AppData path. Wait for Back/textboxes after
+  async note navigation before capturing. Native helper native_tap.py uses fresh
+  hierarchy/clickable control matching and scrolls the observed block menu.
+- All VM breakpoints removed, diagnostic socket closed, owned forwards removed.
+  Never print debug service URIs/capabilities. No native CUA; use direct ADB.
+- Graph Tier2 project D-kiet-hk7-flutter-midterm-note_ai_app-note-ai-app is indexed;
+  last generation2026-10-16T19:00:23Z. Prefer graph, verify path coverage and read
+  changed/missed source. _agent_ops does not exist; do not fabricate ops records.
 
-## Settled scope
+## Durable contracts and gates
 
-13 Basic blocks; independent notes. Selection toolbar including inline math,
-color/highlight/marks/link/code/clear and selected-text font sizes 12-48.
-Single local-first encrypted writer/outbox/cursor and metadata preservation.
-Web and Android independently >=95/100 (60/20/10/10), evidence required.
-No claims of live AWS acceptance from local fixtures or source.
+Document1,13 choices/no Page or Link to page; stable IDs, exact projection,
+finite sizes12-48 and limits from P1 remain. Schema7/AAD3/packet3, V3 capability,
+exact attempted legacy payloads, backfill, explicit conflicts and access fences
+remain. P0-P3 are already published; live AWS/RAG and exact missing manifests
+remain separate gates. Never invent tokenizer/policy files or deployed proof.
 
-## Records
-
-- Editor plan: https://app.notion.com/p/3f5f9c7a1aa0817f9e0bdbe52bb091fe
-- Scorecards: https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
-- Progress: https://app.notion.com/p/3f8f9c7a1aa0817a8f08e793aaaae83d
-- `_agent_ops/` does not exist; use these actual docs, do not fabricate ops files.
+Notion under final flutter:
+- Progress https://app.notion.com/p/3f8f9c7a1aa0817a8f08e793aaaae83d
+- Main M09 https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
+- Editor plan https://app.notion.com/p/3f5f9c7a1aa0817f9e0bdbe52bb091fe
+- Scorecards https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
+- Implementation https://app.notion.com/p/3e8f9c7a1aa0810ea410c5dc6b6bb7c8

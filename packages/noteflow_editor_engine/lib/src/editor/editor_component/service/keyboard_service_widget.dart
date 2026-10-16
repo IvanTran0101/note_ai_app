@@ -60,8 +60,11 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       key: 'keyboard',
       canTap: (details) {
         enableIMEShortcuts = true;
-        focusNode.requestFocus();
-        textInputService.close();
+        if (!focusNode.hasFocus) focusNode.requestFocus();
+        // Web semantic fields already focus on pointer-down. Closing here can
+        // detach the very client their focus action has just attached. The
+        // selection listener owns connection changes when the block changes.
+        if (!kIsWeb) textInputService.close();
         return true;
       },
     );
@@ -103,7 +106,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
 
   @override
   void enable() {
-    focusNode.requestFocus();
+    if (!focusNode.hasFocus) focusNode.requestFocus();
   }
 
   @override
@@ -137,6 +140,8 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       // the Focus widget is used to handle hardware keyboard.
       child = Focus(
         focusNode: focusNode,
+        // Web text fields below this node own their individual DOM focus.
+        includeSemantics: !kIsWeb,
         onKeyEvent: _onKeyEvent,
         child: child,
       );
@@ -229,7 +234,9 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       _updateCaretPosition(selection);
 
       if (editorState.selectionUpdateReason == SelectionUpdateReason.uiEvent) {
-        focusNode.requestFocus();
+        // A host semantic text field may own primary focus beneath this node.
+        // Keep that focus while receiving its selection updates.
+        if (!focusNode.hasFocus) focusNode.requestFocus();
         AppFlowyEditorLog.editor.debug('keyboard service - request focus');
       } else {
         AppFlowyEditorLog.editor.debug(
@@ -291,7 +298,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     // we should clear the composing range on Android.
     final shouldClearComposingRange =
         editorState.selectionType == SelectionType.inline &&
-        editorState.selectionUpdateReason == SelectionUpdateReason.uiEvent;
+            editorState.selectionUpdateReason == SelectionUpdateReason.uiEvent;
 
     if (PlatformExtension.isAndroid && shouldClearComposingRange) {
       textInputService.clearComposingTextRange();
@@ -353,7 +360,7 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
     );
 
     if (!keepEditorFocusNotifier.shouldKeepFocus) {
-      focusNode.requestFocus();
+      if (!focusNode.hasFocus) focusNode.requestFocus();
     }
   }
 

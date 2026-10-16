@@ -1,0 +1,62 @@
+import 'package:flutter/widgets.dart';
+
+/// Display copy only. Stored document keys and command names stay unchanged.
+String editorText(BuildContext context, String english) =>
+    Localizations.localeOf(context).languageCode == 'vi'
+    ? _vietnamese[english] ?? english
+    : english;
+
+const _vietnamese = {
+  'bold': 'Đậm',
+  'italic': 'Nghiêng',
+  'underline': 'Gạch chân',
+  'strikethrough': 'Gạch ngang',
+  'code': 'Mã nội tuyến',
+  'Text': 'Văn bản',
+  'Heading 1': 'Tiêu đề 1',
+  'Heading 2': 'Tiêu đề 2',
+  'Heading 3': 'Tiêu đề 3',
+  'Heading 4': 'Tiêu đề 4',
+  'Mixed': 'Hỗn hợp',
+  'Text style': 'Kiểu văn bản',
+  'Text color': 'Màu chữ',
+  'Highlight': 'Màu nền chữ',
+  'Link': 'Liên kết',
+  'Equation': 'Công thức',
+  'Inline equation': 'Công thức nội tuyến',
+  'Convert equation to text': 'Chuyển công thức thành văn bản',
+  'Clear formatting': 'Xóa định dạng',
+  'Font size': 'Cỡ chữ',
+  'Custom size (12–48)': 'Cỡ tùy chỉnh (12–48)',
+  'Size (12–48)': 'Cỡ chữ (12–48)',
+  'Reset size': 'Đặt lại cỡ chữ',
+  'Default': 'Mặc định',
+  'gray': 'Xám',
+  'brown': 'Nâu',
+  'orange': 'Cam',
+  'yellow': 'Vàng',
+  'green': 'Xanh lá',
+  'blue': 'Xanh dương',
+  'purple': 'Tím',
+  'pink': 'Hồng',
+  'red': 'Đỏ',
+  'Add block': 'Thêm khối',
+  'Undo': 'Hoàn tác',
+  'Redo': 'Làm lại',
+  'Table options': 'Tùy chọn bảng',
+  'Add row below': 'Thêm hàng bên dưới',
+  'Delete row': 'Xóa hàng',
+  'Add column after': 'Thêm cột bên phải',
+  'Delete column': 'Xóa cột',
+  'Toggle header row': 'Bật/tắt hàng tiêu đề',
+  'Toggle header column': 'Bật/tắt cột tiêu đề',
+  'Add text after table': 'Thêm văn bản sau bảng',
+  'https://… (empty to remove)': 'https://… (để trống để xóa)',
+  r'LaTeX, e.g. \sqrt{x}': r'LaTeX, ví dụ \sqrt{x}',
+  'Enter a valid equation (up to 512 characters).':
+      'Nhập công thức hợp lệ (tối đa 512 ký tự).',
+  'Enter a valid value.': 'Nhập giá trị hợp lệ.',
+  'Invalid equation': 'Công thức không hợp lệ',
+  'Cancel': 'Hủy',
+  'Apply': 'Áp dụng',
+};
