@@ -12,7 +12,7 @@ import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { RagFailure } from '../types';
 import {
   RUNTIME_CASE_HASH, RUNTIME_CONFIG_KEY, RUNTIME_CONFIG_VERSION, RUNTIME_CORPUS_KIND,
-  createRuntimeConfigReader, parseRuntimeConfig, sameRuntimeConfig,
+  RUNTIME_ELIGIBLE_OWN_NOTES_KIND, createRuntimeConfigReader, parseRuntimeConfig, sameRuntimeConfig,
 } from './runtime_config';
 import type { RuntimeConfig, RuntimeConfigReaderPort, RuntimeConfigSendOptions } from './runtime_config';
 
@@ -41,6 +41,12 @@ const rawConfig = (patch: Row = {}, corpusPatch: Row = {}): Row => ({
     ...corpusPatch,
   },
   ...patch,
+});
+const dynamicConfig = (patch: Row = {}, corpusPatch: Row = {}): Row => rawConfig(patch, {
+  kind: RUNTIME_ELIGIBLE_OWN_NOTES_KIND,
+  caseHash: null,
+  owners: { [OWNER]: [] },
+  ...corpusPatch,
 });
 
 const refused = (fn: () => unknown): boolean => {
@@ -96,6 +102,44 @@ test('a six-note reviewed pilot is trusted, and the legacy or unknown kind is re
   // The previous `synthetic-quality` kind and any unknown kind are not configured; no fallback.
   assert.ok(refused(() => parseRuntimeConfig(rawConfig({}, { kind: 'synthetic-quality' }))));
   assert.ok(refused(() => parseRuntimeConfig(rawConfig({}, { kind: 'reviewed-pilot-v2' }))));
+});
+
+test('the dynamic eligible-own-notes corpus parses with a null hash and empty owner lists', () => {
+  const input = dynamicConfig();
+  const parsed = parseRuntimeConfig(input);
+  assert.equal(RUNTIME_ELIGIBLE_OWN_NOTES_KIND, 'eligible-own-notes.v1');
+  assert.equal(parsed.corpus.kind, 'eligible-own-notes.v1');
+  assert.equal(parsed.corpus.caseHash, null);
+  assert.deepEqual(parsed.corpus.owners, { [OWNER]: [] });
+  assert.ok(Object.isFrozen(parsed.corpus.owners[OWNER]));
+  assert.equal(parsed.corpus.owners[OWNER].length, 0);
+  // The caller's stored object is copied, never frozen in place.
+  assert.ok(!Object.isFrozen(input));
+  // Dynamic identity still covers generation/mode, and cannot silently equal the reviewed mode.
+  assert.ok(sameRuntimeConfig(parsed, parseRuntimeConfig(dynamicConfig())));
+  assert.ok(!sameRuntimeConfig(parsed, parseRuntimeConfig(dynamicConfig({ generation: 2 }))));
+  assert.ok(!sameRuntimeConfig(parsed, parseRuntimeConfig(dynamicConfig({
+    policy: policy({ enabled: false }),
+  }))));
+  assert.ok(!sameRuntimeConfig(parsed, parseRuntimeConfig(rawConfig())));
+});
+
+test('the dynamic corpus refuses a mixed hash, non-empty bindings or a foreign owner set', () => {
+  const cases: ReadonlyArray<readonly [string, Row]> = [
+    ['reviewed hash in dynamic mode', dynamicConfig({}, { caseHash: RUNTIME_CASE_HASH })],
+    ['undefined dynamic hash', dynamicConfig({}, { caseHash: undefined })],
+    ['non-empty dynamic owner list', dynamicConfig({}, { owners: { [OWNER]: [note('n1')] } })],
+    ['dynamic unknown owner', dynamicConfig({}, { owners: { [OWNER]: [], [OWNER_2]: [] } })],
+    ['dynamic policy owner missing', dynamicConfig({ policy: policy({ owners: [OWNER, OWNER_2] }) })],
+    ['dynamic malformed owner key', dynamicConfig({}, { owners: { actor: [] } })],
+    ['dynamic owners as array', dynamicConfig({}, { owners: [] })],
+    ['unknown corpus kind', dynamicConfig({}, { kind: 'eligible-own-notes.v2' })],
+    ['reviewed null hash', rawConfig({}, { caseHash: null })],
+    ['reviewed empty owner list', rawConfig({}, { owners: { [OWNER]: [] } })],
+  ];
+  for (const [label, value] of cases) {
+    assert.ok(refused(() => parseRuntimeConfig(value)), label);
+  }
 });
 
 test('a disabled policy and an empty owner set are valid configuration', () => {

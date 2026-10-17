@@ -16,6 +16,8 @@ import {
   chunkNote,
   countUnicodeCharacters,
   embeddingText,
+  queryEmbeddingText,
+  QUERY_PREFIX,
 } from './chunking';
 import { RagFailure, type CanonicalNote, type Chunk, type Counter, type ErrorCode } from './types';
 
@@ -109,8 +111,29 @@ test('fixture note a-watch is one paragraph chunk with the exact UTF-16 span', (
   assert.equal(chunk.ownerId, 'actor-a');
   assert.equal(chunk.noteId, 'n-watch');
   assert.equal(chunk.revision, 1);
-  assert.equal(embeddingText(chunk), `SLGH031\n${note.content}`);
+  assert.equal(embeddingText(chunk), `title: SLGH031 | text: ${note.content}`);
   assert.equal(OVERLAP_TOKENS, 0);
+});
+
+test('EmbeddingGemma document and query framing is applied exactly once', () => {
+  const note = syntheticNote('Body', 'Title');
+  const [chunk] = chunkNote(note, words);
+  assert.equal(embeddingText(chunk), 'title: Title | text: Body');
+  assert.equal(embeddingText({ ...chunk, title: '' }), 'title: none | text: Body');
+  assert.equal(queryEmbeddingText('what is RAG?'), 'task: search result | query: what is RAG?');
+  assert.equal(queryEmbeddingText('x'), `${QUERY_PREFIX}x`);
+
+  // The chunk fit measures the exact framed input, not just the content span.
+  const measured: string[] = [];
+  chunkNote(note, (text) => {
+    measured.push(text);
+    return 0;
+  });
+  assert.ok(measured.includes('title: Title | text: Body'));
+
+  for (const invalid of ['', 42, '\ud800']) {
+    assert.throws(() => queryEmbeddingText(invalid as string), failsWith('INVALID_INPUT'));
+  }
 });
 
 test('emoji and Vietnamese content keeps original UTF-16 offsets (no normalization)', () => {
@@ -127,7 +150,7 @@ test('emoji and Vietnamese content keeps original UTF-16 offsets (no normalizati
 test('paragraph boundaries are blank-line runs and chunks stay contiguous', () => {
   const content = 'Alpha beta gamma.\n\nDelta epsilon zeta.\n\nEta theta iota.';
   const note = syntheticNote(content);
-  const chunks = chunkNote(note, scaledWords(100)); // each paragraph alone reaches the 400 target
+  const chunks = chunkNote(note, scaledWords(70)); // each framed paragraph alone reaches the 400 target
   assert.equal(chunks.length, 3);
   assert.deepEqual(
     chunks.map((chunk) => chunk.text),
@@ -144,13 +167,13 @@ test('paragraph boundaries are blank-line runs and chunks stay contiguous', () =
   assert.equal(chunks.map((chunk) => chunk.text).join(''), content); // whitespace preserved inside spans
   assert.deepEqual(chunks.map((chunk) => chunk.ordinal), [0, 1, 2]);
   assert.deepEqual(chunks.map((chunk) => chunk.chunkId), ['body-0', 'body-1', 'body-2']);
-  assertChunkInvariants(chunks, content, scaledWords(100));
+  assertChunkInvariants(chunks, content, scaledWords(70));
 });
 
 test('adjacent paragraphs are packed up to the target without crossing the maximum', () => {
   const content = 'Alpha beta.\n\nGamma delta.\n\nEpsilon zeta.';
   const note = syntheticNote(content);
-  const counter = scaledWords(50);
+  const counter = scaledWords(30);
   const chunks = chunkNote(note, counter);
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0].text, content);
@@ -211,10 +234,10 @@ test('the 2048-character ceiling splits astral text without bisecting surrogate 
   const note = syntheticNote(content, '');
   const chunks = chunkNote(note, zero);
   assert.equal(chunks.length, 2);
-  assert.equal(chunks[0].endOffset, 4094); // 2047 code points per chunk + the title newline
+  assert.equal(chunks[0].endOffset, 4056); // 2028 emoji + the 20-character frame
   assert.equal(chunks.map((chunk) => chunk.text).join(''), content);
   assert.equal(countUnicodeCharacters(embeddingText(chunks[0])), 2048);
-  assert.equal(countUnicodeCharacters(embeddingText(chunks[1])), 954);
+  assert.equal(countUnicodeCharacters(embeddingText(chunks[1])), 992);
   for (const chunk of chunks) {
     assert.ok(countUnicodeCharacters(embeddingText(chunk)) <= MAX_EMBEDDING_CHARACTERS);
     assert.ok(!splitsSurrogatePair(content, chunk.startOffset));
@@ -241,11 +264,11 @@ test('whitespace-only gaps between chunks are not emitted and never hide content
 test('a title that leaves no room for content fails with INPUT_TOO_LONG', () => {
   const note = syntheticNote('Alpha beta.', 'x'.repeat(3000));
   assert.throws(() => chunkNote(note, zero), failsWith('INPUT_TOO_LONG'));
-  // prefix = title + "\n": 2047 characters leaves exactly one code point of room.
-  const boundary = chunkNote(syntheticNote('A', 'x'.repeat(2046)), zero);
+  // prefix = 16 fixed frame characters + title: 2031 leaves exactly one code point of room.
+  const boundary = chunkNote(syntheticNote('A', 'x'.repeat(2031)), zero);
   assert.equal(boundary.length, 1);
   assert.equal(boundary[0].text, 'A');
-  assert.throws(() => chunkNote(syntheticNote('A', 'x'.repeat(2047)), zero), failsWith('INPUT_TOO_LONG'));
+  assert.throws(() => chunkNote(syntheticNote('A', 'x'.repeat(2032)), zero), failsWith('INPUT_TOO_LONG'));
   // A title whose own tokens already consume the 512-token input budget is equally impossible.
   assert.throws(() => chunkNote(syntheticNote('A', 'x '.repeat(600)), words), failsWith('INPUT_TOO_LONG'));
 });
@@ -292,14 +315,14 @@ test('embedding budget fixture: 512 tokens/2048 characters is the inclusive limi
   }
 
   // Exactly 2048 characters and 512 estimated tokens is accepted as a single chunk ...
-  const atLimit = 'a'.repeat(2047); // + the title newline = 2048
+  const atLimit = 'a'.repeat(2028); // + the 20-character `title: none | text: ` frame
   const chunks = chunkNote(syntheticNote(atLimit, ''), tokensFromCharacters);
   assert.equal(chunks.length, 1);
   assert.equal(countUnicodeCharacters(embeddingText(chunks[0])), 2048);
   assert.equal(tokensFromCharacters(embeddingText(chunks[0])), 512);
 
   // ... while one more character (or one more token) is split, never emitted over budget.
-  for (const content of ['a'.repeat(2048), 'a'.repeat(2051)]) {
+  for (const content of ['a'.repeat(2029), 'a'.repeat(2051)]) {
     const oversized = chunkNote(syntheticNote(content, ''), tokensFromCharacters);
     assert.ok(oversized.length > 1);
     assertChunkInvariants(oversized, content, tokensFromCharacters);

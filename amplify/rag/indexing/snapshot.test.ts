@@ -2,7 +2,8 @@
  * Indexing snapshot codec tests — policy identity, exact schema, checksum and rebuild triggers.
  * Runner: node --import tsx --test amplify/rag/indexing/snapshot.test.ts
  */
-import tokenizerManifest from '../../../docs/rag/tokenizer_manifest.json';
+import tokenizerManifest from '../../../docs/rag/embeddinggemma_tokenizer_manifest.json';
+import profile from '../../../docs/rag/embeddinggemma_profile_v1.json';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -45,15 +46,19 @@ const rejectsSnapshot = (value: unknown): void => {
     error instanceof IndexFailure && error.code === 'INDEX_NOT_READY' && error.retryable === false);
 };
 
-test('policy identity pins the full embedding, chunking and UTF-16 policy', () => {
+test('policy identity pins the full profile, tokenizer, chunking and UTF-16 policy', () => {
   assert.deepEqual(POLICY_IDENTITY_FIELDS, {
+    profile,
     tokenizer: tokenizerManifest,
     lexical: { analyzer: 'rag-analyzer.v1', k1: 1.2, b: 0.75 },
-    model: 'cohere.embed-multilingual-v3',
-    dimensions: 1024,
-    documentInputType: 'search_document',
-    queryInputType: 'search_query',
+    model: 'embeddinggemma-2-q8',
+    dimensions: 768,
+    documentInputType: 'title: {title|none} | text: {content span}',
+    queryInputType: 'task: search result | query: {question}',
     truncate: 'NONE',
+    pooling: 'mean',
+    normalization: 'l2',
+    quantization: 'Q8_0',
     chunking: {
       strategy: 'paragraph-sentence-token-then-pack',
       targetTokens: 400,
@@ -63,12 +68,33 @@ test('policy identity pins the full embedding, chunking and UTF-16 policy', () =
     },
     offsetUnit: 'utf16-code-unit',
     spanEnd: 'exclusive',
-    embeddingText: 'title-newline-content-span',
+    embeddingText: 'title-or-none-pipe-text',
+    queryEmbeddingText: 'task-search-result-pipe-query',
   });
-  assert.equal(policy.embedding.dimensions, 1024);
+  assert.equal(policy.embedding.dimensions, 768);
+  assert.equal(profile.model.dimensions, policy.embedding.dimensions);
+  assert.equal(profile.model.id, policy.embedding.model);
+  assert.equal(profile.model.quantization, 'Q8_0');
   assert.match(policyIdentity(), /^[0-9a-f]{64}$/);
   assert.equal(policyIdentity(), sha256(JSON.stringify(POLICY_IDENTITY_FIELDS)));
   assert.equal(policyIdentity(), policyIdentity());
+});
+
+test('policy identity changes on artifact or runtime drift, so an old profile is never current', () => {
+  const drifted = (over: Record<string, unknown>) => sha256(JSON.stringify({
+    ...POLICY_IDENTITY_FIELDS,
+    profile: { ...profile, ...over },
+  }));
+  assert.notEqual(drifted({ model: { ...profile.model, sha256: '0'.repeat(64) } }), policyIdentity());
+  assert.notEqual(drifted({ runtime: { ...profile.runtime, commit: '0'.repeat(40) } }), policyIdentity());
+  assert.notEqual(drifted({ model: { ...profile.model, quantization: 'Q4_0' } }), policyIdentity());
+  // The Cohere-era identity is a different hash, so its manifest/snapshot cannot be reused.
+  const cohereEra = sha256(JSON.stringify({
+    tokenizer: { model: 'cohere.embed-multilingual-v3' },
+    model: 'cohere.embed-multilingual-v3',
+    dimensions: 1024,
+  }));
+  assert.notEqual(cohereEra, policyIdentity());
 });
 
 test('embedding input digest depends on policy, title and text, never on note identity', () => {

@@ -21,6 +21,8 @@ import { LIVE_TOTAL_DEADLINE_MS } from '../live_policy';
 import type { LiveApproval } from '../live_policy';
 import { createQuery } from '../pipeline';
 import { DEEPSEEK_SYSTEM_PROMPT } from '../providers/deepseek';
+import { deepFreeze } from '../query_diagnostics';
+import type { DiagnosticMetadata } from '../query_diagnostics';
 import { deepSeekInputUpperBound, jevInputUpperBound } from '../token_fit';
 import { RagFailure } from '../types';
 import type { Counters, ErrorCode, Providers, RagRequest, RagResponse } from '../types';
@@ -41,7 +43,7 @@ export type PilotQueryDeps = Readonly<{
   readApproval: (signal: AbortSignal) => Promise<LiveApproval>;
   /** Lazily returns the SDK/tokenizer index; may safely be a cached factory. */
   loadIndex: () => IndexDeps;
-  /** Pilot budget: lease, JEV/DeepSeek reservation and the atomic Cohere admission. */
+  /** Pilot budget: lease, JEV/DeepSeek reservation and the atomic embedding admission. */
   budget: PilotBudget;
   /** Raw JEV/DeepSeek ports; reserved by this module before each single call. */
   rawProviders: Providers;
@@ -53,8 +55,8 @@ export type PilotQueryDeps = Readonly<{
    * still shares the one request budget. Local-only: never serialized on the wire.
    */
   parentSignal?: AbortSignal;
-  /** Safe bounded metadata sink (stage/code only); never receives question/text/sub/tokens. */
-  log?: (metadata: Readonly<Record<string, string | number>>) => void;
+  /** Safe bounded metadata sink (stage/codes/counts and typed trace arrays); never raw text/ids. */
+  log?: (metadata: DiagnosticMetadata) => void;
 }>;
 
 export type PilotQuery = (actor: string, request: RagRequest, requestId: string) => Promise<RagResponse>;
@@ -67,10 +69,11 @@ const failure = (requestId: string, code: ErrorCode): RagResponse =>
 
 const logSafely = (
   deps: PilotQueryDeps,
-  metadata: Readonly<Record<string, string | number>>,
+  metadata: DiagnosticMetadata,
 ): void => {
   try {
-    deps.log?.(Object.freeze({ ...metadata }));
+    // Typed arrays/objects pass through; every nested value is frozen for the sink.
+    deps.log?.(deepFreeze({ ...metadata }));
   } catch {
     // Logging must never change a request outcome.
   }
@@ -131,7 +134,7 @@ const hasDeps = (value: unknown): value is PilotQueryDeps => {
     typeof budget['acquireQuery'] === 'function' &&
     typeof budget['release'] === 'function' &&
     typeof budget['reserve'] === 'function' &&
-    typeof budget['acquireCohere'] === 'function' &&
+    typeof budget['acquireEmbedding'] === 'function' &&
     isRecord(rawProviders) &&
     typeof rawProviders['jev'] === 'function' &&
     typeof rawProviders['generate'] === 'function' &&
@@ -191,6 +194,9 @@ export function createPilotQuery(deps: PilotQueryDeps): PilotQuery {
         liveApproval: approval,
         pilotPolicy: config.policy,
         signal: deadline.signal,
+        // Reuse the existing bounded sink; the pipeline freezes an allowlisted event and swallows
+        // sink failures, so the production JSON console logger can never change the response.
+        onDiagnostic: (diagnostic) => logSafely(deps, diagnostic),
         consumeQuota: async (quotaActor, signal) => {
           lease = await deps.budget.acquireQuery(quotaActor, requestId, signal);
           return true;

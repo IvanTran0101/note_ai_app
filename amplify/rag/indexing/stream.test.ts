@@ -136,18 +136,60 @@ test('a malformed relevant row is a terminal typed failure, not a replay', async
   ]);
 });
 
-test('terminal worker results are acknowledged with typed metadata only', async () => {
+test('FAILED worker results stay terminal and are acknowledged with typed metadata only', async () => {
   const rigged = rig(async (value) => (value.ownerId === 'u1'
     ? { status: 'FAILED', code: 'INPUT_TOO_LONG' }
-    : { status: 'SUPERSEDED', code: 'SOURCE_CHANGED' }));
+    : { status: 'FAILED', code: 'CLEANUP_FAILED' }));
   const result = await rigged.handle({
     Records: [record({ sequence: '1' }), record({ ownerId: 'OWNER#u2', sequence: '2' })],
   } as never);
   assert.deepEqual(result, { batchItemFailures: [] });
   assert.deepEqual(rigged.logs, [{
     event: 'index.stream.terminal', code: 'INPUT_TOO_LONG', ownerId: 'u1', noteId: 'n1',
+  }, {
+    event: 'index.stream.terminal', code: 'CLEANUP_FAILED', ownerId: 'u2', noteId: 'n1',
   }]);
   assert.equal(JSON.stringify(rigged.logs).includes('secret'), false);
+});
+
+test('SOURCE_CHANGED and PUBLISH_REJECTED replay the earliest sequence with the exact code', async () => {
+  for (const code of ['SOURCE_CHANGED', 'PUBLISH_REJECTED'] as const) {
+    const rigged = rig(async () => ({ status: 'SUPERSEDED', code }));
+    const result = await rigged.handle({
+      Records: [
+        record({ sequence: '100' }),
+        record({ sequence: '99', eventName: 'MODIFY', revision: 2 }),
+        record({ sortKey: 'PROTECTION#n1', sequence: '101', eventName: 'MODIFY' }),
+      ],
+    } as never);
+    assert.equal(rigged.calls.length, 1, `${code}: one worker call`);
+    assert.deepEqual(result, { batchItemFailures: [{ itemIdentifier: '99' }] }, code);
+    assert.deepEqual(rigged.logs, [{
+      event: 'index.stream.replay', code, ownerId: 'u1', sequenceNumber: '99',
+    }], code);
+  }
+});
+
+test('ALREADY_DONE is acknowledged, never replayed and never logged as terminal', async () => {
+  const rigged = rig(async () => ({ status: 'SUPERSEDED', code: 'ALREADY_DONE' }));
+  const result = await rigged.handle({ Records: [record({ sequence: '21' })] } as never);
+  assert.deepEqual(result, { batchItemFailures: [] });
+  assert.equal(rigged.calls.length, 1);
+  assert.deepEqual(rigged.logs, []);
+});
+
+test('a replayed SOURCE_CHANGED converges on the next invocation', async () => {
+  let attempt = 0;
+  const rigged = rig(async () => {
+    attempt += 1;
+    return attempt === 1
+      ? { status: 'SUPERSEDED', code: 'SOURCE_CHANGED' }
+      : { status: 'SUCCEEDED', code: 'READY' };
+  });
+  const event = { Records: [record({ sequence: '30' })] } as never;
+  assert.deepEqual(await rigged.handle(event), { batchItemFailures: [{ itemIdentifier: '30' }] });
+  assert.deepEqual(await rigged.handle(event), { batchItemFailures: [] });
+  assert.equal(rigged.calls.length, 2);
 });
 
 test('a non-retryable thrown failure is acknowledged; an unknown failure replays', async () => {

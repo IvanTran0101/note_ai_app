@@ -19,6 +19,7 @@
 import { assertChunkAuthority } from '../authority';
 import {
   MAX_EMBEDDING_CHARACTERS, MAX_EMBEDDING_TOKENS, countTokens, countUnicodeCharacters,
+  queryEmbeddingText,
 } from '../chunking';
 import { bm25, compareSourceKey } from '../keyword';
 import { validateVector } from '../retrieval';
@@ -49,6 +50,10 @@ type RequestBinding = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Exactly the documented cosine range; never accept a missing, string or out-of-range metric. */
+const isVectorDistance = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 2;
+
 const deepFreeze = <T>(value: T): T => {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -69,7 +74,10 @@ const toRagFailure = (error: unknown, signal: AbortSignal): RagFailure => {
       case 'INVALID_PROVIDER_OUTPUT': return new RagFailure('INVALID_PROVIDER_OUTPUT');
       case 'SOURCE_CHANGED': return new RagFailure('SOURCE_CHANGED');
       case 'INVALID_INPUT': return new RagFailure('INVALID_INPUT');
+      case 'INPUT_TOO_LONG': return new RagFailure('INPUT_TOO_LONG');
       case 'PROVIDER_UNAVAILABLE': return new RagFailure('PROVIDER_UNAVAILABLE');
+      // A provider-side 401/403 is an outage for the user, never a user authorization failure.
+      case 'UNAUTHORIZED': return new RagFailure('PROVIDER_UNAVAILABLE');
       // The Phase 5 guarded store adds these two typed refusals; keep their safe codes instead of
       // flattening them into INDEX_NOT_READY, which would hide a revoked/stale pilot permit.
       case 'LIVE_POLICY_NOT_CONFIGURED': return new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
@@ -242,10 +250,13 @@ export function createQueryPorts(deps: IndexDeps): QueryPorts {
       const binding = requests.get(io);
       if (binding === undefined) throw new RagFailure('INDEX_NOT_READY');
       if (typeof question !== 'string' || question.trim().length === 0) throw new RagFailure('INVALID_INPUT');
-      if (countTokens(deps.embedding.count, question) > MAX_EMBEDDING_TOKENS) {
+      // Frame exactly once, then bound and dispatch that identical string. Counting the raw
+      // question would understate the prefix and could reserve or send an over-limit input.
+      const input = queryEmbeddingText(question);
+      if (countTokens(deps.embedding.count, input) > MAX_EMBEDDING_TOKENS) {
         throw new RagFailure('INPUT_TOO_LONG');
       }
-      if (countUnicodeCharacters(question) > MAX_EMBEDDING_CHARACTERS) throw new RagFailure('INPUT_TOO_LONG');
+      if (countUnicodeCharacters(input) > MAX_EMBEDDING_CHARACTERS) throw new RagFailure('INPUT_TOO_LONG');
       try {
         // The shared smoke counter is reserved before the single query call, failures included.
         await deps.store.reserveEmbedding(binding.ownerId, io);
@@ -263,7 +274,9 @@ export function createQueryPorts(deps: IndexDeps): QueryPorts {
               }
             };
         await revalidateBeforeEmbed();
-        const produced = await deps.embedding.embed([question], 'search_query', io, revalidateBeforeEmbed);
+        // The exact framed input that passed the bounds above is the only text that may be sent;
+        // its raw user content is preserved verbatim (no trim, no second prefix).
+        const produced = await deps.embedding.embed([input], 'search_query', io, revalidateBeforeEmbed);
         if (!Array.isArray(produced) || produced.length !== 1) {
           throw new IndexFailure('INVALID_PROVIDER_OUTPUT', false);
         }
@@ -280,33 +293,72 @@ export function createQueryPorts(deps: IndexDeps): QueryPorts {
       const binding = bindingFor(context);
       // An empty eligible scope is a legitimate empty result and must not reach the index.
       if (context.notes.length === 0) return Object.freeze([]);
+      // Absence is the documented legacy fallback. A present non-function is a malformed port,
+      // not a reason to silently downgrade to key-only retrieval.
+      const queryScored = deps.artifacts.queryScored;
+      if (queryScored !== undefined && typeof queryScored !== 'function') {
+        throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+      }
       await ensureSnapshot(binding, context);
       const scoped = scopedDocuments(binding, context);
       if (scoped.length === 0) return Object.freeze([]);
-      let keys: readonly string[];
+      let results: readonly Readonly<{ key: string; distance?: number }>[];
       try {
-        keys = await deps.artifacts.query(
-          vector,
-          binding.ownerId,
-          binding.manifest.version,
-          context.request.scope.type === 'note' ? context.request.scope.noteId : null,
-          context.signal,
-        );
+        if (queryScored !== undefined) {
+          // Production path: the same query operation as `query`, but with the validated
+          // distance for each key. A malformed hit is refused, never silently downgraded.
+          const hits = await queryScored(
+            vector,
+            binding.ownerId,
+            binding.manifest.version,
+            context.request.scope.type === 'note' ? context.request.scope.noteId : null,
+            context.signal,
+          );
+          if (!Array.isArray(hits)) throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+          results = hits.map((hit) => {
+            if (!isRecord(hit)) throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+            const key = hit['key'];
+            const distance = hit['distance'];
+            if (typeof key !== 'string' || !isVectorDistance(distance)) {
+              throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+            }
+            return { key, distance };
+          });
+        } else {
+          // Legacy/injected fake fallback: keys only, and therefore no distance at all. Absence
+          // stays `undefined`; no value is derived from the rank or invented here.
+          const keys = await deps.artifacts.query(
+            vector,
+            binding.ownerId,
+            binding.manifest.version,
+            context.request.scope.type === 'note' ? context.request.scope.noteId : null,
+            context.signal,
+          );
+          if (!Array.isArray(keys)) throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+          results = keys.map((key) => {
+            if (typeof key !== 'string') throw new RagFailure('INVALID_PROVIDER_OUTPUT');
+            return { key };
+          });
+        }
       } catch (error) {
         throw toRagFailure(error, context.signal);
       }
       const byVectorKey = new Map(scoped.map((document) => [document.vectorKey, document] as const));
       const ranked: Ranked[] = [];
       const seen = new Set<string>();
-      for (const key of keys) {
-        const document = byVectorKey.get(key);
+      for (const result of results) {
+        const document = byVectorKey.get(result.key);
         // A key outside the scoped snapshot is a foreign or stale index generation.
         if (document === undefined) throw new RagFailure('SOURCE_CHANGED');
         const identity = sourceKey(document.chunk);
         if (seen.has(identity)) throw new RagFailure('INDEX_NOT_READY');
         seen.add(identity);
         assertChunkAuthority(document.chunk, context);
-        ranked.push(Object.freeze({ chunk: document.chunk, rank: ranked.length + 1 }));
+        ranked.push(Object.freeze({
+          chunk: document.chunk,
+          rank: ranked.length + 1,
+          ...(result.distance === undefined ? {} : { vectorDistance: result.distance }),
+        }));
       }
       return Object.freeze(ranked);
     },

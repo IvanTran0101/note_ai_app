@@ -127,7 +127,7 @@ void main() {
 
       expect(harness.gateway.updates.single.accepted, isTrue);
       expect(harness.gateway.updates.single.expectedGeneration, 0);
-      expect(harness.gateway.updates.single.version, 'rag-consent.v1');
+      expect(harness.gateway.updates.single.version, RagConsent.currentVersion);
       expect(harness.service.state.consent, RagConsent(accepted: true, generation: 1));
       expect(harness.service.state.consentLoading, isFalse);
       expect(harness.service.state.failure, isNull);

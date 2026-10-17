@@ -20,7 +20,7 @@
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { SignatureV4 } from '@smithy/signature-v4';
-import { policy } from '../types';
+import legacyPolicy from '../../../docs/rag/policy_v1.json';
 import { IndexFailure } from './types';
 
 export type AwsService = 'bedrock' | 's3vectors';
@@ -62,8 +62,13 @@ export type AwsJson = (
   beforeDispatch?: () => Promise<void>,
 ) => Promise<unknown>;
 
-/** The only Bedrock operation this code may invoke; embedding.ts reuses the constant. */
-export const BEDROCK_INVOKE_MODEL_PATH = `/model/${encodeURIComponent(policy.embedding.model)}/invoke`;
+/**
+ * The only Bedrock operation this code may invoke; embedding.ts reuses the constant. Frozen to
+ * the legacy policy_v1 Cohere model: the active EmbeddingGemma runtime is self-hosted HTTP and
+ * must never widen or retarget this signed Bedrock whitelist.
+ */
+export const BEDROCK_INVOKE_MODEL_PATH =
+  `/model/${encodeURIComponent(legacyPolicy.embedding.model)}/invoke`;
 
 /** Operation whitelist: (service, exact path) pairs. Nothing else is signable or sendable. */
 const OPERATIONS: Readonly<Record<AwsService, ReadonlySet<string>>> = Object.freeze({

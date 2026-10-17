@@ -11,6 +11,10 @@ export const ragQuery = defineFunction({
   environment: {
     DEEPSEEK_API_KEY: secret('DEEPSEEK_API_KEY'),
     TYPESAFE_API_KEY: secret('TYPESAFE_API_KEY'),
+    // Cloudflare Access Service Auth for the self-hosted EmbeddingGemma endpoint. Amplify
+    // resolves these server-side; no value reaches a client or the CDK template as plaintext.
+    CLOUDFLARE_ACCESS_CLIENT_ID: secret('CLOUDFLARE_ACCESS_CLIENT_ID'),
+    CLOUDFLARE_ACCESS_CLIENT_SECRET: secret('CLOUDFLARE_ACCESS_CLIENT_SECRET'),
   },
   logging: { retention: '1 week' },
 });

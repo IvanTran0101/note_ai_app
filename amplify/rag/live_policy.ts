@@ -14,7 +14,9 @@
  * bounds belong to the root adapter that wraps the provider ports.
  */
 import { isValidIdentifier } from './contract';
-import { assertPilotActor, readPilotPolicy } from './phase5/pilot_policy';
+import {
+  assertPilotActor, readPilotPolicy, PILOT_DEMO_THRESHOLDS, PILOT_THRESHOLDS,
+} from './phase5/pilot_policy';
 import { policy, RagFailure, type RuntimeConfig } from './types';
 
 /** The private synthetic-account namespace; mirrors index_job_policy_v1.smoke.ownerPrefix. */
@@ -52,7 +54,10 @@ const hasApprovalShape = (value: Record<string, unknown>): boolean => {
       (APPROVAL_OPTIONAL as readonly string[]).includes(key));
 };
 
-/** Same threshold policy as the mock gates: support strictly above 0.5, conflict strictly below. */
+/**
+ * Same threshold policy as the mock gates, except the answerability floor is inclusive at 0.5 for
+ * the user-approved uncalibrated pilot pair. Conflict stays strictly below 0.5.
+ */
 export const isValidLiveThresholds = (value: unknown): value is LiveThresholds => {
   if (!isRecord(value)) return false;
   const answerabilityMin = value['answerabilityMin'];
@@ -60,7 +65,7 @@ export const isValidLiveThresholds = (value: unknown): value is LiveThresholds =
   return (
     typeof answerabilityMin === 'number' &&
     Number.isFinite(answerabilityMin) &&
-    answerabilityMin > 0.5 &&
+    answerabilityMin >= 0.5 &&
     answerabilityMin <= 1 &&
     typeof conflictMax === 'number' &&
     Number.isFinite(conflictMax) &&
@@ -137,8 +142,8 @@ const POLICY_LIVE_THRESHOLDS: unknown = policy.jev.liveThresholds;
 /**
  * Validates the fixed model, threshold pair and both budgets before any egress. Mock mode needs
  * no approval. Live mode is private: the shipped policy gates must still be closed, exactly one
- * immutable calibrated approval must restate the model and threshold pair, and admission is one
- * of two mutually exclusive gates:
+ * immutable approval must match the calibrated baseline; the explicit pilot may select the
+ * user-approved 0.50 override without claiming recalibration. Admission is one of two gates:
  *
  *  - no explicit pilot policy (the Phase 4 default): the actor must be a `rag-smoke-` account;
  *  - an explicit Phase 5 pilot policy: the actor must be an enabled, listed Cognito `sub`, the
@@ -175,6 +180,9 @@ export const readRuntimeConfig = (
     throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   }
   const bound = Object.freeze({ answerabilityMin, conflictMax });
+  const demoRuntime =
+    answerabilityMin === PILOT_DEMO_THRESHOLDS.answerabilityMin &&
+    conflictMax === PILOT_DEMO_THRESHOLDS.conflictMax;
   // An explicit pilot policy is validated before any branch: an invalid explicit value never
   // silently falls back to the Phase 4 smoke seam and mock mode cannot smuggle an unusable one.
   const pilot = pilotPolicy === undefined ? null : readPilotPolicy(pilotPolicy);
@@ -190,7 +198,7 @@ export const readRuntimeConfig = (
   if (pilot !== null) {
     assertPilotActor(pilot, actor);
     // The frozen pilot policy may only restate the same runtime model/thresholds; together with
-    // `matchesRuntime` below that pins policy == runtime == approval, never a retune.
+    // the approval checks below that pins policy == runtime, never a retune.
     if (
       pilot.model !== model ||
       pilot.thresholds.answerabilityMin !== answerabilityMin ||
@@ -202,7 +210,22 @@ export const readRuntimeConfig = (
     throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   }
   const live = readLiveApproval(approval);
-  if (!matchesRuntime(live, model, bound)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  if (pilot !== null) {
+    // The published approval is the genuine historical 0.85/0.1 calibration. The 0.50 runtime is
+    // a user-approved uncalibrated pilot override: it may not relabel or replace that approval.
+    if (!matchesRuntime(live, model, PILOT_THRESHOLDS)) {
+      throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+    }
+    // The 0.50 pair is admitted only through the exact validated pilot pair; the legacy 0.85 pair
+    // keeps strict approval/runtime equality, so no other runtime threshold can slip through.
+    if (!demoRuntime && !matchesRuntime(live, model, bound)) {
+      throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+    }
+  } else if (demoRuntime || !matchesRuntime(live, model, bound)) {
+    // The smoke/default seam keeps exact approval/runtime equality and never borrows the pilot
+    // override: it cannot run the 0.50 demo pair, even with a matching hand-built approval.
+    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  }
   if (live.retrievalStageMs >= config.requestTimeoutMs) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   return Object.freeze({
     model,

@@ -6,11 +6,15 @@
  *
  * The stream payload stays a hint, never an authority. Every record must carry the exact
  * configured `eventSourceARN` and `eventSource: 'aws:dynamodb'` before any record field is read;
- * then only the Keys of a listed Cognito owner with an approved `NOTE#`/`PROTECTION#` note id (or
- * the one `RAG#CONSENT` account row) are selected. Original records and SequenceNumbers are
- * forwarded unchanged, so coalescing and earliest-sequence partial failures keep their existing
- * semantics. A non-member or unapproved row is skipped before `store.load`, so it can never reach
- * canonical text, an embedding or a publish; `NewImage` text is never read or logged here.
+ * then only the Keys of a listed Cognito owner are selected. In reviewed-pilot mode that means an
+ * approved `NOTE#`/`PROTECTION#` note id or the one `RAG#CONSENT` account row; in
+ * `eligible-own-notes.v1` mode any valid identifier suffix is admitted for the exact listed owner,
+ * while malformed suffixes and every other self `RAG#` row are ignored. Canonical eligibility,
+ * consent and freshness still decide what is embedded and published. Original records and
+ * SequenceNumbers are forwarded unchanged, so coalescing and earliest-sequence partial failures
+ * keep their existing semantics. A non-member or unselected row is skipped before `store.load`, so
+ * it can never reach canonical text, an embedding or a publish; `NewImage` text is never read or
+ * logged here.
  *
  * Every invocation reads the trusted `CONFIG#PHASE5`/`PILOT` row again and builds a new guarded
  * store and worker, so a warm invocation can never reuse a previous invocation's captured config,
@@ -33,7 +37,7 @@ import type { DynamoDBStreamEvent } from 'aws-lambda';
 import { createPilotIndexStore } from './pilot_index_store';
 import type { PilotBudget } from './pilot_budget';
 import { isCognitoSub } from './pilot_policy';
-import { parseRuntimeConfig } from './runtime_config';
+import { RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
 
 /**
@@ -55,8 +59,8 @@ export type PilotWorkerDeps = Readonly<{
   readConfig: (signal: AbortSignal) => Promise<RuntimeConfig>;
   /** Lazily returns the raw SDK/tokenizer index; may safely be a cached factory. */
   runtime: () => IndexDeps;
-  /** Pilot budget; only the atomic Cohere admission is reached through the guarded store. */
-  budget: Pick<PilotBudget, 'acquireCohere'>;
+  /** Pilot budget; only the atomic generic embedding admission is reached through the guarded store. */
+  budget: Pick<PilotBudget, 'acquireEmbedding'>;
   /** Existing retirement/orphan helpers, bound to the per-invocation guarded store. */
   recover: PilotRecover;
   /** The one configured stream ARN every record must carry exactly. */
@@ -89,7 +93,7 @@ const attributeString = (value: unknown): string | null =>
 const SAFE_EVENTS = new Set([
   'index.started', 'index.published', 'index.failed', 'index.superseded',
   'index.orphan.staged', 'index.reuse.skipped', 'index.cleanup.failed',
-  'index.lease.release.failed', 'index.lease.unavailable',
+  'index.cleanup.retained', 'index.lease.release.failed', 'index.lease.unavailable',
   'index.stream.rejected', 'index.stream.terminal', 'index.stream.replay',
   'index.stream.unmapped', 'index.manual.failed', 'pilot.stream.selected',
 ]);
@@ -173,9 +177,11 @@ const approvedNotes = (config: RuntimeConfig, ownerId: string): ReadonlySet<stri
 };
 
 /**
- * Keys-only scope filter: a listed owner's approved `NOTE#`/`PROTECTION#` row or their one
- * `RAG#CONSENT` account row. Self-owned `RAG#`/`META#`/`EVENT#`/`CHANGE#`/`MUTATION#`/`SHARED#`
- * rows and every non-member/unapproved row are ignored.
+ * Keys-only scope filter for a listed owner. Reviewed-pilot mode admits only the frozen approved
+ * note ids; `eligible-own-notes.v1` mode admits any syntactically valid `NOTE#`/`PROTECTION#`
+ * suffix for that exact owner. Both modes admit the one `RAG#CONSENT` account row. Self-owned
+ * `RAG#`/`META#`/`EVENT#`/`CHANGE#`/`MUTATION#`/`SHARED#` rows, malformed suffixes and every
+ * non-member row are ignored before any body load.
  */
 const selectStreamRecord = (config: RuntimeConfig, record: unknown): boolean => {
   if (!isRecord(record)) return false;
@@ -191,9 +197,12 @@ const selectStreamRecord = (config: RuntimeConfig, record: unknown): boolean => 
     return false;
   }
   if (sortKey === CONSENT_SORT_KEY) return true;
-  const approved = approvedNotes(config, ownerId);
+  const dynamic = config.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
+  const approved = dynamic ? null : approvedNotes(config, ownerId);
   for (const prefix of [NOTE_KEY_PREFIX, PROTECTION_KEY_PREFIX] as const) {
-    if (sortKey.startsWith(prefix)) return approved.has(sortKey.slice(prefix.length));
+    if (!sortKey.startsWith(prefix)) continue;
+    const noteId = sortKey.slice(prefix.length);
+    return dynamic ? isValidIdentifier(noteId) : approved !== null && approved.has(noteId);
   }
   return false;
 };
@@ -205,8 +214,18 @@ const requireListedOwner = (config: RuntimeConfig, ownerId: unknown): string => 
   return ownerId;
 };
 
-const requireApprovedNote = (config: RuntimeConfig, ownerId: string, noteId: unknown): void => {
-  if (!isValidIdentifier(noteId) || !approvedNotes(config, ownerId).has(noteId)) {
+/**
+ * Manual `RECONCILE_NOTE` must always name a valid id and a listed owner. Reviewed-pilot mode
+ * additionally requires the frozen approved id; dynamic mode deliberately does not, so a newly
+ * synced canonical note can be backfilled without a config rewrite.
+ */
+const requireReconcilableNote = (config: RuntimeConfig, ownerId: string, noteId: unknown): void => {
+  if (!isValidIdentifier(noteId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+  if (!isCognitoSub(ownerId) || !Object.prototype.hasOwnProperty.call(config.corpus.owners, ownerId)) {
+    throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+  }
+  if (config.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND) return;
+  if (!approvedNotes(config, ownerId).has(noteId)) {
     throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
   }
 };
@@ -243,7 +262,7 @@ export function createPilotWorkerHandler(deps: PilotWorkerDeps): PilotWorkerHand
     typeof deps['readConfig'] !== 'function' ||
     typeof deps['runtime'] !== 'function' ||
     !isRecord(deps['budget']) ||
-    typeof deps['budget']['acquireCohere'] !== 'function' ||
+    typeof deps['budget']['acquireEmbedding'] !== 'function' ||
     typeof deps['recover'] !== 'function' ||
     typeof deps['streamArn'] !== 'string' || deps['streamArn'].length === 0 ||
     (deps['log'] !== undefined && typeof deps['log'] !== 'function') ||
@@ -299,7 +318,7 @@ export function createPilotWorkerHandler(deps: PilotWorkerDeps): PilotWorkerHand
     if (event['operation'] === 'reconcile' && hasExactKeys(event, ['operation', 'job'])) {
       const job = parseJob(event['job']);
       requireListedOwner(config, job.ownerId);
-      if (job.kind === 'RECONCILE_NOTE') requireApprovedNote(config, job.ownerId, job.noteId);
+      if (job.kind === 'RECONCILE_NOTE') requireReconcilableNote(config, job.ownerId, job.noteId);
       return runManualJob(worker, job, safeLog, invocationDeadline);
     }
     if (event['operation'] === 'recover' && hasExactKeys(event, ['operation', 'ownerId'])) {

@@ -10,9 +10,16 @@
  * There is no TTL and no delete path: consent is revoked by writing `accepted:false`, which keeps
  * the generation monotonic for in-flight runs.
  *
- * Absence is the default grant `{accepted:false, version:'rag-consent.v1', generation:0}`.
+ * Absence is the default grant `{accepted:false, version:CONSENT_VERSION, generation:0}`.
  * A foreign projection, a row carrying a TTL, a key mismatch or any malformed field fails
  * closed as SOURCE_CHANGED: the caller must not act on, or write through, state it cannot read.
+ *
+ * Legacy `rag-consent.v1` rows are read-only history: `read` projects them as the current
+ * version, denied, with the SAME stored generation, so an old acceptance never becomes a current
+ * permit and is never rewritten by a read. An explicit current-version PUT may still move that
+ * row, because its CAS compares the RAW captured `accepted`/`version`/`generation`; a stale
+ * writer that captured a different grant loses. No path auto-grants, auto-revokes or resets the
+ * generation while migrating a legacy row.
  */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -59,6 +66,9 @@ export const DEFAULT_CONSENT: ConsentGrant = Object.freeze({
   generation: 0,
 });
 
+/** The only legacy version this build can still read; it is never accepted as current consent. */
+export const LEGACY_CONSENT_VERSION = 'rag-consent.v1';
+const READABLE_CONSENT_VERSIONS = new Set([CONSENT_VERSION, LEGACY_CONSENT_VERSION]);
 const WRITE_KEYS = ['accepted', 'version', 'expectedGeneration'] as const;
 const AWS_REGION = /^[a-z]{2}-[a-z]+-\d$/;
 /**
@@ -255,8 +265,12 @@ const requireWrite = (value: unknown): ConsentWrite => {
   return Object.freeze({ accepted, version, expectedGeneration: expected });
 };
 
-/** Absence is the default grant; every stored value must be coherent and canonical. */
-const grantOf = (item: unknown, actor: string): ConsentGrant => {
+/**
+ * The validated RAW stored grant (the exact row), used only by the write CAS. A legacy version is
+ * readable here precisely so an explicit current-version PUT can compare against the values the
+ * strongly consistent read captured; it is never returned by the public `read`.
+ */
+const storedGrantOf = (item: unknown, actor: string): ConsentGrant => {
   if (item === undefined || item === null) return DEFAULT_CONSENT;
   if (!isRecord(item)) invalidState();
   const key = consentRowKey(actor);
@@ -269,10 +283,22 @@ const grantOf = (item: unknown, actor: string): ConsentGrant => {
   const version = item['version'];
   const generation = item['generation'];
   if (typeof accepted !== 'boolean') invalidState();
-  if (version !== CONSENT_VERSION || !isWellFormed(version)) invalidState();
+  if (typeof version !== 'string' || !READABLE_CONSENT_VERSIONS.has(version) || !isWellFormed(version)) {
+    invalidState();
+  }
   if (!isSafeInteger(generation) || generation < 0) invalidState();
   return Object.freeze({ accepted, version, generation });
 };
+
+/**
+ * The public projection: a current-version row is returned as stored, while a legacy row is
+ * current-denied with the SAME generation. Reading therefore never writes and never turns an old
+ * acceptance into a permit; the explicit current-version PUT is the only path that migrates it.
+ */
+const currentGrantOf = (raw: ConsentGrant): ConsentGrant =>
+  raw.version === CONSENT_VERSION
+    ? raw
+    : Object.freeze({ accepted: false, version: CONSENT_VERSION, generation: raw.generation });
 
 /**
  * Builds the store over one existing notes table. The default client is a document client with
@@ -332,7 +358,7 @@ export function createConsentStore(
       deadline,
     );
     if (!isRecord(output)) invalidState();
-    return grantOf(output['Item'], owner);
+    return storedGrantOf(output['Item'], owner);
   };
 
   /** Post-commit truth: a bounded strongly consistent GET that must reproduce the admitted write. */
@@ -361,7 +387,7 @@ export function createConsentStore(
       // The canonical read happened first; membership is then re-checked against the fresh
       // immutable config before the grant is returned, so a removed actor never receives a grant.
       if (guard !== undefined) await guard.revalidate(owner, deadline);
-      return grant;
+      return currentGrantOf(grant);
     },
 
     async write(actor: string, next: ConsentWrite, signal: AbortSignal): Promise<ConsentGrant> {
@@ -370,8 +396,9 @@ export function createConsentStore(
       const deadline = requireSignal(signal);
       // Fail closed before writing: a row this store cannot read (foreign, TTL-carrying or
       // malformed) is never adopted or repaired, and a generation the caller did not observe
-      // is refused before the conditional write. The captured grant then rides into the
-      // condition below, which stays the authoritative CAS.
+      // is refused before the conditional write. The RAW captured grant then rides into the
+      // condition below, which stays the authoritative CAS; a legacy v1 row is compared by its
+      // stored version/accepted values, not by the current-denied projection.
       const captured = await readRow(owner, deadline);
       if (captured.generation !== grant.expectedGeneration) throw new RagFailure('SOURCE_CHANGED');
       const generation = grant.expectedGeneration + 1;
@@ -385,7 +412,7 @@ export function createConsentStore(
           deadline,
         );
         if (!isRecord(output)) invalidState();
-        const stored = grantOf(output['Attributes'], owner);
+        const stored = storedGrantOf(output['Attributes'], owner);
         if (
           stored.accepted !== grant.accepted ||
           stored.version !== grant.version ||

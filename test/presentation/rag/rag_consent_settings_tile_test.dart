@@ -52,7 +52,7 @@ void main() {
 
     await tapRagConsentSwitch(tester);
     expect(find.byKey(_dialogKey), findsOneWidget);
-    expect(find.textContaining('Cohere'), findsOneWidget);
+    expect(find.textContaining('Cloudflare'), findsOneWidget);
 
     await tester.tap(find.byKey(_cancelKey));
     await tester.pumpAndSettle();

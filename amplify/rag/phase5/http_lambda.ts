@@ -8,15 +8,19 @@
  * No path, method, query parameter or body field can select a private operation: an HTTP request
  * is routed only to the two canonical handlers, and a non-HTTP invocation (the IAM-invoked Phase 4
  * synthetic harness) is forwarded unchanged to the existing `private_lambda.handler` **before any
- * Phase 5 composition**.
+ * Phase 5 composition**. The single exception is the exact IAM-only
+ * `{kind:'embedding-canary.v1'}` payload, which runs one fixed-synthetic-text embedding probe and
+ * returns bounded metadata only; it cannot carry caller text, read a note or be selected over HTTP.
  *
  * Routing is first and setup is lazy:
- *  - non-HTTP -> the private Phase 4 handler, with zero Phase 5 setup (no tokenizer, key or table
- *    requirement);
+ *  - non-HTTP canary -> one fixed synthetic embedding probe, no canonical note read;
+ *  - other non-HTTP -> the private Phase 4 handler, with zero Phase 5 setup (no tokenizer, key or
+ *    table requirement);
  *  - consent -> the notes-table consent store plus the state-table config reader, no
  *    tokenizer/provider/key requirement;
- *  - query   -> one request deadline started **before** the cold counter/provider composition,
- *    which is cached once per process and shared by every request.
+ *  - query   -> only when `RAG_QUERY_ADMISSION_ENABLED` is exactly `true`; one request deadline
+ *    started **before** the cold counter/provider composition, which is cached once per process
+ *    and shared by every request.
  *
  * `createPilotHttpHandler` is the injectable boundary: tests assemble it with mock query/consent
  * handlers and assert routing/envelopes without any AWS, environment or model call. The default
@@ -27,7 +31,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { RequestDeadline } from '../deadline';
-import { isValidIdentifier } from '../contract';
+import { WIRE_VERSION, isValidIdentifier } from '../contract';
 import { createRagHandler } from '../handler';
 import type { RagHttpResponse, RagQuery } from '../handler';
 import { runtime } from '../indexing/runtime';
@@ -36,18 +40,24 @@ import { createDeepSeekProvider } from '../providers/deepseek';
 import { createJevProvider, type ProviderUsage } from '../providers/jev';
 import { jevInputUpperBound, loadDeepSeekCounter } from '../token_fit';
 import { policy, RagFailure } from '../types';
-import type { Counter, ErrorCode, Providers } from '../types';
+import type { Counter, ErrorCode, Providers, RagResponse } from '../types';
 import type { LiveApproval } from '../live_policy';
 import { handler as privateHandler, readPublishedApproval } from '../private_lambda';
 import { CONSENT_PATH, createConsentHandler } from './consent_handler';
 import type { ConsentHandler } from './consent_handler';
 import { createConsentStore } from './consent_store';
 import type { ConsentGuard } from './consent_store';
+import {
+  canaryFailure, createEmbeddingCanary, EMBEDDING_CANARY_KIND, isEmbeddingCanaryEvent,
+} from './embedding_canary';
 import { isPilotOwner } from './pilot_policy';
 import { createPilotBudget } from './pilot_budget';
 import type { PilotBudget, PilotBudgetPort } from './pilot_budget';
 import { createPilotQuery } from './pilot_query';
 import { RUNTIME_CONFIG_KEY, createRuntimeConfigReader, sameRuntimeConfig } from './runtime_config';
+
+/** Existing public imports remain stable; the implementation now lives in `embedding_canary`. */
+export { EMBEDDING_CANARY_KIND, isEmbeddingCanaryEvent };
 
 export type PilotHttpDeps = Readonly<{
   /** The pilot query runner (`createPilotQuery(...)`), wrapped by `createRagHandler`. */
@@ -59,6 +69,8 @@ export type PilotHttpDeps = Readonly<{
   consent: (signal: AbortSignal) => Promise<ConsentHandler> | ConsentHandler;
   /** Non-HTTP invocations (IAM private Phase 4) are forwarded here; never reachable over HTTP. */
   privateHandler?: (event: unknown) => Promise<unknown>;
+  /** Exact `embedding-canary.v1` IAM invocation; HTTP requests can never select it. */
+  canary?: () => Promise<unknown>;
   requestId?: () => string;
   /** Test seam; the default composition uses `Date.now`. */
   now?: () => number;
@@ -94,6 +106,16 @@ const JSON_HEADERS = Object.freeze({
   'cache-control': 'no-store',
 });
 
+/**
+ * Explicit query admission. Only the exact value `true` opens `POST /ai/rag/query`; an absent or
+ * any other value keeps it closed. It is read per request from the server environment, never from
+ * a request field, and it gates the query path only: consent GET/PUT, the exact IAM canary and the
+ * private IAM path do not consult it.
+ */
+export const queryAdmissionEnabled = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean => env['RAG_QUERY_ADMISSION_ENABLED'] === 'true';
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -121,16 +143,18 @@ const safeRequestId = (factory: () => string): string => {
 };
 
 /**
- * The one router. HTTP events reach only the canonical query/consent handlers; every other
- * invocation is the IAM private Phase 4 harness. An unknown HTTP path is refused with the same
- * bounded envelope and never reaches a handler or a provider.
+ * The one router. HTTP events reach only the canonical query/consent handlers; the exact
+ * `embedding-canary.v1` payload runs the fixed synthetic probe, and every other invocation is the
+ * IAM private Phase 4 harness. An unknown HTTP path is refused with the same bounded envelope and
+ * never reaches a handler or a provider.
  */
 export function createPilotHttpHandler(deps: PilotHttpDeps): PilotHttpHandler {
   if (
     !isRecord(deps) ||
     typeof deps['query'] !== 'function' ||
     typeof deps['consent'] !== 'function' ||
-    (deps['privateHandler'] !== undefined && typeof deps['privateHandler'] !== 'function')
+    (deps['privateHandler'] !== undefined && typeof deps['privateHandler'] !== 'function') ||
+    (deps['canary'] !== undefined && typeof deps['canary'] !== 'function')
   ) {
     throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   }
@@ -141,6 +165,17 @@ export function createPilotHttpHandler(deps: PilotHttpDeps): PilotHttpHandler {
   return async function handle(event: unknown): Promise<unknown> {
     const id = safeRequestId(nextId);
     if (!isHttpEvent(event)) {
+      if (isEmbeddingCanaryEvent(event)) {
+        const canary = deps['canary'];
+        if (typeof canary !== 'function') {
+          return Object.freeze({ status: 'ERROR', canary: EMBEDDING_CANARY_KIND, code: 'LIVE_POLICY_NOT_CONFIGURED' });
+        }
+        try {
+          return await canary();
+        } catch (error) {
+          return canaryFailure(error);
+        }
+      }
       const forward = deps.privateHandler;
       if (forward === undefined) return { status: 'ERROR', code: 'LIVE_POLICY_NOT_CONFIGURED' };
       return forward(event);
@@ -191,16 +226,35 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
   const loadIndex = (): IndexDeps => (index ??= (seam.loadIndex ?? runtime)());
   const now: () => number = seam.now ?? Date.now;
 
-  let heavy: Readonly<{ budget: PilotBudget; countOutput: Counter; rawProviders: Providers }> | undefined;
-  /** Cold composition, executed at most once per process and only from inside a query deadline. */
-  const heavyNow = (): Readonly<{ budget: PilotBudget; countOutput: Counter; rawProviders: Providers }> => {
-    if (heavy === undefined) {
+  let counters: Readonly<{ budget: PilotBudget; countOutput: Counter }> | undefined;
+  /**
+   * Cold counter composition, executed at most once per process. It loads the shared embedding
+   * runtime tokenizer through `loadIndex` only when a caller asks for it; the canary uses this
+   * path so it measures the same cold memory as the query path without building provider ports.
+   */
+  const countersNow = (): Readonly<{ budget: PilotBudget; countOutput: Counter }> => {
+    if (counters === undefined) {
       const countOutput = seam.countOutput !== undefined
         ? seam.countOutput(process.env['RAG_DEEPSEEK_TOKENIZER_DIR'] ?? '')
         : loadDeepSeekCounter(required('RAG_DEEPSEEK_TOKENIZER_DIR'));
+      counters = Object.freeze({
+        budget: createPilotBudget(region, stateTable, client, { now }),
+        countOutput,
+      });
+    }
+    return counters;
+  };
+
+  let rawProviders: Providers | undefined;
+  /** Provider ports are built only by the query path, after the counters are available. */
+  const providersNow = (): Readonly<{
+    budget: PilotBudget; countOutput: Counter; rawProviders: Providers;
+  }> => {
+    const built = countersNow();
+    if (rawProviders === undefined) {
       const usage: ProviderUsage[] = [];
       const onUsage = (entry: ProviderUsage) => console.log(JSON.stringify({ stage: 'provider-usage', ...entry }));
-      const rawProviders: Providers = seam.rawProviders ?? {
+      rawProviders = seam.rawProviders ?? {
         jev: createJevProvider({ apiKey: required('TYPESAFE_API_KEY'), onUsage }),
         generate: createDeepSeekProvider({
           apiKey: required('DEEPSEEK_API_KEY'),
@@ -208,17 +262,12 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
           onDiagnostic: (entry) => console.log(JSON.stringify({ stage: 'generation-invalid-shape', ...entry })),
         }),
       };
-      heavy = Object.freeze({
-        budget: createPilotBudget(region, stateTable, client, { now }),
-        countOutput,
-        rawProviders,
-      });
     }
-    return heavy;
+    return Object.freeze({ ...built, rawProviders });
   };
 
   const queryRun = (parent: AbortSignal): RagQuery => {
-    const built = heavyNow();
+    const built = providersNow();
     return createPilotQuery({
       readConfig,
       readApproval,
@@ -243,6 +292,13 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
    * bounds the run, and the release keeps its own short independent budget.
    */
   const query: RagQuery = async (actor, request, requestId) => {
+    // Admission is checked before the cold composition, every AWS read and any provider call.
+    if (!queryAdmissionEnabled()) {
+      const closed: RagResponse = {
+        wireVersion: WIRE_VERSION, requestId, status: 'ERROR', code: 'PROVIDER_UNAVAILABLE',
+      };
+      return Object.freeze(closed);
+    }
     const deadline = new RequestDeadline(REQUEST_TIMEOUT_MS, now);
     try {
       const run = await deadline.within(() => Promise.resolve(queryRun(deadline.signal)));
@@ -282,9 +338,18 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
     });
   };
 
+  // The canary module owns its deadline; this composition supplies only the lazy cold ports.
+  const canary = createEmbeddingCanary({
+    embedding: () => loadIndex().embedding,
+    counters: countersNow,
+    now,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+
   return {
     query,
     consent,
+    canary,
     privateHandler: seam.privateHandler ?? privateHandler,
     requestId: seam.requestId,
     now,
@@ -292,19 +357,30 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
 }
 
 /**
- * The default Lambda entry: route first, compose lazily. A non-HTTP invocation never triggers any
- * Phase 5 setup, so the private IAM path keeps working with only its own environment.
+ * The default Lambda entry: route first, compose lazily. Every non-HTTP invocation except the
+ * exact canary payload never triggers Phase 5 setup, so the private IAM path keeps working with
+ * only its own environment.
  */
 export function createDefaultHandler(seam: PilotProductionSeam = {}): PilotHttpHandler {
   let composed: PilotHttpHandler | undefined;
   return async function handle(event: unknown): Promise<unknown> {
     const id = safeRequestId(seam.requestId ?? randomUUID);
     if (!isHttpEvent(event)) {
-      const forward = seam.privateHandler ?? privateHandler;
+      // Only the exact trusted canary payload composes Phase 5; every other non-HTTP invocation
+      // keeps the existing private Phase 4 forward and its zero-Phase-5-setup behavior.
+      if (!isEmbeddingCanaryEvent(event)) {
+        const forward = seam.privateHandler ?? privateHandler;
+        try {
+          return await forward(event);
+        } catch (error) {
+          return { status: 'ERROR', code: error instanceof RagFailure ? error.code : 'LIVE_POLICY_NOT_CONFIGURED' };
+        }
+      }
       try {
-        return await forward(event);
+        composed ??= createPilotHttpHandler(composeProduction(seam));
+        return await composed(event);
       } catch (error) {
-        return { status: 'ERROR', code: error instanceof RagFailure ? error.code : 'LIVE_POLICY_NOT_CONFIGURED' };
+        return canaryFailure(error);
       }
     }
     if (event.rawPath !== RAG_PATH && event.rawPath !== CONSENT_PATH) {

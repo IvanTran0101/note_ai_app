@@ -6,9 +6,11 @@
  * One atomic `TransactWriteCommand` admits one query attempt: the global attempt counter, the
  * per-account UTC-day counter and the per-account in-flight lease move together or not at all,
  * so a refused admission never debits a counter and never leaves half a lease. Counters include
- * failed calls, are never refunded, and no path deletes a counter item: the ~28s lease only
- * stops a second device from running two queries at once. `release` deletes the lease item,
- * never a counter, and only when the supplied token is still the stored one.
+ * failed calls, are never refunded, and no path deletes or resets a counter item: the ~28s lease
+ * only stops a second device from running two queries at once. `release` deletes the lease item,
+ * never a counter, and only when the supplied token is still the stored one. Production budget
+ * state is monotonic: this module exposes no reset API. The one operator exception is an explicit,
+ * audited CAS of TODAY's per-account daily attempts performed outside this module after a deploy.
  *
  * Every admission first reads the counter rows it is about to debit with a strongly consistent
  * `GetCommand` and refuses a row whose present counters are not nonnegative safe integers
@@ -19,10 +21,17 @@
  * still be present at exactly that value, so a counter row or attribute deleted between the read
  * and the write refuses instead of restarting at 1 and losing the usage already recorded.
  *
- * `acquireCohere` wraps the existing global embedding item with the pilot Cohere counter in a
- * single transaction, so the root replaces `IndexStore.reserveEmbedding` with one call before an
- * embedding invocation. The cumulative global cap is 112 (12 already used at plan time); the
- * per-provider JEV/DeepSeek caps share one 1,000,000-micros reservation ceiling.
+ * `acquireEmbedding` wraps the existing global embedding item with the pilot self-hosted counter
+ * in a single transaction, so the root replaces `IndexStore.reserveEmbedding` with one call before
+ * every embedding attempt (successful or failed). The historical `cohereCalls` stays untouched and
+ * the deprecated `acquireCohere` only exists for legacy callers/tests: both embedding paths share
+ * one pilot allowance, `cohereCalls + selfHostedEmbeddingCalls <= 5,000`, while the legacy Cohere
+ * target is itself capped at 100 and the self-hosted target at 5,000. The same cumulative global
+ * cap of 5,012 (12 already used at plan time + 5,000 pilot) is checked in that one transaction. The
+ * per-provider JEV/DeepSeek caps are 1,000 each and share one 1,000,000-micros reservation ceiling.
+ * No path refunds, resets or deletes a counter. A reset of recorded usage/history is never a
+ * runtime behavior: the only exception is the explicit operator-run, audited CAS of TODAY's daily
+ * attempts after a deploy, and even that exception repairs no other counter and refunds no spend.
  */
 import { randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -36,16 +45,24 @@ import { isCognitoSub } from './pilot_policy';
 
 /** Phase 5 quota, separate from the Phase 4 item; `query` is admitted only by `acquireQuery`. */
 export const PILOT_BUDGET_KEY = Object.freeze({ ownerId: 'BUDGET#PHASE5', noteId: 'COUNTER' });
-export const PILOT_LIMITS = Object.freeze({ query: 50, jev: 60, deepseek: 40, cohere: 100 });
-export const PILOT_DAILY_QUERY_LIMIT = 10;
+export const PILOT_LIMITS = Object.freeze({ query: 1000, jev: 1000, deepseek: 1000, cohere: 100 });
+/** One shared pilot embedding allowance for the historical Cohere calls plus the new local ones. */
+export const PILOT_EMBEDDING_LIMIT = 5000;
+/**
+ * Per-account UTC-day demo cap: 100 admitted query attempts. Operator-approved higher demo quota,
+ * not a new monetary budget. The runtime never resets a counter; the only reset exception is an
+ * explicit operator-run, audited CAS of TODAY's daily attempts after a deploy (outside this
+ * module). Normal operation never refunds or erases recorded attempts.
+ */
+export const PILOT_DAILY_QUERY_LIMIT = 100;
 /** Longer than the 26s request deadline and the 28s Lambda timeout it guards. */
 export const PILOT_QUERY_LEASE_MS = 28_000;
 /** One shared external ceiling for JEV + DeepSeek reservations, in USD micros. */
 export const PILOT_USD_MICROS_LIMIT = 1_000_000;
 /** Existing global embedding item (mirrors indexing/store.ts BUDGET_OWNER_KEY/BUDGET_SORT_KEY). */
 export const GLOBAL_EMBEDDING_KEY = Object.freeze({ ownerId: 'BUDGET#SMOKE', noteId: 'COUNTER' });
-/** Cumulative global embedding cap for the pilot: 12 used + 100 pilot Cohere, never a reset. */
-export const GLOBAL_EMBEDDING_LIMIT = 112;
+/** Cumulative global embedding cap: 12 used at plan time + 5,000 pilot, never a runtime reset. */
+export const GLOBAL_EMBEDDING_LIMIT = 5012;
 
 export type PilotProvider = 'jev' | 'deepseek';
 export type QueryLease = Readonly<{ actor: string; token: string; expiresAt: number }>;
@@ -54,6 +71,7 @@ export type PilotBudgetCounters = Readonly<{
   jevCalls: number;
   deepseekCalls: number;
   cohereCalls: number;
+  selfHostedEmbeddingCalls: number;
   reservedUsdMicros: number;
 }>;
 
@@ -67,6 +85,9 @@ export type PilotBudget = Readonly<{
   reserve(provider: PilotProvider, inputUpperBound: number, signal: AbortSignal): Promise<void>;
   acquireQuery(actor: string, requestId: string, signal: AbortSignal): Promise<QueryLease>;
   release(lease: QueryLease, signal: AbortSignal): Promise<void>;
+  /** Active embedding admission: one atomic debit of the self-hosted + shared global counters. */
+  acquireEmbedding(signal: AbortSignal): Promise<void>;
+  /** Deprecated legacy Cohere admission, isolated for existing callers/tests; never the active path. */
   acquireCohere(signal: AbortSignal): Promise<void>;
   read(signal: AbortSignal): Promise<PilotBudgetCounters>;
 }>;
@@ -74,7 +95,9 @@ export type PilotBudget = Readonly<{
 export type PilotBudgetOptions = Readonly<{ now?: () => number; id?: () => string }>;
 
 const AWS_REGION = /^[a-z]{2}-[a-z]+-\d$/;
-const COUNTER_NAMES = ['queryCalls', 'jevCalls', 'deepseekCalls', 'cohereCalls', 'reservedUsdMicros'] as const;
+const COUNTER_NAMES = [
+  'queryCalls', 'jevCalls', 'deepseekCalls', 'cohereCalls', 'selfHostedEmbeddingCalls', 'reservedUsdMicros',
+] as const;
 /** The one counter on the per-account UTC-day item and on the existing global embedding item. */
 const DAILY_COUNTER = 'attempts';
 const GLOBAL_COUNTER = 'used';
@@ -148,6 +171,19 @@ const counterCas = (
     `${attribute} ${boundInclusive ? '<=' : '<'} ${bound}`;
   return captured === 0 ? `(attribute_not_exists(${attribute}) OR (${matches}))` : `(${matches})`;
 };
+
+/**
+ * The compare-and-set clause for the sibling embedding counter, which must not move between the
+ * consistent read and the one transaction: an absent attribute is admitted only when the read
+ * captured 0, otherwise its exact captured value is required. Both branches reference
+ * `capturedValue`, so the one transaction's `ExpressionAttributeValues` never carries a value the
+ * expression does not use: DynamoDB rejects such a request with a ValidationException before it
+ * evaluates any condition.
+ */
+const siblingCas = (attribute: string, captured: number, capturedValue: string): string =>
+  captured === 0
+    ? `(attribute_not_exists(${attribute}) OR ${attribute} = ${capturedValue})`
+    : `${attribute} = ${capturedValue}`;
 
 /**
  * Builds the budget over the existing RAG state table. The default client is a document client
@@ -228,6 +264,55 @@ export function createPilotBudget(
       counters[name] = value;
     }
     return counters;
+  };
+
+  /**
+   * One atomic embedding admission: the shared global item plus exactly one pilot counter. The
+   * combined pilot allowance is checked against the consistently read pair; the transaction then
+   * CASes both the target counter and its unchanged sibling, so two concurrent admissions can
+   * never cross the shared 5,000. The target's own bound differs by target: the historical Cohere
+   * counter keeps the 100 legacy cap while the active self-hosted counter may use the full 5,000.
+   */
+  const reserveEmbeddingCall = async (
+    target: 'cohereCalls' | 'selfHostedEmbeddingCalls',
+    signal: AbortSignal,
+  ): Promise<void> => {
+    const deadline = requireSignal(signal);
+    const global = await readCounters(GLOBAL_EMBEDDING_KEY, [GLOBAL_COUNTER], deadline);
+    const pilot = await readCounters(PILOT_BUDGET_KEY, COUNTER_NAMES, deadline);
+    const cohere = pilot['cohereCalls'] ?? 0;
+    const local = pilot['selfHostedEmbeddingCalls'] ?? 0;
+    // Both counters are captured below, so this preflight is exact only if neither moves; the
+    // transaction's sibling CAS enforces that and refuses without a debit.
+    if (cohere + local >= PILOT_EMBEDDING_LIMIT) throw new RagFailure('RATE_LIMITED');
+    const captured = target === 'cohereCalls' ? cohere : local;
+    const targetLimit = target === 'cohereCalls' ? PILOT_LIMITS.cohere : PILOT_EMBEDDING_LIMIT;
+    const siblingName = target === 'cohereCalls' ? 'selfHostedEmbeddingCalls' : 'cohereCalls';
+    const sibling = target === 'cohereCalls' ? local : cohere;
+    await send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: table,
+        Key: GLOBAL_EMBEDDING_KEY,
+        UpdateExpression: 'ADD used :one',
+        ConditionExpression: counterCas('used', global[GLOBAL_COUNTER] ?? 0, ':capturedUsed', ':limit'),
+        ExpressionAttributeValues: {
+          ':one': 1, ':limit': GLOBAL_EMBEDDING_LIMIT, ':zero': 0,
+          ':capturedUsed': global[GLOBAL_COUNTER] ?? 0,
+        },
+      } },
+      { Update: {
+        TableName: table,
+        Key: PILOT_BUDGET_KEY,
+        UpdateExpression: `ADD ${target} :one`,
+        ConditionExpression:
+          `${counterCas(target, captured, ':capturedTarget', ':targetLimit')} AND ` +
+          siblingCas(siblingName, sibling, ':capturedSibling'),
+        ExpressionAttributeValues: {
+          ':one': 1, ':targetLimit': targetLimit, ':zero': 0,
+          ':capturedTarget': captured, ':capturedSibling': sibling,
+        },
+      } },
+    ] }), deadline);
   };
 
   return Object.freeze({
@@ -334,34 +419,18 @@ export function createPilotBudget(
       }
     },
 
-    /** One atomic admission for a Cohere embedding invocation before any provider call. */
+    /** Active embedding admission: one atomic self-hosted + shared global debit. */
+    async acquireEmbedding(signal: AbortSignal): Promise<void> {
+      await reserveEmbeddingCall('selfHostedEmbeddingCalls', signal);
+    },
+
+    /**
+     * Deprecated legacy Cohere admission, kept only for existing callers/tests. It shares the
+     * same pilot + global allowance, keeps its own 100 target cap and leaves
+     * `selfHostedEmbeddingCalls` untouched.
+     */
     async acquireCohere(signal: AbortSignal): Promise<void> {
-      const deadline = requireSignal(signal);
-      // Both rows are validated and captured before the admission transaction.
-      const global = await readCounters(GLOBAL_EMBEDDING_KEY, [GLOBAL_COUNTER], deadline);
-      const pilot = await readCounters(PILOT_BUDGET_KEY, COUNTER_NAMES, deadline);
-      await send(new TransactWriteCommand({ TransactItems: [
-        { Update: {
-          TableName: table,
-          Key: GLOBAL_EMBEDDING_KEY,
-          UpdateExpression: 'ADD used :one',
-          // A missing `used` is 0 exactly like a missing pilot counter, so an existing global item
-          // without the attribute is still creatable while the 12 already used stay counted.
-          ConditionExpression: counterCas('used', global[GLOBAL_COUNTER] ?? 0, ':capturedUsed', ':limit'),
-          ExpressionAttributeValues: {
-            ':one': 1, ':limit': GLOBAL_EMBEDDING_LIMIT, ':zero': 0, ':capturedUsed': global[GLOBAL_COUNTER] ?? 0,
-          },
-        } },
-        { Update: {
-          TableName: table,
-          Key: PILOT_BUDGET_KEY,
-          UpdateExpression: 'ADD cohereCalls :one',
-          ConditionExpression: counterCas('cohereCalls', pilot['cohereCalls'] ?? 0, ':capturedCohere', ':limit'),
-          ExpressionAttributeValues: {
-            ':one': 1, ':limit': PILOT_LIMITS.cohere, ':zero': 0, ':capturedCohere': pilot['cohereCalls'] ?? 0,
-          },
-        } },
-      ] }), deadline);
+      await reserveEmbeddingCall('cohereCalls', signal);
     },
 
     async read(signal: AbortSignal): Promise<PilotBudgetCounters> {

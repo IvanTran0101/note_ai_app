@@ -21,6 +21,13 @@ import { RagFailure } from '../types';
 export const PILOT_MODEL = 'jev-1.13.0';
 export const PILOT_THRESHOLDS: Readonly<{ answerabilityMin: number; conflictMax: number }> =
   Object.freeze({ answerabilityMin: 0.85, conflictMax: 0.1 });
+/**
+ * The one user-approved uncalibrated pilot override: exactly 0.50 answerability / 0.10 conflict.
+ * It is not a recalibration and never relabels the historical 0.85 confirmation; the policy
+ * reader accepts only this pair or the legacy calibrated pair above.
+ */
+export const PILOT_DEMO_THRESHOLDS: Readonly<{ answerabilityMin: number; conflictMax: number }> =
+  Object.freeze({ answerabilityMin: 0.5, conflictMax: 0.1 });
 export const MAX_PILOT_OWNERS = 5;
 
 export type PilotPolicy = Readonly<{
@@ -53,7 +60,8 @@ export const isCognitoSub = (value: unknown): value is string =>
 /**
  * Validates one caller-supplied policy. The input and its `owners`/`thresholds` members must
  * already be frozen (a mutable policy is a tunable pilot switch), every key set is exact, the
- * model and threshold pair must equal the frozen Phase 4 binding, and owners must be unique
+ * model must equal the frozen Phase 4 binding and the threshold pair must be exactly one of the
+ * legacy calibrated pair or the one user-approved 0.50 pilot pair, and owners must be unique
  * Cognito subs. The returned copy is deeply frozen so a later mutation of the caller's value
  * cannot widen a running runtime.
  */
@@ -71,17 +79,27 @@ export function readPilotPolicy(value: unknown): PilotPolicy {
   if (value['model'] !== PILOT_MODEL) refuse();
   const thresholds = value['thresholds'];
   if (!isRecord(thresholds) || !Object.isFrozen(thresholds) || !hasExactKeys(thresholds, THRESHOLD_KEYS)) refuse();
+  const answerabilityMin = thresholds['answerabilityMin'];
+  const conflictMax = thresholds['conflictMax'];
+  let accepted: Readonly<{ answerabilityMin: number; conflictMax: number }>;
   if (
-    thresholds['answerabilityMin'] !== PILOT_THRESHOLDS.answerabilityMin ||
-    thresholds['conflictMax'] !== PILOT_THRESHOLDS.conflictMax
+    answerabilityMin === PILOT_THRESHOLDS.answerabilityMin &&
+    conflictMax === PILOT_THRESHOLDS.conflictMax
   ) {
+    accepted = PILOT_THRESHOLDS;
+  } else if (
+    answerabilityMin === PILOT_DEMO_THRESHOLDS.answerabilityMin &&
+    conflictMax === PILOT_DEMO_THRESHOLDS.conflictMax
+  ) {
+    accepted = PILOT_DEMO_THRESHOLDS;
+  } else {
     refuse();
   }
   return Object.freeze({
     enabled,
     owners: Object.freeze(owners),
     model: PILOT_MODEL,
-    thresholds: PILOT_THRESHOLDS,
+    thresholds: accepted,
   });
 }
 

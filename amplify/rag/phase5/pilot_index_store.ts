@@ -4,7 +4,7 @@
  * `createIndexStore` and never rewrites a state, epoch, fingerprint or the publish CAS: `load`
  * hands back the original canonical `IndexState` object, `acquire`/`publish` forward the exact
  * original bound state, lease, manifest and clock, and `reserveEmbedding` is replaced by the
- * atomic pilot `budget.acquireCohere`.
+ * atomic generic pilot `budget.acquireEmbedding`.
  *
  * Every call re-reads the immutable runtime config and compares the whole captured identity
  * (version, generation, policy, corpus). A config that moved mid-run fails closed as
@@ -14,12 +14,15 @@
  *
  * Consent semantics mirror the worker: `accepted && version === CONSENT_VERSION` is a permit.
  * With no permit the guard allows the listed owner's cleanup/BLOCKED path even when the policy is
- * disabled and without any corpus hash; with a permit it additionally requires an enabled policy
- * and every eligible canonical note to appear with its exact approved note id and
- * `embeddingInputDigest(title, content)`. An unknown eligible id or a drifted digest fails
- * closed, while protected/deleted/unsynced notes are simply excluded by `isEligibleNote` and the
- * returned state keeps every note unchanged. `finish` is unguarded on purpose: a failed lease
- * must always be releasable, even after a revoke, a config change or a non-member job.
+ * disabled and without any corpus hash; with a permit it additionally requires an enabled policy.
+ * In reviewed-pilot mode every eligible canonical note must appear with its exact approved note id
+ * and `embeddingInputDigest(title, content)`; an unknown eligible id or a drifted digest fails
+ * closed. In `eligible-own-notes.v1` mode only that frozen id/digest loop is skipped: the exact
+ * configured owner, fresh canonical load/bind, consent version, config equality and the
+ * fingerprint/publish guards are unchanged. Protected/deleted/unsynced notes are simply excluded
+ * by the worker's `isEligibleNote`, and the returned state keeps every note unchanged. `finish` is
+ * unguarded on purpose: a failed lease must always be releasable, even after a revoke, a config
+ * change or a non-member job.
  */
 import { CONSENT_VERSION, isValidIdentifier } from '../contract';
 import { isEligibleNote } from '../authority';
@@ -28,13 +31,15 @@ import { embeddingInputDigest } from '../indexing/snapshot';
 import { IndexFailure } from '../indexing/types';
 import type { IndexState, IndexStore, JobStatus, Lease, Manifest } from '../indexing/types';
 import { RagFailure } from '../types';
-import { parseRuntimeConfig, sameRuntimeConfig } from './runtime_config';
+import {
+  RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig, sameRuntimeConfig,
+} from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
 import type { PilotBudget } from './pilot_budget';
 
 export type PilotIndexStoreDeps = Readonly<{
   store: IndexStore;
-  budget: Pick<PilotBudget, 'acquireCohere'>;
+  budget: Pick<PilotBudget, 'acquireEmbedding'>;
   readConfig: (signal: AbortSignal) => Promise<RuntimeConfig>;
   config: RuntimeConfig;
 }>;
@@ -87,7 +92,7 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
   const budget = deps['budget'];
   const readConfig = deps['readConfig'];
   if (!hasStoreShape(store)) throw new IndexFailure('INVALID_STATE', false);
-  if (!isRecord(budget) || typeof budget['acquireCohere'] !== 'function') {
+  if (!isRecord(budget) || typeof budget['acquireEmbedding'] !== 'function') {
     throw new IndexFailure('INVALID_STATE', false);
   }
   if (typeof readConfig !== 'function') throw new IndexFailure('INVALID_STATE', false);
@@ -101,6 +106,9 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
 
   const isListedOwner = (ownerId: string): boolean =>
     Object.prototype.hasOwnProperty.call(captured.corpus.owners, ownerId);
+  // Dynamic mode has no frozen note id/digest list; canonical eligibility and freshness are the
+  // only body authority. Every other permit check below is shared with the reviewed mode.
+  const dynamicCorpus = captured.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
 
   /**
    * Every permitted call re-reads the whole config and demands the captured identity. The port is
@@ -151,14 +159,16 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
       if (captured.policy.enabled !== true) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
       const approved = captured.corpus.owners[bound.ownerId];
       if (approved === undefined) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
-      const digestById = new Map<string, string>();
-      for (const entry of approved) digestById.set(entry.noteId, entry.inputDigest);
-      for (const note of bound.notes) {
-        if (!isEligibleNote(note, bound.ownerId)) continue;
-        const approvedDigest = digestById.get(note.noteId);
-        if (approvedDigest === undefined) throw new IndexFailure('SOURCE_CHANGED', true);
-        if (embeddingInputDigest(note.title, note.content) !== approvedDigest) {
-          throw new IndexFailure('SOURCE_CHANGED', true);
+      if (!dynamicCorpus) {
+        const digestById = new Map<string, string>();
+        for (const entry of approved) digestById.set(entry.noteId, entry.inputDigest);
+        for (const note of bound.notes) {
+          if (!isEligibleNote(note, bound.ownerId)) continue;
+          const approvedDigest = digestById.get(note.noteId);
+          if (approvedDigest === undefined) throw new IndexFailure('SOURCE_CHANGED', true);
+          if (embeddingInputDigest(note.title, note.content) !== approvedDigest) {
+            throw new IndexFailure('SOURCE_CHANGED', true);
+          }
         }
       }
     }
@@ -229,8 +239,9 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
         if (config.policy.enabled !== true || !consentAccepted(fresh)) {
           throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
         }
-        // Exactly one atomic pilot debit; the underlying global embedding counter is never used.
-        await budget.acquireCohere(deadline);
+        // Exactly one atomic pilot debit; the underlying global embedding counter is never used
+        // directly and the deprecated Cohere counter is preserved, not incremented.
+        await budget.acquireEmbedding(deadline);
       } catch (error) {
         throw asIndexFailure(error, deadline);
       }

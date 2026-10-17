@@ -1,6 +1,6 @@
 // Mock analyzer v1: NFKC/lowercase + Unicode words; BM25 parameters are fixture defaults.
 import { policy, RagFailure, sourceKey, type Chunk, type Ranked } from './types';
-import { assertChunk, embeddingText } from './chunking';
+import { assertChunk } from './chunking';
 
 /** Documented analyzer identity — bump only with a migration. */
 export const ANALYZER_VERSION = 'rag-analyzer.v1';
@@ -8,8 +8,59 @@ export const ANALYZER_PATTERN = /[\p{L}\p{N}]+/gu;
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 export const BM25_TOP_K: number = policy.retrieval.bm25TopK;
-/** BM25 indexes the same title-newline-content-span document as the embedding input. */
+/**
+ * BM25 indexes the lexical title-newline-content document, never the provider-framed embedding
+ * input. Embedding prefixes (`title:`, `task: search result | query:`) must not change match
+ * terms or document length.
+ */
 export const BM25_DOCUMENT = 'title-newline-content-span' as const;
+
+/**
+ * Query-scoring policy version. This describes how a *question* is reduced to BM25 terms; it is
+ * deliberately separate from `ANALYZER_VERSION`/`BM25_K1`/`BM25_B`, which are part of the index
+ * policy identity. Changing query term selection must never force a re-embed or invalidate an
+ * existing index generation.
+ */
+export const QUERY_POLICY_VERSION = 'rag-query-policy.v1' as const;
+
+/**
+ * Explicit, conservative VI/EN function-word and question fillers removed from QUERY SCORING
+ * ONLY. The raw question is never edited (JEV and embeddings still receive it verbatim).
+ *
+ * Deliberately absent: negations (không, chưa, not, no, never, without), numbers, dates and
+ * distinctive name/content tokens. Tokens are matched exactly after `analyze`, so any token with
+ * a digit or a diacritic different from the listed form is always preserved.
+ */
+const QUERY_FILLERS: ReadonlySet<string> = new Set([
+  // Vietnamese question/function words.
+  'khi', 'ra', 'nào', 'diễn', 'cuộc', 'và', 'là', 'của', 'cho', 'với', 'trong', 'trên',
+  'tại', 'từ', 'về', 'để', 'thì', 'như', 'nhưng', 'hoặc', 'đã', 'đang', 'sẽ',
+  'ai', 'gì', 'sao', 'đâu', 'thế', 'này', 'đó', 'các', 'những', 'việc', 'bị', 'mà',
+  'rồi', 'hãy', 'vậy', 'nên',
+  // English question/function words.
+  'when', 'what', 'who', 'whom', 'whose', 'where', 'why', 'which', 'how', 'does', 'did',
+  'do', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'the', 'a', 'an', 'of', 'to',
+  'and', 'or', 'but', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'as', 'that', 'this',
+  'these', 'those', 'it', 'its', 'there', 'here',
+]);
+
+/**
+ * Pure query-term selection for BM25 only: analyzer v1 over the raw question, minus the explicit
+ * filler list, deduplicated in first-occurrence order. A question made only of fillers yields
+ * `[]`; the caller must then leave the keyword branch empty and let the semantic branch decide.
+ * Document terms, analyzer identity, tokenization and chunking are untouched.
+ */
+export function queryTerms(question: string): readonly string[] {
+  if (typeof question !== 'string') throw new RagFailure('INVALID_INPUT');
+  const terms: string[] = [];
+  const seen = new Set<string>();
+  for (const token of analyze(question)) {
+    if (QUERY_FILLERS.has(token) || seen.has(token)) continue;
+    seen.add(token);
+    terms.push(token);
+  }
+  return Object.freeze(terms);
+}
 
 /**
  * Analyzer v1: NFKC -> lowercase -> Unicode letter/number tokens, in text order.
@@ -22,12 +73,15 @@ export function analyze(text: string): string[] {
   return matches === null ? [] : matches;
 }
 
-const documentTerms = (chunk: Chunk): string[] => analyze(embeddingText(chunk));
+/** Raw lexical document: title, newline, exact content span. No embedding framing is added. */
+const documentTerms = (chunk: Chunk): string[] => analyze(`${chunk.title}\n${chunk.text}`);
 
 /**
- * BM25 over the caller-supplied eligible corpus. Returns positive matches only, ranked
- * 1..n (rank starts at 1), capped at `retrieval.bm25TopK` (20), ties broken by ascending
- * source key so the order is deterministic.
+ * BM25 over the caller-supplied eligible corpus. Query terms come from `queryTerms` (explicit
+ * question fillers removed); document terms still come from `analyze`. Returns positive matches
+ * only, ranked 1..n (rank starts at 1), capped at `retrieval.bm25TopK` (20), ties broken by
+ * ascending source key so the order is deterministic. Every entry carries its positive finite
+ * `bm25Score`; the score never participates in RRF/MMR decisions here.
  */
 export function bm25(question: string, chunks: readonly Chunk[]): readonly Ranked[] {
   if (typeof question !== 'string') throw new RagFailure('INVALID_INPUT');
@@ -35,7 +89,7 @@ export function bm25(question: string, chunks: readonly Chunk[]): readonly Ranke
   const k1 = BM25_K1;
   const b = BM25_B;
 
-  const terms = [...new Set(analyze(question))];
+  const terms = queryTerms(question);
   if (terms.length === 0 || chunks.length === 0) return [];
 
   const keys = new Set<string>();
@@ -83,7 +137,11 @@ export function bm25(question: string, chunks: readonly Chunk[]): readonly Ranke
     (left, right) => right.score - left.score || compareSourceKey(left.chunk, right.chunk),
   );
 
-  return scored.slice(0, BM25_TOP_K).map((entry, index) => ({ chunk: entry.chunk, rank: index + 1 }));
+  return scored.slice(0, BM25_TOP_K).map((entry, index) => ({
+    chunk: entry.chunk,
+    rank: index + 1,
+    bm25Score: entry.score,
+  }));
 }
 
 /** Ascending source key (policy.technicalDefaults.tieBreak), compared as code units. */

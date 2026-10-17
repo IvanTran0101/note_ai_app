@@ -5,11 +5,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RagFailure, type Counter } from '../types';
+import { policy, RagFailure, type Counter } from '../types';
 import { IndexFailure } from './types';
 import { BEDROCK_INVOKE_MODEL_PATH, type AwsJson } from './aws_http';
 import {
-  EMBED_BATCH_LIMIT, EMBEDDING_MODEL, EMBEDDING_PATH, EMBEDDING_TRUNCATE, createEmbedding,
+  EMBED_BATCH_LIMIT, EMBEDDING_MODEL, EMBEDDING_PATH, EMBEDDING_TRUNCATE,
+  LEGACY_EMBEDDING_DIMENSIONS, createEmbedding,
 } from './embedding';
 
 const SIGNAL = new AbortController().signal;
@@ -27,9 +28,9 @@ const recorder = (
   return { calls, request };
 };
 
-/** The policy embedding is 1024-dimensional and non-zero; `vector(0.5)` stays non-zero. */
+/** The frozen legacy Cohere embedding is 1024-dimensional and non-zero. */
 const vector = (head = 1): number[] => {
-  const values = new Array<number>(1024).fill(0);
+  const values = new Array<number>(LEGACY_EMBEDDING_DIMENSIONS).fill(0);
   values[0] = head;
   return values;
 };
@@ -55,6 +56,12 @@ test('document batches send the policy request once and return frozen 1024-dim v
   assert.equal(EMBEDDING_PATH, BEDROCK_INVOKE_MODEL_PATH, 'the port whitelists this exact path');
   assert.equal(EMBEDDING_TRUNCATE, 'NONE');
   assert.equal(EMBED_BATCH_LIMIT, 96);
+  // Prove the legacy adapter is frozen to policy_v1, not silently following the active profile.
+  assert.equal(LEGACY_EMBEDDING_DIMENSIONS, 1024);
+  assert.equal(policy.embedding.model, 'embeddinggemma-2-q8');
+  assert.equal(policy.embedding.dimensions, 768);
+  assert.notEqual(EMBEDDING_MODEL, policy.embedding.model);
+  assert.notEqual(LEGACY_EMBEDDING_DIMENSIONS, policy.embedding.dimensions);
 
   const produced = await embedding.embed(['alpha', 'beta'], 'search_document', SIGNAL);
   assert.equal(io.calls.length, 1);

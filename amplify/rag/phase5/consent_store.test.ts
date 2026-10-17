@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { GetCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CONSENT_VERSION } from '../contract';
 import { CONSENT_SORT_KEY, OWNER_KEY_PREFIX } from '../indexing/jobs';
-import { DEFAULT_CONSENT, consentRowKey, createConsentStore } from './consent_store';
+import { DEFAULT_CONSENT, LEGACY_CONSENT_VERSION, consentRowKey, createConsentStore } from './consent_store';
 import type { ConsentCommand, ConsentPort, ConsentSendOptions, ConsentStore } from './consent_store';
 import { RagFailure } from '../types';
 
@@ -206,7 +206,7 @@ test('absent consent is the default grant read with a strongly consistent GET', 
   const store = storeOf(port);
   const grant = await store.read(ACTOR, signal());
   assert.deepEqual(grant, { accepted: false, version: CONSENT_VERSION, generation: 0 });
-  assert.equal(grant.version, 'rag-consent.v1');
+  assert.equal(grant.version, 'rag-consent.v2');
   assert.ok(Object.isFrozen(DEFAULT_CONSENT));
   assert.equal(calls(), 1);
   assert.equal(ROW.ownerId, `${OWNER_KEY_PREFIX}${ACTOR}`);
@@ -236,6 +236,61 @@ test('a generation-0 compare-and-set creates the first grant and increments the 
   // A second accepted write with the correct expectation moves the generation again.
   const again = await store.write(ACTOR, { ...VALID, expectedGeneration: 1 }, signal());
   assert.equal(again.generation, 2);
+});
+
+test('a legacy v1 grant reads as current-denied with the same generation and is never rewritten', async () => {
+  for (const accepted of [true, false]) {
+    const { port, items, at, calls } = fake();
+    const seeded = { ...ROW, accepted, version: LEGACY_CONSENT_VERSION, generation: 4 };
+    items.set(at(ROW), { ...seeded });
+    const grant = await storeOf(port).read(ACTOR, signal());
+    assert.deepEqual(grant, { accepted: false, version: CONSENT_VERSION, generation: 4 });
+    assert.deepEqual(items.get(at(ROW)), seeded, 'a read never rewrites the legacy row');
+    assert.equal(calls(), 1, 'one strongly consistent GET and no write');
+  }
+});
+
+test('an explicit current-version PUT migrates a legacy v1 row by CAS on the RAW captured grant', async () => {
+  const { port, items, at } = fake();
+  const seeded = { ...ROW, accepted: true, version: LEGACY_CONSENT_VERSION, generation: 4 };
+  items.set(at(ROW), { ...seeded });
+  const recorder = recordUpdates(port);
+  const stored = await storeOf(recorder.port).write(
+    ACTOR,
+    { accepted: true, version: CONSENT_VERSION, expectedGeneration: 4 },
+    signal(),
+  );
+  assert.deepEqual(stored, { accepted: true, version: CONSENT_VERSION, generation: 5 });
+  assert.deepEqual(items.get(at(ROW)), {
+    ...ROW, accepted: true, version: CONSENT_VERSION, generation: 5,
+  });
+  const issued = recorder.inputs()[0] as Row;
+  const values = issued['ExpressionAttributeValues'] as Row;
+  assert.equal(values[':capturedVersion'], LEGACY_CONSENT_VERSION, 'the CAS compares the stored v1 version');
+  assert.equal(values[':capturedAccepted'], true, 'the CAS compares the stored accepted value');
+  assert.equal(values[':expected'], 4);
+});
+
+test('a stale or reset legacy write loses without migrating or resetting the generation', async () => {
+  // A legacy row moves between the read and the explicit write: the raw CAS must refuse it.
+  const raced = fake();
+  const seeded = { ...ROW, accepted: true, version: LEGACY_CONSENT_VERSION, generation: 4 };
+  raced.items.set(raced.at(ROW), { ...seeded });
+  const racing = afterFirstGet(raced.port, () => {
+    raced.items.set(raced.at(ROW), { ...seeded, accepted: false });
+  });
+  assert.equal(await codeOf(() => storeOf(racing).write(
+    ACTOR, { accepted: true, version: CONSENT_VERSION, expectedGeneration: 4 }, signal(),
+  )), 'SOURCE_CHANGED');
+  assert.deepEqual(raced.items.get(raced.at(ROW)), { ...seeded, accepted: false }, 'the raced row is untouched');
+
+  // An expectedGeneration of 0 can never reset or overwrite the legacy generation 4.
+  const reset = fake();
+  reset.items.set(reset.at(ROW), { ...seeded });
+  assert.equal(await codeOf(() => storeOf(reset.port).write(
+    ACTOR, { accepted: true, version: CONSENT_VERSION, expectedGeneration: 0 }, signal(),
+  )), 'SOURCE_CHANGED');
+  assert.deepEqual(reset.items.get(reset.at(ROW)), seeded);
 });
 
 test('revoke is a normal CAS write and keeps the generation monotonic', async () => {
@@ -310,7 +365,7 @@ test('a row deleted between the read and the update conflicts instead of being r
 test('a grant rewritten between the read and the update is refused, never overwritten', async () => {
   const races: ReadonlyArray<readonly [string, Row]> = [
     ['accepted flipped at the same generation', { accepted: false }],
-    ['version rewritten', { version: 'rag-consent.v2' }],
+    ['version rewritten', { version: LEGACY_CONSENT_VERSION }],
     ['generation moved', { generation: 3 }],
     ['ttl added', { ttl: 1 }],
     ['foreign projection added', { canonicalOwnerId: OTHER }],
@@ -415,7 +470,7 @@ test('the maximum generation is readable but can never be written past', async (
 test('foreign, ttl-carrying, key-mismatched and malformed rows fail closed', async () => {
   const corrupt: ReadonlyArray<readonly [string, Row]> = [
     ['accepted is not boolean', { ...ROW, accepted: 'true', version: CONSENT_VERSION, generation: 0 }],
-    ['version drift', { ...ROW, accepted: true, version: 'rag-consent.v2', generation: 0 }],
+    ['version drift', { ...ROW, accepted: true, version: 'rag-consent.v3', generation: 0 }],
     ['version is not a string', { ...ROW, accepted: true, version: 7, generation: 0 }],
     ['generation is NaN', { ...ROW, accepted: true, version: CONSENT_VERSION, generation: Number.NaN }],
     ['generation is negative', { ...ROW, accepted: true, version: CONSENT_VERSION, generation: -1 }],
@@ -451,7 +506,7 @@ test('invalid arguments are refused before any DynamoDB call', async () => {
   assert.equal(await codeOf(() => store.read(7 as unknown as string, io)), 'INVALID_INPUT');
   assert.equal(await codeOf(() => store.read(ACTOR, 'signal' as unknown as AbortSignal)), 'INVALID_INPUT');
   assert.equal(await codeOf(() => store.read(ACTOR, aborted.signal)), 'TIMEOUT');
-  assert.equal(await codeOf(() => store.write(ACTOR, { ...VALID, version: 'rag-consent.v2' }, io)), 'INVALID_INPUT');
+  assert.equal(await codeOf(() => store.write(ACTOR, { ...VALID, version: LEGACY_CONSENT_VERSION }, io)), 'INVALID_INPUT');
   assert.equal(await codeOf(() => store.write(ACTOR, { ...VALID, ownerId: ACTOR } as never, io)), 'INVALID_INPUT');
   assert.equal(await codeOf(() => store.write(ACTOR, { accepted: true } as never, io)), 'INVALID_INPUT');
   assert.equal(await codeOf(() => store.write(ACTOR, { ...VALID, accepted: 'true' } as never, io)), 'INVALID_INPUT');

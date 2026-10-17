@@ -1,0 +1,27 @@
+{
+  "profile": "embeddinggemma-2-q8-768-v1",
+  "model": {
+    "id": "embeddinggemma-2-q8",
+    "family": "google/embeddinggemma-2",
+    "repository": "unsloth/embeddinggemma-2-GGUF",
+    "revision": "031f0d4b35536f69ab3509d4893c923264fcf253",
+    "file": "embeddinggemma-2-Q8_0.gguf",
+    "format": "gguf",
+    "quantization": "Q8_0",
+    "bytes": 309855520,
+    "sha256": "6f1bd4ac6c5df7444f9cca7ca36cafe6cfa34cd6f49fefb1e0b4be8143aed8bc",
+    "pooling": "mean",
+    "normalization": "l2",
+    "dimensions": 768
+  },
+  "runtime": {
+    "name": "llama.cpp",
+    "version": "0.7.0-dev",
+    "build": 11706,
+    "commit": "f74e2fa6a31cc33ab4ee4ae516641cfe62df3924",
+    "mode": "CPU",
+    "metal": false,
+    "context": 2048,
+    "parallel": 1
+  }
+}

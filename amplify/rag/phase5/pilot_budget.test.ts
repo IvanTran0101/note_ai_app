@@ -20,8 +20,8 @@ import { DeleteCommand, GetCommand, TransactWriteCommand, UpdateCommand } from '
 import { BUDGET_OWNER_KEY, BUDGET_SORT_KEY } from '../indexing/store';
 import { RagFailure } from '../types';
 import {
-  GLOBAL_EMBEDDING_KEY, GLOBAL_EMBEDDING_LIMIT, PILOT_BUDGET_KEY, PILOT_DAILY_QUERY_LIMIT, PILOT_LIMITS,
-  PILOT_QUERY_LEASE_MS, PILOT_USD_MICROS_LIMIT, createPilotBudget,
+  GLOBAL_EMBEDDING_KEY, GLOBAL_EMBEDDING_LIMIT, PILOT_BUDGET_KEY, PILOT_DAILY_QUERY_LIMIT,
+  PILOT_EMBEDDING_LIMIT, PILOT_LIMITS, PILOT_QUERY_LEASE_MS, PILOT_USD_MICROS_LIMIT, createPilotBudget,
 } from './pilot_budget';
 import type { PilotBudgetPort, PilotCommand, QueryLease } from './pilot_budget';
 
@@ -35,7 +35,9 @@ const signal = (): AbortSignal => new AbortController().signal;
 const dailyKey = (day: string, actor: string): Item => ({ ownerId: PILOT_BUDGET_KEY.ownerId, noteId: `DAILY#${day}#${actor}` });
 const leaseKey = (actor: string): Item => ({ ownerId: PILOT_BUDGET_KEY.ownerId, noteId: `LEASE#${actor}` });
 /** Every counter the pilot item owns; a corrupt value in any one of them refuses the debit. */
-const COUNTERS = ['queryCalls', 'jevCalls', 'deepseekCalls', 'cohereCalls', 'reservedUsdMicros'] as const;
+const COUNTERS = [
+  'queryCalls', 'jevCalls', 'deepseekCalls', 'cohereCalls', 'selfHostedEmbeddingCalls', 'reservedUsdMicros',
+] as const;
 /** Values a counter must never be read as 0: only a missing attribute is 0. */
 const CORRUPT_VALUES: ReadonlyArray<readonly [string, unknown]> = [
   ['negative', -1],
@@ -103,6 +105,31 @@ const evaluate = (expression: string, item: Item, names: Record<string, string>,
   return result;
 };
 
+/**
+ * Real DynamoDB rejects any request whose `ExpressionAttributeNames`/`Values` carries an entry
+ * the condition or update expression never references (`ValidationException`), so a supplied
+ * substitution must be used and a referenced one must be supplied. The check reads the command
+ * that was actually issued; it never restates which alias this budget is expected to use.
+ */
+const unusedSubstitutions = (input: Item): string[] => {
+  const expression = `${String(input['UpdateExpression'] ?? '')} ${String(input['ConditionExpression'] ?? '')}`;
+  const usedNames = new Set(expression.match(/#[A-Za-z0-9_]+/g) ?? []);
+  const usedValues = new Set(expression.match(/:[A-Za-z0-9_]+/g) ?? []);
+  const suppliedNames = Object.keys((input['ExpressionAttributeNames'] ?? {}) as Item);
+  const suppliedValues = Object.keys((input['ExpressionAttributeValues'] ?? {}) as Item);
+  const violations: string[] = [];
+  for (const name of suppliedNames) if (!usedNames.has(name)) violations.push(`${name} is supplied but unused`);
+  for (const value of suppliedValues) if (!usedValues.has(value)) violations.push(`${value} is supplied but unused`);
+  for (const name of usedNames) if (!suppliedNames.includes(name)) violations.push(`${name} is used but unsupplied`);
+  for (const value of usedValues) if (!suppliedValues.includes(value)) violations.push(`${value} is used but unsupplied`);
+  return violations;
+};
+
+const assertSubstitutionsUsed = (input: Item): void => {
+  const violations = unusedSubstitutions(input);
+  if (violations.length > 0) assert.fail(violations.join('; '));
+};
+
 type Hook = (command: PilotCommand, items: Map<string, Item>) => void;
 
 type Fake = Readonly<{
@@ -110,6 +137,8 @@ type Fake = Readonly<{
   items: Map<string, Item>;
   at: (key: Item) => string;
   calls: () => number;
+  /** Every command the budget issued, in order (for expression-contract assertions). */
+  commands: () => readonly PilotCommand[];
   /** Counter/lease writes actually applied; a refused admission must leave it unchanged. */
   writes: () => number;
   /** Runs once, immediately before the first matching command is evaluated. */
@@ -121,6 +150,7 @@ const fakeDynamo = (): Fake => {
   const hooks: Array<{ match: (command: PilotCommand) => boolean; hook: Hook; used: boolean }> = [];
   let calls = 0;
   let writes = 0;
+  const commands: PilotCommand[] = [];
   const at = (key: Item): string => `${String(key['ownerId'])}\u0000${String(key['noteId'])}`;
   const holds = (expression: unknown, current: Item | undefined, names: unknown, values: unknown): boolean =>
     expression === undefined ||
@@ -149,6 +179,7 @@ const fakeDynamo = (): Fake => {
   const port: PilotBudgetPort = {
     async send(command): Promise<unknown> {
       calls += 1;
+      commands.push(command);
       for (const entry of hooks) {
         if (!entry.used && entry.match(command)) {
           entry.used = true;
@@ -159,6 +190,10 @@ const fakeDynamo = (): Fake => {
       const input = (command as { input: Item }).input;
       if (command instanceof TransactWriteCommand) {
         const entries = (input['TransactItems'] ?? []) as Item[];
+        for (const entry of entries) {
+          const write = (entry['Put'] ?? entry['Update']) as Item;
+          assertSubstitutionsUsed(write);
+        }
         const allowed = entries.map((entry) => {
           const write = (entry['Put'] ?? entry['Update']) as Item;
           const key = (write['Item'] ?? write['Key']) as Item;
@@ -185,6 +220,7 @@ const fakeDynamo = (): Fake => {
         return {};
       }
       if (command instanceof UpdateCommand) {
+        assertSubstitutionsUsed(input);
         const key = input['Key'] as Item;
         if (!holds(input['ConditionExpression'], items.get(at(key)), input['ExpressionAttributeNames'], input['ExpressionAttributeValues'])) {
           throw Object.assign(new Error('conditional'), { name: 'ConditionalCheckFailedException' });
@@ -195,6 +231,7 @@ const fakeDynamo = (): Fake => {
         return { Attributes: next };
       }
       if (command instanceof DeleteCommand) {
+        assertSubstitutionsUsed(input);
         const key = input['Key'] as Item;
         if (!holds(input['ConditionExpression'], items.get(at(key)), input['ExpressionAttributeNames'], input['ExpressionAttributeValues'])) {
           throw Object.assign(new Error('conditional'), { name: 'ConditionalCheckFailedException' });
@@ -215,6 +252,7 @@ const fakeDynamo = (): Fake => {
   return {
     port, items, at,
     calls: () => calls,
+    commands: () => commands,
     writes: () => writes,
     before: (match, hook) => { hooks.push({ match, hook, used: false }); },
   };
@@ -272,7 +310,7 @@ test('one admission reserves the global attempt, the UTC-day attempt and the lea
   // Two strongly consistent preflight reads (pilot counters + day counter) then one transaction.
   assert.equal(fake.calls(), 3);
   assert.deepEqual(await budget.read(signal()), {
-    queryCalls: 1, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 0,
+    queryCalls: 1, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 0,
   });
   const daily = fake.items.get(fake.at(dailyKey(DAY, SUB(1)))) as Item;
   const stored = fake.items.get(fake.at(leaseKey(SUB(1)))) as Item;
@@ -335,47 +373,57 @@ test('an unexpired lease refuses and an expired one may be replaced', async () =
   assert.ok(PILOT_QUERY_LEASE_MS > 26_000);
 });
 
-test('the daily cap is ten per account per UTC day and a refusal debits nothing', async () => {
+test('the daily cap admits the hundredth attempt and refuses the next without a debit', async () => {
   const { budget, fake } = build();
-  for (let i = 0; i < PILOT_DAILY_QUERY_LIMIT; i += 1) {
-    const lease = await budget.acquireQuery(SUB(1), `req-${i}`, signal());
-    await budget.release(lease, signal());
-  }
+  const key = fake.at(dailyKey(DAY, SUB(1)));
+  fake.items.set(key, { ...dailyKey(DAY, SUB(1)), attempts: PILOT_DAILY_QUERY_LIMIT - 1 });
+  const lease = await budget.acquireQuery(SUB(1), 'req-99', signal());
+  await budget.release(lease, signal());
+  assert.equal((fake.items.get(key) as Item)['attempts'], PILOT_DAILY_QUERY_LIMIT);
+  assert.equal((await budget.read(signal())).queryCalls, 1);
   const before = await budget.read(signal());
-  assert.equal(before.queryCalls, 10);
-  assert.equal(await codeOf(() => budget.acquireQuery(SUB(1), 'req-11', signal())), 'RATE_LIMITED');
+  const writes = fake.writes();
+  assert.equal(await codeOf(() => budget.acquireQuery(SUB(1), 'req-100', signal())), 'RATE_LIMITED');
   assert.deepEqual(await budget.read(signal()), before);
-  assert.equal((fake.items.get(fake.at(dailyKey(DAY, SUB(1)))) as Item)['attempts'], 10);
-  // A second account has its own daily budget.
-  assert.equal(await codeOf(() => budget.acquireQuery(SUB(2), 'req-12', signal())), 'NO_ERROR');
+  assert.equal(fake.writes(), writes);
+  assert.equal((fake.items.get(key) as Item)['attempts'], PILOT_DAILY_QUERY_LIMIT);
+  // A second account has its own daily budget and leaves the first row untouched.
+  assert.equal(await codeOf(() => budget.acquireQuery(SUB(2), 'req-101', signal())), 'NO_ERROR');
+  assert.equal((fake.items.get(key) as Item)['attempts'], PILOT_DAILY_QUERY_LIMIT);
 });
 
-test('a new UTC day has its own ten attempts and never resets the old counter', async () => {
+test('a new UTC day has its own daily allowance and never resets the old counter', async () => {
   const { budget, fake, advance } = build(Date.parse('2026-10-12T23:00:00.000Z'));
-  for (let i = 0; i < PILOT_DAILY_QUERY_LIMIT; i += 1) {
-    const lease = await budget.acquireQuery(SUB(1), `req-${i}`, signal());
-    await budget.release(lease, signal());
-  }
-  assert.equal(await codeOf(() => budget.acquireQuery(SUB(1), 'req-11', signal())), 'RATE_LIMITED');
+  fake.items.set(fake.at(dailyKey('2026-10-12', SUB(1))), {
+    ...dailyKey('2026-10-12', SUB(1)), attempts: PILOT_DAILY_QUERY_LIMIT,
+  });
+  assert.equal(await codeOf(() => budget.acquireQuery(SUB(1), 'req-0', signal())), 'RATE_LIMITED');
   advance(2 * 60 * 60 * 1000);
-  const next = await budget.acquireQuery(SUB(1), 'req-12', signal());
+  const next = await budget.acquireQuery(SUB(1), 'req-1', signal());
   assert.equal(next.expiresAt, Date.parse('2026-10-13T01:00:00.000Z') + PILOT_QUERY_LEASE_MS);
-  assert.equal((fake.items.get(fake.at(dailyKey('2026-10-12', SUB(1)))) as Item)['attempts'], 10);
+  assert.equal((fake.items.get(fake.at(dailyKey('2026-10-12', SUB(1)))) as Item)['attempts'], PILOT_DAILY_QUERY_LIMIT);
   assert.equal((fake.items.get(fake.at(dailyKey('2026-10-13', SUB(1)))) as Item)['attempts'], 1);
-  assert.equal((await budget.read(signal())).queryCalls, 11);
+  assert.equal((await budget.read(signal())).queryCalls, 1);
 });
 
-test('the global cap is fifty attempts across accounts and refuses atomically', async () => {
+test('the shared global query cap admits the thousandth attempt and then refuses under the daily cap', async () => {
   const { budget, fake } = build();
-  for (let n = 1; n <= 5; n += 1) {
-    for (let i = 0; i < PILOT_DAILY_QUERY_LIMIT; i += 1) {
-      const lease = await budget.acquireQuery(SUB(n), `req-${n}-${i}`, signal());
-      await budget.release(lease, signal());
-    }
-  }
+  seedPilot(fake, { queryCalls: PILOT_LIMITS.query - 1 });
+  const lease = await budget.acquireQuery(SUB(1), 'req-999', signal());
+  await budget.release(lease, signal());
   assert.equal((await budget.read(signal())).queryCalls, PILOT_LIMITS.query);
-  assert.equal(await codeOf(() => budget.acquireQuery(SUB(6), 'req-6', signal())), 'RATE_LIMITED');
-  assert.equal((await budget.read(signal())).queryCalls, PILOT_LIMITS.query);
+  assert.equal((fake.items.get(fake.at(dailyKey(DAY, SUB(1)))) as Item)['attempts'], 1);
+  const before = await budget.read(signal());
+  const writes = fake.writes();
+  // The actor is far below its 100/day cap: only the shared 1,000-attempt cap refuses.
+  assert.equal(await codeOf(() => budget.acquireQuery(SUB(1), 'req-1000', signal())), 'RATE_LIMITED');
+  assert.deepEqual(await budget.read(signal()), before);
+  assert.equal(fake.writes(), writes);
+  assert.equal((fake.items.get(fake.at(dailyKey(DAY, SUB(1)))) as Item)['attempts'], 1);
+
+  // A fresh account is refused by the same shared cap and gets neither a day row nor a lease.
+  seedPilot(fake, { queryCalls: PILOT_LIMITS.query });
+  assert.equal(await codeOf(() => budget.acquireQuery(SUB(6), 'req-1001', signal())), 'RATE_LIMITED');
   assert.equal(fake.items.has(fake.at(dailyKey(DAY, SUB(6)))), false);
   assert.equal(fake.items.has(fake.at(leaseKey(SUB(6)))), false);
 });
@@ -384,7 +432,7 @@ test('provider reservations count every call, share one ceiling and never refund
   const { budget, fake } = build();
   await budget.reserve('jev', 100_000, signal());
   assert.deepEqual(await budget.read(signal()), {
-    queryCalls: 0, jevCalls: 1, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 4200,
+    queryCalls: 0, jevCalls: 1, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 4200,
   });
   await budget.reserve('deepseek', 10_000, signal());
   const both = await budget.read(signal());
@@ -394,26 +442,50 @@ test('provider reservations count every call, share one ceiling and never refund
   await budget.reserve('jev', 0, signal());
   assert.equal((await budget.read(signal())).jevCalls, 2);
   // No refund or reset path exists; a failed call stays counted by construction.
-  assert.deepEqual(Object.keys(budget).sort(), ['acquireCohere', 'acquireQuery', 'read', 'release', 'reserve']);
+  assert.deepEqual(Object.keys(budget).sort(), [
+    'acquireCohere', 'acquireEmbedding', 'acquireQuery', 'read', 'release', 'reserve',
+  ]);
   // Each reservation is one consistent preflight read plus one conditional update.
   assert.equal(fake.calls(), 9);
   assert.equal(fake.writes(), 3);
 });
 
-test('the per-provider call caps refuse the extra reservation without a second write', async () => {
+test('the per-provider call caps admit the thousandth reservation and refuse the next', async () => {
   const { budget, fake } = build();
-  for (let i = 0; i < PILOT_LIMITS.jev; i += 1) await budget.reserve('jev', 0, signal());
-  const after = fake.calls();
-  const stored = fake.writes();
+  seedPilot(fake, { jevCalls: PILOT_LIMITS.jev - 1 });
+  await budget.reserve('jev', 0, signal());
   assert.equal((await budget.read(signal())).jevCalls, PILOT_LIMITS.jev);
+  const stored = fake.writes();
   assert.equal(await codeOf(() => budget.reserve('jev', 0, signal())), 'RATE_LIMITED');
   // The refused reservation reads, then its conditional update is refused: nothing is debited.
   assert.equal(fake.writes(), stored);
   assert.equal((await budget.read(signal())).jevCalls, PILOT_LIMITS.jev);
-  assert.equal(fake.calls(), after + 4);
-  for (let i = 0; i < PILOT_LIMITS.deepseek; i += 1) await budget.reserve('deepseek', 0, signal());
-  assert.equal(await codeOf(() => budget.reserve('deepseek', 0, signal())), 'RATE_LIMITED');
-  assert.equal((await budget.read(signal())).deepseekCalls, PILOT_LIMITS.deepseek);
+
+  const deep = build();
+  seedPilot(deep.fake, { deepseekCalls: PILOT_LIMITS.deepseek - 1 });
+  await deep.budget.reserve('deepseek', 0, signal());
+  assert.equal((await deep.budget.read(signal())).deepseekCalls, PILOT_LIMITS.deepseek);
+  assert.equal(await codeOf(() => deep.budget.reserve('deepseek', 0, signal())), 'RATE_LIMITED');
+  assert.equal((await deep.budget.read(signal())).deepseekCalls, PILOT_LIMITS.deepseek);
+});
+
+test('the USD ceiling refuses a reservation that still fits the provider call cap', async () => {
+  const { budget, fake } = build();
+  seedPilot(fake, { jevCalls: PILOT_LIMITS.jev - 1, reservedUsdMicros: PILOT_USD_MICROS_LIMIT - 1 });
+  const before = await budget.read(signal());
+  const writes = fake.writes();
+  assert.equal(await codeOf(() => budget.reserve('jev', 100_000, signal())), 'RATE_LIMITED');
+  assert.equal(fake.writes(), writes);
+  const row = fake.items.get(fake.at(PILOT_BUDGET_KEY)) as Item;
+  assert.deepEqual(
+    { jevCalls: row['jevCalls'], reservedUsdMicros: row['reservedUsdMicros'] },
+    { jevCalls: PILOT_LIMITS.jev - 1, reservedUsdMicros: PILOT_USD_MICROS_LIMIT - 1 },
+  );
+  assert.deepEqual(await budget.read(signal()), before);
+  // The hundredth JEV reservation is still admitted once a micro of room is left.
+  seedPilot(fake, { jevCalls: PILOT_LIMITS.jev - 1, reservedUsdMicros: PILOT_USD_MICROS_LIMIT - 4_200 });
+  await budget.reserve('jev', 100_000, signal());
+  assert.equal((await budget.read(signal())).jevCalls, PILOT_LIMITS.jev);
 });
 
 test('the shared external ceiling refuses a reservation that would cross it', async () => {
@@ -440,8 +512,10 @@ test('Cohere admission wraps the global embedding item and the pilot counter ato
   await budget.acquireCohere(signal());
   assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 13);
   assert.equal((await budget.read(signal())).cohereCalls, 1);
-  // The cumulative global cap of 112 is shared with the pre-pilot usage.
-  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ownerId: 'BUDGET#SMOKE', noteId: 'COUNTER', used: 111 });
+  // The cumulative global cap of 5,012 is shared with the pre-pilot usage.
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), {
+    ownerId: 'BUDGET#SMOKE', noteId: 'COUNTER', used: GLOBAL_EMBEDDING_LIMIT - 1,
+  });
   await budget.acquireCohere(signal());
   assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], GLOBAL_EMBEDDING_LIMIT);
   assert.equal(await codeOf(() => budget.acquireCohere(signal())), 'RATE_LIMITED');
@@ -449,18 +523,157 @@ test('Cohere admission wraps the global embedding item and the pilot counter ato
   assert.equal((await budget.read(signal())).cohereCalls, 2);
 });
 
-test('the pilot Cohere cap refuses the hundred-and-first invocation', async () => {
+test('the legacy Cohere target admits its hundredth call and refuses the next', async () => {
   const { budget, fake } = build();
-  for (let i = 0; i < PILOT_LIMITS.cohere; i += 1) await budget.acquireCohere(signal());
+  seedPilot(fake, { cohereCalls: PILOT_LIMITS.cohere - 1 });
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ...GLOBAL_EMBEDDING_KEY, used: 12 });
+  await budget.acquireCohere(signal());
   assert.equal((await budget.read(signal())).cohereCalls, PILOT_LIMITS.cohere);
-  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], PILOT_LIMITS.cohere);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 13);
+  const before = await budget.read(signal());
   const calls = fake.calls();
   const writes = fake.writes();
+  // The shared 5,000 is nowhere near exhausted, so only the legacy 100 target cap refuses; the
+  // two consistent reads are followed by a transaction whose target condition fails atomically.
   assert.equal(await codeOf(() => budget.acquireCohere(signal())), 'RATE_LIMITED');
-  // Two consistent preflight reads followed by a refused transaction; no debit.
   assert.equal(fake.calls(), calls + 3);
   assert.equal(fake.writes(), writes);
-  assert.equal((await budget.read(signal())).cohereCalls, PILOT_LIMITS.cohere);
+  assert.deepEqual(await budget.read(signal()), before);
+});
+
+test('acquireEmbedding debits the new local counter and never touches historical Cohere calls', async () => {
+  const { budget, fake } = build();
+  seedPilot(fake, { cohereCalls: 12 });
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ...GLOBAL_EMBEDDING_KEY, used: 5 });
+  await budget.acquireEmbedding(signal());
+  let counters = await budget.read(signal());
+  assert.equal(counters.cohereCalls, 12, 'the historical Cohere counter is preserved');
+  assert.equal(counters.selfHostedEmbeddingCalls, 1);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 6);
+  // The deprecated path is isolated: it still debits only its own counter and the shared item.
+  await budget.acquireCohere(signal());
+  counters = await budget.read(signal());
+  assert.equal(counters.cohereCalls, 13);
+  assert.equal(counters.selfHostedEmbeddingCalls, 1);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 7);
+});
+
+test('every embedding transaction references every supplied expression value', async () => {
+  const pilotTransaction = (commands: readonly PilotCommand[]): Item => {
+    const transaction = commands.find((command) => command instanceof TransactWriteCommand);
+    assert.ok(transaction instanceof TransactWriteCommand, 'one embedding admission transaction');
+    const items = ((transaction as unknown as { input: Item }).input['TransactItems'] ?? []) as Item[];
+    const pilot = items.map((entry) => entry['Update'] as Item)
+      .find((update) => (update['Key'] as Item)['ownerId'] === PILOT_BUDGET_KEY.ownerId);
+    assert.ok(pilot !== undefined, 'the pilot counter item is in the transaction');
+    return pilot;
+  };
+
+  // Fresh local: target 0 and sibling 0 is the branch that previously supplied an unused value.
+  const fresh = build();
+  await fresh.budget.acquireEmbedding(signal());
+  assert.deepEqual(unusedSubstitutions(pilotTransaction(fresh.fake.commands())), []);
+
+  // Fresh legacy Cohere: the same zero/zero sibling branch from the other target.
+  const cohere = build();
+  await cohere.budget.acquireCohere(signal());
+  assert.deepEqual(unusedSubstitutions(pilotTransaction(cohere.fake.commands())), []);
+
+  // Nonzero sibling: the exact captured sibling value must still be referenced, not omitted.
+  const moved = build();
+  seedPilot(moved.fake, { cohereCalls: 7 });
+  await moved.budget.acquireEmbedding(signal());
+  assert.deepEqual(unusedSubstitutions(pilotTransaction(moved.fake.commands())), []);
+});
+
+test('the self-hosted target may pass the legacy 100 bound while Cohere keeps it', async () => {
+  const { budget, fake } = build();
+  seedPilot(fake, { cohereCalls: 0, selfHostedEmbeddingCalls: PILOT_LIMITS.cohere });
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ...GLOBAL_EMBEDDING_KEY, used: 12 });
+  await budget.acquireEmbedding(signal());
+  const counters = await budget.read(signal());
+  assert.equal(counters.selfHostedEmbeddingCalls, PILOT_LIMITS.cohere + 1);
+  assert.equal(counters.cohereCalls, 0);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 13);
+});
+
+test('one shared pilot embedding allowance counts historical Cohere plus new local calls', async () => {
+  const { budget, fake } = build();
+  // 2,500 historical Cohere + 2,499 local already used: the next local call is exactly 5,000.
+  seedPilot(fake, { cohereCalls: 2_500, selfHostedEmbeddingCalls: 2_499 });
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ...GLOBAL_EMBEDDING_KEY, used: 12 });
+  await budget.acquireEmbedding(signal());
+  const after = await budget.read(signal());
+  assert.equal(after.cohereCalls, 2_500, 'the old Cohere calls stay counted, never reset');
+  assert.equal(after.selfHostedEmbeddingCalls, 2_500);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 13);
+  const writes = fake.writes();
+  // 2,500 + 2,500 = 5,000: every further embedding attempt, local or legacy, is refused with no debit.
+  assert.equal(await codeOf(() => budget.acquireEmbedding(signal())), 'RATE_LIMITED');
+  assert.equal(await codeOf(() => budget.acquireCohere(signal())), 'RATE_LIMITED');
+  assert.equal(fake.writes(), writes);
+  assert.deepEqual(await budget.read(signal()), after);
+});
+
+test('the shared global embedding cap of 5012 still bounds a local attempt', async () => {
+  const { budget, fake } = build();
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), {
+    ...GLOBAL_EMBEDDING_KEY, used: GLOBAL_EMBEDDING_LIMIT - 1,
+  });
+  await budget.acquireEmbedding(signal());
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], GLOBAL_EMBEDDING_LIMIT);
+  const counters = await budget.read(signal());
+  assert.equal(counters.selfHostedEmbeddingCalls, 1);
+  const writes = fake.writes();
+  assert.equal(await codeOf(() => budget.acquireEmbedding(signal())), 'RATE_LIMITED');
+  assert.equal(fake.writes(), writes);
+  assert.deepEqual(await budget.read(signal()), counters);
+});
+
+test('a moved sibling embedding counter refuses the local transaction without a debit', async () => {
+  const { budget, fake } = build();
+  seedPilot(fake, { cohereCalls: 40 });
+  fake.items.set(fake.at(GLOBAL_EMBEDDING_KEY), { ...GLOBAL_EMBEDDING_KEY, used: 12 });
+  fake.before((command) => command instanceof TransactWriteCommand, (_command, items) => {
+    // Another worker's legacy admission lands after this attempt's consistent read.
+    (items.get(fake.at(PILOT_BUDGET_KEY)) as Item)['cohereCalls'] = 41;
+  });
+  assert.deepEqual(await admit(() => budget.acquireEmbedding(signal())), {
+    code: 'RATE_LIMITED', providerCalls: 0,
+  });
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 12, 'no global debit');
+  const row = fake.items.get(fake.at(PILOT_BUDGET_KEY)) as Item;
+  assert.equal(row['cohereCalls'], 41, 'the concurrent Cohere debit is kept');
+  assert.equal(row['selfHostedEmbeddingCalls'], undefined, 'no local debit');
+});
+
+test('a failed local attempt is never refunded: only the atomic reservation counts', async () => {
+  const { budget, fake } = build();
+  // The reservation is the caller's only debit; a provider failure after it has no refund path.
+  await budget.acquireEmbedding(signal());
+  await budget.acquireEmbedding(signal());
+  const counters = await budget.read(signal());
+  assert.equal(counters.selfHostedEmbeddingCalls, 2);
+  assert.equal((fake.items.get(fake.at(GLOBAL_EMBEDDING_KEY)) as Item)['used'], 2);
+  assert.deepEqual(Object.keys(budget).sort(), [
+    'acquireCohere', 'acquireEmbedding', 'acquireQuery', 'read', 'release', 'reserve',
+  ]);
+});
+
+test('a pilot self-hosted counter captured above zero is not recreated after deletion', async () => {
+  const { budget, fake } = build();
+  seedPilot(fake, { selfHostedEmbeddingCalls: 30 });
+  const key = fake.at(PILOT_BUDGET_KEY);
+  fake.before((command) => command instanceof TransactWriteCommand, (_command, items) => {
+    delete (items.get(key) as Item)['selfHostedEmbeddingCalls'];
+  });
+  assert.deepEqual(await admit(() => budget.acquireEmbedding(signal())), {
+    code: 'RATE_LIMITED', providerCalls: 0,
+  });
+  assert.equal(fake.writes(), 0, 'a lost counter admits nothing');
+  assert.equal(fake.items.has(fake.at(GLOBAL_EMBEDDING_KEY)), false, 'no global embedding debit');
+  assert.equal((fake.items.get(key) as Item)['selfHostedEmbeddingCalls'], undefined,
+    'the thirty local invocations are not restarted at 1');
 });
 
 test('a corrupt pilot counter refuses every admission before any debit', async () => {
@@ -474,6 +687,7 @@ test('a corrupt pilot counter refuses every admission before any debit', async (
       assert.deepEqual(await admit(() => budget.acquireQuery(SUB(1), 'req-1', io)), { code: 'PROVIDER_UNAVAILABLE', providerCalls: 0 }, scenario);
       assert.deepEqual(await admit(() => budget.reserve('jev', 100_000, io)), { code: 'PROVIDER_UNAVAILABLE', providerCalls: 0 }, scenario);
       assert.deepEqual(await admit(() => budget.acquireCohere(io)), { code: 'PROVIDER_UNAVAILABLE', providerCalls: 0 }, scenario);
+      assert.deepEqual(await admit(() => budget.acquireEmbedding(io)), { code: 'PROVIDER_UNAVAILABLE', providerCalls: 0 }, scenario);
       // The corrupt row is neither repaired nor debited, and no sibling row was created.
       assert.deepEqual(fake.items.get(fake.at(PILOT_BUDGET_KEY)), seeded, `${scenario} (row untouched)`);
       assert.equal(fake.writes(), 0, `${scenario} (no write)`);
@@ -496,7 +710,7 @@ test('a null counter is corruption, while a missing attribute is zero', async ()
   // Only the two key attributes exist: every missing counter is 0, so admission proceeds.
   seedPilot(fresh.fake, {});
   assert.deepEqual(await fresh.budget.read(signal()), {
-    queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 0,
+    queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 0,
   });
   assert.equal(await codeOf(() => fresh.budget.acquireQuery(SUB(1), 'req-1', signal())), 'NO_ERROR');
 
@@ -716,7 +930,7 @@ test('absence is still creatable when the consistent read captured zero', async 
   seedPilot(query.fake, {});
   assert.equal(await codeOf(() => query.budget.acquireQuery(SUB(1), 'req-1', signal())), 'NO_ERROR');
   assert.deepEqual(await query.budget.read(signal()), {
-    queryCalls: 1, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 0,
+    queryCalls: 1, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 0,
   });
   assert.equal((query.fake.items.get(query.fake.at(dailyKey(DAY, SUB(1)))) as Item)['attempts'], 1);
 
@@ -724,7 +938,7 @@ test('absence is still creatable when the consistent read captured zero', async 
   seedPilot(reserve.fake, {});
   assert.equal(await codeOf(() => reserve.budget.reserve('jev', 100_000, signal())), 'NO_ERROR');
   assert.deepEqual(await reserve.budget.read(signal()), {
-    queryCalls: 0, jevCalls: 1, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 4200,
+    queryCalls: 0, jevCalls: 1, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 4200,
   });
 
   // The reused global embedding item with only its key attributes: a missing `used` is 0.
@@ -804,9 +1018,10 @@ test('the Phase 5 keys never collide with the Phase 4 or global budget items', (
   assert.notEqual(PILOT_BUDGET_KEY.ownerId, BUDGET_OWNER_KEY);
   assert.notEqual(PILOT_BUDGET_KEY.ownerId, 'BUDGET#PHASE4');
   assert.deepEqual({ ...GLOBAL_EMBEDDING_KEY }, { ownerId: BUDGET_OWNER_KEY, noteId: BUDGET_SORT_KEY });
-  assert.deepEqual({ ...PILOT_LIMITS }, { query: 50, jev: 60, deepseek: 40, cohere: 100 });
-  assert.equal(PILOT_DAILY_QUERY_LIMIT, 10);
-  assert.equal(GLOBAL_EMBEDDING_LIMIT, 112);
+  assert.deepEqual({ ...PILOT_LIMITS }, { query: 1000, jev: 1000, deepseek: 1000, cohere: 100 });
+  assert.equal(PILOT_EMBEDDING_LIMIT, 5000);
+  assert.equal(PILOT_DAILY_QUERY_LIMIT, 100);
+  assert.equal(GLOBAL_EMBEDDING_LIMIT, 5012);
   assert.equal(PILOT_USD_MICROS_LIMIT, 1_000_000);
 });
 
@@ -833,6 +1048,7 @@ test('invalid providers, bounds, identities and clocks are refused before any ca
   assert.equal(await codeOf(() => budget.read(aborted())), 'TIMEOUT');
   assert.equal(await codeOf(() => budget.reserve('jev', 1, aborted())), 'TIMEOUT');
   assert.equal(await codeOf(() => budget.acquireCohere(aborted())), 'TIMEOUT');
+  assert.equal(await codeOf(() => budget.acquireEmbedding(aborted())), 'TIMEOUT');
   assert.equal(fake.calls(), 0);
 
   const badClock = createPilotBudget('ap-southeast-1', 'rag-state', fake.port, { now: () => Number.NaN });

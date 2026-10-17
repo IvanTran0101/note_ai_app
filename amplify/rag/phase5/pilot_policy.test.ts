@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_PILOT_OWNERS, PILOT_MODEL, PILOT_THRESHOLDS,
+  MAX_PILOT_OWNERS, PILOT_DEMO_THRESHOLDS, PILOT_MODEL, PILOT_THRESHOLDS,
   allowsIndexOwner, assertPilotActor, isCognitoSub, isPilotOwner, readPilotPolicy,
 } from './pilot_policy';
 import { RagFailure } from '../types';
@@ -19,6 +19,7 @@ import { RagFailure } from '../types';
 const sub = (n: number): string => `0000000${n}-0000-4000-8000-00000000000${n}`;
 const OWNERS = Object.freeze([sub(1), sub(2)]);
 const THRESHOLDS = Object.freeze({ answerabilityMin: 0.85, conflictMax: 0.1 });
+const DEMO_THRESHOLDS = Object.freeze({ answerabilityMin: 0.5, conflictMax: 0.1 });
 
 const policy = (patch: Record<string, unknown> = {}): Readonly<Record<string, unknown>> =>
   Object.freeze({ enabled: true, owners: OWNERS, model: PILOT_MODEL, thresholds: THRESHOLDS, ...patch });
@@ -117,9 +118,10 @@ test('owners are at most five unique lowercase Cognito sub UUIDs', () => {
   assert.ok(refused(policy({ owners: 'owner' })));
 });
 
-test('the model and threshold pair are pinned to the frozen Phase 4 binding', () => {
+test('the model and threshold pairs are pinned to the frozen baseline or the one demo override', () => {
   assert.equal(PILOT_MODEL, 'jev-1.13.0');
   assert.deepEqual(PILOT_THRESHOLDS, { answerabilityMin: 0.85, conflictMax: 0.1 });
+  assert.deepEqual(PILOT_DEMO_THRESHOLDS, { answerabilityMin: 0.5, conflictMax: 0.1 });
   assert.ok(refused(policy({ model: 'jev-1.12.0' })));
   assert.ok(refused(policy({ model: 'deepseek-flash' })));
   assert.ok(refused(policy({ model: null })));
@@ -128,6 +130,29 @@ test('the model and threshold pair are pinned to the frozen Phase 4 binding', ()
   assert.ok(refused(policy({ thresholds: Object.freeze({ answerabilityMin: Number.NaN, conflictMax: 0.1 }) })));
   assert.ok(refused(policy({ thresholds: Object.freeze({ answerabilityMin: 0.85 }) })));
   assert.ok(refused(policy({ thresholds: Object.freeze({ answerabilityMin: 0.85, conflictMax: 0.1, extra: 1 }) })));
+  // Only the exact demo pair is accepted; arbitrary values and a widened conflict are refused.
+  for (const thresholds of [
+    { answerabilityMin: 0.5, conflictMax: 0.11 },
+    { answerabilityMin: 0.5, conflictMax: 0.15 },
+    { answerabilityMin: 0.499, conflictMax: 0.1 },
+    { answerabilityMin: 0.51, conflictMax: 0.1 },
+    { answerabilityMin: 0.5 },
+  ]) {
+    assert.ok(refused(policy({ thresholds: Object.freeze(thresholds) })), JSON.stringify(thresholds));
+  }
+});
+
+test('the exact 0.5 demo pair is accepted frozen and preserved as its own pair', () => {
+  const parsed = readPilotPolicy(policy({ thresholds: DEMO_THRESHOLDS }));
+  assert.deepEqual(parsed.thresholds, { answerabilityMin: 0.5, conflictMax: 0.1 });
+  assert.ok(Object.isFrozen(parsed) && Object.isFrozen(parsed.owners) && Object.isFrozen(parsed.thresholds));
+  // The returned thresholds preserve the demo input rather than relabeling it as the .85 baseline.
+  assert.equal(parsed.thresholds, PILOT_DEMO_THRESHOLDS);
+  assert.notEqual(parsed.thresholds, PILOT_THRESHOLDS);
+  // The legacy pair is still accepted and preserved unchanged.
+  const legacy = readPilotPolicy(policy());
+  assert.deepEqual(legacy.thresholds, { answerabilityMin: 0.85, conflictMax: 0.1 });
+  assert.equal(legacy.thresholds, PILOT_THRESHOLDS);
 });
 
 test('the admission gate refuses a disabled policy and every non-pilot actor', () => {

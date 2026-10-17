@@ -264,7 +264,7 @@ void main() {
     test('models the default, a grant, and a revoke', () {
       expect(RagConsent.none.accepted, isFalse);
       expect(RagConsent.none.generation, 0);
-      expect(RagConsent.none.version, 'rag-consent.v1');
+      expect(RagConsent.none.version, 'rag-consent.v2');
       expect(RagConsent.none.allowsQuery, isFalse);
 
       final RagConsent granted = RagConsent(accepted: true, generation: 1);
@@ -280,7 +280,7 @@ void main() {
       expect(revoked.allowsQuery, isFalse);
     });
 
-    test('refuses an impossible grant or a foreign version', () {
+    test('refuses an impossible grant or a legacy/foreign version', () {
       expect(
         () => RagConsent(accepted: true, generation: 0),
         throwsArgumentError,
@@ -289,10 +289,19 @@ void main() {
         () => RagConsent(accepted: false, generation: -1),
         throwsArgumentError,
       );
+      // A legacy v1 grant is never adopted as current permission.
       expect(
         () => RagConsent(
           accepted: true,
-          version: 'rag-consent.v2',
+          version: 'rag-consent.v1',
+          generation: 1,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => RagConsent(
+          accepted: true,
+          version: 'rag-consent.v3',
           generation: 1,
         ),
         throwsArgumentError,
@@ -306,7 +315,7 @@ void main() {
       );
 
       expect(update.accepted, isTrue);
-      expect(update.version, 'rag-consent.v1');
+      expect(update.version, 'rag-consent.v2');
       expect(update.expectedGeneration, 3);
       expect(
         update,

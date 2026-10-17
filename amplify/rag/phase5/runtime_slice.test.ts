@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { beginContext } from '../authority';
-import { parseRequest } from '../contract';
+import { CONSENT_VERSION, parseRequest } from '../contract';
 import { createQueryPorts } from '../indexing/query_ports';
 import { IndexFailure } from '../indexing/types';
 import { readLiveApproval, readRuntimeConfig } from '../live_policy';
@@ -120,8 +120,8 @@ test('the runtime-config reader refuses a late completion after the signal abort
 test('a consent handler parented to an aborted enclosing budget refuses before any store read', async () => {
   let reads = 0;
   const store: ConsentStore = {
-    async read(): Promise<ConsentGrant> { reads += 1; return Object.freeze({ accepted: false, version: 'rag-consent.v1', generation: 0 }); },
-    async write(): Promise<ConsentGrant> { return Object.freeze({ accepted: false, version: 'rag-consent.v1', generation: 0 }); },
+    async read(): Promise<ConsentGrant> { reads += 1; return Object.freeze({ accepted: false, version: CONSENT_VERSION, generation: 0 }); },
+    async write(): Promise<ConsentGrant> { return Object.freeze({ accepted: false, version: CONSENT_VERSION, generation: 0 }); },
   };
   const controller = new AbortController();
   controller.abort();

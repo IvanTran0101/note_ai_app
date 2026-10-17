@@ -116,14 +116,15 @@ final class RagCopy {
 
   /// Full, truthful disclosure shown before an explicit Allow.
   ///
-  /// It names the processors (Cohere on AWS, TypeSafe JEV, DeepSeek), the
-  /// included scope, the excluded inputs, the account/version binding, the
+  /// It names the processors (the NoteFlow backend on AWS, the self-hosted
+  /// NoteFlow embedding reached through Cloudflare, TypeSafe JEV, and DeepSeek),
+  /// the included scope, the excluded inputs, the account/version binding, the
   /// default-off state, the logout/revoke semantics, and the cancellation
   /// caveat. It promises neither zero retention nor exclusion from provider
   /// training, and it never implies that this grants cloud summaries.
   String get consentDisclosure => _isVietnamese
-      ? 'Chỉ dùng văn bản đã đồng bộ, chưa bảo vệ và thuộc sở hữu của bạn. Ghi chú được chia sẻ đến bạn, tệp đính kèm và bản nháp cục bộ đều bị loại trừ. Nội dung được gửi đến máy chủ NoteFlow và xử lý bằng Cohere (trên AWS), TypeSafe JEV và DeepSeek. Quyền này gắn với tài khoản và phiên bản rag-consent.v1, áp dụng trên mọi thiết bị và mặc định tắt. Đăng xuất xóa phiên chạy cục bộ nhưng không thu hồi quyền. Thu hồi rõ ràng sẽ chặn yêu cầu mới và xóa câu trả lời đang hiển thị. Hủy một câu hỏi đã gửi đi có thể không dừng được yêu cầu đã bị tính phí.'
-      : 'Only your own synced, unprotected text is used. Notes shared with you, attachments, and local drafts are excluded. Content is sent to the NoteFlow backend and processed with Cohere (on AWS), TypeSafe JEV, and DeepSeek. This permission is bound to your account and to version rag-consent.v1, applies across devices, and is off by default. Logging out clears the local run but does not revoke the grant. An explicit revoke stops new requests and clears the displayed answer. Cancelling a question that was already dispatched may not stop an already-billed request.';
+      ? 'Chỉ dùng văn bản đã đồng bộ, chưa bảo vệ và thuộc sở hữu của bạn. Ghi chú được chia sẻ đến bạn, tệp đính kèm và bản nháp cục bộ đều bị loại trừ. Nội dung được gửi đến máy chủ NoteFlow trên AWS, sau đó đến mô hình embedding NoteFlow tự vận hành qua Cloudflare và xử lý bằng TypeSafe JEV và DeepSeek. Quyền này gắn với tài khoản và phiên bản rag-consent.v2, áp dụng trên mọi thiết bị và mặc định tắt. Đăng xuất xóa phiên chạy cục bộ nhưng không thu hồi quyền. Thu hồi rõ ràng sẽ chặn yêu cầu mới và xóa câu trả lời đang hiển thị. Hủy một câu hỏi đã gửi đi có thể không dừng được yêu cầu đã bị tính phí.'
+      : 'Only your own synced, unprotected text is used. Notes shared with you, attachments, and local drafts are excluded. Content is sent to the NoteFlow backend on AWS, then to the self-hosted NoteFlow embedding model reached through Cloudflare, and processed with TypeSafe JEV and DeepSeek. This permission is bound to your account and to version rag-consent.v2, applies across devices, and is off by default. Logging out clears the local run but does not revoke the grant. An explicit revoke stops new requests and clears the displayed answer. Cancelling a question that was already dispatched may not stop an already-billed request.';
 
   /// Formats the bounded wait derived from a rate-limit hint.
   ///

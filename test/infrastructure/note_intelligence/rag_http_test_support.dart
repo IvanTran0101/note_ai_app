@@ -129,7 +129,7 @@ Map<String, Object?> errorEnvelope(String code, {String requestId = 'req-1'}) =>
 /// Builds one consent envelope body.
 Map<String, Object?> consentEnvelope({
   bool accepted = true,
-  String version = 'rag-consent.v1',
+  String version = RagConsent.currentVersion,
   int generation = 1,
   String requestId = 'req-1',
 }) => <String, Object?>{

@@ -19,6 +19,12 @@ const config: RuntimeConfig = {
   requestTimeoutMs: 26000,
 };
 
+/** The user-approved uncalibrated pilot pair: exactly 0.50 answerability, conflict still 0.10. */
+const demoConfig: RuntimeConfig = {
+  ...config,
+  thresholds: { answerabilityMin: 0.5, conflictMax: 0.1 },
+};
+
 const body = (question: string, scope: unknown = { type: 'account' }): string =>
   JSON.stringify({ wireVersion: 1, question, scope });
 
@@ -210,11 +216,21 @@ test('decideNoul follows the Phase 1 oracle branch order without averaging', () 
   assert.equal(decideNoul(noul(0.96, 0.2), config), 'UNCERTAIN');
 });
 
+test('the exact 0.50 pilot pair allows at the inclusive floor and refuses below it', () => {
+  assert.equal(decideNoul(noul(0.5, 0.06), demoConfig), 'ALLOW');
+  assert.equal(decideNoul(noul(0.66, 0.06), demoConfig), 'ALLOW');
+  assert.equal(decideNoul(noul(0.499, 0.06), demoConfig), 'UNCERTAIN');
+  assert.equal(decideNoul(noul(0.5, 0.11), demoConfig), 'UNCERTAIN');
+  // A widened conflict can never be mistaken for the pilot pair.
+  assert.equal(decideNoul(noul(1, 0.5), demoConfig), 'UNRESOLVED_CONFLICT');
+});
+
 test('decideNoul fails closed with the policy code before it judges the envelope', () => {
   const unconfigured: readonly [string, RuntimeConfig][] = [
     ['null model', { ...config, model: null }],
     ['null thresholds', { ...config, thresholds: null }],
-    ['low threshold not above 0.5', { ...config, thresholds: { answerabilityMin: 0.5, conflictMax: 0.1 } }],
+    ['answerability below 0.5', { ...config, thresholds: { answerabilityMin: 0.499, conflictMax: 0.1 } }],
+    ['answerability far below 0.5', { ...config, thresholds: { answerabilityMin: 0.49, conflictMax: 0.1 } }],
     ['conflict threshold too high', { ...config, thresholds: { answerabilityMin: 0.9, conflictMax: 0.5 } }],
     ['non-finite threshold', { ...config, thresholds: { answerabilityMin: Number.NaN, conflictMax: 0.1 } }],
   ];

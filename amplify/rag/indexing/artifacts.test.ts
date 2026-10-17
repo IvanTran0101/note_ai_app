@@ -14,6 +14,7 @@ import type { Chunk } from '../types';
 import { IndexFailure, type Manifest, type Snapshot } from './types';
 import type { Document } from './types';
 import { checksum, encodeSnapshot, policyIdentity, validateSnapshot } from './snapshot';
+import { EMBEDDING_DIMENSIONS } from '../retrieval';
 import type { AwsJson } from './aws_http';
 import {
   QUERY_TOP_K, createArtifacts, type ArtifactsConfig, type S3Command, type S3Port,
@@ -31,7 +32,7 @@ const TITLE_SENTINEL = 'TITLE-SENTINEL';
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 const SNAPSHOT_KEY = `rag/snapshots/${sha256(OWNER)}/${VERSION}.json`;
 
-const VECTOR: readonly number[] = Object.freeze([1, ...new Array<number>(1023).fill(0)]);
+const VECTOR: readonly number[] = Object.freeze([1, ...new Array<number>(EMBEDDING_DIMENSIONS - 1).fill(0)]);
 const jsonVector = (): number[] => [...VECTOR];
 
 const chunk = (over: Partial<Chunk> = {}): Chunk => ({
@@ -320,7 +321,7 @@ test('putVectors writes exact-key batches of at most 500 with minimal metadata a
       ownerId: OWNER, manifestVersion: VERSION, noteId: 'n1', revision: 1, chunkId: `body-${index}`,
     });
     const data = entry['data'] as { float32: readonly number[] };
-    assert.equal(data.float32.length, 1024);
+    assert.equal(data.float32.length, EMBEDDING_DIMENSIONS);
     assert.deepEqual([...data.float32], [...VECTOR]);
   }
   // No raw chunk text and no title ever leaves the process inside a vector payload.
@@ -340,7 +341,7 @@ test('putVectors narrows to float32 before writing and refuses non-representable
 
   const bad: readonly (readonly [string, readonly number[]])[] = [
     ['too few dimensions', new Array<number>(512).fill(1)],
-    ['zero vector', new Array<number>(1024).fill(0)],
+    ['zero vector', new Array<number>(EMBEDDING_DIMENSIONS).fill(0)],
     ['non-finite component', [...VECTOR].map((value, index) => (index === 2 ? Number.NaN : value))],
     ['overflow past float32', [...VECTOR].map((value, index) => (index === 2 ? 1e39 : value))],
   ];
@@ -462,7 +463,7 @@ test('getVectors rejects foreign, duplicate, missing and malformed vector entrie
     ['data missing', 'INDEX_NOT_READY', { vectors: [{ key }] }],
     ['float32 missing', 'INDEX_NOT_READY', { vectors: [{ key, data: {} }] }],
     ['wrong dimensions', 'INDEX_NOT_READY', { vectors: [{ key, data: { float32: [1, 2, 3] } }] }],
-    ['zero vector', 'INDEX_NOT_READY', { vectors: [{ key, data: { float32: new Array<number>(1024).fill(0) } }] }],
+    ['zero vector', 'INDEX_NOT_READY', { vectors: [{ key, data: { float32: new Array<number>(EMBEDDING_DIMENSIONS).fill(0) } }] }],
     ['missing key', 'INDEX_NOT_READY', { vectors: [] }],
   ];
   for (const [label, code, reply] of cases) {
@@ -576,6 +577,78 @@ test('query returns response order and rejects scope, distance, key and mode vio
     [...(await boundaryArtifacts.query(VECTOR, OWNER, VERSION, null, SIGNAL))], [keyA, keyB]);
 });
 
+test('queryScored shares the legacy query operation and returns validated key/distance hits', async () => {
+  const keyA = sha256('a');
+  const keyB = sha256('b');
+  const vectors = vectorFake(() => ({ vectors: [hit(keyB, 0.25), hit(keyA, 1.75)] }));
+  const artifacts = createArtifacts(
+    { region: REGION, snapshotBucket: BUCKET, vectorIndexArn: INDEX_ARN },
+    { s3: s3Fake().port, request: vectors.request },
+  );
+  const queryScored = artifacts.queryScored;
+  assert.ok(queryScored, 'production artifacts always expose the scored query');
+  const hits = await queryScored(VECTOR, OWNER, VERSION, null, SIGNAL);
+  assert.deepEqual(
+    hits.map((entry) => ({ key: entry.key, distance: entry.distance })),
+    [{ key: keyB, distance: 0.25 }, { key: keyA, distance: 1.75 }],
+    'response order and validated distances are preserved',
+  );
+  assert.equal(vectors.calls.length, 1, 'scored query is one QueryVectors request');
+  assert.ok(Object.isFrozen(hits));
+  for (const entry of hits) assert.ok(Object.isFrozen(entry));
+
+  // The legacy projection is exactly the same keys from the same request shape.
+  assert.deepEqual(await artifacts.query(VECTOR, OWNER, VERSION, null, SIGNAL), [keyB, keyA]);
+  assert.equal(vectors.calls.length, 2);
+  assert.deepEqual(vectors.calls[0].body, vectors.calls[1].body);
+});
+
+test('queryScored paginates with the same filters and rejects malformed scored records', async () => {
+  const metadata = { ownerId: OWNER, manifestVersion: VERSION, noteId: 'n1', revision: 1, chunkId: 'body-0' };
+  const first = sha256('first');
+  const second = sha256('second');
+  const requests: Record<string, unknown>[] = [];
+  const request: AwsJson = async (_service, _path, body) => {
+    requests.push(body as Record<string, unknown>);
+    return requests.length === 1
+      ? { vectors: [{ key: first, distance: 0.1, metadata }], nextToken: 'page-2' }
+      : { vectors: [{ key: second, distance: 0.2, metadata }], nextToken: '' };
+  };
+  const paged = createArtifacts(
+    { region: REGION, snapshotBucket: BUCKET, vectorIndexArn: INDEX_ARN },
+    { request },
+  );
+  assert.ok(paged.queryScored);
+  assert.deepEqual(
+    (await paged.queryScored(VECTOR, OWNER, VERSION, null, SIGNAL)).map((entry) => ({ ...entry })),
+    [{ key: first, distance: 0.1 }, { key: second, distance: 0.2 }],
+  );
+  assert.equal(requests[1]?.['nextToken'], 'page-2');
+  assert.deepEqual(requests[0]?.['filter'], requests[1]?.['filter']);
+
+  const key = sha256('k');
+  const cases: readonly (readonly [string, unknown])[] = [
+    ['missing distance', { vectors: [{ key, metadata: hit(key)['metadata'] }] }],
+    ['non-finite distance', { vectors: [hit(key, Number.NaN)] }],
+    ['out-of-range distance', { vectors: [hit(key, 2.5)] }],
+    ['foreign owner metadata', { vectors: [hit(key, 0.5, { ownerId: 'u2' })] }],
+    ['extra metadata key', { vectors: [hit(key, 0.5, { text: TEXT_SENTINEL })] }],
+    ['duplicate keys', { vectors: [hit(key, 0.4), hit(key, 0.6)] }],
+    ['vectors missing', {}],
+  ];
+  for (const [label, reply] of cases) {
+    const vectors = vectorFake(() => reply);
+    const strict = createArtifacts(
+      { region: REGION, snapshotBucket: BUCKET, vectorIndexArn: INDEX_ARN },
+      { s3: s3Fake().port, request: vectors.request },
+    );
+    assert.ok(strict.queryScored);
+    const error = await failureOf(() => strict.queryScored!(VECTOR, OWNER, VERSION, null, SIGNAL));
+    assert.deepEqual([error.code, error.retryable], ['INVALID_PROVIDER_OUTPUT', false], label);
+    assert.equal(vectors.calls.length, 1, label);
+  }
+});
+
 test('query validates its own arguments and never downgrades a refused enhanced mode', async () => {
   const vectors = vectorFake();
   const artifacts = createArtifacts(
@@ -583,7 +656,7 @@ test('query validates its own arguments and never downgrades a refused enhanced 
     { s3: s3Fake().port, request: vectors.request },
   );
   const badVectors: readonly unknown[] = [
-    [1, 2, 3], new Array<number>(1024).fill(0), 'vector',
+    [1, 2, 3], new Array<number>(EMBEDDING_DIMENSIONS).fill(0), 'vector',
     [...VECTOR].map((value, index) => (index === 0 ? Number.NaN : value)),
   ];
   for (const vector of badVectors) {

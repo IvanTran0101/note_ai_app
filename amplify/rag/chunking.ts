@@ -80,7 +80,14 @@ export function assertChunk(chunk: unknown): asserts chunk is Chunk {
   }
 }
 
-/** policy.technicalDefaults.embeddingText = "title-newline-content-span". */
+/** EmbeddingGemma document framing: `title: {title or none} | text: {content span}`. */
+const documentPrefix = (title: string): string =>
+  `title: ${title.length === 0 ? 'none' : title} | text: `;
+
+/** EmbeddingGemma query framing; applied exactly once, never to a document. */
+export const QUERY_PREFIX = 'task: search result | query: ';
+
+/** Canonical embedding input for one document chunk, already framed and counted as-is. */
 export function embeddingText(chunk: Chunk): string {
   if (
     chunk === null ||
@@ -90,7 +97,15 @@ export function embeddingText(chunk: Chunk): string {
   ) {
     throw new RagFailure('INVALID_INPUT');
   }
-  return `${chunk.title}\n${chunk.text}`;
+  return documentPrefix(chunk.title) + chunk.text;
+}
+
+/** Canonical embedding input for one question; the caller counts and embeds this exact string. */
+export function queryEmbeddingText(question: string): string {
+  if (typeof question !== 'string' || question.length === 0 || !isWellFormed(question)) {
+    throw new RagFailure('INVALID_INPUT');
+  }
+  return QUERY_PREFIX + question;
 }
 
 type Span = Readonly<{ start: number; end: number }>;
@@ -210,8 +225,9 @@ export function chunkNote(note: CanonicalNote, counter: Counter): readonly Chunk
   if (!isIdentifier(note.ownerId) || !isIdentifier(note.noteId)) throw new RagFailure('INVALID_INPUT');
   if (!isSafeInteger(note.revision) || note.revision < 1) throw new RagFailure('INVALID_INPUT');
 
-  const prefix = `${title}\n`;
-  // The title shares the input budget; if it leaves no room for content the note is unindexable.
+  const prefix = documentPrefix(title);
+  // The framed title shares the input budget; if it leaves no room for content the note is
+  // unindexable. The counter includes the tokenizer's BOS/EOS runtime special tokens.
   if (
     countTokens(counter, prefix) >= MAX_EMBEDDING_TOKENS ||
     countUnicodeCharacters(prefix) >= MAX_EMBEDDING_CHARACTERS

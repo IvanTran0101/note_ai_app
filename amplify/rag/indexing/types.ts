@@ -30,12 +30,20 @@ export type IndexStore = Readonly<{
   finish(ownerId: string, lease: Lease, status: JobStatus, code: string, nowMs: number, signal: AbortSignal): Promise<void>;
   reserveEmbedding(ownerId: string, signal: AbortSignal): Promise<void>;
 }>;
+/** One raw vector hit: the vector key plus its validated cosine distance in [0,2]. */
+export type VectorSearchHit = Readonly<{ key: string; distance: number }>;
 export type Artifacts = Readonly<{
   read(manifest: Manifest, signal: AbortSignal): Promise<Snapshot>;
   put(snapshot: Snapshot, signal: AbortSignal): Promise<Readonly<{ key: string; checksum: string }>>;
   putVectors(snapshot: Snapshot, vectors: ReadonlyMap<string, readonly number[]>, signal: AbortSignal): Promise<void>;
   getVectors(keys: readonly string[], signal: AbortSignal): Promise<ReadonlyMap<string, readonly number[]>>;
   query(vector: readonly number[], ownerId: string, version: string, noteId: string | null, signal: AbortSignal): Promise<readonly string[]>;
+  /**
+   * Optional scored variant of `query` with the exact same arguments. Production artifacts
+   * implement it; a legacy/injected fake may omit it and `query` remains the fallback (whose
+   * callers carry no distance rather than inventing one).
+   */
+  queryScored?(vector: readonly number[], ownerId: string, version: string, noteId: string | null, signal: AbortSignal): Promise<readonly VectorSearchHit[]>;
   cleanup(manifest: Manifest, signal: AbortSignal): Promise<void>;
 }>;
 export type Embedding = Readonly<{

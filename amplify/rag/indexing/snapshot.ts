@@ -6,13 +6,15 @@
  * never vector floats, provider payloads or canonical text beyond the chunk itself. Every
  * rejected value throws `INDEX_NOT_READY` with a code only: no raw text in messages or logs.
  *
- * The policy identity is a SHA-256 over the complete indexing policy (model, dimensions,
- * document/query input types, truncate, chunk parameters, UTF-16 exclusive spans and the
- * title-newline-content embedding text), so any policy drift forces a rebuild instead of a
- * silent score reuse across policies.
+ * The policy identity is a SHA-256 over the complete indexing policy (model identity, artifact
+ * hash, quantization, runtime build, tokenizer files, dimensions, document/query input formats,
+ * pooling/normalization, chunk parameters, UTF-16 exclusive spans and the exact embedding text),
+ * so any drift forces a rebuild instead of a silent score reuse across profiles. A Cohere-era
+ * manifest re-derives to a different identity and is therefore never treated as current.
  */
 import { ANALYZER_VERSION, BM25_K1, BM25_B } from '../keyword';
-import tokenizerManifest from '../../../docs/rag/tokenizer_manifest.json';
+import tokenizerManifest from '../../../docs/rag/embeddinggemma_tokenizer_manifest.json';
+import profile from '../../../docs/rag/embeddinggemma_profile_v1.json';
 import { createHash } from 'node:crypto';
 import { policy, sourceKey } from '../types';
 import type { Chunk } from '../types';
@@ -26,8 +28,9 @@ export const SHA256_HEX = /^[0-9a-f]{64}$/;
 /** Domain tag kept inside the digest so the input never depends on bare concatenation. */
 export const INPUT_DIGEST_DOMAIN = 'rag-embedding-input.v1';
 
-/** policy.technicalDefaults.offsetUnit / spanEnd / embeddingText and the embedding policy. */
+/** The active profile plus every field that decides whether a vector may be reused. */
 export const POLICY_IDENTITY_FIELDS = Object.freeze({
+  profile,
   tokenizer: tokenizerManifest,
   lexical: Object.freeze({ analyzer: ANALYZER_VERSION, k1: BM25_K1, b: BM25_B }),
   model: policy.embedding.model,
@@ -35,10 +38,14 @@ export const POLICY_IDENTITY_FIELDS = Object.freeze({
   documentInputType: policy.embedding.documentInputType,
   queryInputType: policy.embedding.queryInputType,
   truncate: policy.embedding.truncate,
+  pooling: profile.model.pooling,
+  normalization: profile.model.normalization,
+  quantization: profile.model.quantization,
   chunking: Object.freeze({ ...policy.chunking }),
   offsetUnit: policy.technicalDefaults.offsetUnit,
   spanEnd: policy.technicalDefaults.spanEnd,
   embeddingText: policy.technicalDefaults.embeddingText,
+  queryEmbeddingText: policy.technicalDefaults.queryEmbeddingText,
 });
 
 export const sha256Hex = (text: string): string =>

@@ -1,13 +1,18 @@
 /**
  * Phase 5 pilot runtime config (plan 5.1D): the one trusted, server-only description of the
- * approved reviewed pilot corpus, stored under `CONFIG#PHASE5`/`PILOT` in the RAG state table.
+ * approved pilot corpus, stored under `CONFIG#PHASE5`/`PILOT` in the RAG state table.
  *
  * The reader is the authority boundary. It performs one strongly consistent `GetCommand`
  * (retries disabled) and turns the stored row into a deep-frozen `RuntimeConfig`; the caller
  * never sees a mutable copy. A missing row, a foreign key, an unknown/duplicate key, a malformed
- * policy, a corpus owner set that does not exactly equal `policy.owners`, an empty owner list or
- * a non-hex digest all fail closed as `LIVE_POLICY_NOT_CONFIGURED`. `mode`/allowlist decisions
- * are never inferred from a request: this config is the whole permission input.
+ * policy, a corpus owner set that does not exactly equal `policy.owners` or a mixed corpus shape
+ * all fail closed as `LIVE_POLICY_NOT_CONFIGURED`. `mode`/allowlist decisions are never inferred
+ * from a request: this config is the whole permission input.
+ *
+ * Two strict corpus modes exist: the reviewed-pilot gold corpus (pinned case hash and per-note
+ * digests) and the automatic `eligible-own-notes.v1` mode (`caseHash:null` and empty per-owner
+ * lists, with canonical eligibility as the body authority). They never mix and neither falls back
+ * to the other.
  *
  * The policy is validated only through the existing `readPilotPolicy`, which requires an already
  * frozen exact shape. Stored data may be unfrozen, so this module deep-copies and deep-freezes
@@ -37,6 +42,13 @@ export const RUNTIME_CORPUS_KIND = 'reviewed-pilot';
 /** The one human-reviewed 20-case corpus hash (docs/rag/phase5_gold_review.md). */
 export const RUNTIME_CASE_HASH =
   'sha256:0477ea68e177cdeadfd8f61977ffa61fe907557317e0150d3614d8130595f7a3';
+/**
+ * The automatic eligible-own-note kind: the exact configured owner set, but no frozen note ids or
+ * digests. `caseHash` is null and every owner's list is empty on purpose; canonical ownership,
+ * consent, freshness and `isEligibleNote` remain the only body authority. It is a separate kind
+ * with no fallback to or from the reviewed corpus.
+ */
+export const RUNTIME_ELIGIBLE_OWN_NOTES_KIND = 'eligible-own-notes.v1';
 
 const CONFIG_KEYS = ['version', 'generation', 'policy', 'corpus'] as const;
 const CORPUS_KEYS = ['kind', 'caseHash', 'owners'] as const;
@@ -77,14 +89,17 @@ const deepFreeze = <T>(value: T): T => {
   return value;
 };
 
+export type RuntimeCorpusKind =
+  | typeof RUNTIME_CORPUS_KIND
+  | typeof RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
 export type RuntimeCorpusNote = Readonly<{ noteId: string; inputDigest: string }>;
 export type RuntimeConfig = Readonly<{
   version: typeof RUNTIME_CONFIG_VERSION;
   generation: number;
   policy: PilotPolicy;
   corpus: Readonly<{
-    kind: typeof RUNTIME_CORPUS_KIND;
-    caseHash: typeof RUNTIME_CASE_HASH;
+    kind: RuntimeCorpusKind;
+    caseHash: typeof RUNTIME_CASE_HASH | null;
     owners: Readonly<Record<string, readonly RuntimeCorpusNote[]>>;
   }>;
 }>;
@@ -92,9 +107,13 @@ export type RuntimeConfig = Readonly<{
 /**
  * Validates one stored config value and returns a deep-frozen canonical copy. Every key set is
  * exact, the generation is a positive safe integer, the policy is re-validated by
- * `readPilotPolicy` on a frozen deep copy, the case hash is the pinned reviewed hash, the corpus
- * owner set equals `policy.owners` exactly, every owner list is non-empty and every digest is a
- * lowercase 64-hex value with no duplicate note id inside a list.
+ * `readPilotPolicy` on a frozen deep copy, the corpus owner set equals `policy.owners` exactly.
+ *
+ * There are exactly two accepted corpus modes and no mixed shape:
+ *  - `reviewed-pilot`: the pinned reviewed case hash, every owner list non-empty, and every
+ *    digest a lowercase 64-hex value with no duplicate note id inside a list;
+ *  - `eligible-own-notes.v1`: `caseHash` is null and every owner list is empty, so no frozen
+ *    note id or digest can imply a gold corpus or widen the canonical eligibility authority.
  */
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   if (!isRecord(value) || !hasExactKeys(value, CONFIG_KEYS)) refuse();
@@ -105,7 +124,24 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 
   const corpus = value['corpus'];
   if (!isRecord(corpus) || !hasExactKeys(corpus, CORPUS_KEYS)) refuse();
-  if (corpus['kind'] !== RUNTIME_CORPUS_KIND || corpus['caseHash'] !== RUNTIME_CASE_HASH) refuse();
+  const rawKind = corpus['kind'];
+  const rawCaseHash = corpus['caseHash'];
+  let kind: RuntimeCorpusKind;
+  let caseHash: typeof RUNTIME_CASE_HASH | null;
+  if (rawKind === RUNTIME_CORPUS_KIND) {
+    if (rawCaseHash !== RUNTIME_CASE_HASH) refuse();
+    kind = RUNTIME_CORPUS_KIND;
+    caseHash = RUNTIME_CASE_HASH;
+  } else if (rawKind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND) {
+    // A dynamic corpus never carries a frozen review hash or per-note binding.
+    if (rawCaseHash !== null) refuse();
+    kind = RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
+    caseHash = null;
+  } else {
+    refuse();
+  }
+  const dynamic = kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
+
   const rawOwners = corpus['owners'];
   if (!isRecord(rawOwners)) refuse();
   const ownerKeys = Object.keys(rawOwners);
@@ -116,7 +152,14 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   for (const owner of ownerKeys) {
     if (!isCognitoSub(owner) || !policy.owners.includes(owner)) refuse();
     const list = rawOwners[owner];
-    if (!Array.isArray(list) || list.length === 0) refuse();
+    if (!Array.isArray(list)) refuse();
+    // Dynamic mode freezes nothing at all; reviewed mode must bind at least one note.
+    if (dynamic) {
+      if (list.length !== 0) refuse();
+      owners[owner] = Object.freeze([]);
+      continue;
+    }
+    if (list.length === 0) refuse();
     const notes: RuntimeCorpusNote[] = [];
     const seen = new Set<string>();
     for (const entry of list) {
@@ -135,11 +178,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
     version: RUNTIME_CONFIG_VERSION,
     generation,
     policy,
-    corpus: Object.freeze({
-      kind: RUNTIME_CORPUS_KIND,
-      caseHash: RUNTIME_CASE_HASH,
-      owners: Object.freeze(owners),
-    }),
+    corpus: Object.freeze({ kind, caseHash, owners: Object.freeze(owners) }),
   });
 }
 

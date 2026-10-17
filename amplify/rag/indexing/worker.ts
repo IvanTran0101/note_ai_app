@@ -33,8 +33,12 @@ import {
 } from './snapshot';
 import { RagFailure } from '../types';
 
-/** Cohere embed accepts at most 96 texts per call; one reservation guards each call. */
-export const EMBED_BATCH_LIMIT = 96;
+/**
+ * Pilot self-hosted embedding accepts exactly one input per HTTP call. Every unique sample gets
+ * its own reserve+dispatch pair, so a failure is charged to exactly one attempt and no batch can
+ * ever mix embedding profiles.
+ */
+export const EMBED_BATCH_LIMIT = 1;
 
 export type IndexWorker = (job: Job, remainingMs?: number) => Promise<JobResult>;
 
@@ -331,15 +335,23 @@ const stageAndPublish = async (run: Run): Promise<JobResult> => {
   // The staged version is now the current manifest: it must never be treated as an orphan.
   progress.stagedVersion = null;
 
-  // The manifest is current and ready: only the previous generation's namespace is removed.
+  // The manifest is current and ready: only the previous generation under the *same* embedding
+  // profile may be removed. A generation from another profile (the Cohere -> self-hosted
+  // migration) is retained for rollback/investigation; a dedicated cleanup request owns it.
   if (bound.manifest !== null) {
-    try {
-      await guard(deps.artifacts.cleanup(bound.manifest, signal), signal, check);
-    } catch (error) {
-      if (signal.aborted) throw error;
-      logEvent(deps, { event: 'index.cleanup.failed', ownerId: job.ownerId, version });
-      await release(deps, now, job, lease, 'FAILED', 'CLEANUP_FAILED');
-      return { status: 'FAILED', code: 'CLEANUP_FAILED', manifestVersion: version };
+    if (bound.manifest.policyIdentity !== policyId) {
+      logEvent(deps, {
+        event: 'index.cleanup.retained', ownerId: job.ownerId, version: bound.manifest.version,
+      });
+    } else {
+      try {
+        await guard(deps.artifacts.cleanup(bound.manifest, signal), signal, check);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        logEvent(deps, { event: 'index.cleanup.failed', ownerId: job.ownerId, version });
+        await release(deps, now, job, lease, 'FAILED', 'CLEANUP_FAILED');
+        return { status: 'FAILED', code: 'CLEANUP_FAILED', manifestVersion: version };
+      }
     }
   }
 

@@ -128,6 +128,58 @@ test('RRF fixture rank-01 is the B-A-D-C order with the constant-60 arithmetic',
   assert.deepEqual([byLabel.get('C')?.vectorRank, byLabel.get('C')?.bm25Rank], [3, undefined]);
 });
 
+test('RRF carries raw distances/scores without changing any fusion decision', () => {
+  const vector: Ranked[] = [
+    { chunk: chunkByLabel('A'), rank: 1, vectorDistance: 0.25 },
+    { chunk: chunkByLabel('B'), rank: 2, vectorDistance: 2 },
+  ];
+  const keyword: Ranked[] = [
+    { chunk: chunkByLabel('A'), rank: 1, bm25Score: 3.5 },
+    { chunk: chunkByLabel('C'), rank: 2, bm25Score: 0.5 },
+  ];
+  const baseline = rrf(rankedFrom(['A', 'B']), rankedFrom(['A', 'C']));
+  const fused = rrf(vector, keyword);
+
+  assert.deepEqual(fused.map((candidate) => candidate.chunk.chunkId), baseline.map((candidate) => candidate.chunk.chunkId));
+  assert.deepEqual(fused.map((candidate) => candidate.score), baseline.map((candidate) => candidate.score));
+  assert.deepEqual(
+    fused.map((candidate) => [candidate.vectorRank, candidate.bm25Rank]),
+    baseline.map((candidate) => [candidate.vectorRank, candidate.bm25Rank]),
+  );
+
+  const byLabel = new Map(fused.map((candidate) => [candidate.chunk.chunkId, candidate]));
+  assert.deepEqual([byLabel.get('A')?.vectorDistance, byLabel.get('A')?.bm25Score], [0.25, 3.5]);
+  assert.deepEqual([byLabel.get('B')?.vectorDistance, byLabel.get('B')?.bm25Score], [2, undefined]);
+  assert.deepEqual([byLabel.get('C')?.vectorDistance, byLabel.get('C')?.bm25Score], [undefined, 0.5]);
+
+  // Legacy rank-only entries remain valid and never acquire fabricated metrics.
+  for (const candidate of baseline) {
+    assert.equal('vectorDistance' in candidate, false);
+    assert.equal('bm25Score' in candidate, false);
+  }
+});
+
+test('RRF validates optional metric domains and rejects malformed raw signals', () => {
+  const base: Ranked = { chunk: chunkByLabel('A'), rank: 1 };
+  for (const value of [-0.1, 2.0001, Number.NaN, Number.POSITIVE_INFINITY, -Infinity, '0.5', null, {}]) {
+    assert.throws(
+      () => rrf([{ ...base, vectorDistance: value as number }], []),
+      failsWith('INVALID_INPUT'),
+      `vectorDistance ${String(value)}`,
+    );
+  }
+  for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '1', null, {}]) {
+    assert.throws(
+      () => rrf([], [{ ...base, bm25Score: value as number }]),
+      failsWith('INVALID_INPUT'),
+      `bm25Score ${String(value)}`,
+    );
+  }
+  assert.doesNotThrow(() => rrf([{ ...base, vectorDistance: 0 }], []));
+  assert.doesNotThrow(() => rrf([{ ...base, vectorDistance: 2 }], []));
+  assert.doesNotThrow(() => rrf([], [{ ...base, bm25Score: Number.MIN_VALUE }]));
+});
+
 test('RRF keeps one contribution per source per branch and the best original rank', () => {
   const duplicate = rankingFixture.cases.find((entry) => entry.id === 'rank-03');
   assert.ok(duplicate);
@@ -215,11 +267,11 @@ test('RRF rejects the same identity carrying inconsistent spans instead of corru
   );
 });
 
-test('validateVector accepts only finite non-zero 1024-dimensional vectors', () => {
-  assert.equal(EMBEDDING_DIMENSIONS, 1024);
+test('validateVector accepts only finite non-zero 768-dimensional vectors', () => {
+  assert.equal(EMBEDDING_DIMENSIONS, 768);
   assert.doesNotThrow(() => validateVector(basisVector(0)));
-  assert.doesNotThrow(() => validateVector(Array.from({ length: 1024 }, () => -0.5)));
-  for (const length of [0, 1, 1023, 1025]) {
+  assert.doesNotThrow(() => validateVector(Array.from({ length: 768 }, () => -0.5)));
+  for (const length of [0, 1, 767, 769, 1024]) {
     assert.throws(() => validateVector(Array.from({ length }, () => 1)), failsWith('INDEX_NOT_READY'), `length ${length}`);
   }
   const withNaN = basisVector(0);
@@ -231,7 +283,7 @@ test('validateVector accepts only finite non-zero 1024-dimensional vectors', () 
   const withString = basisVector(0);
   (withString as unknown as unknown[])[5] = '1';
   assert.throws(() => validateVector(withString as unknown as number[]), failsWith('INDEX_NOT_READY'));
-  assert.throws(() => validateVector(Array.from({ length: 1024 }, () => 0)), failsWith('INDEX_NOT_READY'));
+  assert.throws(() => validateVector(Array.from({ length: 768 }, () => 0)), failsWith('INDEX_NOT_READY'));
   assert.throws(() => validateVector(null as unknown as number[]), failsWith('INDEX_NOT_READY'));
 });
 
@@ -296,7 +348,7 @@ test('MMR fails closed on missing vectors and malformed candidates', () => {
   const chunk = chunkByLabel('A');
   assert.throws(() => mmr([asCandidate(chunk, 1)], new Map()), failsWith('INDEX_NOT_READY'));
   assert.throws(
-    () => mmr([asCandidate(chunk, 1)], vectorsFor([[chunk, Array.from({ length: 1024 }, () => 0)]])),
+    () => mmr([asCandidate(chunk, 1)], vectorsFor([[chunk, Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0)]])),
     failsWith('INDEX_NOT_READY'),
   );
   assert.throws(() => mmr([asCandidate(chunk, Number.NaN)], vectorsFor([[chunk, basisVector(0)]])), failsWith('INVALID_INPUT'));
@@ -330,4 +382,99 @@ test('integration: keyword-only chunks survive fusion and reach MMR anchors', ()
   assert.equal(anchors[0].noteId, 'n-watch');
   assert.ok(anchors.length <= MMR_MAX_ANCHORS);
   assert.equal(vectors.has(sourceKey(watch)), true, 'the keyword-only candidate got a reused vector');
+});
+
+test('adaptive MMR uses a raw semantic signal ahead of the fused rank', () => {
+  const semantic = chunkByLabel('A');
+  const fusedFirst = chunkByLabel('B');
+  const candidates = [
+    // Fused score says B first, but A is much closer to the query vector.
+    asCandidate(fusedFirst, 1),
+    asCandidate(semantic, 0.5),
+  ];
+  const withSignals: Candidate[] = [
+    { ...candidates[0], vectorDistance: 0.9 },
+    { ...candidates[1], vectorDistance: 0.05 },
+  ];
+  const vectors = vectorsFor([
+    [semantic, basisVector(0)],
+    [fusedFirst, basisVector(1)],
+  ]);
+  const anchors = mmr(withSignals, vectors);
+  assert.deepEqual(anchors.map((chunk) => chunk.chunkId), ['A', 'B']);
+});
+
+test('adaptive MMR normalizes BM25 by the pool maximum and falls back to RRF when metrics are absent', () => {
+  const lexical = chunkByLabel('A');
+  const fallback = chunkByLabel('B');
+  const strongLexical = chunkByLabel('C');
+  const signals: Candidate[] = [
+    { ...asCandidate(lexical, 0.9), bm25Score: 1 },
+    // No raw signal of its own: the normal RRF score is the fallback, not a fabricated zero.
+    asCandidate(fallback, 1),
+    { ...asCandidate(strongLexical, 0.8), bm25Score: 10 },
+  ];
+  const vectors = vectorsFor([
+    [lexical, basisVector(0)],
+    [fallback, basisVector(1)],
+    [strongLexical, basisVector(2)],
+  ]);
+  const anchors = mmr(signals, vectors);
+  assert.deepEqual(anchors.map((chunk) => chunk.chunkId), ['B', 'C', 'A']);
+});
+
+test('adaptive MMR stops at zero marginal utility while retaining positive same-entity conflicts', () => {
+  const firstConflict = chunkByLabel('A');
+  const secondConflict = chunkByLabel('B');
+  const negative = chunkByLabel('C');
+  const vectors = vectorsFor([
+    [firstConflict, basisVector(0)],
+    [secondConflict, basisVector(1)],
+    [negative, basisVector(2)],
+  ]);
+  const candidates: Candidate[] = [
+    { ...asCandidate(firstConflict, 1), vectorDistance: 0.2 },
+    { ...asCandidate(secondConflict, 0.9), vectorDistance: 0.3 },
+    { ...asCandidate(negative, 0.8), vectorDistance: 1.5 },
+  ];
+  const anchors = mmr(candidates, vectors);
+  assert.deepEqual(
+    anchors.map((chunk) => chunk.chunkId),
+    ['A', 'B'],
+    'both positive facts are selected; the zero-utility negative candidate stops selection',
+  );
+});
+
+test('adaptive MMR stops when the best next candidate is redundant enough for non-positive utility', () => {
+  const seed = chunkByLabel('A');
+  const redundant = chunkByLabel('B');
+  const vectors = vectorsFor([
+    [seed, basisVector(0)],
+    [redundant, basisVector(0)],
+  ]);
+  const candidates: Candidate[] = [
+    { ...asCandidate(seed, 1), vectorDistance: 0.1 },
+    { ...asCandidate(redundant, 0.8), vectorDistance: 0.95 },
+  ];
+  const anchors = mmr(candidates, vectors);
+  assert.deepEqual(anchors.map((chunk) => chunk.chunkId), ['A']);
+});
+
+test('MMR validates raw metric domains instead of reading malformed/mixed signals', () => {
+  const chunk = chunkByLabel('A');
+  const vectors = vectorsFor([[chunk, basisVector(0)]]);
+  for (const value of [-0.1, 2.1, Number.NaN, Number.POSITIVE_INFINITY, '0.5', null]) {
+    assert.throws(
+      () => mmr([{ ...asCandidate(chunk, 1), vectorDistance: value as unknown as number }], vectors),
+      failsWith('INVALID_INPUT'),
+      `vectorDistance ${String(value)}`,
+    );
+  }
+  for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '1', null]) {
+    assert.throws(
+      () => mmr([{ ...asCandidate(chunk, 1), bm25Score: value as unknown as number }], vectors),
+      failsWith('INVALID_INPUT'),
+      `bm25Score ${String(value)}`,
+    );
+  }
 });

@@ -284,7 +284,7 @@ export function createMockIndex(snapshot: LexicalSnapshot): MockIndex {
   const vectorSearch = async (vector: readonly number[], context: RequestContext): Promise<readonly Ranked[]> => {
     const corpus = coherentCorpus(metadata, frozenDocuments, stored, context);
     // Cosine as a dot product of unit vectors: validate and normalize the incoming query vector,
-    // never re-embed it. Vectors that are not 1024 finite dims are INDEX_NOT_READY upstream too.
+    // never re-embed it. Vectors that are not the active finite dims are INDEX_NOT_READY upstream too.
     const query = unitVector(vector);
     const scored: { chunk: Chunk; score: number }[] = [];
     for (const chunk of corpus.chunks) {

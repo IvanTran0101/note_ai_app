@@ -4,7 +4,10 @@ import { parseRequest, CONSENT_VERSION } from '../contract';
 import { bm25 } from '../keyword';
 import { rrf, mmr, validateVector } from '../retrieval';
 import { sourceKey, RagFailure, type Chunk, type Ranked } from '../types';
-import { countTokens, countUnicodeCharacters, MAX_EMBEDDING_TOKENS, MAX_EMBEDDING_CHARACTERS } from '../chunking';
+import {
+  countTokens, countUnicodeCharacters, MAX_EMBEDDING_TOKENS, MAX_EMBEDDING_CHARACTERS,
+  queryEmbeddingText,
+} from '../chunking';
 import { fingerprint } from './jobs';
 import { policyIdentity, validateSnapshot } from './snapshot';
 import { IndexFailure, type IndexDeps, type IndexState, type Snapshot } from './types';
@@ -48,13 +51,16 @@ export function createRetrievalProbe(deps: IndexDeps) {
     await context.revalidate();
     if (scoped.length === 0) return { provenance: 'internal-retrieval-probe', manifestVersion: manifest.version,
       checksum: manifest.checksum, vectorKeys: [], keywordChunkIds: [], anchors: [], neighbors: [] };
+    // BM25 stays lexical on the raw question; only the embedding input is framed, exactly once.
     const keyword = bm25(request.question, scoped.map(d => d.chunk));
-    const tokens = countTokens(deps.embedding.count, request.question);
-    if (tokens > MAX_EMBEDDING_TOKENS || countUnicodeCharacters(request.question) > MAX_EMBEDDING_CHARACTERS)
+    const input = queryEmbeddingText(request.question);
+    const tokens = countTokens(deps.embedding.count, input);
+    if (tokens > MAX_EMBEDDING_TOKENS || countUnicodeCharacters(input) > MAX_EMBEDDING_CHARACTERS)
       throw new RagFailure('INPUT_TOO_LONG');
     await context.revalidate();
     await deps.store.reserveEmbedding(ownerId, signal);
-    const produced = await deps.embedding.embed([request.question], 'search_query', signal);
+    // Dispatch the exact string that passed the bounds above (no raw-question fallback).
+    const produced = await deps.embedding.embed([input], 'search_query', signal);
     if (produced.length !== 1) throw new IndexFailure('INVALID_PROVIDER_OUTPUT');
     validateVector(produced[0]);
     await context.revalidate();

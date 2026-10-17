@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RagFailure } from '../types';
+import { policy, RagFailure } from '../types';
 import { IndexFailure } from './types';
 import {
   BEDROCK_INVOKE_MODEL_PATH, createAwsJson, failureForStatus, isAwsRegion,
@@ -53,6 +53,10 @@ test('bedrock invoke signs the fixed endpoint, service and escaped model path', 
 
   assert.deepEqual(reply, { embeddings: [] });
   assert.equal(BEDROCK_INVOKE_MODEL_PATH, '/model/cohere.embed-multilingual-v3/invoke');
+  // The signed Bedrock whitelist is frozen to policy_v1; the active profile is self-hosted 768.
+  assert.equal(policy.embedding.model, 'embeddinggemma-2-q8');
+  assert.equal(policy.embedding.dimensions, 768);
+  assert.notEqual(BEDROCK_INVOKE_MODEL_PATH, `/model/${policy.embedding.model}/invoke`);
   assert.equal(io.calls.length, 1);
   const { url, init } = io.calls[0];
   assert.equal(url, 'https://bedrock-runtime.us-east-1.amazonaws.com/model/cohere.embed-multilingual-v3/invoke');

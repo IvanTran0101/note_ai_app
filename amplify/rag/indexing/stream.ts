@@ -61,6 +61,9 @@ const emit = (log: StreamLog | undefined, metadata: Readonly<Record<string, stri
   }
 };
 
+/** Superseded outcomes that may succeed on replay; LEASE_BUSY keeps its existing handling. */
+const RETRYABLE_SUPERSEDED = new Set(['SOURCE_CHANGED', 'PUBLISH_REJECTED']);
+
 /** Runs one job and reports whether the batch must replay it, plus the typed failure code. */
 const outcomeOf = (result: JobResult | null, thrown: unknown): Readonly<{ replay: boolean; code: string }> => {
   if (thrown !== null) {
@@ -69,6 +72,10 @@ const outcomeOf = (result: JobResult | null, thrown: unknown): Readonly<{ replay
     return { replay: true, code: 'PORT_FAILURE' };
   }
   if (result?.code === 'LEASE_BUSY') return { replay: true, code: result.code };
+  // A source move or a rejected CAS may succeed on replay. ALREADY_DONE is the only SUPERSEDED
+  // result that is acknowledged, because the published index already matched.
+  if (result !== null && result.status === 'SUPERSEDED' && RETRYABLE_SUPERSEDED.has(result.code))
+    return { replay: true, code: result.code };
   if (result !== null && result.status === 'FAILED') return { replay: false, code: result.code };
   return { replay: false, code: '' };
 };

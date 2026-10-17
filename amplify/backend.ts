@@ -1,7 +1,8 @@
 import { ragQuery } from './rag/resource';
 import { createPrivateRagInfrastructure } from './rag/private_infrastructure';
-import { createRagInfrastructure, readRagPilotScope } from './rag/infrastructure';
+import { createRagInfrastructure, readRagPilotScope, resolveRagSecrets } from './rag/infrastructure';
 import { createPhase5Infrastructure, RAG_ALLOWED_ORIGINS } from './rag/phase5/infrastructure';
+import { RUNTIME_ELIGIBLE_OWN_NOTES_KIND } from './rag/phase5/runtime_config';
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { summary } from './ai/resource';
@@ -27,25 +28,29 @@ const backend = defineBackend({
 });
 
 /**
- * The one human-reviewed six-note pilot scope: the five synthetic notes plus the one exact
- * reviewed existing own note (docs/rag/phase5_runtime_contract.md,
- * docs/rag/phase5_existing_note_review.md,
- * output/rag/phase5-implementation/gold/first-account-binding.json,
- * output/rag/phase5-implementation/existing-note-review-receipt.json).
- * The reviewed owner and note ids are compile-time constants: the ESM filter is exact per owner,
- * no digest or note body reaches any client output, and mapping admission stays disabled.
+ * The explicitly approved pilot actors use the `eligible-own-notes.v1` corpus
+ * (docs/rag/phase5_runtime_contract.md). Only actor IDs are compiled; `noteIds` is deliberately
+ * empty and there is no case hash or digest in this scope. Canonical `isEligibleNote` plus the
+ * live consent/freshness guard decide which of each actor's own notes may be embedded. The ESM
+ * filter remains exact per owner and the explicit dynamic stream flag stays false for the first
+ * deploy; root flips it only after the controlled worker READY proof.
  */
 const ragPilotScope = readRagPilotScope({
-  owners: [{
-    ownerId: '293a65cc-20f1-70e3-16e8-5317be9e95a6',
-    noteIds: ['p5-hs', 'p5-cost', 'p5-iris', 'p5-truc-a', 'p5-truc-b', 'note-1791284611425000-3'],
-  }],
+  kind: RUNTIME_ELIGIBLE_OWN_NOTES_KIND,
+  owners: [
+    { ownerId: '293a65cc-20f1-70e3-16e8-5317be9e95a6', noteIds: [] },
+    { ownerId: '89fa153c-5031-704f-6d8c-7fe77abd1cca', noteIds: [] },
+    { ownerId: 'a9cad54c-5071-709a-6c23-e90dd410f6ae', noteIds: [] },
+  ],
+  streamEnabled: true,
 });
 
 const syncStack = backend.createStack('SyncStack');
 const notesTable = createNotesTable(syncStack);
 // Keep RAG resources declared on every deploy; its reviewed pilot stream mapping defaults disabled.
-const rag = createRagInfrastructure(syncStack, notesTable, ragPilotScope);
+// The worker/probe get the same Amplify-resolved Cloudflare Access secrets as the managed Lambda;
+// the values are deploy-time references, never literals in this file or the synthesized template.
+const rag = createRagInfrastructure(syncStack, notesTable, ragPilotScope, resolveRagSecrets(syncStack));
 createPrivateRagInfrastructure(backend.ragQuery.resources.lambda, notesTable, rag);
 const ragPhase5 = createPhase5Infrastructure({
   handler: backend.ragQuery.resources.lambda,

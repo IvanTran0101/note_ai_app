@@ -21,10 +21,24 @@ test('private query has bounded concurrency/read-only source access and no publi
  const query=Object.entries(r).find(([id])=>id.startsWith('PrivateQuery')&&(r[id] as any).Type==='AWS::Lambda::Function')![1] as any;
  assert.equal(query.Properties.ReservedConcurrentExecutions,1);
  assert.equal(query.Properties.Environment.Variables.RAG_PRIVATE_PHASE4,'synthetic-only');
- assert.equal(query.Properties.Layers.length,1);
+ assert.equal(query.Properties.Environment.Variables.RAG_TOKENIZER_DIR,'/opt');
+ assert.equal(query.Properties.Environment.Variables.RAG_VECTOR_INDEX_ARN['Fn::GetAtt'][1],'IndexArn');
+ assert.equal(query.Properties.Environment.Variables.RAG_QUERY_ADMISSION_ENABLED,'false');
+ // The managed query reads the additive 768 EmbeddingGemma index, never the retained Cohere one.
+ const active=Object.entries(r).find(([,resource]:[string,any])=>
+   resource.Type==='AWS::S3Vectors::Index'&&resource.Properties.IndexName==='rag-eg2-q8-768-v1');
+ assert.ok(active,'active EmbeddingGemma index exists');
+ assert.deepEqual(query.Properties.Environment.Variables.RAG_VECTOR_INDEX_ARN,{'Fn::GetAtt':[active![0],'IndexArn']});
+ const legacy=Object.entries(r).find(([,resource]:[string,any])=>
+   resource.Type==='AWS::S3Vectors::Index'&&resource.Properties.IndexName==='rag-v1');
+ assert.ok(legacy,'legacy Cohere index is retained');
+ assert.equal((legacy![1] as any).Properties.Dimension,1024);
+ assert.equal((legacy![1] as any).DeletionPolicy,'Retain');
+ assert.equal(query.Properties.Layers.length,2);
  const policy=Object.entries(r).find(([id])=>id.startsWith('PrivateQuery')&&id.includes('DefaultPolicy'))![1] as any;
  const stmts=policy.Properties.PolicyDocument.Statement;
  const actions=stmts.flatMap((s:any)=>[s.Action].flat());
+ assert.ok(!actions.includes('bedrock:InvokeModel'),'self-hosted embedding needs no Bedrock grant');
  for(const denied of ['dynamodb:PutItem','dynamodb:DeleteItem','dynamodb:ConditionCheckItem','s3:PutObject','s3:DeleteObject','s3vectors:PutVectors','s3vectors:DeleteVectors'])assert.ok(!actions.includes(denied),denied);
  const update=stmts.find((s:any)=>[s.Action].flat().includes('dynamodb:UpdateItem'));
  assert.deepEqual(update.Condition,{'ForAllValues:StringEquals':{'dynamodb:LeadingKeys':['BUDGET#SMOKE','BUDGET#PHASE4']},Null:{'dynamodb:LeadingKeys':'false'}});
@@ -45,7 +59,8 @@ test('pilot scope keeps the private Phase4 query surface unchanged and closed',(
   const query=Object.entries(r).find(([id])=>id.startsWith('PrivateQuery')&&(r[id] as any).Type==='AWS::Lambda::Function')![1] as any;
   assert.equal(query.Properties.ReservedConcurrentExecutions,1);
   assert.equal(query.Properties.Environment.Variables.RAG_PRIVATE_PHASE4,'synthetic-only');
-  assert.equal(query.Properties.Layers.length,1);
+  assert.equal(query.Properties.Environment.Variables.RAG_TOKENIZER_DIR,'/opt');
+  assert.equal(query.Properties.Layers.length,2);
   const policy=Object.entries(r).find(([id])=>id.startsWith('PrivateQuery')&&id.includes('DefaultPolicy'))![1] as any;
   const update=(policy.Properties.PolicyDocument.Statement as any[]).find((s:any)=>[s.Action].flat().includes('dynamodb:UpdateItem'));
   assert.deepEqual(update.Condition,{'ForAllValues:StringEquals':{'dynamodb:LeadingKeys':['BUDGET#SMOKE','BUDGET#PHASE4']},Null:{'dynamodb:LeadingKeys':'false'}});

@@ -8,7 +8,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { beginContext } from '../authority';
-import { chunkNote } from '../chunking';
+import {
+  MAX_EMBEDDING_CHARACTERS, MAX_EMBEDDING_TOKENS, QUERY_PREFIX, chunkNote, queryEmbeddingText,
+} from '../chunking';
 import { CONSENT_VERSION } from '../contract';
 import { countSyntheticTokens } from '../mock';
 import { policy, sourceKey } from '../types';
@@ -53,6 +55,8 @@ type Counts = {
   embeds: number;
   order: string[];
   queryNoteIds: (string | null)[];
+  /** Exact text arrays handed to the embedding port, in call order. */
+  embedInputs: string[][];
 };
 
 type Fixture = Readonly<{
@@ -69,7 +73,8 @@ const fixtureFor = (
   options: Readonly<{ version?: string; tamperManifest?: boolean }> = {},
 ): Fixture => {
   const counts: Counts = {
-    loads: 0, reserves: 0, reads: 0, queries: 0, getVectors: 0, embeds: 0, order: [], queryNoteIds: [],
+    loads: 0, reserves: 0, reads: 0, queries: 0, getVectors: 0, embeds: 0, order: [],
+    queryNoteIds: [], embedInputs: [],
   };
   const states = new Map<string, IndexState>();
   const snapshots = new Map<string, Snapshot>();
@@ -175,6 +180,7 @@ const fixtureFor = (
     embed: async (texts: readonly string[], purpose: 'search_document' | 'search_query', signal: AbortSignal) => {
       counts.embeds += 1;
       counts.order.push('embed');
+      counts.embedInputs.push([...texts]);
       if (signal.aborted) throw new IndexFailure('TIMEOUT', true);
       assert.equal(purpose, 'search_query');
       return texts.map((_text, index) => vector1024(index));
@@ -374,6 +380,7 @@ test('embedQuery reserves the shared counter before exactly one search_query cal
   assert.deepEqual(fixture.counts.order, ['reserve', 'embed']);
   assert.equal(fixture.counts.reserves, 1);
   assert.equal(fixture.counts.embeds, 1);
+  assert.deepEqual(fixture.counts.embedInputs, [[queryEmbeddingText(ACCOUNT.question)]]);
 
   const oversized = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
   await assert.rejects(
@@ -382,6 +389,40 @@ test('embedQuery reserves the shared counter before exactly one search_query cal
   );
   assert.equal(fixture.counts.reserves, 1, 'no reservation for a rejected input');
   assert.equal(fixture.counts.embeds, 1);
+});
+
+test('framed, not raw, limits refuse before reservation and dispatch', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const ports = createQueryPorts(fixture.deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  // 2030 chars is 508 synthetic tokens raw, but the 29-character query frame pushes it to 515
+  // tokens and 2059 code points. The prefix must be part of the bound, not added afterwards.
+  const raw = 'a'.repeat(2030);
+  assert.ok(countSyntheticTokens(raw) <= MAX_EMBEDDING_TOKENS, 'raw input is within the token cap');
+  assert.ok(raw.length <= MAX_EMBEDDING_CHARACTERS, 'raw input is within the character cap');
+  assert.ok(countSyntheticTokens(queryEmbeddingText(raw)) > MAX_EMBEDDING_TOKENS);
+  assert.ok(queryEmbeddingText(raw).length > MAX_EMBEDDING_CHARACTERS);
+
+  await assert.rejects(
+    () => ports.retrieval.embedQuery(raw, context.signal),
+    (error: unknown) => (error as { code?: string }).code === 'INPUT_TOO_LONG',
+  );
+  assert.equal(fixture.counts.reserves, 0, 'no debit for an input that cannot be dispatched');
+  assert.equal(fixture.counts.embeds, 0, 'no provider fetch');
+  assert.deepEqual(fixture.counts.embedInputs, []);
+  assert.deepEqual(fixture.counts.order, []);
+});
+
+test('embedQuery preserves raw question content with exactly one frame', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const ports = createQueryPorts(fixture.deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  const raw = '  alpha beta gamma  ';
+  await ports.retrieval.embedQuery(raw, context.signal);
+  const dispatched = fixture.counts.embedInputs[0]![0]!;
+  assert.equal(dispatched, QUERY_PREFIX + raw);
+  assert.equal(dispatched.slice(QUERY_PREFIX.length), raw, 'raw content is unchanged');
+  assert.equal(dispatched.startsWith(QUERY_PREFIX), true);
 });
 
 test('retrieval called without an authorized request signal fails closed', async () => {
@@ -409,6 +450,178 @@ test('a retrieval Ranked entry is returned unmodified: no fusion or evidence wor
     Object.keys(ports.retrieval).sort(),
     ['embedQuery', 'getVectors', 'keywordSearch', 'neighbors', 'vectorSearch'],
   );
+});
+
+test('the production scored path uses one queryScored call and attaches the validated distance', async () => {
+  const fixture = fixtureFor({
+    'rag-smoke-a': [
+      noteOf('rag-smoke-a', 'n-a', longContent('a')),
+      noteOf('rag-smoke-a', 'n-b', longContent('b')),
+    ],
+  });
+  const legacyQuery = fixture.deps.artifacts.query;
+  let scoredCalls = 0;
+  const deps: IndexDeps = {
+    ...fixture.deps,
+    artifacts: {
+      ...fixture.deps.artifacts,
+      queryScored: async (vector, ownerId, version, noteId, signal) => {
+        scoredCalls += 1;
+        const keys = await legacyQuery(vector, ownerId, version, noteId, signal);
+        return keys.map((key, index) => ({ key, distance: index / 10 }));
+      },
+    },
+  };
+  const ports = createQueryPorts(deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  const ranked = await ports.retrieval.vectorSearch(vector1024(0), context);
+
+  assert.equal(scoredCalls, 1, 'the scored operation is preferred exactly once');
+  assert.equal(fixture.counts.queries, 1, 'one underlying QueryVectors operation');
+  assert.deepEqual(fixture.counts.queryNoteIds, [null], 'the account-scope filter is unchanged');
+  const snapshot = [...fixture.snapshots.values()][0];
+  assert.ok(snapshot);
+  assert.deepEqual(
+    ranked.map((entry) => entry.chunk.chunkId),
+    snapshot.documents.map((document) => document.chunk.chunkId),
+    'legacy key order and membership are preserved',
+  );
+  ranked.forEach((entry, index) => {
+    assert.equal(entry.rank, index + 1);
+    assert.equal(entry.vectorDistance, index / 10);
+    assert.ok(Number.isFinite(entry.vectorDistance));
+    assert.ok((entry.vectorDistance ?? -1) >= 0 && (entry.vectorDistance ?? 3) <= 2);
+  });
+  assert.ok(Object.isFrozen(ranked));
+  for (const entry of ranked) assert.ok(Object.isFrozen(entry));
+});
+
+test('a legacy query-only artifact keeps ranked entries without a fabricated distance', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const ports = createQueryPorts(fixture.deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+
+  const ranked = await ports.retrieval.vectorSearch(vector1024(0), context);
+  assert.ok(ranked.length > 0);
+  assert.equal(fixture.counts.queries, 1, 'the legacy query fallback is used exactly once');
+  for (const entry of ranked) {
+    assert.equal('vectorDistance' in entry, false, 'absent distance stays undefined');
+  }
+
+  const keyword = await ports.retrieval.keywordSearch(ACCOUNT.question, context);
+  assert.ok(keyword.length > 0);
+  for (const entry of keyword) {
+    assert.ok(Number.isFinite(entry.bm25Score) && (entry.bm25Score ?? 0) > 0);
+    assert.equal('vectorDistance' in entry, false);
+  }
+});
+
+test('a present non-function queryScored rejects without falling back to legacy query', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const deps: IndexDeps = {
+    ...fixture.deps,
+    artifacts: {
+      ...fixture.deps.artifacts,
+      queryScored: 'not-a-function' as unknown as Artifacts['queryScored'],
+    },
+  };
+  const ports = createQueryPorts(deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  await assert.rejects(
+    () => ports.retrieval.vectorSearch(vector1024(0), context),
+    (error: unknown) => (error as { code?: string }).code === 'INVALID_PROVIDER_OUTPUT',
+  );
+  assert.equal(fixture.counts.queries, 0, 'the legacy query is never used for a malformed port');
+  assert.equal(fixture.counts.reads, 0, 'the malformed port is refused before any snapshot read');
+});
+
+test('an explicitly undefined queryScored keeps the documented legacy fallback', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  const deps: IndexDeps = {
+    ...fixture.deps,
+    artifacts: { ...fixture.deps.artifacts, queryScored: undefined },
+  };
+  const ports = createQueryPorts(deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+
+  const ranked = await ports.retrieval.vectorSearch(vector1024(0), context);
+  assert.ok(ranked.length > 0);
+  assert.equal(fixture.counts.queries, 1, 'an absent/undefined scored hook still reaches query');
+  for (const entry of ranked) {
+    assert.equal('vectorDistance' in entry, false, 'no distance is invented for the legacy path');
+  }
+});
+
+test('a malformed, mixed or foreign scored record fails closed with no partial result', async () => {
+  const notes = () => [
+    noteOf('rag-smoke-a', 'n-a', longContent('a')),
+    noteOf('rag-smoke-a', 'n-b', longContent('b')),
+  ];
+  const fixture = fixtureFor({ 'rag-smoke-a': notes() });
+  const snapshot = [...fixture.snapshots.values()][0];
+  assert.ok(snapshot && snapshot.documents.length >= 2);
+  const first = snapshot.documents[0]!;
+  const second = snapshot.documents[1]!;
+  const cases: ReadonlyArray<readonly [string, unknown, string]> = [
+    ['not an array', null, 'INVALID_PROVIDER_OUTPUT'],
+    ['missing distance', [{ key: first.vectorKey }], 'INVALID_PROVIDER_OUTPUT'],
+    ['string distance', [{ key: first.vectorKey, distance: '0.5' }], 'INVALID_PROVIDER_OUTPUT'],
+    ['distance above 2', [{ key: first.vectorKey, distance: 2.0001 }], 'INVALID_PROVIDER_OUTPUT'],
+    ['non-finite distance', [{ key: first.vectorKey, distance: Number.NaN }], 'INVALID_PROVIDER_OUTPUT'],
+    [
+      'mixed valid then missing',
+      [{ key: first.vectorKey, distance: 0.1 }, { key: second.vectorKey }],
+      'INVALID_PROVIDER_OUTPUT',
+    ],
+    ['foreign key', [{ key: sha256Hex('foreign-key'), distance: 0.1 }], 'SOURCE_CHANGED'],
+    [
+      'duplicate key',
+      [{ key: first.vectorKey, distance: 0.1 }, { key: first.vectorKey, distance: 0.2 }],
+      'INDEX_NOT_READY',
+    ],
+  ];
+  for (const [label, hits, code] of cases) {
+    const scoped = fixtureFor({ 'rag-smoke-a': notes() });
+    const deps: IndexDeps = {
+      ...scoped.deps,
+      artifacts: {
+        ...scoped.deps.artifacts,
+        queryScored: async () => hits as unknown as readonly { key: string; distance: number }[],
+      },
+    };
+    const ports = createQueryPorts(deps);
+    const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+    await assert.rejects(
+      () => ports.retrieval.vectorSearch(vector1024(0), context),
+      (error: unknown) => (error as { code?: string }).code === code,
+      label,
+    );
+    assert.equal(scoped.counts.queries, 0, `${label}: never falls back to the legacy query`);
+  }
+});
+
+test('a scored query failure keeps its error taxonomy and never falls back to query', async () => {
+  const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+  let legacyCalls = 0;
+  const deps: IndexDeps = {
+    ...fixture.deps,
+    artifacts: {
+      ...fixture.deps.artifacts,
+      query: async (vector, ownerId, version, noteId, signal) => {
+        legacyCalls += 1;
+        return fixture.deps.artifacts.query(vector, ownerId, version, noteId, signal);
+      },
+      queryScored: async () => { throw new IndexFailure('TIMEOUT', true); },
+    },
+  };
+  const ports = createQueryPorts(deps);
+  const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+  await assert.rejects(
+    () => ports.retrieval.vectorSearch(vector1024(0), context),
+    (error: unknown) => (error as { code?: string }).code === 'TIMEOUT',
+  );
+  assert.equal(legacyCalls, 0);
+  assert.equal(fixture.counts.queries, 0);
 });
 
 test('embedQuery awaits the dispatch callback after reservation and before the paid embed', async () => {
@@ -446,6 +659,34 @@ test('embedQuery without a dispatch callback fails closed on a canonical fingerp
   assert.equal(fixture.counts.embeds, 0, 'no paid embed after the fingerprint moved');
 });
 
+test('adapter auth and over-limit failures keep safe codes, never an abstention', async () => {
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ['UNAUTHORIZED', 'PROVIDER_UNAVAILABLE'],
+    ['INPUT_TOO_LONG', 'INPUT_TOO_LONG'],
+    ['PROVIDER_UNAVAILABLE', 'PROVIDER_UNAVAILABLE'],
+    ['TIMEOUT', 'TIMEOUT'],
+  ];
+  for (const [thrown, expected] of cases) {
+    const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
+    const deps: IndexDeps = {
+      ...fixture.deps,
+      embedding: {
+        count: fixture.deps.embedding.count,
+        embed: async () => { throw new IndexFailure(thrown, thrown === 'TIMEOUT'); },
+      },
+    };
+    const ports = createQueryPorts(deps);
+    const context = await contextFor(ports, 'rag-smoke-a', ACCOUNT);
+    await assert.rejects(
+      () => ports.retrieval.embedQuery(ACCOUNT.question, context.signal),
+      (error: unknown) => (error as { code?: string }).code === expected,
+      thrown,
+    );
+    assert.notEqual(expected, 'INDEX_NOT_READY', thrown);
+    assert.equal(fixture.counts.reserves, 1, 'the reservation is retained, never refunded');
+  }
+});
+
 test('embedQuery forwards the dispatch callback into the embedding port reservation window', async () => {
   const fixture = fixtureFor({ 'rag-smoke-a': [noteOf('rag-smoke-a', 'n-a', longContent('a'))] });
   let dispatches = 0;
@@ -457,7 +698,7 @@ test('embedQuery forwards the dispatch callback into the embedding port reservat
       count: fixture.deps.embedding.count,
       embed: async (texts, _purpose, _signal, beforeDispatch) => {
         forwarded = beforeDispatch;
-        // Simulate the private Cohere reservation: an async window before the raw paid call.
+        // Simulate the embedding port's own async reservation window before the raw paid call.
         await Promise.resolve();
         if (typeof beforeDispatch === 'function') {
           dispatches += 1;

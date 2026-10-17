@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { beginContext } from './authority';
-import { parseRequest } from './contract';
+import { CONSENT_VERSION, parseRequest } from './contract';
 import type { CanonicalNote, CanonicalState } from './types';
 
 const note: CanonicalNote = { ownerId: 'actor-a', noteId: 'n', revision: 1,
   title: 'Title', content: 'alpha', synced: true, protected: false, deleted: false, available: true };
 const state: CanonicalState = { actorId: 'actor-a', sessionGeneration: 1,
-  consent: { accepted: true, version: 'rag-consent.v1', generation: 1 }, indexReady: true,
+  consent: { accepted: true, version: CONSENT_VERSION, generation: 1 }, indexReady: true,
   manifestVersion: 'mock-1', notes: [note, { ...note, ownerId: 'actor-b' },
     { ...note, noteId: 'protected', protected: true }, { ...note, noteId: 'other-own' }] };
 

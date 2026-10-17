@@ -131,7 +131,7 @@ void main() {
       expect(client.requests.single.method, 'PUT');
       expect(bodyOf(client), <String, Object?>{
         'accepted': true,
-        'version': 'rag-consent.v1',
+        'version': RagConsent.currentVersion,
         'expectedGeneration': 3,
       });
     });

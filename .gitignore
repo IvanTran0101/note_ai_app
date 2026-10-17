@@ -101,6 +101,10 @@ GoogleService-Info.plist
 !/docs/rag/
 /docs/rag/*
 !/docs/rag/deepseek_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_profile_v1.json
+!/docs/rag/policy_v2.json
+!/docs/rag/EMBEDDING_MIGRATION.md
 !/docs/rag/PHASE4_HANDOFF.md
 !/docs/rag/phase4_policy_v1.json
 !/docs/rag/phase4_receipt.json

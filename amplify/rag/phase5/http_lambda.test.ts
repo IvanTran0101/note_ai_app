@@ -22,7 +22,10 @@ import type { Artifacts, Document, IndexDeps, IndexState, IndexStore, Manifest, 
 import { createConsentHandler } from './consent_handler';
 import type { ConsentGrant, ConsentStore } from './consent_store';
 import { consentRowKey } from './consent_store';
-import { createDefaultHandler, createPilotHttpHandler, composeProduction } from './http_lambda';
+import {
+  createDefaultHandler, createPilotHttpHandler, composeProduction, EMBEDDING_CANARY_KIND,
+  isEmbeddingCanaryEvent, queryAdmissionEnabled,
+} from './http_lambda';
 import type { PilotHttpDeps, PilotProductionSeam } from './http_lambda';
 import type { PilotBudgetPort } from './pilot_budget';
 import { PILOT_RELEASE_TIMEOUT_MS } from './pilot_query';
@@ -268,8 +271,8 @@ const documentFake = (stateItems: Map<string, Row>) => {
   return { client, commands, notesItems, stateItems };
 };
 
-const syntheticIndex = (): Readonly<{ deps: IndexDeps; counts: { loads: number; embeds: number } }> => {
-  const counts = { loads: 0, embeds: 0 };
+const syntheticIndex = (): Readonly<{ deps: IndexDeps; counts: { loads: number; embeds: number; texts: string[] } }> => {
+  const counts = { loads: 0, embeds: 0, texts: [] as string[] };
   const baseNote = {
     ownerId: ACTOR, noteId: 'n-a', revision: 7, title: TITLE, content: CONTENT,
     synced: true, protected: false, deleted: false, available: true, protectionRevision: 0,
@@ -317,7 +320,11 @@ const syntheticIndex = (): Readonly<{ deps: IndexDeps; counts: { loads: number; 
   };
   const embedding = {
     count: countSyntheticTokens,
-    async embed(texts: readonly string[]) { counts.embeds += 1; return texts.map((_text, index) => vector1024(index)); },
+    async embed(texts: readonly string[]) {
+      counts.embeds += 1;
+      counts.texts.push(...texts);
+      return texts.map((_text, index) => vector1024(index));
+    },
   };
   return Object.freeze({ deps: { store, artifacts, embedding }, counts });
 };
@@ -416,7 +423,10 @@ test('the default query path composes lazily and keeps config/budget on the stat
   const fake = documentFake(stateItems);
   const index = syntheticIndex();
   const providerCalls = { jev: 0, generate: 0 };
-  await withEnv({ RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE }, async () => {
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+    RAG_QUERY_ADMISSION_ENABLED: 'true',
+  }, async () => {
     let loads = 0;
     const seam: PilotProductionSeam = {
       client: () => fake.client,
@@ -458,6 +468,165 @@ test('a non-HTTP private invocation is forwarded with zero Phase 5 composition',
   assert.deepEqual(seen, [payload]);
 });
 
+test('the exact IAM canary embeds fixed synthetic text once and returns metadata only', async () => {
+  const fake = documentFake(new Map());
+  const index = syntheticIndex();
+  let privateCalls = 0;
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+  }, async () => {
+    const handler = createDefaultHandler({
+      client: () => fake.client,
+      requestId: () => 'req-1',
+      loadIndex: () => index.deps,
+      countOutput: () => countSyntheticTokens,
+      privateHandler: async () => { privateCalls += 1; return { leaked: true }; },
+    });
+    assert.equal(isEmbeddingCanaryEvent({ kind: EMBEDDING_CANARY_KIND }), true);
+    assert.equal(isEmbeddingCanaryEvent({ kind: EMBEDDING_CANARY_KIND, text: 'note body' }), false);
+    assert.equal(isEmbeddingCanaryEvent({ kind: 'embedding-canary.v2' }), false);
+
+    const result = await handler({ kind: EMBEDDING_CANARY_KIND }) as Record<string, unknown>;
+    assert.equal(result['status'], 'OK');
+    assert.equal(result['canary'], EMBEDDING_CANARY_KIND);
+    assert.equal(result['dimensions'], policy.embedding.dimensions);
+    assert.equal(typeof result['norm'], 'number');
+    assert.ok((result['norm'] as number) > 0);
+    assert.equal(result['finite'], true);
+    assert.deepEqual(result['profile'], {
+      model: 'embeddinggemma2', dimensions: policy.embedding.dimensions,
+    });
+    assert.equal(typeof (result['timing'] as Row)['totalMs'], 'number');
+    const tokenizerCounts = result['tokenizerCounts'] as Row;
+    assert.equal(typeof tokenizerCounts['embedding'], 'number');
+    assert.equal(typeof tokenizerCounts['deepseek'], 'number');
+    // No caller text, vector, credentials or provider payload is echoed.
+    assert.ok(!('vector' in result) && !('vectors' in result));
+    assert.ok(!JSON.stringify(result).includes('synthetic embedding canary'));
+    assert.equal(privateCalls, 0);
+    assert.equal(index.counts.embeds, 1);
+    assert.equal(index.counts.texts.length, 1);
+    assert.match(index.counts.texts[0] as string, /^NoteFlow synthetic embedding canary/);
+    // The one budget reservation is on the state table; no canonical note read was issued.
+    assert.ok(fake.commands.some((command) => command['kind'] === 'TransactWriteCommand'));
+    assert.ok(fake.commands.every((command) =>
+      (command['tables'] as string[]).every((table) => table === STATE_TABLE)));
+  });
+});
+
+test('a canary-like payload with extra keys or another kind stays a private forward', async () => {
+  let canaryCalls = 0;
+  let privateCalls = 0;
+  const seen: unknown[] = [];
+  const handler = createPilotHttpHandler(deps({
+    canary: async () => { canaryCalls += 1; return { status: 'OK' }; },
+    privateHandler: async (event) => { privateCalls += 1; seen.push(event); return { private: true }; },
+  }));
+  const payloads: readonly object[] = [
+    { kind: EMBEDDING_CANARY_KIND, text: 'note body' },
+    { kind: EMBEDDING_CANARY_KIND, model: 'other' },
+    { kind: 'embedding-canary.v2' },
+    {},
+  ];
+  for (const payload of payloads) {
+    assert.deepEqual(await handler(payload), { private: true });
+  }
+  assert.equal(canaryCalls, 0);
+  assert.equal(privateCalls, payloads.length);
+  assert.deepEqual(seen, payloads);
+});
+
+test('a canary event with no injected runner fails closed and never reaches the private handler', async () => {
+  let privateCalls = 0;
+  const handler = createPilotHttpHandler(deps({
+    privateHandler: async () => { privateCalls += 1; return { private: true }; },
+  }));
+  assert.deepEqual(await handler({ kind: EMBEDDING_CANARY_KIND }), {
+    status: 'ERROR', canary: EMBEDDING_CANARY_KIND, code: 'LIVE_POLICY_NOT_CONFIGURED',
+  });
+  assert.equal(privateCalls, 0);
+});
+
+test('an HTTP event carrying a canary kind still routes to consent and never the canary', async () => {
+  let canaryCalls = 0;
+  let privateCalls = 0;
+  const store = consentStore(Object.freeze({ accepted: false, version: CONSENT_VERSION, generation: 2 }));
+  const handler = createPilotHttpHandler(deps({
+    canary: async () => { canaryCalls += 1; return { status: 'OK' }; },
+    consent: async () => createConsentHandler({ store, assertActor: () => {} }),
+    privateHandler: async () => { privateCalls += 1; return { private: true }; },
+  }));
+  const response = await handler(httpEvent({
+    kind: EMBEDDING_CANARY_KIND,
+    rawPath: '/ai/rag/consent',
+    body: undefined,
+    requestContext: { http: { method: 'GET' }, authorizer: { jwt: { claims: { sub: ACTOR, token_use: 'access' } } } },
+  })) as { statusCode: number; body: string };
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body).consent, {
+    accepted: false, version: CONSENT_VERSION, generation: 2,
+  });
+  assert.equal(canaryCalls, 0);
+  assert.equal(privateCalls, 0);
+
+  // A public JWT body cannot inject the top-level kind the IAM canary requires.
+  const bodyKind = await handler(httpEvent({
+    body: JSON.stringify({ kind: EMBEDDING_CANARY_KIND }),
+  })) as { statusCode: number; body: string };
+  assert.equal(bodyKind.statusCode, 400);
+  assert.equal(JSON.parse(bodyKind.body).code, 'INVALID_INPUT');
+  assert.equal(canaryCalls, 0);
+  assert.equal(privateCalls, 0);
+});
+
+test('a canary with a failed budget or adapter returns a safe code and never echoes detail', async () => {
+  const index = syntheticIndex();
+  const denyAll: PilotBudgetPort = {
+    async send(): Promise<unknown> {
+      throw Object.assign(new Error('raw provider detail'), { name: 'AccessDeniedException' });
+    },
+  };
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+  }, async () => {
+    const handler = createDefaultHandler({
+      client: () => denyAll,
+      requestId: () => 'req-1',
+      loadIndex: () => index.deps,
+      countOutput: () => countSyntheticTokens,
+    });
+    const denied = await handler({ kind: EMBEDDING_CANARY_KIND }) as Record<string, unknown>;
+    assert.deepEqual(denied, {
+      status: 'ERROR', canary: EMBEDDING_CANARY_KIND, code: 'PROVIDER_UNAVAILABLE',
+    });
+    assert.equal(index.counts.embeds, 0, 'no dispatch before a successful reservation');
+  });
+
+  const fake = documentFake(new Map());
+  const failing = {
+    ...index.deps,
+    embedding: {
+      count: countSyntheticTokens,
+      async embed(): Promise<readonly (readonly number[])[]> {
+        throw new RagFailure('PROVIDER_UNAVAILABLE');
+      },
+    },
+  };
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+  }, async () => {
+    const handler = createDefaultHandler({
+      client: () => fake.client,
+      requestId: () => 'req-1',
+      loadIndex: () => failing,
+      countOutput: () => countSyntheticTokens,
+    });
+    assert.deepEqual(await handler({ kind: EMBEDDING_CANARY_KIND }), {
+      status: 'ERROR', canary: EMBEDDING_CANARY_KIND, code: 'PROVIDER_UNAVAILABLE',
+    });
+  });
+});
+
 test('the default query stops before any paid dispatch when cold composition outlives the budget', async () => {
   const stateItems = new Map<string, Row>([
     [keyOf({ ownerId: 'CONFIG#PHASE5', noteId: 'PILOT' }),
@@ -466,7 +635,10 @@ test('the default query stops before any paid dispatch when cold composition out
   const fake = documentFake(stateItems);
   const index = syntheticIndex();
   const providerCalls = { jev: 0, generate: 0 };
-  await withEnv({ RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE }, async () => {
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+    RAG_QUERY_ADMISSION_ENABLED: 'true',
+  }, async () => {
     let clock = 0;
     let loads = 0;
     const handler = createDefaultHandler({
@@ -521,6 +693,55 @@ const consentPut = (expectedGeneration: number): Event => httpEvent({
 
 const QUERY_ENV = Object.freeze({
   RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+  RAG_QUERY_ADMISSION_ENABLED: 'true',
+});
+
+test('query admission is explicit and defaults off', () => {
+  assert.equal(queryAdmissionEnabled({}), false);
+  assert.equal(queryAdmissionEnabled({ RAG_QUERY_ADMISSION_ENABLED: 'false' }), false);
+  assert.equal(queryAdmissionEnabled({ RAG_QUERY_ADMISSION_ENABLED: '1' }), false);
+  assert.equal(queryAdmissionEnabled({ RAG_QUERY_ADMISSION_ENABLED: 'TRUE' }), false);
+  assert.equal(queryAdmissionEnabled({ RAG_QUERY_ADMISSION_ENABLED: 'true' }), true);
+});
+
+test('admission off refuses the query before any config, index, lease or provider call', async () => {
+  const fake = documentFake(stateWithConfig(configValue));
+  const providerCalls = { jev: 0, generate: 0 };
+  let loads = 0;
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+    RAG_QUERY_ADMISSION_ENABLED: 'false',
+  }, async () => {
+    const handler = createDefaultHandler({
+      client: () => fake.client,
+      requestId: () => 'req-1',
+      loadIndex: () => { loads += 1; return syntheticIndex().deps; },
+      countOutput: () => { throw new Error('admission off must not load the tokenizer'); },
+      readApproval: async () => approval,
+      rawProviders: syntheticProviders(providerCalls),
+    });
+    const response = await handler(httpEvent()) as { statusCode: number; body: string };
+    assert.equal(response.statusCode, 503, response.body);
+    assert.equal(JSON.parse(response.body).code, 'PROVIDER_UNAVAILABLE');
+    assert.equal(loads, 0);
+    assert.equal(providerCalls.jev, 0);
+    assert.equal(providerCalls.generate, 0);
+    assert.equal(fake.commands.length, 0, 'no config/lease/budget read happened');
+  });
+});
+
+test('the consent route works while query admission is off', async () => {
+  const disabled = { ...configValue, policy: { ...configValue.policy, enabled: false } };
+  const fake = documentFake(stateWithConfig(disabled));
+  await withEnv({
+    RAG_REGION: 'ap-southeast-1', RAG_STATE_TABLE: STATE_TABLE, RAG_NOTES_TABLE: NOTES_TABLE,
+    RAG_QUERY_ADMISSION_ENABLED: 'false',
+  }, async () => {
+    const handler = createDefaultHandler({ client: () => fake.client, requestId: () => 'req-1' });
+    const get = await handler(consentGet()) as { statusCode: number; body: string };
+    assert.equal(get.statusCode, 200, get.body);
+    assert.deepEqual(JSON.parse(get.body).consent, { accepted: false, version: CONSENT_VERSION, generation: 0 });
+  });
 });
 
 test('the production query budget plus its bounded lease release fits the 28s Lambda', () => {

@@ -17,9 +17,10 @@ import { IndexFailure, JOB_POLICY_VERSION, LEASE_MS, WORKER_MS } from '../indexi
 import { WORKER_MARGIN_MS } from '../indexing/stream';
 import type { Counter } from '../types';
 import { RagFailure } from '../types';
-import { RUNTIME_CASE_HASH, parseRuntimeConfig } from './runtime_config';
+import { RUNTIME_CASE_HASH, RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
 import { createPilotWorkerHandler, sanitizePilotMetadata } from './pilot_worker';
+import { EMBEDDING_DIMENSIONS } from '../retrieval';
 
 const ACTOR = '00000001-0000-4000-8000-000000000001';
 const OTHER = '00000009-0000-4000-8000-000000000009';
@@ -30,7 +31,7 @@ const DIGEST = embeddingInputDigest(TITLE, CONTENT);
 type Row = Record<string, unknown>;
 
 const unitWith = (value: number): readonly number[] => {
-  const vector = new Array<number>(1024).fill(0);
+  const vector = new Array<number>(EMBEDDING_DIMENSIONS).fill(0);
   vector[0] = value;
   return Object.freeze(vector);
 };
@@ -59,6 +60,15 @@ const rawConfig = (patch: Row = {}): Row => ({
   corpus: {
     kind: 'reviewed-pilot', caseHash: RUNTIME_CASE_HASH,
     owners: { [ACTOR]: [{ noteId: 'n1', inputDigest: DIGEST }] },
+  },
+  ...patch,
+});
+const dynamicConfig = (patch: Row = {}): Row => ({
+  version: 'rag-pilot-config.v1',
+  generation: 1,
+  policy: policyRaw(),
+  corpus: {
+    kind: RUNTIME_ELIGIBLE_OWN_NOTES_KIND, caseHash: null, owners: { [ACTOR]: [] },
   },
   ...patch,
 });
@@ -203,7 +213,7 @@ const rig = (options: RigOptions = {}) => {
     readConfig,
     runtime: () => ({ store, artifacts, embedding, log: (metadata) => logs.push({ ...metadata }) }),
     budget: {
-      async acquireCohere(): Promise<void> {
+      async acquireEmbedding(): Promise<void> {
         budgetCalls.push(1);
         if (options.onCohere !== undefined) await options.onCohere();
       },
@@ -290,6 +300,56 @@ test('a mixed batch loads only listed/approved rows and never reads non-pilot bo
   assert.equal(h.embedding.calls.length, 1);
   assert.equal(h.store.manifests.length, 1);
   assert.equal(h.store.manifests[0]?.status, 'READY');
+});
+
+test('dynamic mode admits a new exact-owner note and ignores foreign, malformed and self rows', async () => {
+  const h = rig({ config: dynamicConfig(), state: state({ notes: [note({ noteId: 'new-own-note' })] }) });
+  const result = await h.handler(stream(
+    recordFor(ACTOR, 'NOTE#new-own-note', '1'),
+    recordFor(ACTOR, 'PROTECTION#new-own-note', '2'),
+    recordFor(OTHER, 'NOTE#new-own-note', '3'),
+    recordFor(ACTOR, 'NOTE#bad id', '4'),
+    recordFor(ACTOR, 'PROTECTION#', '5'),
+    recordFor(ACTOR, 'RAG#OTHER', '6'),
+    recordFor(ACTOR, 'META#x', '7'),
+  ));
+  assert.deepEqual(failuresOf(result), []);
+  assert.deepEqual([...new Set(h.store.loadedOwners)], [ACTOR]);
+  assert.equal(h.store.manifests.length, 1);
+  assert.equal(h.store.manifests[0]?.status, 'READY');
+  assert.equal(h.embedding.calls.length, 1);
+});
+
+test('dynamic mode never embeds foreign, shared, deleted, protected or unsynced notes', async () => {
+  const notes = [
+    note({ noteId: 'new-own-note', title: 'NEW OWN', content: 'NEW OWN BODY' }),
+    note({ noteId: 'shared-note', incomingShared: true, title: 'SHARED', content: 'SHARED BODY' }),
+    note({ noteId: 'deleted-note', deleted: true, title: 'DELETED', content: 'DELETED BODY' }),
+    note({ noteId: 'protected-note', protected: true, title: 'PROTECTED', content: 'PROTECTED BODY' }),
+    note({ noteId: 'unsynced-note', synced: false, title: 'UNSYNCED', content: 'UNSYNCED BODY' }),
+    note({ noteId: 'unavailable-note', available: false, title: 'UNAVAILABLE', content: 'UNAVAILABLE BODY' }),
+  ];
+  const h = rig({ config: dynamicConfig(), state: state({ notes }) });
+  const result = await h.handler(stream(recordFor(ACTOR, 'NOTE#new-own-note', '1')));
+  assert.deepEqual(failuresOf(result), []);
+  assert.equal(h.embedding.calls.length, 1);
+  const embeddedText = JSON.stringify(h.embedding.calls);
+  for (const body of ['SHARED BODY', 'DELETED BODY', 'PROTECTED BODY',
+    'UNSYNCED BODY', 'UNAVAILABLE BODY']) {
+    assert.ok(!embeddedText.includes(body), `${body} must never be embedded`);
+  }
+  const snapshot = decodeSnapshot([...h.artifacts.snapshots.values()][0]);
+  assert.deepEqual([...new Set(snapshot.documents.map((document) => document.chunk.noteId))], ['new-own-note']);
+
+  // A foreign-owner note cannot even be bound as this owner's canonical state, so it can never
+  // reach an embedding or a publish either.
+  const foreign = rig({
+    config: dynamicConfig(),
+    state: state({ notes: [note({ ownerId: OTHER, title: 'FOREIGN', content: 'FOREIGN BODY' })] }),
+  });
+  await foreign.handler(stream(recordFor(ACTOR, 'NOTE#n1', '1')));
+  assert.equal(foreign.embedding.calls.length, 0);
+  assert.equal(foreign.store.manifests.length, 0);
 });
 
 test('original huge BigInt sequences coalesce into the earliest account replay point', async () => {
@@ -380,10 +440,53 @@ test('a source, protection or consent move before publish ends SUPERSEDED with n
       if (typeof beforeDispatch === 'function') await beforeDispatch();
     };
     const result = await h.handler(stream(recordFor(ACTOR, 'NOTE#n1', '1')));
-    assert.deepEqual(failuresOf(result), [], `${name} move is terminal/acked`);
+    assert.deepEqual(failuresOf(result), [{ itemIdentifier: '1' }], `${name} move is retryable`);
     assert.equal(h.store.manifests.length, 0, `${name} move publishes nothing`);
     assert.ok(h.store.finishes.some((entry) => entry.status === 'SUPERSEDED'), `${name} superseded`);
   }
+});
+
+test('dynamic config, consent, protection, delete or epoch moves mid-embed never publish READY', async () => {
+  const mutations: ReadonlyArray<readonly [string, (h: ReturnType<typeof rig>) => void]> = [
+    ['config', (h) => { h.setConfig(dynamicConfig({ generation: 2 })); }],
+    ['consent', (h) => { h.store.state = state({ consent: consent(false, 2) }); }],
+    ['protection', (h) => {
+      h.store.state = state({ notes: [note({ protected: true, protectionRevision: 1 })] });
+    }],
+    ['delete', (h) => { h.store.state = state({ notes: [note({ deleted: true })] }); }],
+    ['epoch', (h) => { h.store.state = state({ accountEpoch: 1 }); }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const h = rig({ config: dynamicConfig() });
+    h.embedding.dispatch = async (beforeDispatch) => {
+      mutate(h);
+      if (typeof beforeDispatch === 'function') await beforeDispatch();
+    };
+    const result = await h.handler(stream(recordFor(ACTOR, 'NOTE#n1', '1')));
+    assert.equal(h.store.manifests.length, 0, `${name} move publishes nothing`);
+    assert.equal(h.budgetCalls.length, 1, `${name} consumed exactly the one reservation`);
+    assert.deepEqual(failuresOf(result), [{ itemIdentifier: '1' }], `${name} is replayable`);
+  }
+});
+
+test('dynamic duplicate/out-of-order hints converge and unchanged embeddings are reused', async () => {
+  const h = rig({ config: dynamicConfig() });
+  const first = await h.handler(stream(
+    recordFor(ACTOR, 'NOTE#n1', '10'),
+    recordFor(ACTOR, 'NOTE#n1', '2'),
+  ));
+  assert.deepEqual(failuresOf(first), []);
+  assert.equal(h.store.manifests.length, 1, 'the duplicate hints coalesce into one job');
+  assert.equal(h.embedding.calls.length, 1);
+  assert.equal(h.store.finishes.filter((entry) => entry.status === 'SUCCEEDED').length, 1);
+
+  // A revision move changes the canonical fingerprint but not the embedding input: the worker
+  // must publish a new READY manifest and reuse the existing vector instead of paying again.
+  h.store.state = { ...h.store.state, notes: [note({ revision: 2 })] };
+  const second = await h.handler(stream(recordFor(ACTOR, 'NOTE#n1', '3')));
+  assert.deepEqual(failuresOf(second), []);
+  assert.equal(h.store.manifests.length, 2);
+  assert.equal(h.embedding.calls.length, 1, 'unchanged embedding input is reused');
 });
 
 test('a transient config failure after the paid embed retries the earliest sequence only once', async () => {
@@ -516,7 +619,7 @@ test('construction validates the injected dependencies', () => {
   const base = {
     readConfig: async (): Promise<RuntimeConfig> => parseRuntimeConfig(rawConfig()),
     runtime: () => ({ store: new MemoryStore(state()) }) as never,
-    budget: { async acquireCohere(): Promise<void> {} },
+    budget: { async acquireEmbedding(): Promise<void> {} },
     recover: async () => ({}),
     streamArn: STREAM,
   };

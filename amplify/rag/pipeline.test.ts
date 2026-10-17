@@ -9,8 +9,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { APIGatewayProxyEventV2WithJWTAuthorizer as Event } from 'aws-lambda';
 import notesFixture from '../../test/fixtures/rag/notes.json';
+import { chunkNote } from './chunking';
 import { CONSENT_VERSION } from './contract';
-import { createMockRuntime, MOCK_MODEL } from './mock';
+import { countSyntheticTokens, createMockRuntime, MOCK_MODEL } from './mock';
 import type { MockRuntime } from './mock';
 import { buildLexicalSnapshot, createMockIndex } from './mock_index';
 import { createQuery } from './pipeline';
@@ -339,6 +340,36 @@ test('an empty union abstains while a broken branch is an error and a timeout ca
   assert.equal(errorCode(await runQuery(withShortDeadline(hung))), 'TIMEOUT');
   assert.equal(hung.counts.jev, 0);
   assert.equal(hung.counts.generation, 0);
+});
+
+test('a foreign or malformed branch result errors before the relevance gate can filter it', async () => {
+  const foreign = notesFixture.notes.find((note) => note.key === 'b-watch');
+  assert.ok(foreign);
+  const foreignChunk = chunkNote(
+    { ...foreign, incomingShared: undefined },
+    countSyntheticTokens,
+  )[0];
+  assert.ok(foreignChunk);
+
+  const foreignRuntime = createMockRuntime();
+  asMutable(foreignRuntime.deps.retrieval).vectorSearch = async () => [
+    { chunk: foreignChunk, rank: 1, vectorDistance: 0.1 },
+  ];
+  asMutable(foreignRuntime.deps.retrieval).keywordSearch = async () => [];
+  assert.equal(errorCode(await runQuery(foreignRuntime.deps)), 'SCOPE_DENIED');
+  assert.equal(foreignRuntime.counts.getVectors, 0);
+  assert.equal(foreignRuntime.counts.jev, 0);
+  assert.equal(foreignRuntime.counts.generation, 0);
+
+  const malformedRuntime = createMockRuntime();
+  const original = malformedRuntime.deps.retrieval.vectorSearch;
+  asMutable(malformedRuntime.deps.retrieval).vectorSearch = async (...args) => {
+    const entries = await original(...args);
+    return entries.map((entry) => ({ ...entry, vectorDistance: 2.5 }));
+  };
+  assert.equal(errorCode(await runQuery(malformedRuntime.deps)), 'INVALID_INPUT');
+  assert.equal(malformedRuntime.counts.getVectors, 0);
+  assert.equal(malformedRuntime.counts.jev, 0);
 });
 
 test('a single-branch union still answers: stored vectors are reused, never re-embedded', async () => {

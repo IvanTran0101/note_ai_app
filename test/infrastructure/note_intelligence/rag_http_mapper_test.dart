@@ -537,16 +537,23 @@ void main() {
       expect(consent(consentEnvelope(accepted: false, generation: 5)).generation, 5);
     });
 
-    test('refuses an impossible grant or a foreign version', () {
+    test('refuses an impossible grant or a legacy/foreign version', () {
       expect(
         problemOf(
           () => consent(consentEnvelope(accepted: true, generation: 0)),
         ),
         RagFailureCode.invalidProviderOutput,
       );
+      // A legacy v1 grant or another version is never adopted as current permission.
       expect(
         problemOf(
-          () => consent(consentEnvelope(version: 'rag-consent.v2')),
+          () => consent(consentEnvelope(version: 'rag-consent.v1')),
+        ),
+        RagFailureCode.invalidProviderOutput,
+      );
+      expect(
+        problemOf(
+          () => consent(consentEnvelope(version: 'rag-consent.v3')),
         ),
         RagFailureCode.invalidProviderOutput,
       );
@@ -566,7 +573,7 @@ void main() {
               ...consentEnvelope(),
               'consent': <String, Object?>{
                 'accepted': true,
-                'version': 'rag-consent.v1',
+                'version': RagConsent.currentVersion,
                 'generation': generation,
               },
             }),
@@ -583,7 +590,7 @@ void main() {
             ...consentEnvelope(),
             'consent': <String, Object?>{
               'accepted': true,
-              'version': 'rag-consent.v1',
+              'version': RagConsent.currentVersion,
               'generation': 1,
               'ownerId': 'user-1',
             },

@@ -16,9 +16,10 @@ import type {
 import { checksum, decodeSnapshot, encodeSnapshot } from './snapshot';
 import { fingerprint } from './jobs';
 import { createIndexWorker } from './worker';
+import { EMBEDDING_DIMENSIONS } from '../retrieval';
 
 const unitWith = (value: number): readonly number[] => {
-  const vector = new Array<number>(1024).fill(0);
+  const vector = new Array<number>(EMBEDDING_DIMENSIONS).fill(0);
   vector[0] = value;
   return vector;
 };
@@ -364,6 +365,31 @@ test('a previous snapshot under a different policy is rebuilt, never reused', as
   assert.equal(published(rigged.artifacts, versionOf(second)).documents[0]?.embeddingDigest, oldDigest);
 });
 
+test('a migration to another embedding profile retains the old generation for rollback', async () => {
+  const rigged = rig();
+  const first = await rigged.worker(job());
+  const firstVersion = versionOf(first);
+  const oldProfile = 'c'.repeat(64);
+  // The current generation was produced under the previous (Cohere) profile: both the manifest
+  // and its snapshot carry that identity, exactly like a pre-migration index.
+  const current = rigged.store.state.manifest;
+  assert.ok(current !== null);
+  rigged.store.state = structuredClone({
+    ...rigged.store.state, manifest: { ...current, policyIdentity: oldProfile },
+  });
+  const parsed = JSON.parse(rigged.artifacts.snapshots.get(firstVersion) as string) as Record<string, unknown>;
+  rigged.artifacts.snapshots.set(firstVersion, JSON.stringify({ ...parsed, policyIdentity: oldProfile }));
+  update(rigged, { notes: [note({ revision: 2 })] });
+  const second = await rigged.worker(job({ sourceRevisionHint: 2 }));
+  assert.equal(second.status, 'SUCCEEDED');
+  assert.equal(rigged.embedding.calls.length, 2, 'the old-profile vector is never reused');
+  assert.deepEqual(rigged.artifacts.cleanupVersions, [], 'migration cleanup retains the old generation');
+  assert.equal(rigged.artifacts.snapshots.has(firstVersion), true);
+  assert.ok(rigged.logs.some((entry) => entry['event'] === 'index.cleanup.retained'));
+  assert.notEqual(rigged.store.state.manifest?.policyIdentity, oldProfile, 'the new profile is published');
+  assert.equal(rigged.store.state.manifest?.generation, 2);
+});
+
 test('revoked consent publishes BLOCKED with zero model calls and retires old artifacts', async () => {
   const rigged = rig();
   const first = await rigged.worker(job());
@@ -430,7 +456,7 @@ test('protecting one note retires its artifacts while other eligible notes stay 
   });
   const second = await rigged.worker(job({ noteId: 'n1' }));
   assert.equal(second.status, 'SUCCEEDED');
-  assert.equal(rigged.embedding.calls.length, 1, 'the preserved note reused its float');
+  assert.equal(rigged.embedding.calls.length, 2, 'the preserved note reused its float (two original samples)');
   const secondSnapshot = published(rigged.artifacts, versionOf(second));
   assert.deepEqual(secondSnapshot.documents.map((entry) => entry.chunk.noteId), ['n2']);
   assert.deepEqual(
@@ -495,7 +521,7 @@ test('an expired lease is fenced: the new worker publishes and the old token can
   assert.notEqual(store.state.manifest?.version, 'lease-1');
 });
 
-test('embedding stops at the batch limit and reserves before every paid call', async () => {
+test('embedding dispatches one sample at a time and reserves before every paid call', async () => {
   const content = Array.from({ length: 97 },
     (_, index) => `${'a'.repeat(298)}${String(index).padStart(3, '0')}\n\n`).join('');
   const many = baseState({ notes: [note({ content })] });
@@ -503,7 +529,7 @@ test('embedding stops at the batch limit and reserves before every paid call', a
   await assert.rejects(limited.worker(job()), (error: unknown) =>
     error instanceof IndexFailure && error.code === 'BUDGET_EXHAUSTED' && error.retryable === true);
   assert.equal(limited.embedding.calls.length, 1);
-  assert.equal(limited.embedding.calls[0]?.length, 96);
+  assert.equal(limited.embedding.calls[0]?.length, 1, 'pilot batch is exactly one sample');
   assert.equal(limited.store.reserves, 2);
   assert.equal(limited.store.publishes, 0);
   assert.ok(limited.store.finishes.some((entry) => entry.status === 'FAILED' && entry.code === 'BUDGET_EXHAUSTED'));
@@ -511,7 +537,8 @@ test('embedding stops at the batch limit and reserves before every paid call', a
   const full = rig({ state: many });
   const result = await full.worker(job());
   assert.equal(result.status, 'SUCCEEDED');
-  assert.deepEqual(full.embedding.calls.map((call) => call.length), [96, 1]);
+  assert.deepEqual(full.embedding.calls.map((call) => call.length), new Array(97).fill(1));
+  assert.equal(full.store.reserves, 97, 'one reserve+dispatch pair per unique sample');
   assert.equal(published(full.artifacts, versionOf(result)).documents.length, 97);
 });
 
@@ -519,12 +546,14 @@ test('wrong provider cardinality, dimensions or a zero vector are terminal', asy
   const cases: readonly ((texts: readonly string[]) => readonly (readonly number[])[])[] = [
     () => [unitWith(1), unitWith(2)],
     () => [[1, 2, 3]],
-    () => [new Array<number>(1024).fill(0)],
+    () => [new Array<number>(EMBEDDING_DIMENSIONS).fill(0)],
   ];
   for (const respond of cases) {
     const rigged = rig();
     rigged.embedding.respond = respond;
     assert.deepEqual(await rigged.worker(job()), { status: 'FAILED', code: 'INVALID_PROVIDER_OUTPUT' });
+    assert.equal(rigged.embedding.calls.length, 1, 'one failed dispatch is never retried in-process');
+    assert.equal(rigged.store.reserves, 1, 'the failed attempt stays counted');
     assert.equal(rigged.store.publishes, 0);
   }
 });

@@ -94,15 +94,18 @@ void main() {
   });
 
   group('consent disclosure', () {
-    testWidgets('names the processors, included scope, and exclusions', (
+    testWidgets('names the truthful processors, included scope, and exclusions', (
       WidgetTester tester,
     ) async {
       final RagCopy copy = await _resolve(tester, locale: const Locale('en'));
       final String disclosure = copy.consentDisclosure;
-      expect(disclosure, contains('Cohere'));
       expect(disclosure, contains('AWS'));
+      expect(disclosure, contains('Cloudflare'));
+      expect(disclosure, contains('self-hosted NoteFlow embedding'));
       expect(disclosure, contains('TypeSafe JEV'));
       expect(disclosure, contains('DeepSeek'));
+      expect(disclosure, contains('rag-consent.v2'));
+      expect(disclosure, isNot(contains('Cohere')));
       expect(disclosure, contains('shared with you'));
       expect(disclosure, contains('attachments'));
       expect(disclosure, contains('local drafts'));
@@ -117,8 +120,10 @@ void main() {
     ) async {
       final RagCopy vi = await _resolve(tester, locale: const Locale('vi'));
       final RagCopy en = await _resolve(tester, locale: const Locale('en'));
-      expect(vi.consentDisclosure, contains('Cohere'));
+      expect(vi.consentDisclosure, contains('Cloudflare'));
       expect(vi.consentDisclosure, contains('DeepSeek'));
+      expect(vi.consentDisclosure, contains('rag-consent.v2'));
+      expect(vi.consentDisclosure, isNot(contains('Cohere')));
       expect(vi.consentDisclosure, isNot(equals(en.consentDisclosure)));
     });
   });

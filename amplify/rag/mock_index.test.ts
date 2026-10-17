@@ -152,7 +152,7 @@ test('the codec refuses malformed, wrong-identity, wrong-owner and inconsistent 
     ['wrong codec', mutateJson(snapshot, (value) => { value['codec'] = 'rag-lexical-snapshot.v2'; })],
     ['wrong snapshot version', mutateJson(snapshot, (value) => { value['metadata']['snapshotVersion'] = 2; })],
     ['wrong model', mutateJson(snapshot, (value) => { value['metadata']['model'] = 'other-embed'; })],
-    ['wrong dimensions', mutateJson(snapshot, (value) => { value['metadata']['dimensions'] = 768; })],
+    ['wrong dimensions', mutateJson(snapshot, (value) => { value['metadata']['dimensions'] = INDEX_DIMENSIONS + 1; })],
     ['wrong analyzer', mutateJson(snapshot, (value) => { value['metadata']['analyzerVersion'] = 'rag-analyzer.v0'; })],
     ['wrong chunking policy', mutateJson(snapshot, (value) => { value['metadata']['chunkingPolicy'] = 'fixed-window'; })],
     ['extra metadata key', mutateJson(snapshot, (value) => { value['metadata']['cacheHint'] = 'trust-me'; })],
@@ -260,7 +260,7 @@ test('each search filters by the request context scope, not by the snapshot clai
   assert.deepEqual(await index.keywordSearch('qqqq', accountContext), []);
 });
 
-test('embeddings are deterministic, 1024-dimensional, finite and unit-length', () => {
+test('embeddings are deterministic, active-dimension, finite and unit-length', () => {
   const first = embedSearchQuery('alpha beta');
   const second = embedSearchQuery('alpha beta');
   assert.deepEqual(first, second);

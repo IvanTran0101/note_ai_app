@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chunkNote } from './chunking';
 import { buildEvidence } from './context';
-import { mmr, rrf } from './retrieval';
+import { EMBEDDING_DIMENSIONS, mmr, rrf } from './retrieval';
 import { sourceKey, type Chunk, type CanonicalNote } from './types';
 
 const note: CanonicalNote = { ownerId: 'actor-a', noteId: 'n', revision: 1,
@@ -20,7 +20,7 @@ test('canonical span validation cannot bisect a valid emoji', () => {
 });
 test('MMR cosine remains correct for tiny but nonzero valid vectors', () => {
   const a = chunk('a'), b = chunk('b'), c = chunk('c');
-  const axis = (index: number) => Array.from({ length: 1024 }, (_, i) => i === index ? 1e-300 : 0);
+  const axis = (index: number) => Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => i === index ? 1e-300 : 0);
   const vectors = new Map([[sourceKey(a), axis(0)], [sourceKey(b), axis(0)], [sourceKey(c), axis(1)]]);
   const anchors = mmr([{ chunk: a, score: 1 }, { chunk: b, score: .9 }, { chunk: c, score: .8 }], vectors);
   assert.deepEqual(anchors.slice(0, 2).map(c => c.chunkId), ['a', 'c']);

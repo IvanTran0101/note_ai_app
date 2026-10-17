@@ -11,27 +11,32 @@
  * non-zero 1024-dimensional float vector per input; anything else is INVALID_PROVIDER_OUTPUT.
  * This module never reserves budget — the worker/probe reserve before calling `embed`.
  */
-import { policy, type Counter } from '../types';
+import { type Counter } from '../types';
 import {
   MAX_EMBEDDING_CHARACTERS, MAX_EMBEDDING_TOKENS, countTokens, countUnicodeCharacters,
   isWellFormed,
 } from '../chunking';
-import { EMBEDDING_DIMENSIONS } from '../retrieval';
+import legacyPolicy from '../../../docs/rag/policy_v1.json';
 import { IndexFailure, type Embedding } from './types';
 import {
   BEDROCK_INVOKE_MODEL_PATH, createAwsJson, isAwsRegion, type AwsJson,
 } from './aws_http';
 
-/** The policy model; the invoke path whitelist in aws_http is derived from the same value. */
-export const EMBEDDING_MODEL: string = policy.embedding.model;
+/**
+ * Frozen Phase 3/rollback Cohere contract. It reads policy_v1 deliberately: the active policy is
+ * EmbeddingGemma-2 768 and must never silently retarget this legacy adapter or its invoke path.
+ */
+export const EMBEDDING_MODEL: string = legacyPolicy.embedding.model;
+/** Frozen legacy vector width; independent of the active policy's 768 dimensions. */
+export const LEGACY_EMBEDDING_DIMENSIONS: number = legacyPolicy.embedding.dimensions;
 /** Cohere embed accepts at most 96 texts per call (worker EMBED_BATCH_LIMIT mirrors this). */
 export const EMBED_BATCH_LIMIT = 96;
-export const EMBEDDING_TRUNCATE: string = policy.embedding.truncate;
+export const EMBEDDING_TRUNCATE: string = legacyPolicy.embedding.truncate;
 export const EMBEDDING_PATH: string = BEDROCK_INVOKE_MODEL_PATH;
 
 const INPUT_TYPES: Readonly<Record<'search_document' | 'search_query', string>> = Object.freeze({
-  search_document: policy.embedding.documentInputType,
-  search_query: policy.embedding.queryInputType,
+  search_document: legacyPolicy.embedding.documentInputType,
+  search_query: legacyPolicy.embedding.queryInputType,
 });
 
 const invalidInput: () => never = () => {
@@ -54,7 +59,7 @@ const requireEmbeddings = (payload: unknown, expected: number): readonly (readon
   if (!Array.isArray(embeddings) || embeddings.length !== expected) invalidOutput();
   const vectors: (readonly number[])[] = [];
   for (const entry of embeddings) {
-    if (!Array.isArray(entry) || entry.length !== EMBEDDING_DIMENSIONS) invalidOutput();
+    if (!Array.isArray(entry) || entry.length !== LEGACY_EMBEDDING_DIMENSIONS) invalidOutput();
     const vector: number[] = [];
     for (const value of entry) {
       if (typeof value !== 'number' || !Number.isFinite(value)) invalidOutput();

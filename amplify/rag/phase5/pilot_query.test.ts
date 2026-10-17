@@ -1,6 +1,6 @@
 /**
  * Phase 5 pilot query tests: the trusted config/actor gate before composition, the canonical
- * pipeline reached through the guarded index store, the atomic lease/Cohere debits, fail-closed
+ * pipeline reached through the guarded index store, the atomic lease/embedding debits, fail-closed
  * config/consent/index moves, the single reservation per provider and the independent bounded
  * lease release. Synthetic in-process index/providers only; no AWS, network or model call.
  *
@@ -18,7 +18,12 @@ import { checksum, embeddingInputDigest, policyIdentity, sha256Hex } from '../in
 import type { Artifacts, Document, IndexDeps, IndexState, IndexStore, Manifest, Snapshot } from '../indexing/types';
 import { readLiveApproval } from '../live_policy';
 import type { LiveApproval } from '../live_policy';
+import type { RagQueryDiagnostic } from '../pipeline';
+import { RELEVANCE_POLICY_VERSION } from '../relevance';
+import { indexRef, ownerRef } from '../query_diagnostics';
+import type { DiagnosticMetadata } from '../query_diagnostics';
 import type { PilotBudget, QueryLease } from './pilot_budget';
+import { PILOT_DEMO_THRESHOLDS } from './pilot_policy';
 import { createPilotQuery } from './pilot_query';
 import { RUNTIME_CASE_HASH, RUNTIME_CONFIG_VERSION, RUNTIME_CORPUS_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
@@ -36,14 +41,19 @@ const isCode = (code: string) => (error: unknown): boolean =>
   error instanceof RagFailure && error.code === code;
 
 const rawConfig = (
-  patch: { generation?: number; enabled?: boolean; owners?: readonly string[] } = {},
+  patch: {
+    generation?: number;
+    enabled?: boolean;
+    owners?: readonly string[];
+    thresholds?: Readonly<{ answerabilityMin: number; conflictMax: number }>;
+  } = {},
 ): RuntimeConfig => {
   const owners = patch.owners ?? [ACTOR];
   return parseRuntimeConfig({
     version: RUNTIME_CONFIG_VERSION,
     generation: patch.generation ?? 1,
     policy: { enabled: patch.enabled ?? true, owners, model: 'jev-1.13.0',
-      thresholds: { answerabilityMin: 0.85, conflictMax: 0.1 } },
+      thresholds: patch.thresholds ?? { answerabilityMin: 0.85, conflictMax: 0.1 } },
     corpus: { kind: RUNTIME_CORPUS_KIND, caseHash: RUNTIME_CASE_HASH,
       owners: Object.fromEntries(owners.map((owner) =>
         [owner, [{ noteId: 'n-a', inputDigest: embeddingInputDigest(TITLE, CONTENT) }]])) },
@@ -67,7 +77,13 @@ type Fixture = Readonly<{
   documents: readonly Document[];
 }>;
 
-const fixture = (overrides: { manifest?: 'ready' | 'tampered' | 'none'; consent?: boolean } = {}): Fixture => {
+const fixture = (
+  overrides: {
+    manifest?: 'ready' | 'tampered' | 'none';
+    consent?: boolean;
+    embedFailure?: 'PROVIDER_UNAVAILABLE' | 'TIMEOUT';
+  } = {},
+): Fixture => {
   const counts = { loads: 0, reads: 0, queries: 0, embeds: 0, underlyingReserve: 0 };
   const baseNote = note();
   const documents: readonly Document[] = Object.freeze(
@@ -117,16 +133,23 @@ const fixture = (overrides: { manifest?: 'ready' | 'tampered' | 'none'; consent?
   };
   const embedding = {
     count: countSyntheticTokens as Counter,
-    async embed(texts: readonly string[]) { counts.embeds += 1; return texts.map((_text, index) => vector1024(index)); },
+    async embed(texts: readonly string[]) {
+      if (overrides.embedFailure !== undefined) throw new RagFailure(overrides.embedFailure);
+      counts.embeds += 1;
+      return texts.map((_text, index) => vector1024(index));
+    },
   };
   return Object.freeze({ deps: { store, artifacts, embedding }, counts, documents });
 };
 
-const jevEnvelope = (input: JevInput): unknown => ({
+const jevEnvelope = (
+  input: JevInput,
+  scores: Readonly<{ support: number; conflict: number }> = { support: 0.96, conflict: 0.03 },
+): unknown => ({
   model: 'jev-1.13.0',
   answers: {
-    answerable_from_evidence: { type: 'noul', noul: 0.96 },
-    has_unresolved_conflict: { type: 'noul', noul: 0.03 },
+    answerable_from_evidence: { type: 'noul', noul: scores.support },
+    has_unresolved_conflict: { type: 'noul', noul: scores.conflict },
   },
   usage: { input_tokens: countSyntheticTokens(JSON.stringify(input)), output_tokens: 10 },
 });
@@ -144,7 +167,7 @@ type Calls = {
   acquireQuery: number;
   release: number;
   reserve: string[];
-  acquireCohere: number;
+  acquireEmbedding: number;
   rawJev: number;
   rawGenerate: number;
 };
@@ -153,22 +176,28 @@ const setup = (options: {
   index?: Fixture;
   owners?: readonly string[];
   enabled?: boolean;
+  thresholds?: Readonly<{ answerabilityMin: number; conflictMax: number }>;
+  jevScores?: Readonly<{ support: number; conflict: number }>;
   config?: (call: number) => RuntimeConfig;
   reserveFailure?: 'jev' | 'deepseek';
   acquireFailure?: boolean;
   releaseHangs?: boolean;
   /** Withdraws the config (next generation) while the named async reservation is in flight. */
   mutateOn?: 'cohere' | 'jev' | 'deepseek';
+  /** Captures the same safe sink production wires to JSON console output. */
+  log?: (metadata: DiagnosticMetadata) => void;
 } = {}) => {
   const index = options.index ?? fixture();
   const calls: Calls = {
-    readConfig: 0, loadIndex: 0, acquireQuery: 0, release: 0, reserve: [], acquireCohere: 0, rawJev: 0, rawGenerate: 0,
+    readConfig: 0, loadIndex: 0, acquireQuery: 0, release: 0, reserve: [], acquireEmbedding: 0, rawJev: 0, rawGenerate: 0,
   };
   let generation = 1;
   const readConfig = async (): Promise<RuntimeConfig> => {
     calls.readConfig += 1;
     if (options.config !== undefined) return options.config(calls.readConfig);
-    return rawConfig({ owners: options.owners, enabled: options.enabled, generation });
+    return rawConfig({
+      owners: options.owners, enabled: options.enabled, generation, thresholds: options.thresholds,
+    });
   };
   const budget: PilotBudget = {
     async reserve(provider) {
@@ -185,14 +214,15 @@ const setup = (options: {
       calls.release += 1;
       if (options.releaseHangs === true) await new Promise<never>(() => {});
     },
-    async acquireCohere() {
-      calls.acquireCohere += 1;
+    async acquireEmbedding() {
+      calls.acquireEmbedding += 1;
       if (options.mutateOn === 'cohere') generation += 1;
     },
-    async read() { return Object.freeze({ queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 0 }); },
+    async acquireCohere() { /* deprecated: the active path never calls it */ },
+    async read() { return Object.freeze({ queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 0 }); },
   };
   const rawProviders: Providers = {
-    async jev(input) { calls.rawJev += 1; return jevEnvelope(input); },
+    async jev(input) { calls.rawJev += 1; return jevEnvelope(input, options.jevScores); },
     async generate(input) { calls.rawGenerate += 1; return generateEnvelope(input); },
   };
   const query = createPilotQuery({
@@ -202,6 +232,7 @@ const setup = (options: {
     budget,
     rawProviders,
     counters: { evidence: countSyntheticTokens, jev: countSyntheticTokens, output: countSyntheticTokens },
+    log: options.log,
   });
   return { query, calls, index };
 };
@@ -217,10 +248,161 @@ test('a listed enabled actor runs the canonical pipeline and releases the one le
   assert.deepEqual(s.calls.reserve, ['jev', 'deepseek']);
   assert.equal(s.calls.rawJev, 1);
   assert.equal(s.calls.rawGenerate, 1);
-  // Cohere goes only through the guarded store -> budget.acquireCohere, never the old counter.
-  assert.equal(s.calls.acquireCohere, 1);
+  // Self-hosted embedding goes only through the guarded store -> budget.acquireEmbedding.
+  assert.equal(s.calls.acquireEmbedding, 1);
   assert.equal(s.index.counts.underlyingReserve, 0);
   assert.equal(s.index.counts.embeds, 1);
+});
+
+test('the exact 0.5 demo pilot answers .66/.06 and refuses .49/.06 with the genuine .85 approval', async () => {
+  // The approval remains the historical 0.85/0.1 calibration read from the real record.
+  assert.deepEqual(approval.thresholds, { answerabilityMin: 0.85, conflictMax: 0.1 });
+  assert.deepEqual(PILOT_DEMO_THRESHOLDS, { answerabilityMin: 0.5, conflictMax: 0.1 });
+
+  const answered = setup({
+    thresholds: PILOT_DEMO_THRESHOLDS,
+    jevScores: { support: 0.66, conflict: 0.06 },
+  });
+  const answer = await run(answered);
+  assert.equal(answer.status, 'ANSWERED');
+  assert.equal(answered.calls.rawJev, 1);
+  assert.equal(answered.calls.rawGenerate, 1);
+
+  const refused = setup({
+    thresholds: PILOT_DEMO_THRESHOLDS,
+    jevScores: { support: 0.49, conflict: 0.06 },
+  });
+  const refusal = await run(refused);
+  assert.equal(refusal.status, 'NOT_ENOUGH_CONTEXT');
+  assert.equal((refusal as { reason: string }).reason, 'UNCERTAIN');
+  assert.equal(refused.calls.rawJev, 1);
+  assert.equal(refused.calls.rawGenerate, 0);
+});
+
+test('the pilot safe sink receives one typed allowlisted diagnostic event, including null pre-Jev scores', async () => {
+  const events: DiagnosticMetadata[] = [];
+  const s = setup({ log: (metadata) => { events.push(metadata); } });
+  const response = await run(s);
+  assert.equal(response.status, 'ANSWERED');
+
+  const diagnostics = events.filter((event) => event['stage'] === 'rag-query-diagnostic');
+  assert.equal(diagnostics.length, 1);
+  const event = diagnostics[0] as unknown as RagQueryDiagnostic;
+  assert.ok(event);
+  assert.deepEqual(Object.keys(event).sort(), [
+    'abstentionStage',
+    'answerabilityNoul',
+    'conflictNoul',
+    'evidenceSourceCount',
+    'evidenceSources',
+    'fusedCandidateCount',
+    'fusedCandidates',
+    'indexRef',
+    'keywordCandidateCount',
+    'keywordCandidates',
+    'outcome',
+    'ownerRef',
+    'reason',
+    'rejectedChunkReasons',
+    'rejectedChunkRefs',
+    'relevanceMode',
+    'relevancePolicyVersion',
+    'relevantCandidateCount',
+    'requestId',
+    'scopeType',
+    'selectedChunkCount',
+    'selectedChunkRefs',
+    'stage',
+    'vectorCandidateCount',
+    'vectorCandidates',
+  ].sort());
+  assert.equal(event['requestId'], 'req-1');
+  assert.equal(event['scopeType'], 'account');
+  assert.equal(event['outcome'], 'ANSWERED');
+  assert.equal(event['reason'], null);
+  assert.equal(event['abstentionStage'], null);
+  assert.equal(typeof event['answerabilityNoul'], 'number');
+  assert.equal(typeof event['conflictNoul'], 'number');
+  assert.equal(event['ownerRef'], ownerRef(ACTOR));
+  assert.equal(event['indexRef'], indexRef(ACTOR, 'v1'));
+
+  // The sink receives typed arrays/objects, never pre-serialized JSON strings.
+  assert.ok(Array.isArray(event['vectorCandidates']));
+  assert.ok(Array.isArray(event['keywordCandidates']));
+  assert.ok(Array.isArray(event['fusedCandidates']));
+  assert.ok(Array.isArray(event['selectedChunkRefs']));
+  assert.ok(Array.isArray(event['evidenceSources']));
+  assert.ok(Array.isArray(event['rejectedChunkRefs']));
+  assert.ok(Array.isArray(event['rejectedChunkReasons']));
+  assert.equal(event['vectorCandidates'].length, event['vectorCandidateCount']);
+  assert.equal(event['keywordCandidates'].length, event['keywordCandidateCount']);
+  assert.equal(event['fusedCandidates'].length, event['fusedCandidateCount']);
+  assert.equal(event['selectedChunkRefs'].length, event['selectedChunkCount']);
+  assert.equal(event['evidenceSources'].length, event['evidenceSourceCount']);
+  assert.equal(event['rejectedChunkRefs'].length, event['rejectedChunkReasons'].length);
+  assert.equal(
+    event['relevantCandidateCount'] + event['rejectedChunkRefs'].length,
+    event['fusedCandidateCount'],
+  );
+  assert.equal(event['relevancePolicyVersion'], RELEVANCE_POLICY_VERSION);
+  assert.ok(event['relevantCandidateCount'] > 0);
+  assert.ok(
+    event['relevanceMode'] === 'scored' ||
+      event['relevanceMode'] === 'mixed' ||
+      event['relevanceMode'] === 'legacy-rank-only',
+  );
+  assert.ok(event['vectorCandidates'].length > 0);
+  assert.ok(event['selectedChunkRefs'].length > 0);
+  assert.ok(event['evidenceSources'].length > 0);
+  assert.ok(Object.isFrozen(event));
+  assert.ok(Object.isFrozen(event['vectorCandidates']));
+  assert.ok(Object.isFrozen(event['vectorCandidates'][0]));
+  assert.ok(Object.isFrozen(event['selectedChunkRefs']));
+  assert.ok(Object.isFrozen(event['rejectedChunkRefs']));
+  assert.ok(Object.isFrozen(event['rejectedChunkReasons']));
+  assert.ok(Object.isFrozen(event['evidenceSources']));
+  assert.ok(Object.isFrozen(event['evidenceSources'][0]));
+
+  // No raw actor, note identity, title, question, content or manifest version reaches the sink.
+  const serialized = JSON.stringify(event);
+  for (const secret of [ACTOR, 'n-a', TITLE, REQUEST.question, CONTENT, '"v1"']) {
+    assert.ok(!serialized.includes(secret), secret);
+  }
+
+  // Pre-Jev refusal: the same sink carries null scores, never fabricated zeroes.
+  const deniedEvents: DiagnosticMetadata[] = [];
+  const denied = setup({ acquireFailure: true, log: (metadata) => { deniedEvents.push(metadata); } });
+  const deniedResponse = await run(denied);
+  assert.equal(deniedResponse.status, 'ERROR');
+  assert.equal((deniedResponse as { code: string }).code, 'RATE_LIMITED');
+  const deniedDiagnostics = deniedEvents.filter((entry) => entry['stage'] === 'rag-query-diagnostic');
+  assert.equal(deniedDiagnostics.length, 1);
+  const deniedEvent = deniedDiagnostics[0] as unknown as RagQueryDiagnostic;
+  assert.ok(deniedEvent);
+  assert.equal(deniedEvent['outcome'], 'ERROR');
+  assert.equal(deniedEvent['reason'], 'RATE_LIMITED');
+  assert.equal(deniedEvent['answerabilityNoul'], null);
+  assert.equal(deniedEvent['conflictNoul'], null);
+  assert.equal(deniedEvent['abstentionStage'], null);
+  assert.equal(deniedEvent['ownerRef'], ownerRef(ACTOR));
+  assert.equal(deniedEvent['indexRef'], indexRef(ACTOR, 'v1'));
+  assert.deepEqual(deniedEvent['vectorCandidates'], []);
+  assert.deepEqual(deniedEvent['keywordCandidates'], []);
+  assert.deepEqual(deniedEvent['fusedCandidates'], []);
+  assert.deepEqual(deniedEvent['selectedChunkRefs'], []);
+  assert.deepEqual(deniedEvent['evidenceSources'], []);
+  assert.equal(deniedEvent['relevancePolicyVersion'], RELEVANCE_POLICY_VERSION);
+  assert.equal(deniedEvent['relevantCandidateCount'], 0);
+  assert.deepEqual(deniedEvent['rejectedChunkRefs'], []);
+  assert.deepEqual(deniedEvent['rejectedChunkReasons'], []);
+  assert.equal(deniedEvent['relevanceMode'], null);
+});
+
+test('a throwing pilot log sink is swallowed and cannot change the query outcome', async () => {
+  const s = setup({ log: () => { throw new Error('pilot-log-secret'); } });
+  const response = await run(s);
+  assert.equal(response.status, 'ANSWERED');
+  assert.equal(s.calls.release, 1);
 });
 
 test('a non-pilot or disabled config is refused before the index factory and every provider', async () => {
@@ -278,7 +460,7 @@ test('a quota refusal stops before embedding and every provider, and releases no
   assert.equal(response.status, 'ERROR');
   assert.equal((response as { code: string }).code, 'RATE_LIMITED');
   assert.equal(s.calls.rawJev, 0);
-  assert.equal(s.calls.acquireCohere, 0);
+  assert.equal(s.calls.acquireEmbedding, 0);
   assert.equal(s.calls.release, 0);
 });
 
@@ -292,6 +474,20 @@ test('a refused JEV reservation stops before the single raw JEV call', async () 
   assert.equal(s.calls.release, 1);
 });
 
+test('an embedding outage is a bounded ERROR with its reservation kept, never an abstention', async () => {
+  for (const embedFailure of ['PROVIDER_UNAVAILABLE', 'TIMEOUT'] as const) {
+    const s = setup({ index: fixture({ embedFailure }) });
+    const response = await run(s);
+    assert.equal(response.status, 'ERROR', embedFailure);
+    assert.equal((response as { code: string }).code, embedFailure);
+    assert.notEqual(response.status, 'NOT_ENOUGH_CONTEXT');
+    assert.equal(s.calls.acquireEmbedding, 1, 'the atomic reservation is never refunded');
+    assert.equal(s.calls.rawJev, 0);
+    assert.equal(s.calls.rawGenerate, 0);
+    assert.equal(s.calls.release, 1);
+  }
+});
+
 test('a provider failure still releases the captured lease exactly once', async () => {
   const s = setup();
   const query = createPilotQuery({
@@ -302,8 +498,9 @@ test('a provider failure still releases the captured lease exactly once', async 
       async reserve() {},
       async acquireQuery(actor): Promise<QueryLease> { return { actor, token: 't', expiresAt: 1 }; },
       async release() { s.calls.release += 1; },
-      async acquireCohere() {},
-      async read() { return { queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, reservedUsdMicros: 0 }; },
+      async acquireEmbedding() {},
+      async acquireCohere() { /* deprecated: the active path never calls it */ },
+      async read() { return { queryCalls: 0, jevCalls: 0, deepseekCalls: 0, cohereCalls: 0, selfHostedEmbeddingCalls: 0, reservedUsdMicros: 0 }; },
     },
     rawProviders: {
       jev: async () => { throw new RagFailure('TIMEOUT'); },
@@ -351,7 +548,7 @@ test('a config withdrawal during the Cohere reservation blocks the paid embed', 
   const response = await run(s);
   assert.equal(response.status, 'ERROR');
   assert.equal((response as { code: string }).code, 'SOURCE_CHANGED');
-  assert.equal(s.calls.acquireCohere, 1, 'the reservation is still consumed');
+  assert.equal(s.calls.acquireEmbedding, 1, 'the reservation is still consumed');
   assert.equal(s.index.counts.embeds, 0, 'no paid embed after the permit moved');
   assert.equal(s.calls.rawJev, 0);
   assert.equal(s.calls.rawGenerate, 0);

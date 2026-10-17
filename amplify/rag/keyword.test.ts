@@ -7,7 +7,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import notesFixture from '../../test/fixtures/rag/notes.json';
 import { chunkNote } from './chunking';
-import { ANALYZER_VERSION, BM25_B, BM25_K1, BM25_TOP_K, analyze, bm25 } from './keyword';
+import {
+  ANALYZER_VERSION, BM25_B, BM25_DOCUMENT, BM25_K1, BM25_TOP_K, QUERY_POLICY_VERSION,
+  analyze, bm25, queryTerms,
+} from './keyword';
+import { POLICY_IDENTITY_FIELDS } from './indexing/snapshot';
 import { RagFailure, type CanonicalNote, type Chunk, type Counter, type ErrorCode } from './types';
 
 const words: Counter = (text) => text.split(/\s+/).filter((part) => part.length > 0).length;
@@ -71,6 +75,59 @@ test('analyzer v1 is NFKC + Unicode lowercase + letter/number runs', () => {
   assert.deepEqual(analyze('aa aa'), ['aa', 'aa'], 'duplicates are kept for term frequency');
 });
 
+test('queryTerms removes only explicit VI/EN fillers from query scoring', () => {
+  assert.equal(QUERY_POLICY_VERSION, 'rag-query-policy.v1');
+  assert.deepEqual(
+    queryTerms('SLGH031 chạy bao lâu khi lên cót đầy?'),
+    ['slgh031', 'chạy', 'bao', 'lâu', 'lên', 'cót', 'đầy'],
+    'khi is a filler; the model name, question word and content terms remain',
+  );
+  assert.deepEqual(
+    queryTerms('Khi nào diễn ra cuộc họp và ai đến?'),
+    ['họp', 'đến'],
+    'Vietnamese question/function fillers are removed, content words are not',
+  );
+  assert.deepEqual(
+    queryTerms('When does the Nimbus N1 have an 80-hour power reserve?'),
+    ['nimbus', 'n1', 'have', '80', 'hour', 'power', 'reserve'],
+    'English question fillers and articles are removed; the model/number stay',
+  );
+  assert.deepEqual(queryTerms('khi ra nào diễn cuộc và'), []);
+  assert.deepEqual(queryTerms('the a an of to and is did'), []);
+  assert.deepEqual(queryTerms(''), [], 'an empty meaningful query has no terms');
+  assert.deepEqual(queryTerms('!!! ...'), []);
+});
+
+test('queryTerms never removes negations, numbers or distinctive content tokens', () => {
+  assert.deepEqual(
+    queryTerms('không xử lý file đính kèm'),
+    ['không', 'xử', 'lý', 'file', 'đính', 'kèm'],
+  );
+  assert.deepEqual(queryTerms('chưa có bảo hành'), ['chưa', 'có', 'bảo', 'hành']);
+  assert.deepEqual(queryTerms('not without the 14-day limit'), ['not', 'without', '14', 'day', 'limit']);
+  assert.deepEqual(queryTerms('no never'), ['no', 'never']);
+  assert.deepEqual(queryTerms('Hoa Sen 2026-07-01'), ['hoa', 'sen', '2026', '07', '01']);
+  assert.deepEqual(queryTerms('SLGH031 Caliber 9SA5'), ['slgh031', 'caliber', '9sa5']);
+
+  const raw = '  Khi nào Hoa Sen ra mắt?  ';
+  assert.deepEqual(queryTerms(raw), ['hoa', 'sen', 'mắt']);
+  assert.equal(raw, '  Khi nào Hoa Sen ra mắt?  ', 'the raw question is never edited');
+  assert.throws(() => queryTerms(null as unknown as string), failsWith('INVALID_INPUT'));
+});
+
+test('query policy version is not part of the index policy identity', () => {
+  assert.equal(QUERY_POLICY_VERSION, 'rag-query-policy.v1');
+  assert.deepEqual(POLICY_IDENTITY_FIELDS.lexical, {
+    analyzer: ANALYZER_VERSION,
+    k1: BM25_K1,
+    b: BM25_B,
+  });
+  assert.ok(
+    !JSON.stringify(POLICY_IDENTITY_FIELDS).includes(QUERY_POLICY_VERSION),
+    'query-only term selection must not force a re-embed or invalidate an index generation',
+  );
+});
+
 test('BM25 finds a keyword-only chunk (no vector branch involved)', () => {
   const corpus = [chunkOf('a-watch'), chunkOf('a-meeting'), chunkOf('a-condition'), chunkOf('a-negation')];
   const ranked = bm25('SLGH031 chạy bao lâu khi lên cót đầy?', corpus);
@@ -83,6 +140,51 @@ test('BM25 finds a keyword-only chunk (no vector branch involved)', () => {
     ranked.map((_entry, index) => index + 1),
     'ranks are dense and start at 1',
   );
+});
+
+test('BM25 attaches a positive finite bm25Score to every returned entry', () => {
+  const corpus = ['a-watch', 'a-meeting', 'a-condition', 'a-negation'].map((key) => chunkOf(key));
+  const ranked = bm25('SLGH031 chạy bao lâu khi lên cót đầy?', corpus);
+  assert.ok(ranked.length > 0);
+  for (const entry of ranked) {
+    assert.equal(typeof entry.bm25Score, 'number');
+    assert.ok(Number.isFinite(entry.bm25Score));
+    assert.ok((entry.bm25Score ?? 0) > 0);
+  }
+  const scores = ranked.map((entry) => entry.bm25Score ?? 0);
+  assert.deepEqual([...scores].sort((left, right) => right - left), scores, 'score order matches rank order');
+  // A question made only of fillers never falls back to common-word boosts.
+  assert.deepEqual(bm25('khi ra nào diễn cuộc và', corpus), []);
+  assert.deepEqual(bm25('the a an of to and is did', corpus), []);
+});
+
+test('query-only khi/ra fillers do not boost unrelated notes while distinctive names remain', () => {
+  const watch = {
+    ...manualChunk('Đồng hồ chạy khi lên cót đầy.', 'body-0', 'n-watch'),
+    title: 'Đồng hồ',
+  };
+  const meeting = {
+    ...manualChunk('Buổi họp diễn ra tại phòng B203.', 'body-1', 'n-meeting'),
+    title: 'Buổi họp',
+  };
+  const hoaSen = {
+    ...manualChunk('Hoa Sen là biểu tượng của Việt Nam.', 'body-2', 'n-hoa-sen'),
+    title: 'Hoa Sen',
+  };
+  const corpus = [watch, meeting, hoaSen];
+
+  // "khi", "nào", "diễn" and "ra" are fillers, so the unrelated watch/meeting chunks cannot
+  // enter the keyword branch through those shared words.
+  assert.deepEqual(
+    bm25('Hoa Sen khi nào diễn ra?', corpus).map((entry) => entry.chunk.noteId),
+    ['n-hoa-sen'],
+  );
+  assert.deepEqual(
+    bm25('Hoa Sen', corpus).map((entry) => entry.chunk.noteId),
+    ['n-hoa-sen'],
+    'the distinctive name tokens remain scorable',
+  );
+  assert.deepEqual(bm25('khi ra', corpus), [], 'filler-only query yields an empty keyword branch');
 });
 
 test('BM25 returns positive matches only and ranks them by score', () => {
@@ -165,6 +267,17 @@ test('BM25 uses the fixed fixture parameters', () => {
   assert.equal(BM25_K1, 1.2);
   assert.equal(BM25_B, 0.75);
   assert.equal(bm25('SLGH031', corpus).length, 1);
+});
+
+test('BM25 analyzes raw title-newline-content, never the embedding frame', () => {
+  assert.equal(BM25_DOCUMENT, 'title-newline-content-span');
+  const chunk = manualChunk('alpha beta', 'body-0', 'n-frame');
+  // These words occur only in the `title: ... | text: ...` embedding frame, not in the
+  // title/content themselves, so lexical retrieval must not see them.
+  assert.deepEqual(bm25('title', [chunk]), []);
+  assert.deepEqual(bm25('text', [chunk]), []);
+  assert.equal(bm25('manual', [chunk]).length, 1, 'the title remains lexical input');
+  assert.equal(bm25('alpha', [chunk]).length, 1, 'the content span remains lexical input');
 });
 
 test('BM25 fails closed on a malformed corpus', () => {

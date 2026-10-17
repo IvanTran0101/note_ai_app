@@ -28,7 +28,7 @@ import { isValidIdentifier } from '../contract';
 import { isSafeInteger } from '../chunking';
 import { EMBEDDING_DIMENSIONS } from '../retrieval';
 import { policy, type Chunk } from '../types';
-import { IndexFailure, type Artifacts, type Manifest, type Snapshot } from './types';
+import { IndexFailure, type Artifacts, type Manifest, type Snapshot, type VectorSearchHit } from './types';
 import {
   SHA256_HEX, checksum, decodeSnapshot, encodeSnapshot, sha256Hex, validateManifest,
   validateSnapshot,
@@ -168,7 +168,7 @@ const readBody = async (Body: unknown, signal: AbortSignal): Promise<string> => 
 
 /**
  * Float32 narrowing for the index. The caller's vector must already be a finite, non-zero
- * 1024-dimensional embedding; narrowing may round but must never produce Infinity.
+ * active-dimension embedding; narrowing may round but must never produce Infinity.
  */
 const float32 = (vector: unknown, code: string): readonly number[] => {
   if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS) {
@@ -264,6 +264,78 @@ export function createArtifacts(config: ArtifactsConfig, options?: ArtifactsOpti
     return Object.freeze({ snapshot, key });
   };
 
+  /**
+   * The one QueryVectors operation behind both artifact methods: same filters, enhanced mode,
+   * pagination and validation. It returns validated key+distance hits in response order; the
+   * legacy `query` is a pure key projection of this same result, so the wire calls are identical.
+   */
+  const queryHits = async (
+    vector: readonly number[],
+    ownerId: string,
+    version: string,
+    noteId: string | null,
+    signal: AbortSignal,
+  ): Promise<readonly VectorSearchHit[]> => {
+    if (!isValidIdentifier(ownerId) || !isSafeVersion(version)) invalidInput();
+    if (noteId !== null && !isValidIdentifier(noteId)) invalidInput();
+    const deadline = requireSignal(signal);
+    const query = float32(vector, 'INVALID_INPUT');
+    const constraints: Record<string, unknown>[] = [{ ownerId: { $eq: ownerId } }, { manifestVersion: { $eq: version } }];
+    if (noteId !== null) constraints.push({ noteId: { $eq: noteId } });
+    const filter = { $and: constraints };
+    const hits: VectorSearchHit[] = [];
+    const seen = new Set<string>();
+    const tokens = new Set<string>();
+    let nextToken: string | undefined;
+    for (let page = 0; page < QUERY_TOP_K; page++) {
+      const payload = await request('s3vectors', '/QueryVectors', {
+        indexArn,
+        ...(nextToken ? { nextToken } : {}),
+        queryVector: { float32: query },
+        topK: QUERY_TOP_K,
+        filter,
+        // Enhanced mode is required, never negotiated down: a refusal fails the call.
+        queryMode: 'ENHANCED',
+        returnDistance: true,
+        returnMetadata: true,
+      }, deadline);
+      if (!isRecord(payload) || !Array.isArray(payload['vectors'])) invalidOutput();
+      if (payload['queryMode'] !== undefined && payload['queryMode'] !== 'ENHANCED') invalidOutput();
+      const entries = payload['vectors'];
+      if (entries.length + hits.length > QUERY_TOP_K) invalidOutput();
+      if (payload['distanceMetric'] !== undefined && payload['distanceMetric'] !== 'cosine') invalidOutput();
+      for (const entry of entries) {
+        if (!isRecord(entry)) invalidOutput();
+        const key = entry['key'];
+        if (typeof key !== 'string' || !SHA256_HEX.test(key) || seen.has(key)) invalidOutput();
+        const distance = entry['distance'];
+        if (typeof distance !== 'number' || !Number.isFinite(distance) || distance < 0 || distance > 2) {
+          invalidOutput();
+        }
+        const metadata = entry['metadata'];
+        if (!isRecord(metadata) || !hasExactKeys(metadata, METADATA_KEYS)) invalidOutput();
+        if (metadata['ownerId'] !== ownerId || metadata['manifestVersion'] !== version) invalidOutput();
+        if (noteId !== null && metadata['noteId'] !== noteId) invalidOutput();
+        if (
+          !isValidIdentifier(metadata['noteId']) ||
+          !isSafeInteger(metadata['revision']) || metadata['revision'] < 1 ||
+          !isValidIdentifier(metadata['chunkId'])
+        ) {
+          invalidOutput();
+        }
+        seen.add(key);
+        hits.push(Object.freeze({ key, distance }));
+      }
+      const token = payload['nextToken'];
+      if (token === undefined || token === null || token === '' || hits.length === QUERY_TOP_K) {
+        return Object.freeze(hits);
+      }
+      if (typeof token !== 'string' || tokens.has(token)) invalidOutput();
+      tokens.add(token); nextToken = token;
+    }
+    invalidOutput();
+  };
+
   return Object.freeze({
     read: async (manifest, signal) => {
       const bound = requireManifest(manifest);
@@ -356,63 +428,12 @@ export function createArtifacts(config: ArtifactsConfig, options?: ArtifactsOpti
     },
 
     query: async (vector, ownerId, version, noteId, signal) => {
-      if (!isValidIdentifier(ownerId) || !isSafeVersion(version)) invalidInput();
-      if (noteId !== null && !isValidIdentifier(noteId)) invalidInput();
-      const deadline = requireSignal(signal);
-      const query = float32(vector, 'INVALID_INPUT');
-      const constraints: Record<string, unknown>[] = [{ ownerId: { $eq: ownerId } }, { manifestVersion: { $eq: version } }];
-      if (noteId !== null) constraints.push({ noteId: { $eq: noteId } });
-      const filter = { $and: constraints };
-      const keys: string[] = [];
-      const seen = new Set<string>();
-      const tokens = new Set<string>();
-      let nextToken: string | undefined;
-      for (let page = 0; page < QUERY_TOP_K; page++) {
-      const payload = await request('s3vectors', '/QueryVectors', {
-        indexArn,
-        ...(nextToken ? { nextToken } : {}),
-        queryVector: { float32: query },
-        topK: QUERY_TOP_K,
-        filter,
-        // Enhanced mode is required, never negotiated down: a refusal fails the call.
-        queryMode: 'ENHANCED',
-        returnDistance: true,
-        returnMetadata: true,
-      }, deadline);
-      if (!isRecord(payload) || !Array.isArray(payload['vectors'])) invalidOutput();
-      if (payload['queryMode'] !== undefined && payload['queryMode'] !== 'ENHANCED') invalidOutput();
-      const entries = payload['vectors'];
-      if (entries.length + keys.length > QUERY_TOP_K) invalidOutput();
-      if (payload['distanceMetric'] !== undefined && payload['distanceMetric'] !== 'cosine') invalidOutput();
-      for (const entry of entries) {
-        if (!isRecord(entry)) invalidOutput();
-        const key = entry['key'];
-        if (typeof key !== 'string' || !SHA256_HEX.test(key) || seen.has(key)) invalidOutput();
-        const distance = entry['distance'];
-        if (typeof distance !== 'number' || !Number.isFinite(distance) || distance < 0 || distance > 2) {
-          invalidOutput();
-        }
-        const metadata = entry['metadata'];
-        if (!isRecord(metadata) || !hasExactKeys(metadata, METADATA_KEYS)) invalidOutput();
-        if (metadata['ownerId'] !== ownerId || metadata['manifestVersion'] !== version) invalidOutput();
-        if (noteId !== null && metadata['noteId'] !== noteId) invalidOutput();
-        if (
-          !isValidIdentifier(metadata['noteId']) ||
-          !isSafeInteger(metadata['revision']) || metadata['revision'] < 1 ||
-          !isValidIdentifier(metadata['chunkId'])
-        ) {
-          invalidOutput();
-        }
-        seen.add(key);
-        keys.push(key);
-      }
-      const token = payload['nextToken'];
-      if (token === undefined || token === null || token === '' || keys.length === QUERY_TOP_K) return Object.freeze(keys);
-      if (typeof token !== 'string' || tokens.has(token)) invalidOutput();
-      tokens.add(token); nextToken = token;
-      }
-      invalidOutput();
+      const hits = await queryHits(vector, ownerId, version, noteId, signal);
+      return Object.freeze(hits.map((hit) => hit.key));
     },
+
+    queryScored: async (vector, ownerId, version, noteId, signal) =>
+      queryHits(vector, ownerId, version, noteId, signal),
 
     cleanup: async (manifest, signal) => {
       const bound = requireManifest(manifest);

@@ -2,7 +2,8 @@
  * RAG v1 wire contract: request parsing, the two-Noul Jev envelope/verdict, and the generated
  * answer citation check.
  *
- * Contract: docs/contracts/rag_api_v1.md §2/§3/§6. Policy: docs/rag/policy_v1.json
+ * Contract: docs/contracts/rag_api_v1.md §2/§3/§6. Policy: docs/rag/policy_v2.json
+ * (the active EmbeddingGemma profile; docs/rag/policy_v1.json stays for rollback)
  * `technicalDefaults.wire`, `safety`, `jev` and `mockOnly`.
  *
  * Boundaries:
@@ -286,7 +287,9 @@ const readRuntimePolicy = (config: RuntimeConfig): Readonly<{ model: string; hig
   }
   const high = thresholds.answerabilityMin;
   const low = thresholds.conflictMax;
-  if (typeof high !== 'number' || !Number.isFinite(high) || !(high > 0.5 && high <= 1)) {
+  // 0.5 is the user-approved uncalibrated pilot override; the guard stays inclusive so an exact
+  // 0.50 pair can run, while anything below 0.5 is still refused.
+  if (typeof high !== 'number' || !Number.isFinite(high) || !(high >= 0.5 && high <= 1)) {
     throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
   }
   if (typeof low !== 'number' || !Number.isFinite(low) || !(low >= 0 && low < 0.5)) {

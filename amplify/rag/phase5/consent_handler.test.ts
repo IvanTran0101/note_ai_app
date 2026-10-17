@@ -241,7 +241,7 @@ test('PUT requires a bounded JSON UTF-8 body and an exact shape', async () => {
     ['missing key', JSON.stringify({ accepted: true, version: CONSENT_VERSION })],
     ['unknown key', JSON.stringify({ accepted: true, version: CONSENT_VERSION, expectedGeneration: 0, extra: 1 })],
     ['accepted not boolean', JSON.stringify({ accepted: 'true', version: CONSENT_VERSION, expectedGeneration: 0 })],
-    ['version drift', JSON.stringify({ accepted: true, version: 'rag-consent.v2', expectedGeneration: 0 })],
+    ['legacy version drift', JSON.stringify({ accepted: true, version: 'rag-consent.v1', expectedGeneration: 0 })],
     ['version not a string', JSON.stringify({ accepted: true, version: 1, expectedGeneration: 0 })],
     ['expectedGeneration null', JSON.stringify({ accepted: true, version: CONSENT_VERSION, expectedGeneration: null })],
     ['expectedGeneration fractional', JSON.stringify({ accepted: true, version: CONSENT_VERSION, expectedGeneration: 1.5 })],

@@ -1,7 +1,7 @@
 /**
  * Phase 5 guarded index store tests: the scope permit, canonical identity of the returned state,
  * membership-before-body-load, corpus admission/denial, the exact config-generation fail-closed
- * behavior, the one-and-only `acquireCohere` debit and the unconditional `finish` release.
+ * behavior, the one-and-only `acquireEmbedding` debit and the unconditional `finish` release.
  *
  * The underlying `IndexStore`, the pilot budget and the config reader are injected fakes that
  * record the exact objects/arguments they receive, so the tests assert forwarding and identity
@@ -16,7 +16,7 @@ import { embeddingInputDigest } from '../indexing/snapshot';
 import { IndexFailure } from '../indexing/types';
 import type { IndexNote, IndexState, IndexStore, JobStatus, Lease, Manifest } from '../indexing/types';
 import { RagFailure } from '../types';
-import { RUNTIME_CASE_HASH, parseRuntimeConfig } from './runtime_config';
+import { RUNTIME_CASE_HASH, RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
 import { createPilotIndexStore } from './pilot_index_store';
 
@@ -55,6 +55,15 @@ const rawConfig = (patch: Row = {}): Row => ({
   corpus: {
     kind: 'reviewed-pilot', caseHash: RUNTIME_CASE_HASH,
     owners: { [ACTOR]: [{ noteId: 'n1', inputDigest: DIGEST }] },
+  },
+  ...patch,
+});
+const dynamicConfig = (patch: Row = {}): Row => ({
+  version: 'rag-pilot-config.v1',
+  generation: 1,
+  policy: policyRaw(),
+  corpus: {
+    kind: RUNTIME_ELIGIBLE_OWN_NOTES_KIND, caseHash: null, owners: { [ACTOR]: [] },
   },
   ...patch,
 });
@@ -114,7 +123,7 @@ const setup = (
   const { store, calls } = fakeStore(loadImpl);
   const budgetCalls: number[] = [];
   const budget = {
-    async acquireCohere(): Promise<void> {
+    async acquireEmbedding(): Promise<void> {
       budgetCalls.push(1);
       if (budgetImpl !== undefined) await budgetImpl();
     },
@@ -153,6 +162,31 @@ test('an eligible note with an unknown id or a drifted digest is refused before 
   const drift = setup(rawConfig(), [rawConfig()], () => state({ notes: [note({ content: 'drifted body' })] }));
   await assert.rejects(drift.guard.load(ACTOR, signal()), isFailure('SOURCE_CHANGED', true));
   assert.equal(drift.calls.reserveEmbedding, 0);
+});
+
+test('dynamic mode admits a new eligible note with no frozen id or digest', async () => {
+  const target = state({ notes: [note({ noteId: 'new-own-note', content: 'new canonical body' })] });
+  const h = setup(dynamicConfig(), [dynamicConfig()], () => target);
+  assert.equal(await h.guard.load(ACTOR, signal()), target);
+  await h.guard.reserveEmbedding(ACTOR, signal());
+  assert.equal(h.budgetCalls.length, 1);
+  assert.equal(
+    await h.guard.publish(target, LEASE, manifest('READY'), 7, signal()),
+    true,
+  );
+  assert.equal(h.calls.publish.length, 1);
+});
+
+test('dynamic mode still fails closed on mode or generation drift before the body load', async () => {
+  const generation = setup(dynamicConfig(), [dynamicConfig({ generation: 2 })], () => state());
+  await assert.rejects(generation.guard.load(ACTOR, signal()), isFailure('SOURCE_CHANGED', true));
+  assert.equal(generation.calls.load.length, 0);
+
+  // Switching between the dynamic and reviewed mode is a whole-config source change, never a
+  // silent widening or narrowing of the permit.
+  const mode = setup(dynamicConfig(), [rawConfig()], () => state());
+  await assert.rejects(mode.guard.load(ACTOR, signal()), isFailure('SOURCE_CHANGED', true));
+  assert.equal(mode.calls.load.length, 0);
 });
 
 test('a revoked listed owner can still reach cleanup/BLOCKED while the policy is disabled', async () => {
@@ -249,7 +283,7 @@ test('an injected config port that resolves after an abort cannot grant a permit
   const { store, calls } = fakeStore(() => state());
   const guard = createPilotIndexStore({
     store,
-    budget: { async acquireCohere(): Promise<void> {} },
+    budget: { async acquireEmbedding(): Promise<void> {} },
     config: parseRuntimeConfig(rawConfig()),
     readConfig: async () => {
       // A port that ignores the abort signal and resolves late must still be refused.
@@ -270,7 +304,7 @@ test('a signal aborted during the canonical load refuses the authorized state an
   });
   const guard = createPilotIndexStore({
     store,
-    budget: { async acquireCohere(): Promise<void> {} },
+    budget: { async acquireEmbedding(): Promise<void> {} },
     config: parseRuntimeConfig(rawConfig()),
     readConfig: async () => parseRuntimeConfig(rawConfig()),
   });
@@ -318,7 +352,7 @@ test('a BLOCKED manifest is refused while canonical consent is accepted', async 
   assert.equal(h.calls.publish.length, 0);
 });
 
-test('reserveEmbedding performs exactly one atomic acquireCohere and never the legacy debit', async () => {
+test('reserveEmbedding performs exactly one atomic acquireEmbedding and never the legacy debit', async () => {
   const target = state();
   const h = setup(rawConfig(), [rawConfig()], () => target);
   await h.guard.reserveEmbedding(ACTOR, signal());
@@ -348,7 +382,7 @@ test('budget and reader failures keep typed codes and the retryable flag', async
 
   const captured = parseRuntimeConfig(rawConfig());
   const store = fakeStore(() => state()).store;
-  const budget = { async acquireCohere(): Promise<void> {} };
+  const budget = { async acquireEmbedding(): Promise<void> {} };
   const provider = createPilotIndexStore({
     store, budget, config: captured, readConfig: async () => { throw new RagFailure('PROVIDER_UNAVAILABLE'); },
   });
@@ -392,7 +426,7 @@ test('an aborted signal is a timeout before any port call', async () => {
 test('construction validates the store, budget, reader and the captured config', () => {
   const captured = parseRuntimeConfig(rawConfig());
   const store = fakeStore(() => state()).store;
-  const budget = { async acquireCohere(): Promise<void> {} };
+  const budget = { async acquireEmbedding(): Promise<void> {} };
   const readConfig = async (): Promise<RuntimeConfig> => captured;
   assert.ok(createPilotIndexStore({ store, budget, readConfig, config: captured }));
   assert.throws(() => createPilotIndexStore(null as never), isFailure('INVALID_STATE', false));

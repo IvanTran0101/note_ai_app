@@ -20,7 +20,7 @@ final class RagConsent {
   }
 
   /// The only consent version this build understands.
-  static const String currentVersion = 'rag-consent.v1';
+  static const String currentVersion = 'rag-consent.v2';
 
   /// The default for an account with no stored row.
   static final RagConsent none = RagConsent(

@@ -1,4 +1,5 @@
-import policy from '../../docs/rag/policy_v1.json';
+// Active profile: EmbeddingGemma-2 Q8/768. policy_v1.json stays untouched for rollback.
+import policy from '../../docs/rag/policy_v2.json';
 export { policy };
 export type ErrorCode = keyof typeof policy.technicalDefaults.errorHttpStatus;
 export class RagFailure extends Error {
@@ -15,8 +16,19 @@ export type Chunk = Readonly<{
   ownerId: string; noteId: string; revision: number; sectionId: string; chunkId: string;
   ordinal: number; title: string; startOffset: number; endOffset: number; text: string;
 }>;
-export type Ranked = Readonly<{ chunk: Chunk; rank: number }>;
-export type Candidate = Readonly<{ chunk: Chunk; score: number; vectorRank?: number; bm25Rank?: number }>;
+/**
+ * Optional raw ranking signals. `vectorDistance` is a cosine distance in [0,2] and `bm25Score`
+ * is a positive finite BM25 score. They are carried for diagnostics/ranking policy only: the
+ * fused `score` and all RRF/MMR decisions never read them, and a legacy branch entry without
+ * them stays valid (absence is `undefined`, never a fabricated number).
+ */
+export type Ranked = Readonly<{
+  chunk: Chunk; rank: number; vectorDistance?: number; bm25Score?: number;
+}>;
+export type Candidate = Readonly<{
+  chunk: Chunk; score: number; vectorRank?: number; bm25Rank?: number;
+  vectorDistance?: number; bm25Score?: number;
+}>;
 export type Source = Readonly<{
   sourceId: string; noteId: string; revision: number; title: string;
   startOffset: number; endOffset: number; quote: string;
