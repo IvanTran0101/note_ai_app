@@ -119,5 +119,8 @@ void main() {
         }
       }
     },
+    // Uses the production600k PBKDF2 across enable and both unlock modes.
+    // Match the real-crypto security suite budget on debug VM workers.
+    timeout: const Timeout(Duration(minutes: 5)),
   );
 }
