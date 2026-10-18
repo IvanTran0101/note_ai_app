@@ -77,7 +77,10 @@ final class NoteFlowPageHeader extends StatelessWidget {
   }
 
   Widget _layout(BuildContext context, BoxConstraints constraints) {
-    final compact = constraints.maxWidth < NoteFlowLayout.compactBreakpoint;
+    final compact = NoteFlowLayout.isCompact(
+      context,
+      availableWidth: constraints.maxWidth,
+    );
     final wrapActions = constraints.maxWidth < 360 && actions.length > 2;
     return Column(
       mainAxisSize: MainAxisSize.min,

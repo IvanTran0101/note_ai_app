@@ -1,8 +1,5 @@
 import 'application/users/profile_app_service.dart';
 
-import 'package:appflowy_editor/appflowy_editor.dart'
-    show AppFlowyEditorLocalizations;
-
 import 'application/users/profile_snapshot.dart';
 import 'domain/users/profile_failure.dart';
 import 'infrastructure/users/http_user_profile_repository.dart';
@@ -84,6 +81,7 @@ import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
 import 'presentation/dashboard/dashboard_page.dart';
+import 'presentation/editor/editor_localizations.dart';
 import 'presentation/notes/note_detail_localizations.dart';
 import 'presentation/notes/note_detail_page.dart';
 import 'presentation/notes/note_detail_route_result.dart';
@@ -116,7 +114,7 @@ const String _noteFlowAuthMode = String.fromEnvironment(
   defaultValue: 'cognito',
 );
 const String _noteFlowSyncApi = String.fromEnvironment('NOTEFLOW_SYNC_API');
-const Color _noteFlowSeedColor = Color(0xFF0F766E);
+const Color _noteFlowSeedColor = Color(0xFF236BB3);
 
 enum _NoteFlowLanguageChoice { system, vietnamese, english }
 
@@ -154,7 +152,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
         brightness: brightness,
       ).copyWith(
         primary: tokens.link,
-        onPrimary: isDark ? const Color(0xFF16312E) : const Color(0xFFFFFFFF),
+        onPrimary: isDark ? const Color(0xFF102A43) : const Color(0xFFFFFFFF),
         primaryContainer: tokens.selectedSurface,
         onPrimaryContainer: tokens.textPrimary,
         secondaryContainer: tokens.selectedSurface,
@@ -1365,8 +1363,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   Future<void> _showAppearanceSettings(BuildContext context) async {
     ThemeMode selectedTheme = _themeMode;
     _NoteFlowLanguageChoice selectedLanguage = _languageChoice;
-    final NotesCopy copy = NotesCopy.of(context);
-    final AuthCopy authCopy = AuthCopy.of(context);
     final generation = _currentUserSession.sessionGeneration;
     bool savingTheme = false;
     String? themeError;
@@ -1380,6 +1376,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       builder: (BuildContext sheetContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setSheetState) {
+            final NotesCopy copy = NotesCopy.of(context);
+            final AuthCopy authCopy = AuthCopy.of(context);
             return SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -1565,7 +1563,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       themeMode: _themeMode,
       locale: _selectedLocale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-        AppFlowyEditorLocalizations.delegate,
+        NoteFlowEditorLocalizationsDelegate(),
         AuthCopy.delegate,
         NotesCopy.delegate,
         NoteDetailCopy.delegate,

@@ -16,7 +16,6 @@ extension _NoteDetailActions on NoteDetailPageState {
     if (_currentConflict != null || !_canEdit) return false;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final savingDraftRevision = _draftRevision;
     final savingEpoch = _editorEpoch;
     final savingController = widget.notesController;
     bool persisted = false;
@@ -53,9 +52,7 @@ extension _NoteDetailActions on NoteDetailPageState {
         _savedDocument = saved.document;
         _richEditor?.acceptSavedDocument(saved.document);
         _summaryController.clearFailure();
-        _statusMessage = _draftRevision == savingDraftRevision
-            ? copy.saved
-            : copy.autoSavePending;
+        _statusMessage = _isDirty ? null : copy.saved;
         _didPersist = true;
       });
       _notifyDirtyChanged();

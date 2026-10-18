@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'editor_popup_guard.dart';
 import 'editor_copy.dart';
+import 'editor_icon_button.dart';
 import 'rich_editor_adapter.dart';
 import 'slash_command_controller.dart';
 import 'table_commands.dart';
@@ -41,8 +42,8 @@ final class _EditorControlsState extends State<EditorControls> {
 
   Widget _button(String label, IconData icon, VoidCallback action) => Listener(
     onPointerDown: (_) => _pointer = _selection(),
-    child: IconButton(
-      tooltip: editorText(context, label),
+    child: EditorIconButton(
+      label: editorText(context, label),
       icon: Icon(icon, size: 20),
       onPressed: action,
     ),
@@ -104,15 +105,15 @@ final class _EditorControlsState extends State<EditorControls> {
       return Row(
         children: [
           _button('Add block', Icons.add, _blocks),
-          IconButton(
-            tooltip: editorText(context, 'Undo'),
+          EditorIconButton(
+            label: editorText(context, 'Undo'),
             icon: const Icon(Icons.undo, size: 18),
             onPressed: adapter.editor.undoManager.undoStack.isEmpty
                 ? null
                 : adapter.editor.undoManager.undo,
           ),
-          IconButton(
-            tooltip: editorText(context, 'Redo'),
+          EditorIconButton(
+            label: editorText(context, 'Redo'),
             icon: const Icon(Icons.redo, size: 18),
             onPressed: adapter.editor.undoManager.redoStack.isEmpty
                 ? null

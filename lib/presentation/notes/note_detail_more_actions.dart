@@ -11,8 +11,7 @@ Future<bool?> showNoteDetailMoreActions({
   required NoteDetailCopy copy,
   BuildContext? anchorContext,
 }) {
-  final bool compact =
-      MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+  final bool compact = NoteFlowLayout.isCompact(context);
   if (!compact && anchorContext != null) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final RenderBox overlay =

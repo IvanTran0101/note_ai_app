@@ -10,9 +10,13 @@ final class EditorHeaderBoundary extends StatefulWidget {
     super.key,
     required this.adapter,
     required this.child,
+    this.interceptSelection = true,
   });
   final RichEditorAdapter adapter;
   final Widget child;
+
+  /// A rail outside the editor's gesture subtree only needs the focus boundary.
+  final bool interceptSelection;
   @override
   State<EditorHeaderBoundary> createState() => _EditorHeaderBoundaryState();
 }
@@ -30,6 +34,7 @@ final class _EditorHeaderBoundaryState extends State<EditorHeaderBoundary> {
   @override
   void initState() {
     super.initState();
+    if (!widget.interceptSelection) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       service = widget.adapter.editor.service.selectionService;

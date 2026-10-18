@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -8,10 +7,12 @@ import 'basic_block_commands.dart';
 import 'document_palette.dart';
 import 'editor_value_dialog.dart';
 import 'editor_copy.dart';
+import 'editor_icon_button.dart';
 import 'editor_popup_guard.dart';
 import 'equation_commands.dart';
 import 'rich_editor_adapter.dart';
 import 'selection_formatting_controller.dart';
+import 'selection_toolbar_layout.dart';
 
 final class SelectionToolbar extends StatelessWidget {
   const SelectionToolbar({
@@ -31,75 +32,70 @@ final class SelectionToolbar extends StatelessWidget {
       if (snapshot == null) return const SizedBox.shrink();
       final formatter = SelectionFormattingController(adapter);
       final size = formatter.state(snapshot, 'font_size');
-      return SizedBox(
-        width: math.min(MediaQuery.sizeOf(context).width - 40, 670),
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          children: [
-            _menu(
-              dialogContext,
-              _blockLabel(snapshot),
-              Icons.text_fields,
-              snapshot,
-            ),
-            for (final entry in const {
-              'bold': Icons.format_bold,
-              'italic': Icons.format_italic,
-              'underline': Icons.format_underlined,
-              'strikethrough': Icons.format_strikethrough,
-              'code': Icons.code,
-            }.entries)
-              _icon(
-                entry.key,
-                entry.value,
-                () => formatter.toggle(snapshot, entry.key),
-                selected: formatter.state(snapshot, entry.key).value == true,
-                mixed: formatter.state(snapshot, entry.key).mixed,
-                enabled:
-                    entry.key != 'code' || !formatter.containsMath(snapshot),
-              ),
+      return SelectionToolbarLayout(
+        children: [
+          _menu(
+            dialogContext,
+            _blockLabel(snapshot),
+            Icons.text_fields,
+            snapshot,
+          ),
+          for (final entry in const {
+            'bold': Icons.format_bold,
+            'italic': Icons.format_italic,
+            'underline': Icons.format_underlined,
+            'strikethrough': Icons.format_strikethrough,
+            'code': Icons.code,
+          }.entries)
             _icon(
-              'Text color',
-              Icons.format_color_text,
-              () => _color(dialogContext, snapshot, false),
+              entry.key,
+              entry.value,
+              () => formatter.toggle(snapshot, entry.key),
+              selected: formatter.state(snapshot, entry.key).value == true,
+              mixed: formatter.state(snapshot, entry.key).mixed,
+              enabled: entry.key != 'code' || !formatter.containsMath(snapshot),
             ),
+          _icon(
+            'Text color',
+            Icons.format_color_text,
+            () => _color(dialogContext, snapshot, false),
+          ),
+          _icon(
+            'Highlight',
+            Icons.highlight,
+            () => _color(dialogContext, snapshot, true),
+          ),
+          TextButton(
+            onPressed: () => _size(dialogContext, snapshot),
+            child: Text(
+              size.mixed
+                  ? editorText(context, 'Mixed')
+                  : '${size.value ?? 16} pt',
+            ),
+          ),
+          _icon(
+            'Link',
+            Icons.link,
+            () => _link(dialogContext, snapshot),
+            enabled: !formatter.containsMath(snapshot),
+          ),
+          _icon('Equation', Icons.functions, () {
+            onPopupOpen();
+            return editEquation(dialogContext, adapter, snapshot);
+          }, enabled: snapshot.selection.isSingle),
+          if (formatter.containsMath(snapshot))
             _icon(
-              'Highlight',
-              Icons.highlight,
-              () => _color(dialogContext, snapshot, true),
+              'Convert equation to text',
+              Icons.text_snippet_outlined,
+              () => EquationCommands(adapter).convertToText(snapshot),
+              enabled: snapshot.selection.isSingle,
             ),
-            TextButton(
-              onPressed: () => _size(dialogContext, snapshot),
-              child: Text(
-                size.mixed
-                    ? editorText(context, 'Mixed')
-                    : '${size.value ?? 16} pt',
-              ),
-            ),
-            _icon(
-              'Link',
-              Icons.link,
-              () => _link(dialogContext, snapshot),
-              enabled: !formatter.containsMath(snapshot),
-            ),
-            _icon('Equation', Icons.functions, () {
-              onPopupOpen();
-              return editEquation(dialogContext, adapter, snapshot);
-            }, enabled: snapshot.selection.isSingle),
-            if (formatter.containsMath(snapshot))
-              _icon(
-                'Convert equation to text',
-                Icons.text_snippet_outlined,
-                () => EquationCommands(adapter).convertToText(snapshot),
-                enabled: snapshot.selection.isSingle,
-              ),
-            _icon(
-              'Clear formatting',
-              Icons.format_clear,
-              () => formatter.clear(snapshot),
-            ),
-          ],
-        ),
+          _icon(
+            'Clear formatting',
+            Icons.format_clear,
+            () => formatter.clear(snapshot),
+          ),
+        ],
       );
     },
   );
@@ -119,20 +115,19 @@ final class SelectionToolbar extends StatelessWidget {
     String label,
     IconData icon,
     Future<Object?> Function() action, {
-    bool selected = false,
+    bool? selected,
     bool mixed = false,
     bool enabled = true,
   }) => Builder(
-    builder: (context) => Semantics(
+    builder: (context) => EditorIconButton(
+      label: editorText(context, label),
       value: mixed ? editorText(context, 'Mixed') : null,
-      child: IconButton(
-        tooltip: mixed
-            ? '${editorText(context, label)} (${editorText(context, 'Mixed')})'
-            : editorText(context, label),
-        isSelected: selected,
-        onPressed: enabled ? () => unawaited(action()) : null,
-        icon: Icon(icon, size: 20),
-      ),
+      tooltip: mixed
+          ? '${editorText(context, label)} (${editorText(context, 'Mixed')})'
+          : editorText(context, label),
+      selected: selected,
+      onPressed: enabled ? () => unawaited(action()) : null,
+      icon: Icon(icon, size: 20),
     ),
   );
   Widget _menu(

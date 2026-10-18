@@ -9,6 +9,63 @@ import 'package:note_ai_app/presentation/editor/rich_note_editor.dart';
 
 void main() {
   testWidgets(
+    'tapping an unchanged native caret keeps the input client attached',
+    (tester) async {
+      final focus = FocusNode();
+      final adapter = RichEditorAdapter(
+        document: null,
+        legacyText: 'body',
+        canEdit: () => true,
+        isLive: () => true,
+        accessGeneration: () => 1,
+        onChanged: () {},
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        adapter.dispose();
+        focus.dispose();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            engine.AppFlowyEditorLocalizations.delegate,
+          ],
+          home: Scaffold(
+            body: RichNoteEditor(
+              adapter: adapter,
+              focusNode: focus,
+              header: const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      adapter.editor.service.selectionService.updateSelection(
+        engine.Selection.collapsed(engine.Position(path: [0], offset: 4)),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.hasAnyClients, isTrue);
+      final text = find.byWidgetPredicate(
+        (w) => w is RichText && w.text.toPlainText() == 'body',
+      );
+      final box = tester.getRect(text);
+      await tester.tapAt(Offset(box.right - 1, box.center.dy));
+      await tester.pumpAndSettle();
+      expect(adapter.editor.selection?.start.offset, 4);
+      expect(tester.testTextInput.hasAnyClients, isTrue);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: ' body_EDIT',
+          selection: TextSelection.collapsed(offset: 10),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(adapter.plainText, 'body_EDIT');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
     'cell focus survives selection feedback and Tab keeps row order',
     (tester) async {
       final focus = FocusNode();

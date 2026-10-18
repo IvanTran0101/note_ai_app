@@ -8,6 +8,8 @@ import 'rich_document_codec.dart';
 import 'nested_block_commands.dart';
 import 'document_palette.dart';
 import 'callout_options.dart';
+import 'editor_icon_button.dart';
+import 'editor_copy.dart';
 import 'rich_inline_codec.dart';
 import '../../domain/notes/note_document.dart' show DocumentColor;
 
@@ -91,15 +93,17 @@ final class _ContainerBlockState extends State<_ContainerBlock>
   void _toggle() => widget.adapter.expand(RichDocumentCodec.id(node));
 
   Widget _leading() => widget.toggle
-      ? IconButton(
-          tooltip: collapsed ? 'Expand toggle' : 'Collapse toggle',
+      ? EditorIconButton(
+          label: editorText(
+            context,
+            collapsed ? 'Expand toggle' : 'Collapse toggle',
+          ),
           onPressed: _toggle,
           icon: Icon(collapsed ? Icons.chevron_right : Icons.expand_more),
-          visualDensity: VisualDensity.compact,
         )
       : widget.adapter.editable
-      ? IconButton(
-          tooltip: 'Callout style',
+      ? EditorIconButton(
+          label: editorText(context, 'Callout style'),
           onPressed: () => showCalloutOptions(context, node, widget.adapter),
           icon: Text(
             node.attributes['m09_icon'] as String? ?? '💡',
@@ -155,8 +159,8 @@ final class _ContainerBlockState extends State<_ContainerBlock>
             _leading(),
             Expanded(child: text),
             if (widget.adapter.editable)
-              IconButton(
-                tooltip: 'Add nested block',
+              EditorIconButton(
+                label: editorText(context, 'Add nested block'),
                 onPressed: () =>
                     NestedBlockCommands(widget.adapter).addChild(node),
                 icon: const Icon(Icons.add, size: 18),

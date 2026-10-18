@@ -1,3 +1,5 @@
+import 'note_detail_test_controller.dart';
+
 import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -10,7 +12,6 @@ import 'package:note_ai_app/presentation/editor/nested_block_commands.dart';
 import 'package:note_ai_app/presentation/editor/basic_block_commands.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
-import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_localizations.dart';
 
@@ -18,7 +19,7 @@ void main() {
   testWidgets(
     'New note after autosave creates a fresh editor without the prior body',
     (tester) async {
-      final controller = _RichController();
+      final controller = RichTestNotesController();
       final key = GlobalKey<NotesWorkspacePageState>();
       await tester.pumpWidget(
         MaterialApp(
@@ -84,7 +85,7 @@ void main() {
   );
   Future<void> pump(
     WidgetTester tester,
-    _RichController controller,
+    RichTestNotesController controller,
     NoteDto? selected, {
     bool withRag = false,
   }) async {
@@ -118,7 +119,7 @@ void main() {
           runs: const [DocumentText('Heading')],
         ),
       ]);
-      await pump(tester, _RichController(), note(document: document));
+      await pump(tester, RichTestNotesController(), note(document: document));
       final host = tester.widget<RichNoteEditor>(find.byType(RichNoteEditor));
       final editorWidget = tester.widget<engine.AppFlowyEditor>(
         find.byType(engine.AppFlowyEditor),
@@ -155,7 +156,7 @@ void main() {
           runs: const [DocumentText('Parent')],
         ),
       ]);
-      await pump(tester, _RichController(), note(document: document));
+      await pump(tester, RichTestNotesController(), note(document: document));
       final adapter = tester
           .widget<RichNoteEditor>(find.byType(RichNoteEditor))
           .adapter;
@@ -214,7 +215,7 @@ void main() {
           ],
         ),
       ]);
-      await pump(tester, _RichController(), note(document: document));
+      await pump(tester, RichTestNotesController(), note(document: document));
       final sizes = <double?>[];
       for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
         rich.text.visitChildren((span) {
@@ -233,7 +234,7 @@ void main() {
   testWidgets('pointer title focus routes typing to title instead of body', (
     tester,
   ) async {
-    await pump(tester, _RichController(), note());
+    await pump(tester, RichTestNotesController(), note());
     final editor = tester.widget<RichNoteEditor>(find.byType(RichNoteEditor));
     await tester.tap(find.byType(engine.AppFlowyRichText).first);
     await tester.pump();
@@ -255,7 +256,12 @@ void main() {
   testWidgets(
     'RAG availability never moves the rich editor during typing/save',
     (tester) async {
-      await pump(tester, _RichController(), note(revision: 1), withRag: true);
+      await pump(
+        tester,
+        RichTestNotesController(),
+        note(revision: 1),
+        withRag: true,
+      );
       final host = tester.widget<RichNoteEditor>(find.byType(RichNoteEditor));
       final before = tester.getTopLeft(find.byType(RichNoteEditor));
       expect(find.byKey(NoteDetailPage.askNotesKey), findsOneWidget);
@@ -279,7 +285,7 @@ void main() {
   testWidgets(
     'keyboard input edits the production document through upstream IME',
     (tester) async {
-      final controller = _RichController();
+      final controller = RichTestNotesController();
       await pump(tester, controller, note());
       final adapter = tester
           .widget<RichNoteEditor>(find.byType(RichNoteEditor))
@@ -301,7 +307,7 @@ void main() {
   testWidgets(
     'selection does not save; format-only local autosave retains the document',
     (tester) async {
-      final controller = _RichController();
+      final controller = RichTestNotesController();
       await pump(tester, controller, note());
       final adapter = tester
           .widget<RichNoteEditor>(find.byType(RichNoteEditor))
@@ -344,7 +350,7 @@ void main() {
   testWidgets(
     'title-only legacy save does not inflate body; rich title-only preserves format',
     (tester) async {
-      final controller = _RichController();
+      final controller = RichTestNotesController();
       await pump(tester, controller, note());
       await tester.enterText(
         find.byKey(NoteDetailPage.titleFieldKey),
@@ -377,7 +383,7 @@ void main() {
   testWidgets(
     'new rich note remains clean on open; title-only creates empty typed document',
     (tester) async {
-      final controller = _RichController();
+      final controller = RichTestNotesController();
       await pump(tester, controller, null);
       await tester.pump(const Duration(seconds: 4));
       expect(controller.richSaves, 0);
@@ -393,62 +399,4 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
-}
-
-final class _RichController
-    implements
-        NotesApplicationController,
-        DocumentNotesController,
-        SnapshotNotesController {
-  int richSaves = 0, plainSaves = 0;
-  NoteDto? last;
-  @override
-  Future<List<NoteDto>> listNotes() async => last == null ? [] : [last!];
-  @override
-  get summaryConsent => null;
-  NoteDto saved(
-    NoteDto? previous,
-    String title,
-    String content,
-    NoteDocument? document,
-  ) => last = NoteDto(
-    id: previous?.id ?? 'new',
-    ownerId: previous?.ownerId ?? 'owner',
-    title: title,
-    content: content,
-    document: document,
-    createdAt: previous?.createdAt ?? DateTime.utc(2026),
-    updatedAt: DateTime.utc(2026, 10, 15),
-  );
-  @override
-  Future<NoteDto> saveDocumentSnapshot(
-    NoteDto selected,
-    String title,
-    NoteDocument document,
-  ) async {
-    richSaves++;
-    return saved(selected, title, document.plainText, document);
-  }
-
-  @override
-  Future<NoteDto> createDocumentNote({
-    required String title,
-    required NoteDocument document,
-  }) async {
-    richSaves++;
-    return saved(null, title, document.plainText, document);
-  }
-
-  @override
-  Future<NoteDto> saveEditorSnapshot(
-    NoteDto selected,
-    String title,
-    String content,
-  ) async {
-    plainSaves++;
-    return saved(selected, title, content, null);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -98,3 +98,18 @@ use the original transaction/history owner. Real Native QA reproduced row Undo
 being trapped by repeated height-only history items; `table_history_test.dart`
 covers initial paint/text-scale with no edits, one-step row Undo/Redo and a
 layout change retaining Redo. This patch changes no stored document contract.
+
+## P5 viewport and delayed selection scrolling (17Oct; acceptance pending)
+
+`scroll_service_widget.dart` observes viewport constraints and requests current
+selection scrolling after layout. Selection/resize requests invalidate older
+post-frame and Native keyboard-delay callbacks; delayed scrolling reads fresh
+selection rectangles. An idle editor explicitly requests a frame. Unmount
+invalidates pending callbacks and stops scrolling. The platform scroll service
+continues to own scrolling, including the existing desktop drag-scroll guard,
+mobile drag-handle direction and disabled-auto-scroll behavior. No input,
+document, transaction or history algorithm changes.
+
+The widget regression runs on the host OS with Android layout metrics. It does
+not simulate UniversalPlatform's Native Android branch; emulator rotation with
+Gboard must independently verify that branch before acceptance.

@@ -7,6 +7,7 @@ import 'document_palette.dart';
 import 'editor_popup_guard.dart';
 import 'rich_editor_adapter.dart';
 import 'rich_inline_codec.dart';
+import 'editor_icon_button.dart';
 
 Future<void> showCalloutOptions(
   BuildContext context,
@@ -48,10 +49,10 @@ Future<void> showCalloutOptions(
                   ])
                     Semantics(
                       selected: value == icon,
-                      child: IconButton(
-                        tooltip: 'Use $value',
+                      child: EditorIconButton(
+                        label: 'Use $value',
                         onPressed: () => update(() => icon = value),
-                        isSelected: value == icon,
+                        selected: value == icon,
                         icon: Text(value, style: const TextStyle(fontSize: 22)),
                       ),
                     ),
@@ -64,9 +65,9 @@ Future<void> showCalloutOptions(
                   for (final value in DocumentColor.values)
                     Semantics(
                       selected: value == tone,
-                      child: IconButton(
-                        tooltip: value.name,
-                        isSelected: value == tone,
+                      child: EditorIconButton(
+                        label: value.name,
+                        selected: value == tone,
                         onPressed: () => update(() => tone = value),
                         icon: Icon(
                           value == tone ? Icons.check_circle : Icons.circle,

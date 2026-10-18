@@ -1,6 +1,7 @@
 import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
 
+import '../notes/notes_theme_tokens.dart';
 import 'accessible_builders.dart';
 import 'container_block.dart';
 import 'document_span.dart';
@@ -53,6 +54,13 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
       ),
       'm09_toggle': ContainerBlockBuilder(toggle: true, adapter: adapter),
       'm09_callout': ContainerBlockBuilder(toggle: false, adapter: adapter),
+      engine.TableBlockKeys.type: engine.TableBlockComponentBuilder(
+        tableStyle: engine.TableStyle(
+          borderWidth: 1,
+          borderColor: NoteFlowUiTokens.of(context).divider,
+          borderHoverColor: colors.primary,
+        ),
+      ),
       engine.TableCellBlockKeys.type: engine.TableCellBlockComponentBuilder(
         colorBuilder: (_, cell) => _headerColor(colors, cell),
       ),

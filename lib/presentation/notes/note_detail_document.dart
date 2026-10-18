@@ -45,7 +45,6 @@ extension _NoteDetailDocument on NoteDetailPageState {
   }
 
   void _recordEditorChange() {
-    _draftRevision++;
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
       _summaryController.markStaleIfResult();
@@ -53,7 +52,9 @@ extension _NoteDetailDocument on NoteDetailPageState {
       _adoptSavedNote(_pendingSavedNote);
     }
     _ignoreNextEditorFocusLoss = false;
-    _update(() {});
+    _update(() {
+      if (!_isDirty) _statusMessage = null;
+    });
     _notifyDirtyChanged();
     _notifyNoteEdited();
     _scheduleAutosave();

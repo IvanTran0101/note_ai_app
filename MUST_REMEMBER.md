@@ -17,6 +17,16 @@ earlier wording that could imply unrestricted feature additions during M09.
 Full policy and proposal register:
 https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
 
+## Visible UI checkpoint — 18 October2026
+
+Reference styling is implemented locally: sidebar/search/new-note icon, neutral
+selection,704px reading column, Web tools below body, folded metadata and
+responsive share panel. Current811 source88194311 and matching actual Web/
+Android captures are in docs/m09/P5_P6_ACCEPTANCE.md. This is a visible P5
+checkpoint, not full M09/95-point acceptance. User prioritizes finishing the
+visual pass over repeating full suites; finish remaining screens then final QA.
+Earlier1926VM/1728Chrome receipts predate these latest visual changes.
+
 ## Active request — Integration then complete M09 (2026-10-13)
 
 The user approved updating final-tuankiet, integrating all of anhminh-final,
@@ -34,6 +44,7 @@ published23f3652, remote SHA confirmed. P4 rich editor now has verified source/l
 checkpoint807: full VM1898/5 configured skips/0fail, installed Chrome1700/2 skips/
 0fail on199 mains including actual local HTTP, static checks clean. Matching
 APK A76328E3 retains rich data; physical row Undo/Redo and popup position pass.
+Checkpoint092e2c9 is pushed to final-tuankiet; remote SHA verified.
 P5 Native phone-landscape/spacing and final full UI matrix/scoring remain open.
 Read docs/m09/CURRENT_WORK.md for exact current source,
 runtimes, tests and next steps. Final P4/P5 UI acceptance, P6 and

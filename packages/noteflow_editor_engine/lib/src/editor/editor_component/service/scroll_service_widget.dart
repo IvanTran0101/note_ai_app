@@ -34,6 +34,8 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
   late ScrollController scrollController = ScrollController();
 
   Selection? lastSelection;
+  Size? _lastViewportSize;
+  int _scrollRequestGeneration = 0;
 
   @override
   void initState() {
@@ -43,24 +45,39 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
 
   @override
   void dispose() {
+    _scrollRequestGeneration++;
     editorState.selectionNotifier.removeListener(_onSelectionChanged);
+    editorState.autoScroller?.stopAutoScroll();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Provider.value(
-      value: widget.editorScrollController,
-      child: Builder(
-        builder: (context) {
-          if (PlatformExtension.isDesktopOrWeb) {
-            return _buildDesktopScrollService(context);
-          } else if (PlatformExtension.isMobile) {
-            return _buildMobileScrollService(context);
-          }
-          throw UnimplementedError();
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportSize = constraints.biggest;
+        final previousViewportSize = _lastViewportSize;
+        _lastViewportSize = viewportSize;
+
+        if (previousViewportSize != null &&
+            previousViewportSize != viewportSize) {
+          _requestSelectionScroll(stopCurrentScroll: true);
+        }
+
+        return Provider.value(
+          value: widget.editorScrollController,
+          child: Builder(
+            builder: (context) {
+              if (PlatformExtension.isDesktopOrWeb) {
+                return _buildDesktopScrollService(context);
+              } else if (PlatformExtension.isMobile) {
+                return _buildMobileScrollService(context);
+              }
+              throw UnimplementedError();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -83,6 +100,11 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
   }
 
   void _onSelectionChanged() {
+    _requestSelectionScroll();
+  }
+
+  void _requestSelectionScroll({bool stopCurrentScroll = false}) {
+    final requestGeneration = ++_scrollRequestGeneration;
     // should auto scroll after the cursor or selection updated.
     final selection = editorState.selection;
     if (selection == null ||
@@ -92,15 +114,12 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final selectionRects = editorState.selectionRects();
-      if (selectionRects.isEmpty) {
+      if (!mounted || requestGeneration != _scrollRequestGeneration) {
         return;
       }
-
-      Rect targetRect;
-      AxisDirection? direction;
-      final dynamic dragMode =
-          editorState.selectionExtraInfo?['selection_drag_mode'];
+      if (stopCurrentScroll) {
+        editorState.autoScroller?.stopAutoScroll();
+      }
 
       // For desktop: if auto-scroller is already scrolling (from drag-to-select),
       // don't override it here. The desktop_selection_service handles drag scrolling.
@@ -109,43 +128,7 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
         return;
       }
 
-      switch (dragMode?.toString()) {
-        case 'MobileSelectionDragMode.leftSelectionHandle':
-          targetRect = selectionRects.first;
-          direction = AxisDirection.up;
-          break;
-        case 'MobileSelectionDragMode.rightSelectionHandle':
-          targetRect = selectionRects.last;
-          direction = AxisDirection.down;
-          break;
-        default:
-          targetRect = selectionRects.last;
-
-          /// sometimes moving up in a long single node may be not working
-          /// so we need to special handle this case.
-          final isInSingleNode = (lastSelection?.isSingle ?? false) &&
-              lastSelection?.start.path == selection.start.path;
-          if (selection.isForward && isInSingleNode) {
-            targetRect = selectionRects.first;
-          }
-      }
-
-      lastSelection = selection;
-
-      final endTouchPoint = targetRect.centerRight;
-
       if (PlatformExtension.isMobile) {
-        // Determine if this is a drag operation
-        final bool isDragOperation = dragMode != null &&
-            (dragMode.toString() ==
-                    'MobileSelectionDragMode.leftSelectionHandle' ||
-                dragMode.toString() ==
-                    'MobileSelectionDragMode.rightSelectionHandle');
-
-        // Use animation for drag operations, instant for others
-        final scrollDuration =
-            isDragOperation ? const Duration(milliseconds: 2) : Duration.zero;
-
         // soft keyboard
         // workaround: wait for the soft keyboard to show up
         final keyboardDelay = KeyboardHeightObserver.currentKeyboardHeight == 0
@@ -153,30 +136,78 @@ class _ScrollServiceWidgetState extends State<ScrollServiceWidget>
             : Duration.zero;
 
         Future.delayed(keyboardDelay, () {
-          if (_forwardKey.currentContext == null) {
+          if (!mounted ||
+              requestGeneration != _scrollRequestGeneration ||
+              _forwardKey.currentContext == null) {
             return;
           }
-          // Mobile needs to continuously update scroll position/direction during drag
-          // Don't skip even if already scrolling, because direction may have changed
-          startAutoScroll(
-            endTouchPoint,
-            edgeOffset: editorState.autoScrollEdgeOffset,
-            direction: direction,
-            duration: scrollDuration,
-          );
+          _scrollCurrentSelection(requestGeneration);
         });
       } else {
-        if (_forwardKey.currentContext == null) {
-          return;
-        }
-        startAutoScroll(
-          endTouchPoint,
-          edgeOffset: editorState.autoScrollEdgeOffset,
-          direction: direction,
-          duration: Duration.zero,
-        );
+        _scrollCurrentSelection(requestGeneration);
       }
     });
+    // Requests may arrive while the editor is idle or from a post-frame
+    // selection update. A queued callback alone does not schedule another frame.
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _scrollCurrentSelection(int requestGeneration) {
+    if (!mounted ||
+        requestGeneration != _scrollRequestGeneration ||
+        _forwardKey.currentContext == null) {
+      return;
+    }
+
+    final selection = editorState.selection;
+    if (selection == null ||
+        [SelectionUpdateReason.selectAll]
+            .contains(editorState.selectionUpdateReason)) {
+      return;
+    }
+
+    // Read geometry after the native keyboard resize has settled. A selection
+    // rectangle captured before the delay can point at stale screen coordinates.
+    final selectionRects = editorState.selectionRects();
+    if (selectionRects.isEmpty) {
+      return;
+    }
+
+    Rect targetRect;
+    AxisDirection? direction;
+    final dynamic dragMode =
+        editorState.selectionExtraInfo?['selection_drag_mode'];
+    switch (dragMode?.toString()) {
+      case 'MobileSelectionDragMode.leftSelectionHandle':
+        targetRect = selectionRects.first;
+        direction = AxisDirection.up;
+        break;
+      case 'MobileSelectionDragMode.rightSelectionHandle':
+        targetRect = selectionRects.last;
+        direction = AxisDirection.down;
+        break;
+      default:
+        targetRect = selectionRects.last;
+        final isInSingleNode = (lastSelection?.isSingle ?? false) &&
+            lastSelection?.start.path == selection.start.path;
+        if (selection.isForward && isInSingleNode) {
+          targetRect = selectionRects.first;
+        }
+    }
+
+    lastSelection = selection;
+    final isDragOperation = dragMode != null &&
+        (dragMode.toString() == 'MobileSelectionDragMode.leftSelectionHandle' ||
+            dragMode.toString() ==
+                'MobileSelectionDragMode.rightSelectionHandle');
+    startAutoScroll(
+      targetRect.centerRight,
+      edgeOffset: editorState.autoScrollEdgeOffset,
+      direction: direction,
+      duration: PlatformExtension.isMobile && isDragOperation
+          ? const Duration(milliseconds: 2)
+          : Duration.zero,
+    );
   }
 
   @override

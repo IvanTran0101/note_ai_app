@@ -8,6 +8,7 @@ import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_role.dart';
 import '../../domain/notes/note_share_grant.dart';
 import 'sharing_localizations.dart';
+import 'notes_theme_tokens.dart';
 
 /// ACL administration is online and confirmed. No optimistic recipient access.
 final class ShareManagementDialog extends StatefulWidget {
@@ -186,8 +187,38 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
   @override
   Widget build(BuildContext context) {
     final copy = SharingCopy(context);
+    final tokens = NoteFlowUiTokens.of(context);
+    final compact = NoteFlowLayout.isCompact(context);
     return AlertDialog(
-      title: Text(copy.manage),
+      alignment: compact ? Alignment.bottomCenter : Alignment.topRight,
+      insetPadding: compact
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 12)
+          : const EdgeInsets.fromLTRB(24, 76, 20, 24),
+      backgroundColor: tokens.elevatedSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(compact ? 20 : 12),
+        side: BorderSide(color: tokens.divider),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      title: Row(
+        children: [
+          Icon(Icons.people_outline, size: 20, color: tokens.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              copy.manage,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -195,34 +226,11 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(copy.onlineOnly),
+              if (_busy || _error != null) Text(copy.onlineOnly),
               if (_reactivate != null)
                 Text('${copy.share}: ${_reactivate!.recipientId}'),
-              TextField(
-                key: const ValueKey('share-recipient-email'),
-                controller: _email,
-                enabled: !_busy && _retry == null,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(labelText: copy.email),
-              ),
-              DropdownButton<NoteRole>(
-                key: const ValueKey('share-recipient-role'),
-                value: _role,
-                items: NoteRole.values
-                    .map(
-                      (r) =>
-                          DropdownMenuItem(value: r, child: Text(copy.role(r))),
-                    )
-                    .toList(),
-                onChanged: _busy || _retry != null
-                    ? null
-                    : (r) => setState(() => _role = r!),
-              ),
-              FilledButton(
-                key: const ValueKey('share-recipient-submit'),
-                onPressed: _busy || _retry != null ? null : _create,
-                child: Text(copy.share),
-              ),
+              _inviteForm(copy, tokens),
+              const SizedBox(height: 16),
               if (_busy) ...[
                 const LinearProgressIndicator(),
                 Text(copy.loading),
@@ -236,13 +244,14 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          key: const ValueKey('share-retry'),
-          onPressed: _busy
-              ? null
-              : () => unawaited(_retry == null ? _load() : _apply(_retry!)),
-          child: Text(copy.retry),
-        ),
+        if (_error != null)
+          TextButton(
+            key: const ValueKey('share-retry'),
+            onPressed: _busy
+                ? null
+                : () => unawaited(_retry == null ? _load() : _apply(_retry!)),
+            child: Text(copy.retry),
+          ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(copy.close),
@@ -250,6 +259,77 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
       ],
     );
   }
+
+  Widget _inviteForm(SharingCopy copy, NoteFlowUiTokens tokens) {
+    final email = _inviteEmail(copy, tokens);
+    final role = _inviteRole(copy);
+    final submit = FilledButton(
+      key: const ValueKey('share-recipient-submit'),
+      onPressed: _busy || _retry != null ? null : _create,
+      child: Text(copy.share),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow =
+            constraints.maxWidth < 400 ||
+            MediaQuery.textScalerOf(context).scale(14) > 19;
+        if (narrow) {
+          return Column(
+            children: [
+              email,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: role),
+                  submit,
+                ],
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: email),
+            const SizedBox(width: 12),
+            role,
+            const SizedBox(width: 12),
+            submit,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _inviteEmail(SharingCopy copy, NoteFlowUiTokens tokens) => TextField(
+    key: const ValueKey('share-recipient-email'),
+    controller: _email,
+    enabled: !_busy && _retry == null,
+    keyboardType: TextInputType.emailAddress,
+    decoration: InputDecoration(
+      labelText: copy.email,
+      filled: true,
+      fillColor: tokens.subtleSurface,
+      isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: tokens.divider),
+      ),
+    ),
+  );
+
+  Widget _inviteRole(SharingCopy copy) => DropdownButtonHideUnderline(
+    child: DropdownButton<NoteRole>(
+      key: const ValueKey('share-recipient-role'),
+      value: _role,
+      items: NoteRole.values
+          .map((r) => DropdownMenuItem(value: r, child: Text(copy.role(r))))
+          .toList(),
+      onChanged: _busy || _retry != null
+          ? null
+          : (r) => setState(() => _role = r!),
+    ),
+  );
 
   @override
   void dispose() {

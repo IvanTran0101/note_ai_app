@@ -5,6 +5,7 @@ import '../../application/note_intelligence/model_provisioning/model_provisionin
 import 'model_provisioning_status_panel.dart';
 import 'note_detail_localizations.dart';
 import 'note_detail_summary.dart';
+import 'note_detail_utilities.dart';
 import 'note_summary_availability.dart';
 import 'note_summary_feedback.dart';
 import 'notes_theme_tokens.dart';
@@ -36,6 +37,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.includeContent = true,
     this.includeTitle = true,
     this.includeMetadata = true,
+    this.quietMetadata = false,
     this.includeFeedback = true,
     this.isSummarizing = false,
     this.showBusyIndicator = true,
@@ -73,6 +75,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final Widget? attachments;
   final bool includeContent;
   final bool includeTitle, includeMetadata, includeFeedback;
+  final bool quietMetadata;
   final bool isSummarizing;
   final bool showBusyIndicator;
   final IModelProvisioningReader? provisioningReader;
@@ -116,9 +119,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final double titleLeadingInset = compactWeb
         ? NoteFlowLayout.compactWebEditorTitleLeadingInset
         : 0;
-    final double titleFontSize = MediaQuery.sizeOf(context).width < 600
-        ? 32
-        : 40;
+    final double titleFontSize = NoteFlowLayout.isCompact(context) ? 32 : 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -160,27 +161,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         if (includeTitle) const SizedBox(height: NoteFlowSpacing.sm),
-        if (includeMetadata && summaryAvailability != null)
-          NoteSummaryFeedback(
-            copy: copy,
-            availability: summaryAvailability!,
-            cloud: summaryCloud,
-            isRunning: isSummarizing,
-            onCancel: onCancelSummary,
-          ),
-        if (includeMetadata)
-          NoteDetailSummary(
-            copy: copy,
-            hasSavedNote: hasSavedNote,
-            summary: summary,
-            isStale: summaryStale,
-            isSummarizing: isSummarizing,
-            onCopy: onCopySummary,
-            onRegenerate: onRegenerateSummary,
-            copyLabel: copySummaryLabel,
-            regenerateLabel: regenerateSummaryLabel,
-          ),
-        if (includeMetadata && attachments != null) attachments!,
+        if (includeMetadata) ..._metadata(),
         if (includeContent)
           Container(
             key: contentFieldContextKey,
@@ -349,5 +330,42 @@ final class NoteDetailEditorForm extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  List<Widget> _metadata() {
+    final feedback = summaryAvailability == null
+        ? const SizedBox.shrink()
+        : NoteSummaryFeedback(
+            copy: copy,
+            availability: summaryAvailability!,
+            cloud: summaryCloud,
+            isRunning: isSummarizing,
+            onCancel: onCancelSummary,
+          );
+    final result = NoteDetailSummary(
+      copy: copy,
+      hasSavedNote: hasSavedNote,
+      summary: summary,
+      isStale: summaryStale,
+      isSummarizing: isSummarizing,
+      onCopy: onCopySummary,
+      onRegenerate: onRegenerateSummary,
+      copyLabel: copySummaryLabel,
+      regenerateLabel: regenerateSummaryLabel,
+    );
+    if (!quietMetadata || !hasSavedNote) {
+      return [feedback, result, ?attachments];
+    }
+    return [
+      if (isSummarizing) feedback,
+      if (summary != null) result,
+      NoteDetailUtilities(
+        label: copy.noteDetails,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [if (!isSummarizing) feedback, ?attachments],
+        ),
+      ),
+    ];
   }
 }

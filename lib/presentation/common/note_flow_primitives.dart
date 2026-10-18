@@ -134,7 +134,7 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
           vertical: 2,
         ),
         child: Material(
-          color: widget.selected ? tokens.selectedSurface : Colors.transparent,
+          color: widget.selected ? tokens.subtleSurface : Colors.transparent,
           borderRadius: BorderRadius.circular(NoteFlowRadius.row),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -156,7 +156,13 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
                 ),
               ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: widget.dense ? 40 : 44),
+                constraints: BoxConstraints(
+                  minHeight: NoteFlowLayout.isCompact(context)
+                      ? 48
+                      : widget.dense
+                      ? 40
+                      : 44,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: NoteFlowSpacing.md,

@@ -11,6 +11,7 @@ import 'package:note_ai_app/main.dart';
 import 'package:note_ai_app/presentation/auth/controllers/auth_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/common/note_flow_primitives.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
 
 import '../infrastructure/notes/note_repository_test_support.dart';
 
@@ -26,6 +27,73 @@ final class _SilentSource implements IRevisionSource {
 }
 
 void main() {
+  testWidgets('open settings follows a language change without reopening', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1363, 936)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final session = CurrentUserSession()
+      ..setIdentity(
+        AuthIdentity(
+          userId: 'settings-qa-owner',
+          email: 'owner@example.invalid',
+          isEmailVerified: true,
+        ),
+      );
+    final auth = AuthController(
+      authenticationAppService: null,
+      initialUser: AuthUserDto.fromIdentity(session.identity!),
+    );
+    final store = FakeLocalSyncStore(accountUserId: session.requiredUserId);
+    final client = MockClient(
+      (_) async =>
+          http.Response('{"items":[],"nextCursor":null,"hasMore":false}', 200),
+    );
+    try {
+      await tester.pumpWidget(
+        NoteFlowApp(
+          authController: auth,
+          currentUserSession: session,
+          localSyncStoreFactory: ({required accountUserId}) => store,
+          connection: NoteConnection(
+            baseUri: Uri.parse('https://startup.test'),
+            tokenProvider: ({required forceRefresh}) async => null,
+            client: client,
+            revisionSourceFor: (_) => _SilentSource(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final shell = tester.state<WorkspaceShellState>(
+        find.byType(WorkspaceShell),
+      );
+      final destination = shell.destination;
+      await tester.tap(find.byKey(WorkspaceShell.settingsKey));
+      await tester.pumpAndSettle();
+      expect(find.text('Appearance and language'), findsOneWidget);
+      await tester.tap(
+        find
+            .byWidgetPredicate(
+              (widget) => widget is DropdownButtonFormField<Object?>,
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vietnamese').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Giao diện và ngôn ngữ'), findsOneWidget);
+      expect(find.text('Ngôn ngữ'), findsOneWidget);
+      expect(find.text('Đăng xuất'), findsOneWidget);
+      expect(shell.destination, destination);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      client.close();
+    }
+  });
+
   testWidgets('long sync/conflict status fits a narrow editor header', (
     tester,
   ) async {

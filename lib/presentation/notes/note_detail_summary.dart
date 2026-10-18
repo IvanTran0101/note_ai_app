@@ -191,7 +191,9 @@ final class _NoteDetailSummaryState extends State<NoteDetailSummary> {
           tooltip: widget.copy.hideSummary,
           onPressed: () => setState(() => _expanded = false),
           icon: const Icon(Icons.chevron_left, size: 20),
-          visualDensity: VisualDensity.compact,
+          visualDensity: NoteFlowLayout.isCompact(context)
+              ? VisualDensity.standard
+              : VisualDensity.compact,
         ),
       ],
     );

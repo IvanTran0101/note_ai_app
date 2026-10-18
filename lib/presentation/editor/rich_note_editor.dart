@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../notes/notes_theme_tokens.dart';
 import 'basic_block_menu.dart';
 import 'basic_block_commands.dart';
 import 'editor_popup_guard.dart';
@@ -50,6 +51,7 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   Widget? _cachedView;
   ThemeData? _cachedTheme;
   bool? _cachedEditable, _cachedCompact;
+  bool? _cachedShort;
   double? _cachedScale;
   VoidCallback? _dismissFormatting;
   @override
@@ -145,6 +147,7 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context), editable = widget.adapter.editable;
     final compact = MediaQuery.sizeOf(context).width < 720;
+    final short = NoteFlowLayout.isShortEditor(context);
     final scale = MediaQuery.textScalerOf(context).scale(16);
     // Keep the engine widget and its input service stable across editor/header
     // notifications. Public Node listeners own text repaint; UI menus listen
@@ -153,10 +156,12 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         _cachedTheme != theme ||
         _cachedEditable != editable ||
         _cachedCompact != compact ||
+        _cachedShort != short ||
         _cachedScale != scale) {
       _cachedTheme = theme;
       _cachedEditable = editable;
       _cachedCompact = compact;
+      _cachedShort = short;
       _cachedScale = scale;
       _cachedView = _buildEditor(context);
     }
@@ -189,7 +194,10 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [Expanded(child: _toolbar(context, editor))],
+      children: [
+        Expanded(child: _toolbar(context, editor)),
+        if (!kIsWeb) _nativeControls(context),
+      ],
     );
   }
 
@@ -201,18 +209,44 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
           valueListenable: header,
           builder: (_, value, _) => value,
         ),
-        ListenableBuilder(
-          listenable: widget.adapter,
-          builder: (_, _) => widget.adapter.editable
-              ? EditorControls(adapter: widget.adapter, slash: slash)
-              : const SizedBox.shrink(),
-        ),
       ],
+    ),
+  );
+
+  Widget _controls() => ListenableBuilder(
+    listenable: widget.adapter,
+    builder: (_, _) => widget.adapter.editable
+        ? EditorControls(adapter: widget.adapter, slash: slash)
+        : const SizedBox.shrink(),
+  );
+
+  Widget _nativeControls(BuildContext context) => EditorHeaderBoundary(
+    adapter: widget.adapter,
+    interceptSelection: false,
+    child: ListenableBuilder(
+      listenable: Listenable.merge([widget.adapter, widget.focusNode]),
+      builder: (context, _) {
+        if (!widget.adapter.editable) return const SizedBox.shrink();
+        final selection = widget.adapter.editor.selection;
+        final formatting =
+            NoteFlowLayout.isShortEditor(context) &&
+            NoteFlowLayout.keyboardInset(context) > 0 &&
+            widget.focusNode.hasFocus &&
+            selection != null &&
+            !selection.isCollapsed;
+        return SizedBox(
+          key: const ValueKey('document-controls-rail'),
+          height: 48,
+          child: Offstage(offstage: formatting, child: _controls()),
+        );
+      },
     ),
   );
   Widget _footer(ColorScheme colors) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      if (kIsWeb)
+        EditorHeaderBoundary(adapter: widget.adapter, child: _controls()),
       ValueListenableBuilder<Widget>(
         valueListenable: footer,
         builder: (_, value, _) =>
@@ -239,7 +273,11 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
       editorState: adapter.editor,
       editorScrollController: scroll,
       textDirection: Directionality.of(context),
-      floatingToolbarHeight: MediaQuery.sizeOf(context).width < 720 ? 144 : 96,
+      floatingToolbarHeight: NoteFlowLayout.isShortEditor(context)
+          ? 48
+          : MediaQuery.sizeOf(context).width < 720
+          ? 144
+          : 96,
       style: engine.FloatingToolbarStyle(
         backgroundColor: colors.surface,
         toolbarActiveColor: colors.primary,
@@ -289,9 +327,21 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         rects = widget.adapter.editor.selectionRects();
     if (rects.isEmpty) return const SizedBox.shrink();
     final rect = rects.first, width = math.min(area.size.width - 40, 686.0);
-    final height = area.size.width < 720 ? 144.0 : 96.0;
-    final placed = EditorPopupArea.of(context)
-        .place(rect, Size(width, height), centered: true);
+    final short = NoteFlowLayout.isShortEditor(context);
+    final height = short
+        ? 48.0
+        : area.size.width < 720
+        ? 144.0
+        : 96.0;
+    final popup = EditorPopupArea.of(context);
+    final placed = short && area.viewInsets.bottom > 0
+        ? Rect.fromLTWH(
+            popup.bounds.center.dx - width / 2,
+            popup.bounds.bottom - math.min(height, popup.bounds.height),
+            width,
+            math.min(height, popup.bounds.height),
+          )
+        : popup.place(rect, Size(width, height), centered: true);
     return Positioned.fromRect(
       rect: placed,
       child: ClipRect(child: SingleChildScrollView(child: child)),

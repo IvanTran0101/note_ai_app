@@ -95,9 +95,13 @@ final class _ResponsiveNotesWorkspaceState
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
-        final bool compact = width < ResponsiveNotesWorkspace.compactBreakpoint;
+        final bool compact = NoteFlowLayout.isCompact(
+          context,
+          availableWidth: width,
+        );
         final bool expanded =
             !widget.preferFullPage &&
+            !compact &&
             width >= ResponsiveNotesWorkspace.expandedBreakpoint;
         final bool fullWidth = compact || widget.preferFullPage;
         final bool centerPeek = !fullWidth && !expanded;

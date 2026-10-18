@@ -142,12 +142,25 @@ final class NoteDetailSurface extends StatelessWidget {
   static const Key scrollKey = ValueKey<String>('note-detail-scroll');
 
   @override
-  Widget build(BuildContext context) {
-    final bool compact =
-        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+  Widget build(BuildContext context) => LayoutBuilder(
+    // Scaffold can resize this subtree without changing its stripped MediaQuery.
+    builder: (context, _) => _buildLayout(context),
+  );
+
+  Widget _buildLayout(BuildContext context) {
+    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool nativeLandscape =
+        NoteFlowLayout.isNativePhone(context) &&
+        MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
     final double editorMaxWidth = compact
         ? NoteFlowLayout.compactEditorMaxWidth
         : NoteFlowLayout.editorMaxWidth;
+    final double richMaxWidth = nativeLandscape
+        ? NoteFlowLayout.editorMaxWidth
+        : editorMaxWidth;
+    final bool keyboardTakesHeader =
+        NoteFlowLayout.isShortEditor(context) &&
+        NoteFlowLayout.keyboardInset(context) > 0;
     final double editorTopPadding = compact
         ? NoteFlowLayout.compactEditorTopInset(context) +
               (kIsWeb
@@ -192,7 +205,7 @@ final class NoteDetailSurface extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (showPageHeader)
+        if (showPageHeader && !keyboardTakesHeader)
           NoteFlowPageHeader(
             breadcrumb: copy.pageBreadcrumb(pageTitle),
             statusLabel: pageStatus,
@@ -226,7 +239,7 @@ final class NoteDetailSurface extends StatelessWidget {
                         ? Alignment.topLeft
                         : Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: editorMaxWidth),
+                      constraints: BoxConstraints(maxWidth: richMaxWidth),
                       child: richEditorBuilder!(
                         Padding(
                           padding: EdgeInsets.only(top: richTopPadding),
@@ -299,6 +312,7 @@ final class NoteDetailSurface extends StatelessWidget {
     includeContent: includeContent,
     includeTitle: includeTitle,
     includeMetadata: includeMetadata,
+    quietMetadata: richEditorBuilder != null,
     includeFeedback: includeFeedback,
     isSummarizing: isSummarizing,
     showBusyIndicator: showBusyIndicator,

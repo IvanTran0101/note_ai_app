@@ -195,7 +195,9 @@ extension _NoteDetailView on NoteDetailPageState {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final minimumHeight = MediaQuery.textScalerOf(context).scale(320);
+        final minimumHeight = NoteFlowLayout.isShortEditor(context)
+            ? 88.0
+            : MediaQuery.textScalerOf(context).scale(320);
         final content = Column(
           children: <Widget>[
             if (_hasRemoteEditorChange) _remoteEditorNotice(),
