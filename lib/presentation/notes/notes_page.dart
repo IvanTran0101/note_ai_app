@@ -435,9 +435,10 @@ class _NotesPageState extends State<NotesPage> {
 
   Future<void> _restoreDeletedNote(NoteDto note) async {
     try {
-      final NoteDto restored = await _application.createNote(
+      final restored = await _application.createSnapshotNote(
         title: note.title,
         content: note.content,
+        document: note.document,
       );
       if (!mounted) {
         return;

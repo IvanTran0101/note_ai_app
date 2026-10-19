@@ -16,7 +16,7 @@ extension _NoteRepositoryMutations on NoteRepository {
         current,
         notes: <LocalNoteState>[
           ...current.notes,
-          NoteRepository._toLocalNote(
+          _localNoteFromDomain(
             note,
             serverRevision: 0,
             status: NoteSyncStatus.pending,
@@ -39,7 +39,7 @@ extension _NoteRepositoryMutations on NoteRepository {
       current,
       notes: NoteRepository._notesWith(
         current.notes,
-        NoteRepository._toLocalNote(
+        _localNoteFromDomain(
           note,
           serverRevision: existing.serverRevision,
           status: NoteSyncStatus.pending,

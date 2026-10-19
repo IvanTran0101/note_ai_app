@@ -16,7 +16,8 @@ extension _NoteDetailActions on NoteDetailPageState {
     if (_currentConflict != null || !_canEdit) return false;
 
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
-    final savingDraftRevision = _draftRevision;
+    final savingEpoch = _editorEpoch;
+    final savingController = widget.notesController;
     bool persisted = false;
     _update(() {
       _saving = true;
@@ -31,6 +32,10 @@ extension _NoteDetailActions on NoteDetailPageState {
       if (!mounted) {
         return true;
       }
+      if (savingEpoch != _editorEpoch ||
+          !identical(savingController, widget.notesController)) {
+        return false;
+      }
       if (widget.notesController is SecuredNotesController &&
           !(widget.notesController as SecuredNotesController)
               .capabilitiesFor(saved)
@@ -44,10 +49,10 @@ extension _NoteDetailActions on NoteDetailPageState {
         _pendingSavedNote = null;
         _savedTitle = saved.title;
         _savedContent = saved.content;
+        _savedDocument = saved.document;
+        _richEditor?.acceptSavedDocument(saved.document);
         _summaryController.clearFailure();
-        _statusMessage = _draftRevision == savingDraftRevision
-            ? copy.saved
-            : copy.autoSavePending;
+        _statusMessage = _isDirty ? null : copy.saved;
         _didPersist = true;
       });
       _notifyDirtyChanged();
@@ -87,6 +92,13 @@ extension _NoteDetailActions on NoteDetailPageState {
     final String content = _contentController.text;
     final NoteDto? current = _note;
     final controller = widget.notesController;
+    final document = _editorDocument;
+    if (document != null && controller is DocumentNotesController) {
+      final rich = controller as DocumentNotesController;
+      return current == null
+          ? rich.createDocumentNote(title: title, document: document)
+          : rich.saveDocumentSnapshot(current, title, document);
+    }
     if (current != null && controller is SnapshotNotesController) {
       return (controller as SnapshotNotesController).saveEditorSnapshot(
         current,
@@ -183,9 +195,10 @@ extension _NoteDetailActions on NoteDetailPageState {
       }
       _update(() => _saving = true);
       try {
-        final NoteDto copy = await widget.notesController.createNote(
+        final NoteDto copy = await widget.notesController.createSnapshotNote(
           title: _titleController.text,
           content: _contentController.text,
+          document: _editorDocument,
         );
         if (mounted) {
           _pop(reason: NoteDetailExitReason.saved, noteOverride: copy);

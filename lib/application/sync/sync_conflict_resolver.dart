@@ -13,10 +13,14 @@ import 'sync_conflict.dart';
 import 'sync_mutation.dart';
 import 'protection_sync_change.dart';
 import 'sync_snapshot.dart';
+import 'sync_document_projection.dart';
 import '../notes/note_access.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_document.dart';
+
+part 'sync_conflict_projection.dart';
 
 enum SyncConflictChoice { useLocal, useRemote, later }
 
@@ -197,6 +201,7 @@ final class SyncConflictResolver {
           ownerId: accountUserId,
           title: local.title,
           content: local.content,
+          document: local.document,
           createdAt: local.createdAt,
           updatedAt: timestamp,
           pinnedAt: local.pinnedAt,
@@ -220,7 +225,24 @@ final class SyncConflictResolver {
           ),
         );
       } else {
-        notes.add(_pendingNote(local, serverRevision: remote.revision));
+        // Explicit Use local replaces the remote body. A plain legacy draft
+        // becomes a typed paragraph here, never during backfill or replay.
+        final resolved = _pendingNote(
+          local,
+          serverRevision: remote.revision,
+          document:
+              local.document ??
+              (remote.document == null
+                  ? null
+                  : NoteDocument([
+                      DocumentBlock(
+                        id: 'legacy-draft',
+                        kind: DocumentBlockKind.paragraph,
+                        runs: [DocumentText(local.content)],
+                      ),
+                    ])),
+        );
+        notes.add(resolved);
         outbox.add(
           _mutation(
             id: local.id,
@@ -233,7 +255,7 @@ final class SyncConflictResolver {
                     after: pendingProtection.after,
                     verifier: pendingProtection.verifier,
                   ),
-            local: local,
+            local: resolved,
             accountUserId: accountUserId,
             timestamp: timestamp,
             includeLabels: conflict.pending.payload?.includesLabels == true,
@@ -278,6 +300,8 @@ final class SyncConflictResolver {
         : SyncNotePayload(
             title: local.title,
             content: local.content,
+            document: local.document,
+            includesDocument: local.document != null,
             labelMembership: LabelMembership(local.labelIds),
             includesLabels:
                 local.share == null &&
@@ -291,67 +315,3 @@ final class SyncConflictResolver {
     createdAt: timestamp,
   );
 }
-
-LocalNoteState? _findNote(LocalSyncState state, NoteIdentity identity) {
-  for (final LocalNoteState note in state.notes) {
-    if (note.identity == identity) return note;
-  }
-  return null;
-}
-
-LocalNoteState _pendingNote(
-  LocalNoteState note, {
-  required int serverRevision,
-}) => LocalNoteState(
-  id: note.id,
-  ownerId: note.ownerId,
-  share: note.share,
-  title: note.title,
-  content: note.content,
-  createdAt: note.createdAt,
-  updatedAt: note.updatedAt,
-  pinnedAt: note.pinnedAt,
-  attachments: note.attachments,
-  labelIds: note.labelIds,
-  labelProjections: note.labelProjections,
-  serverRevision: serverRevision,
-  deletedAt: note.deletedAt,
-  status: NoteSyncStatus.pending,
-  protection: note.protection,
-  contentAvailable: note.contentAvailable,
-);
-
-LocalNoteState _fromRemote(
-  SyncNoteSnapshot note,
-  String accountUserId, {
-  LocalNoteState? previous,
-}) => LocalNoteState(
-  id: note.id,
-  ownerId: note.ownerId ?? accountUserId,
-  share: note.share,
-  title: note.title,
-  content: note.content,
-  createdAt: note.createdAt,
-  updatedAt: note.serverUpdatedAt,
-  pinnedAt: note.pinnedAt,
-  attachments: !note.contentAvailable || note.isDeleted
-      ? const []
-      : note.includesAttachments
-      ? note.attachments
-      : previous?.attachments ?? const [],
-  labelIds: !note.contentAvailable || note.isDeleted
-      ? const []
-      : note.includesLabels
-      ? note.labelIds
-      : previous?.labelIds ?? const [],
-  labelProjections: !note.contentAvailable || note.isDeleted
-      ? const []
-      : note.includesLabels
-      ? note.labelProjections
-      : previous?.labelProjections ?? const [],
-  serverRevision: note.revision,
-  deletedAt: note.deletedAt,
-  status: NoteSyncStatus.synced,
-  protection: note.protection,
-  contentAvailable: note.contentAvailable,
-);

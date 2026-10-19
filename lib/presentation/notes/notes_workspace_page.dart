@@ -40,6 +40,7 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.syncController,
     this.onNoteEdited,
     this.onOpenNoteRag,
+    this.onDetailVisibilityChanged,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -61,6 +62,7 @@ final class NotesWorkspacePage extends StatefulWidget {
 
   /// Opens the ask-notes screen for the current note when the host supports it.
   final ValueChanged<NoteDto>? onOpenNoteRag;
+  final ValueChanged<bool>? onDetailVisibilityChanged;
 
   @override
   NotesWorkspacePageState createState() => NotesWorkspacePageState();
@@ -78,6 +80,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   NoteDetailSelectionRequest? _pendingSelectionRequest;
   Object? _lastSyncState;
   bool _detailDirty = false;
+  bool? _lastReportedDetailVisibility;
   Object? _error;
   bool _loading = true;
   Future<void>? _loadInFlight;
@@ -130,6 +133,27 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _detailWidgetKey.currentState?.hasActiveOperation ?? false;
 
   bool get _showDetail => _editingNewNote || _selectedNote != null;
+
+  bool _readableNote(NoteDto note) => _application is SecuredNotesController
+      ? (_application as SecuredNotesController).capabilitiesFor(note).canRead
+      : !note.isProtected && note.contentAvailable;
+
+  bool get _hasEmbeddedSyncHeader =>
+      widget.embeddedInWorkspace &&
+      _showDetail &&
+      (_detailWidgetKey.currentState?.rendersSyncHeader ??
+          (_selectedNote == null || _readableNote(_selectedNote!)));
+
+  void _reportDetailVisibility() {
+    final visible = _showDetail;
+    if (_lastReportedDetailVisibility == visible) return;
+    _lastReportedDetailVisibility = visible;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _lastReportedDetailVisibility == visible) {
+        widget.onDetailVisibilityChanged?.call(visible);
+      }
+    });
+  }
 
   Future<void> _requestDetailClose() =>
       _detailWidgetKey.currentState?.requestClose() ?? Future<void>.value();
@@ -264,6 +288,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _selectedNoteId = null;
       _sharedOnly = false;
       _editingNewNote = true;
+      // Autosave can create a note while this workspace still owns a "new"
+      // editor. A new create intent must get a new editor, even with that key.
+      _detailKeyIdentity = null;
       _pendingSelectionRequest = null;
     });
   }

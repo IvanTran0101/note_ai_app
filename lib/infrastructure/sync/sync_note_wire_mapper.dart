@@ -4,6 +4,7 @@ part of 'sync_http_mapper.dart';
 SyncNoteSnapshot _decodeNote(
   Map<String, Object?> json, {
   bool authorizedContent = false,
+  bool documents = false,
 }) {
   final Object? id = json['id'];
   final securityFields = [
@@ -29,6 +30,11 @@ SyncNoteSnapshot _decodeNote(
     throw const FormatException('Invalid note protection metadata.');
   }
   final hasContent = available && (!enabled || authorizedContent);
+  final document = _readDocument(
+    json,
+    readable: hasContent,
+    requireDocument: documents,
+  );
   final share = json['share'] == null
       ? null
       : ShareWireCodec.decode(json['share']);
@@ -45,6 +51,8 @@ SyncNoteSnapshot _decodeNote(
     share: share,
     title: hasContent ? _readString(json, 'title') : '',
     content: hasContent ? _readString(json, 'content') : '',
+    document: document,
+    includesDocument: json.containsKey('document'),
     attachments:
         hasContent &&
             json['deletedAt'] == null &&
@@ -71,6 +79,30 @@ SyncNoteSnapshot _decodeNote(
     pinnedAt: _readOptionalUtcTimestamp(json, 'pinnedAt'),
     deletedAt: _readOptionalTimestamp(json, 'deletedAt'),
   );
+}
+
+NoteDocument? _readDocument(
+  Map<String, Object?> json, {
+  required bool readable,
+  required bool requireDocument,
+}) {
+  if (requireDocument && !json.containsKey('document')) {
+    throw const FormatException('Typed document presence required.');
+  }
+  final raw = json['document'];
+  if (raw == null) return null;
+  if (!readable || json['deletedAt'] != null) {
+    throw const FormatException('Unavailable document must be redacted.');
+  }
+  try {
+    final document = NoteDocumentCodec.decode(raw);
+    if (document.plainText != json['content']) {
+      throw const FormatException('Document projection mismatch.');
+    }
+    return document;
+  } on Object {
+    throw const FormatException('Invalid typed document.');
+  }
 }
 
 /// Reads a required string field, or throws when it is missing or not a string.

@@ -60,6 +60,7 @@ final class SyncPageProjection {
       return;
     }
     _refreshLabels(snapshot, old, index);
+    _recordLegacyDocumentConflict(snapshot, index);
     if (_updateConflict(snapshot)) return;
     if (outbox.any(
       (m) =>
@@ -67,7 +68,11 @@ final class SyncPageProjection {
     )) {
       return;
     }
-    if (old != null && snapshot.revision <= old.serverRevision) return;
+    if (old != null &&
+        snapshot.revision <= old.serverRevision &&
+        !_backfillsDocument(snapshot, old)) {
+      return;
+    }
     final incoming = fromRemote(snapshot, NoteSyncStatus.synced, previous: old);
     if (index < 0) {
       notes.add(incoming);
@@ -108,6 +113,7 @@ final class SyncPageProjection {
       ownerId: old.ownerId,
       title: old.title,
       content: old.content,
+      document: old.document,
       createdAt: old.createdAt,
       updatedAt: old.updatedAt,
       pinnedAt: old.pinnedAt,
@@ -130,7 +136,19 @@ final class SyncPageProjection {
     final index = conflicts.indexWhere((c) => c.identity == identity);
     if (index < 0) return false;
     final old = conflicts[index];
-    if (snapshot.revision > (old.remote?.revision ?? 0)) {
+    final previous = old.remote;
+    final backfill =
+        previous != null &&
+        !previous.includesDocument &&
+        snapshot.includesDocument &&
+        snapshot.revision == previous.revision &&
+        snapshot.title == previous.title &&
+        snapshot.content == previous.content &&
+        snapshot.contentAvailable == previous.contentAvailable &&
+        snapshot.protection == previous.protection &&
+        snapshot.share == previous.share &&
+        snapshot.deletedAt == previous.deletedAt;
+    if (snapshot.revision > (previous?.revision ?? 0) || backfill) {
       conflicts[index] = SyncConflict(
         noteId: old.noteId,
         remote: snapshot,
@@ -142,6 +160,58 @@ final class SyncPageProjection {
     }
     return true;
   }
+
+  void _recordLegacyDocumentConflict(SyncNoteSnapshot snapshot, int index) {
+    if (index < 0 ||
+        snapshot.document == null ||
+        !snapshot.contentAvailable ||
+        conflicts.any(
+          (c) => c.identity == snapshot.identityFor(state.accountUserId),
+        )) {
+      return;
+    }
+    final local = notes[index];
+    final pending = outbox
+        .where(
+          (m) =>
+              !m.isLabel &&
+              m.mutation.identityFor(state.accountUserId) == local.identity &&
+              m.blocked &&
+              m.lastError == SyncErrorCode.documentRequiresUpgrade &&
+              m.payload?.includesDocument != true,
+        )
+        .firstOrNull;
+    if (pending == null ||
+        !local.contentAvailable ||
+        snapshot.revision < local.serverRevision ||
+        snapshot.share != local.share ||
+        snapshot.protection != local.protection) {
+      return;
+    }
+    conflicts.add(
+      SyncConflict(
+        noteId: local.id,
+        local: local,
+        pending: pending,
+        remote: snapshot,
+        detectedAt: pending.createdAt,
+      ),
+    );
+    changed = true;
+  }
+
+  bool _backfillsDocument(SyncNoteSnapshot snapshot, LocalNoteState old) =>
+      snapshot.revision == old.serverRevision &&
+      snapshot.includesDocument &&
+      snapshot.document != null &&
+      old.document == null &&
+      old.contentAvailable &&
+      snapshot.contentAvailable &&
+      snapshot.title == old.title &&
+      snapshot.content == old.content &&
+      snapshot.protection == old.protection &&
+      snapshot.share == old.share &&
+      snapshot.deletedAt == old.deletedAt;
 
   void _blockStaleWork(SyncNoteSnapshot snapshot) {
     final identity = snapshot.identityFor(state.accountUserId);

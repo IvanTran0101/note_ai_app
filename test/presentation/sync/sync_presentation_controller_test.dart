@@ -34,6 +34,72 @@ import 'package:note_ai_app/presentation/workspace/workspace_localizations.dart'
 final DateTime _time = DateTime.utc(2026, 9, 26, 10);
 
 void main() {
+  for (final local in ['saved', 'pending', 'failed']) {
+    testWidgets(
+      'header combines $local and cloud status with one sync action',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          final coordinator = _FakeCoordinator();
+          final sync = _controller(
+            _MemoryStore(LocalSyncState(accountUserId: 'account-1')),
+            coordinator,
+          );
+          addTearDown(sync.dispose);
+          addTearDown(coordinator.close);
+          await sync.refresh();
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: SyncStatusPanel(
+                  controller: sync,
+                  iconOnly: true,
+                  additionalStatus: 'Local $local',
+                  localPending: local == 'pending',
+                  localFailed: local == 'failed',
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final button = find.byKey(const ValueKey<String>('sync-now'));
+          expect(button, findsOneWidget);
+          final label = tester.getSemantics(button).label;
+          expect(label, contains('Local $local'));
+          expect(RegExp('All synced').allMatches(label).length, 1);
+          expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
+          expect(
+            find.byIcon(
+              local == 'failed'
+                  ? Icons.error_outline
+                  : local == 'pending'
+                  ? Icons.cloud_upload_outlined
+                  : Icons.cloud_done_outlined,
+            ),
+            findsOneWidget,
+          );
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(coordinator.calls, 1);
+          coordinator.publish(const SyncStatusSnapshot.offline());
+          await tester.pumpAndSettle();
+          expect(tester.getSemantics(button).label, contains('Offline'));
+          expect(tester.getSemantics(button).label, contains('Retry'));
+          expect(
+            find.byIcon(
+              local == 'failed'
+                  ? Icons.error_outline
+                  : Icons.cloud_off_outlined,
+            ),
+            findsOneWidget,
+          );
+          await tester.pumpWidget(const SizedBox());
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
   for (final scenario in [
     'same text ACK',
     'remote text changed',
@@ -575,6 +641,7 @@ final class _MemoryStore implements ILocalSyncStore {
 }
 
 final class _FakeCoordinator implements ISyncCoordinator {
+  int calls = 0;
   final StreamController<SyncStatusSnapshot> _changes =
       StreamController<SyncStatusSnapshot>.broadcast();
   SyncStatusSnapshot _status = const SyncStatusSnapshot.idle();
@@ -586,7 +653,10 @@ final class _FakeCoordinator implements ISyncCoordinator {
   Stream<SyncStatusSnapshot> get statusChanges => _changes.stream;
 
   @override
-  Future<SyncReport> syncNow() async => SyncReport();
+  Future<SyncReport> syncNow() async {
+    calls++;
+    return SyncReport();
+  }
 
   void publish(SyncStatusSnapshot value) {
     _status = value;

@@ -123,58 +123,53 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
         opacity: animation,
         child: Padding(
           padding: const EdgeInsets.only(bottom: NoteFlowSpacing.md),
-          child: Semantics(
-            selected: selected,
-            button: true,
-            label: '$title. $preview',
-            child: ListTile(
-              key: ValueKey<String>(
-                '${outgoing ? 'outgoing-' : ''}note-${note.reference}',
-              ),
-              selected: selected,
-              selectedTileColor: tokens.selectedSurface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(NoteFlowRadius.row),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: NoteFlowSpacing.md,
-                vertical: 2,
-              ),
-              leading: Icon(
-                note.isProtected
-                    ? Icons.lock_outline
-                    : Icons.description_outlined,
-                size: 20,
-                color: selected ? tokens.textPrimary : tokens.textMuted,
-              ),
-              title: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  NoteLabelChips(note: note, readable: !masked),
-                  Text(
-                    note.share == null || outgoing
-                        ? preview
-                        : '$preview\n${SharingCopy(context).metadata(note.share!)}',
-                    maxLines: note.share == null ? 1 : 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: tokens.textMuted),
-                  ),
-                ],
-              ),
-              onTap: outgoing || widget.actionBusy
-                  ? null
-                  : () => widget.onSelectNote(note),
+          child: ListTile(
+            key: ValueKey<String>(
+              '${outgoing ? 'outgoing-' : ''}note-${note.reference}',
             ),
+            selected: selected,
+            selectedTileColor: tokens.selectedSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(NoteFlowRadius.row),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: NoteFlowSpacing.md,
+              vertical: 2,
+            ),
+            leading: Icon(
+              note.isProtected
+                  ? Icons.lock_outline
+                  : Icons.description_outlined,
+              size: 20,
+              color: selected ? tokens.textPrimary : tokens.textMuted,
+            ),
+            title: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                NoteLabelChips(note: note, readable: !masked),
+                Text(
+                  note.share == null || outgoing
+                      ? preview
+                      : '$preview\n${SharingCopy(context).metadata(note.share!)}',
+                  maxLines: note.share == null ? 1 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: tokens.textMuted),
+                ),
+              ],
+            ),
+            onTap: outgoing || widget.actionBusy
+                ? null
+                : () => widget.onSelectNote(note),
           ),
         ),
       ),

@@ -130,7 +130,7 @@ const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
 const matchesMethod = (expected: string, method: string): boolean => method === '' || method === expected;
 
 const routeOf = (method: string, path: string): SyncRoute => {
-  switch (path.replace('/sync/v2/', '/sync/')) {
+  switch (path.replace(/^\/sync\/v[23]\//, '/sync/')) {
     case HEALTH_PATH:
       return matchesMethod('GET', method) ? 'health' : 'unknown';
     case '/sync/protection-predecessor':
@@ -197,6 +197,7 @@ const handleMutation = async (
   ownerId: string,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
   const v2 = event.rawPath.startsWith('/sync/v2/');
+  const wireVersion = event.rawPath.startsWith('/sync/v3/') ? 3 : v2 ? 2 : 1;
   if (v2 && event.rawPath === '/sync/v2/mutations') {
     try {
       const body = JSON.parse(event.body ?? 'null');
@@ -211,8 +212,8 @@ const handleMutation = async (
       throw error;
     }
   }
-  const path = event.rawPath.replace('/sync/v2/', '/sync/');
-  const parsed = parseMutationBody(event.body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', v2 ? 2 : 1);
+  const path = event.rawPath.replace(/^\/sync\/v[23]\//, '/sync/');
+  const parsed = parseMutationBody(event.body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', wireVersion);
   if (!parsed.ok) {
     logRejected('mutations', parsed.problem);
     return invalidMutationResponse(parsed.problem);
@@ -221,7 +222,7 @@ const handleMutation = async (
   try {
     const result = await store.applyMutation(parsed.mutation.ownerId ?? ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
       inspectOnly: path === '/sync/protection-predecessor' });
-    return v2 ? noteV2MutationResponse(result) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+    return wireVersion >= 2 ? noteV2MutationResponse(result, wireVersion as 2 | 3) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
     const mapped = responseForStoreError('mutations', error);
     if (mapped !== undefined) {
@@ -242,7 +243,8 @@ const handleChanges = async (
   }
 
   try {
-    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit, event.rawPath.startsWith('/sync/v2/') ? 2 : 1));
+    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit,
+      event.rawPath.startsWith('/sync/v3/') ? 3 : event.rawPath.startsWith('/sync/v2/') ? 2 : 1));
   } catch (error) {
     const mapped = responseForStoreError('changes', error);
     if (mapped !== undefined) {

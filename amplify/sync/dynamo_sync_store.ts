@@ -8,6 +8,7 @@ import { recipientProjection } from '../sharing/feed_projection';
 import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { decodeChangeCursor, encodeChangeCursor } from './cursor';
+import {boundedChangeRows} from './bounded_change_rows';
 import { SyncInvalidMutationError, SyncStorageError } from './sync_store_models';
 import type { SyncStore, DynamoSyncStoreOptions, NoteSnapshot, ApplyMutationResult, ChangesPage,
   NormalizedMutation, CommitOutcome, StoredMutation, SyncMutation } from './sync_store_models';
@@ -75,7 +76,7 @@ export class DynamoSyncStore implements SyncStore {
     const project = async (n: NoteSnapshot, a?: ProtectionMetadata) => {
       const projected = actor !== ownerId
         ? await recipientProjection(actor, ownerId, n, this.acl!, this.security!) : this.metadataProjection(n, a);
-      if (request.wireVersion !== 2) return projected;
+      if (request.wireVersion !== 2 && request.wireVersion !== 3) return projected;
       const labeled = await projectNoteLabels(this.documentClient, this.tableName, ownerId, projected, actor !== ownerId);
       if (actor !== ownerId) return recipientProjection(actor, ownerId, labeled, this.acl!, this.security!);
       const live = await authorize();
@@ -92,7 +93,7 @@ export class DynamoSyncStore implements SyncStore {
           const live = await this.security.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
           if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
           return { status: 'applied', mutationId: request.mutationId,
-            note: { ...this.metadataProjection(recorded.note, live), title: '', content: '', contentAvailable: false }, replayed: true };
+            note: { ...this.metadataProjection(recorded.note, live), title: '', content: '', ...(recorded.note.document !== undefined ? {document: null} : {}), contentAvailable: false }, replayed: true };
         }
       }
       let authority = await authorize();
@@ -132,7 +133,7 @@ export class DynamoSyncStore implements SyncStore {
         if (request.protectionChange) {
           const live = await this.security!.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
           return { status: 'applied', mutationId: request.mutationId,
-            note: { ...this.metadataProjection(outcome.note, live), title: '', content: '', contentAvailable: false }, replayed: false };
+            note: { ...this.metadataProjection(outcome.note, live), title: '', content: '', ...(outcome.note.document !== undefined ? {document: null} : {}), contentAvailable: false }, replayed: false };
         }
         authority = await authorize();
         return { status: 'applied', mutationId: request.mutationId,
@@ -154,7 +155,7 @@ export class DynamoSyncStore implements SyncStore {
     const remote = recorded ? recorded.note : await this.readNote(ownerKey, request.noteId);
     const live = await this.security.metadata(actor, ownerId, request.noteId, true);
     const projection = remote ? { ...this.metadataProjection(remote, live),
-      title: '', content: '', contentAvailable: false } : null;
+      title: '', content: '', ...(remote.document !== undefined ? {document: null} : {}), contentAvailable: false } : null;
     if (recorded) {
       if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
       return { status: 'applied', mutationId: request.mutationId, note: projection!, replayed: true };
@@ -162,7 +163,7 @@ export class DynamoSyncStore implements SyncStore {
     return { status: 'conflict', mutationId: request.mutationId, remoteNote: projection };
   }
 
-  async listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion: 1 | 2 = 1): Promise<ChangesPage> {
+  async listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion: 1 | 2 | 3 = 1): Promise<ChangesPage> {
     const after = decodeChangeCursor(cursor, ownerId);
     const pageSize = pageSizeOf(limit);
     const ownerKey = ownerKeyOf(ownerId);
@@ -186,8 +187,10 @@ export class DynamoSyncStore implements SyncStore {
       contiguousRows.push(row);
       expectedSequence++;
     }
-    const hasMore = !foundGap && contiguousRows.length > pageSize;
-    const page = contiguousRows.slice(0, pageSize);
+    const page = wireVersion === 3 ? boundedChangeRows(contiguousRows, pageSize)
+      : contiguousRows.slice(0, pageSize);
+    const hasMore = page.length < Math.min(contiguousRows.length, pageSize) ||
+      !foundGap && contiguousRows.length > pageSize;
     const lastVisible = page.length === 0 ? after : sequenceOf(page[page.length - 1]);
     const committed = this.feed && !hasMore ? await this.feed.item(ownerId, META_SORT_KEY) : null;
     if (committed && (!Number.isSafeInteger(committed.lastSequence) || committed.lastSequence < 0)) throw corruptData();
@@ -199,17 +202,17 @@ export class DynamoSyncStore implements SyncStore {
         if (snapshot.ownerId && snapshot.ownerId !== ownerId) {
           if (!this.acl || !this.security) throw new NoteSecurityError('denied');
           const projected = await recipientProjection(ownerId, snapshot.ownerId, snapshot, this.acl, this.security);
-          const labeled = wireVersion === 2 ? await projectNoteLabels(this.documentClient, this.tableName, snapshot.ownerId, projected, true) : projected;
+          const labeled = wireVersion >= 2 ? await projectNoteLabels(this.documentClient, this.tableName, snapshot.ownerId, projected, true) : projected;
           return recipientProjection(ownerId, snapshot.ownerId, labeled, this.acl, this.security);
         }
         const protection = await this.security?.metadata(ownerId, ownerId, snapshot.id);
         const projected = this.metadataProjection(snapshot, protection);
-        return wireVersion === 2 ? projectNoteLabels(this.documentClient, this.tableName, ownerId, projected) : projected;
+        return wireVersion >= 2 ? projectNoteLabels(this.documentClient, this.tableName, ownerId, projected) : projected;
       })),
       nextCursor: encodeChangeCursor(ownerId, page.length === 0 ? after : sequenceOf(page[page.length - 1])),
       hasMore,
       ...(catchUpPending ? { catchUpPending: true } : {}),
-      ...(wireVersion === 2 ? {wireVersion: 2, labels: page.filter(row => row.entityType === 'label').map(row => labelSnapshot(row, ownerId))} : {}),
+      ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3, labels: page.filter(row => row.entityType === 'label').map(row => labelSnapshot(row, ownerId))} : {}),
     };
   }
 
@@ -287,7 +290,7 @@ export class DynamoSyncStore implements SyncStore {
     const enabled = authority?.enabled ?? note.protected ?? false;
     return { ...note, protected: enabled,
       protectionRevision: authority?.revision ?? note.protectionRevision ?? 0,
-      ...(enabled ? { title: '', content: '', ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
+      ...(enabled ? { title: '', content: '', ...(note.document !== undefined ? {document: null} : {}), ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
   }
 
   private async readItem(ownerKey: string, sortKey: string): Promise<Record<string, unknown> | null> {

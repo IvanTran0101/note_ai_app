@@ -2,10 +2,11 @@
 
 The installed Flutter SDK is never edited. Two test-server handlers in the
 current SDK use Windows filesystem separators for browser URL paths, causing
-CanvasKit 404s and mismatched test selectors. Normalize only those handlers in
+CanvasKit 404s and mismatched test selectors/entrypoint literals. Normalize only those paths in
 an isolated copy; all product, compiler, engine and browser code stays real.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,9 +16,51 @@ import tempfile
 from urllib.parse import urljoin
 
 
+def normalize_windows_test_urls(overlay):
+    """Only patch the owned QA copy; preserve the installed SDK byte-for-byte."""
+    replacements = {
+        'lib/src/test/flutter_web_platform.dart': [
+            ('final String fullPath = _fileSystem.path.fromUri(request.url);',
+             'final String fullPath = request.url.path;'),
+            ('window.testSelector = "$test";',
+             '''window.testSelector = "${test.replaceAll(String.fromCharCode(92), '/')}";'''),
+        ],
+        'lib/src/web/bootstrap.dart': [
+            ('final String entryPointPath = testInfo.entryPoint;',
+             "final String entryPointPath = testInfo.entryPoint.replaceAll(String.fromCharCode(92), '/');"),
+        ],
+    }
+    receipt = []
+    for relative, edits in replacements.items():
+        path = overlay / relative
+        if not path.is_file():
+            continue  # Older SDKs may not have the newer Web bootstrap file.
+        before = path.read_bytes()
+        source = before.decode('utf-8')
+        applied = []
+        for old, new in edits:
+            count = source.count(old)
+            if count:
+                source = source.replace(old, new)
+                applied.append({'original': old, 'count': count})
+        if applied:
+            after = source.encode('utf-8')
+            path.write_bytes(after)
+            receipt.append({
+                'path': relative,
+                'before_sha256': hashlib.sha256(before).hexdigest(),
+                'after_sha256': hashlib.sha256(after).hexdigest(),
+                'edits': applied,
+            })
+    (overlay / 'windows-url-receipt.json').write_text(
+        json.dumps(receipt, indent=2), encoding='utf-8')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--sdk', required=True)
+    parser.add_argument('--dart-define', action='append', default=[],
+                        help='Explicit compile-time configuration for authorized local tests')
     parser.add_argument('--aggregate', action='store_true',
                         help='Register each target main in its own group in one Chrome compilation')
     parser.add_argument('targets', nargs='*', default=['test'])
@@ -55,11 +98,8 @@ def main():
         raise RuntimeError('overlay escaped temporary directory')
     shutil.copytree(tools / 'lib', overlay / 'lib')
     shutil.copytree(tools / 'bin', overlay / 'bin')
-    handler = overlay / 'lib/src/test/flutter_web_platform.dart'
-    source = handler.read_text(encoding='utf-8')
-    old = '_fileSystem.path.fromUri(request.url)'
-    if os.name == 'nt' and source.count(old) == 2:
-        handler.write_text(source.replace(old, 'request.url.path'), encoding='utf-8')
+    if os.name == 'nt':
+        normalize_windows_test_urls(overlay)
     original_config = tools / '.dart_tool/package_config.json'
     config = json.loads(original_config.read_text(encoding='utf-8'))
     for package in config['packages']:
@@ -71,7 +111,8 @@ def main():
     dart = sdk / 'bin/cache/dart-sdk/bin/dart.exe'
     command = [str(dart), f'--packages={config_path}', str(overlay / 'bin/flutter_tools.dart'),
                'test', '--platform', 'chrome', '--no-pub', '--reporter', 'expanded',
-               f'--file-reporter=json:{temp_root / "m05-chrome-results.jsonl"}', *targets]
+               f'--file-reporter=json:{temp_root / "m05-chrome-results.jsonl"}',
+               *[f'--dart-define={value}' for value in args.dart_define], *targets]
     print(f'Isolated Flutter tools: {overlay}', flush=True)
     return subprocess.call(command, env=env)
 

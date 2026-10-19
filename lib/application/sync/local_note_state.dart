@@ -7,6 +7,7 @@ import '../../domain/labels/label_projection.dart';
 import 'note_sync_status.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
 
@@ -23,6 +24,7 @@ final class LocalNoteState {
     required String ownerId,
     required this.title,
     required this.content,
+    this.document,
     required this.createdAt,
     required this.updatedAt,
     this.pinnedAt,
@@ -49,8 +51,12 @@ final class LocalNoteState {
             content.isNotEmpty ||
             this.attachments.isNotEmpty ||
             this.labelIds.isNotEmpty ||
-            this.labelProjections.isNotEmpty)) {
+            this.labelProjections.isNotEmpty ||
+            document != null)) {
       throw ArgumentError('Unavailable content must be redacted.');
+    }
+    if (document != null && content != document!.plainText) {
+      throw ArgumentError('Rich content must match its projection.');
     }
   }
 
@@ -68,6 +74,7 @@ final class LocalNoteState {
 
   /// The current content.
   final String content;
+  final NoteDocument? document;
   final List<Attachment> attachments;
   final List<String> labelIds;
   final List<LabelProjection> labelProjections;
@@ -102,6 +109,7 @@ final class LocalNoteState {
         other.ownerId == ownerId &&
         other.title == title &&
         other.content == content &&
+        other.document == document &&
         sameAttachments(other.attachments, attachments) &&
         sameLabelIds(other.labelIds, labelIds) &&
         _sameLabels(other.labelProjections, labelProjections) &&
@@ -122,6 +130,7 @@ final class LocalNoteState {
     ownerId,
     title,
     content,
+    document,
     Object.hashAll(attachments),
     createdAt,
     updatedAt,

@@ -23,10 +23,7 @@ extension _NoteDetailConflicts on NoteDetailPageState {
         return;
       }
       if (draftChoice == SyncDirtyDraftChoice.discard) {
-        _titleController.text = conflict.local.title;
-        _contentController.text = conflict.local.content;
-        _savedTitle = conflict.local.title;
-        _savedContent = conflict.local.content;
+        _adoptSavedNote(NoteDto.fromLocalState(conflict.local));
         _notifyDirtyChanged();
         if (_note?.isProtected == true) await _readSecuredNote();
         if (!mounted || !_canEdit) {
@@ -78,9 +75,10 @@ extension _NoteDetailConflicts on NoteDetailPageState {
       _error = null;
     });
     try {
-      copy = await widget.notesController.createNote(
+      copy = await widget.notesController.createSnapshotNote(
         title: _titleController.text,
         content: _contentController.text,
+        document: _editorDocument,
       );
       if (!mounted) return;
       _update(() => _saving = false);

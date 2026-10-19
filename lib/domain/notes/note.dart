@@ -5,6 +5,7 @@ import 'note_share_grant.dart';
 import 'attachment.dart';
 import '../labels/label.dart';
 import '../labels/label_projection.dart';
+import 'note_document.dart';
 
 /// The Note aggregate root for the notes domain.
 ///
@@ -26,6 +27,7 @@ class Note {
     this._attachments,
     this._labelIds,
     this.labelProjections,
+    this._document,
   );
 
   /// Creates a new note with valid text and identical creation/update times.
@@ -35,9 +37,10 @@ class Note {
     required String title,
     required String content,
     required DateTime now,
+    NoteDocument? document,
   }) {
     _requireText(title, "title");
-    _requireText(content, "content");
+    _requireDocumentProjection(content, document);
     return Note._(
       id,
       ownerId,
@@ -53,6 +56,7 @@ class Note {
       const [],
       const [],
       const [],
+      document,
     );
   }
 
@@ -72,6 +76,7 @@ class Note {
     List<Attachment> attachments = const [],
     Iterable<String> labelIds = const [],
     Iterable<LabelProjection> labelProjections = const [],
+    NoteDocument? document,
   }) {
     if (share != null &&
         (share.note != NoteIdentity(ownerId, id) ||
@@ -84,8 +89,12 @@ class Note {
                 content.isNotEmpty ||
                 attachments.isNotEmpty ||
                 labelIds.isNotEmpty ||
-                labelProjections.isNotEmpty))) {
+                labelProjections.isNotEmpty ||
+                document != null))) {
       throw ArgumentError('Invalid note content availability.');
+    }
+    if (document != null && document.plainText != content) {
+      throw ArgumentError('Note document projection does not match content.');
     }
     return Note._(
       id,
@@ -102,6 +111,7 @@ class Note {
       freezeAttachments(attachments, noteId: id),
       freezeLabelIds(labelIds),
       List.unmodifiable(labelProjections),
+      document,
     );
   }
 
@@ -114,6 +124,7 @@ class Note {
   final DateTime _createdAt;
   String _title;
   String _content;
+  NoteDocument? _document;
   DateTime _updatedAt;
   DateTime? _pinnedAt;
   List<Attachment> _attachments;
@@ -159,6 +170,11 @@ class Note {
   String get content {
     _requireContent();
     return _content;
+  }
+
+  NoteDocument? get document {
+    _requireContent();
+    return _document;
   }
 
   /// When this note was created. Never changes after creation.
@@ -225,7 +241,7 @@ class Note {
   /// Replaces note content while preserving its formatting.
   void replaceContent(String content, DateTime now) {
     _requireContent();
-    _requireText(content, "content");
+    _requirePlainWrite(content);
     if (_content == content) return;
     _content = content;
     _updatedAt = now;
@@ -234,11 +250,30 @@ class Note {
   void replaceText(String title, String content, DateTime now) {
     _requireContent();
     _requireText(title, 'title');
-    _requireText(content, 'content');
+    _requirePlainWrite(content);
     if (_title == title && _content == content) return;
     _title = title;
     _content = content;
     _updatedAt = now.toUtc();
+  }
+
+  /// A document mutation owns its plain projection; format-only changes count.
+  void replaceDocument(String title, NoteDocument document, DateTime now) {
+    _requireContent();
+    _requireText(title, 'title');
+    if (_title == title && _document == document) return;
+    _title = title;
+    _document = document;
+    _content = document.plainText;
+    _updatedAt = now.toUtc();
+  }
+
+  void _requirePlainWrite(String content) {
+    if (_document == null) {
+      _requireText(content, 'content');
+    } else if (_content != content) {
+      throw ArgumentError('A rich note requires a document snapshot.');
+    }
   }
 
   /// Pins once; repeated requests do not move a note to the top again.
@@ -265,5 +300,13 @@ class Note {
 void _requireText(String value, String field) {
   if (value.trim().isEmpty) {
     throw ArgumentError('Note $field must not be blank.');
+  }
+}
+
+void _requireDocumentProjection(String content, NoteDocument? document) {
+  if (document == null) {
+    _requireText(content, 'content');
+  } else if (document.plainText != content) {
+    throw ArgumentError('Note document projection does not match content.');
   }
 }

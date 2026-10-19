@@ -8,9 +8,20 @@ import 'sync_presentation_controller.dart';
 
 /// Compact, readable account sync state and a foreground retry action.
 final class SyncStatusPanel extends StatelessWidget {
-  const SyncStatusPanel({super.key, required this.controller});
+  const SyncStatusPanel({
+    super.key,
+    required this.controller,
+    this.compact = false,
+    this.iconOnly = false,
+    this.additionalStatus,
+    this.localPending = false,
+    this.localFailed = false,
+  });
 
   final SyncPresentationController controller;
+  final bool compact;
+  final bool iconOnly, localPending, localFailed;
+  final String? additionalStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +42,104 @@ final class SyncStatusPanel extends StatelessWidget {
             copy.invalidMutationHint,
         ];
         final String semanticLabel = <String>[title, ...details].join('. ');
+        final VoidCallback? foregroundAction =
+            controller.isLoading || controller.status.isSyncing
+            ? null
+            : controller.loadError == null
+            ? controller.syncNow
+            : controller.refresh;
+        if (iconOnly) {
+          final label = <String>[
+            if (additionalStatus != null)
+              additionalStatus!.trim().replaceFirst(RegExp(r'[.!?…]+$'), ''),
+            semanticLabel,
+            controller.loadError != null ||
+                    controller.status.status == SyncStatus.failed ||
+                    controller.status.status == SyncStatus.offline
+                ? copy.retry
+                : copy.syncNow,
+          ].join('. ');
+          return Semantics(
+            key: const ValueKey<String>('sync-now'),
+            liveRegion: true,
+            button: true,
+            enabled: foregroundAction != null,
+            label: label,
+            onTap: foregroundAction,
+            excludeSemantics: true,
+            child: IconButton(
+              tooltip: label,
+              onPressed: foregroundAction,
+              icon: controller.status.isSyncing
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      localFailed
+                          ? Icons.error_outline
+                          : localPending &&
+                                !controller.isLoading &&
+                                controller.loadError == null &&
+                                controller.status.status == SyncStatus.idle
+                          ? Icons.cloud_upload_outlined
+                          : _icon,
+                      size: 20,
+                    ),
+            ),
+          );
+        }
+        if (compact) {
+          return Semantics(
+            container: true,
+            explicitChildNodes: true,
+            liveRegion: true,
+            label: semanticLabel,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(_icon, size: 18, color: colors.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ExcludeSemantics(
+                      child: Tooltip(
+                        message: semanticLabel,
+                        child: Text(
+                          <String>[title, ...details].join(' · '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey<String>('sync-now'),
+                    tooltip:
+                        controller.loadError != null ||
+                            controller.status.status == SyncStatus.failed ||
+                            controller.status.status == SyncStatus.offline
+                        ? copy.retry
+                        : copy.syncNow,
+                    onPressed:
+                        controller.isLoading || controller.status.isSyncing
+                        ? null
+                        : controller.loadError == null
+                        ? controller.syncNow
+                        : controller.refresh,
+                    icon: controller.status.isSyncing
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return Semantics(
           container: true,
           liveRegion: true,

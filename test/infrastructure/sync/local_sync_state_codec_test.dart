@@ -57,14 +57,14 @@ void main() {
     });
 
     test(
-      'writes exactly the frozen envelope fields at inner schema version 6',
+      'writes exactly the frozen envelope fields at inner schema version 7',
       () {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           richStateFixture(),
         );
 
-        expect(LocalSyncStateCodec.schemaVersion, 6);
-        expect(LocalSyncSchema.version, 6);
+        expect(LocalSyncStateCodec.schemaVersion, 7);
+        expect(LocalSyncSchema.version, 7);
         expect(envelope.keys.toSet(), <String>{
           'schemaVersion',
           'accountUserId',
@@ -76,7 +76,7 @@ void main() {
           'labels',
           'syncWireVersion',
         });
-        expect(envelope['schemaVersion'], 6);
+        expect(envelope['schemaVersion'], 7);
         expect(envelope['accountUserId'], 'user-1');
         expect(envelope['cursor'], 'opaque-cursor-1');
         expect(envelope['notes'], isA<List<Object?>>());
@@ -110,7 +110,10 @@ void main() {
       final Map<String, Object?> tombstone = copyRecord(
         (envelope['notes']! as List<Object?>)[2],
       );
-      expect(tombstone.keys.toSet(), LocalSyncSchema.noteFields);
+      expect(
+        tombstone.keys.toSet(),
+        LocalSyncSchema.noteFields.difference({'document'}),
+      );
       expect(tombstone['deletedAt'], fixtureUpdatedAt.toIso8601String());
       expect(tombstone['status'], 'conflict');
       expect(tombstone['serverRevision'], 4);
@@ -143,7 +146,7 @@ void main() {
         copyRecord(conflicts[0])['remote'],
       );
       expect(liveRemote.keys.toSet(), {
-        ...LocalSyncSchema.snapshotFields,
+        ...LocalSyncSchema.snapshotFields.difference({'document'}),
         'includesAttachments',
         'includesLabels',
       });
@@ -352,14 +355,14 @@ void main() {
     });
 
     test(
-      'rejects versions outside v2/v3/v4/v5 legacy and v6 current contract',
+      'rejects versions outside v2/v3/v4/v5/v6 legacy and v7 current contract',
       () {
         // Web numbers erase the int/double distinction for integral values.
         // A fractional version is invalid on both runtimes.
         final List<Object?> versions = <Object?>[
           0,
           1,
-          7,
+          8,
           '3',
           3.25,
           null,

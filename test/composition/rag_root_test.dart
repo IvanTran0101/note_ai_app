@@ -22,6 +22,7 @@ import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
 
 import '../application/note_intelligence/rag_test_support.dart';
 import '../infrastructure/notes/note_repository_test_support.dart';
+import '../presentation/editor/rich_editor_test_support.dart';
 
 final class _SilentSource implements IRevisionSource {
   @override
@@ -107,9 +108,7 @@ void main() {
     );
     stores[actor] = createStore(actor);
     final FakeRagGateway fake = FakeRagGateway(
-      consentScript: <Object>[
-        RagConsent(accepted: true, generation: 1),
-      ],
+      consentScript: <Object>[RagConsent(accepted: true, generation: 1)],
     );
     final List<String> events = <String>[];
     final _RecordingGateway? gateway = withRag
@@ -130,6 +129,11 @@ void main() {
       if (gate != null) await gate.future;
       if (failSync) {
         throw http.ClientException('offline');
+      }
+      // This fixture intentionally models the older plain API. The new root
+      // probes V3 first and must fall back without treating it as deployed.
+      if (request.url.path == '/sync/v3/changes') {
+        return http.Response('{"code":"NOT_FOUND"}', 404);
       }
       return http.Response(
         '{"items":[],"nextCursor":null,"hasMore":false}',
@@ -203,7 +207,11 @@ void main() {
     final LocalNoteState note = harness.store.state.notes.firstWhere(
       (LocalNoteState candidate) => candidate.id == 'note-1',
     );
-    final RagSource source = sourceFor(note, sourceId: 'source-1', quote: quote);
+    final RagSource source = sourceFor(
+      note,
+      sourceId: 'source-1',
+      quote: quote,
+    );
     harness.fake.queryScript
       ..clear()
       ..add(answeredResult(<RagSource>[source]));
@@ -239,7 +247,9 @@ void main() {
       await askAndDisplaySource(tester, harness);
 
       harness.events.clear();
-      await tester.tap(find.byKey(const ValueKey<String>('rag-source-source-1')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('rag-source-source-1')),
+      );
       await tester.pumpAndSettle();
 
       final List<String> events = harness.events;
@@ -258,15 +268,18 @@ void main() {
 
       // The RAG route is gone and the cited note is open with the exact span.
       expect(find.byKey(RagPage.questionFieldKey), findsNothing);
-      final TextEditingController controller = tester
-          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-          .controller!;
-      final TextSelection selection = controller.selection;
+      final editor = visibleRichEditor(tester);
+      final selection = editor.editor.selection!.normalized;
+      expect(selection.isSingle, true);
       expect(
-        controller.text.substring(selection.start, selection.end),
+        editor.editor.document
+            .nodeAtPath(selection.start.path)!
+            .delta!
+            .toPlainText()
+            .substring(selection.start.offset, selection.end.offset),
         quote,
       );
-      expect(selection.start, content.indexOf(quote));
+      expect(selection.start.offset, content.indexOf(quote));
 
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();
@@ -306,10 +319,7 @@ void main() {
     await tester.tap(find.text('Title').first);
     await tester.pumpAndSettle();
     expect(find.byKey(NoteDetailPage.contentFieldKey), findsOneWidget);
-    await tester.enterText(
-      find.byKey(NoteDetailPage.contentFieldKey),
-      'draft in progress',
-    );
+    await replaceRichText(visibleRichEditor(tester), 'draft in progress');
     await tester.pump();
     // Force the autosave that a focus loss triggers to fail, so the draft stays
     // dirty (and the stored note keeps its original text/revision).
@@ -348,7 +358,10 @@ void main() {
     await pumpApp(tester, harness);
     await tester.tap(find.byKey(WorkspaceShell.settingsKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('settings-rag-consent')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('settings-rag-consent')),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
     harness.syncClient.close();
@@ -569,9 +582,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Second').first);
     await tester.pumpAndSettle();
-    final TextEditingController content = tester
-        .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
-        .controller!;
+    final content = visibleRichEditor(tester);
 
     await openAccountRag(tester);
     await askAndDisplaySource(tester, harness);
@@ -586,7 +597,7 @@ void main() {
     // while the fresh sync is in flight marks the workspace dirty, so the late
     // completion must not reach the canonical GET.
     harness.store.failure = StateError('offline');
-    content.text = 'draft during sync';
+    await replaceRichText(content, 'draft during sync');
     await tester.pump();
     expect(
       find.byKey(RagPage.answerKey),
@@ -635,7 +646,9 @@ void main() {
       final Completer<void> gate = Completer<void>();
       harness.setSyncGate(gate);
       harness.events.clear();
-      await tester.tap(find.byKey(const ValueKey<String>('rag-source-source-1')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('rag-source-source-1')),
+      );
       await tester.pump();
 
       // A second question replaces the displayed result while the fresh sync is
@@ -734,33 +747,39 @@ void main() {
     harness.syncClient.close();
   });
 
-  testWidgets('a closed RAG route during the citation sync refuses late apply', (
-    tester,
-  ) async {
-    final _RagAppHarness harness = buildHarness();
-    await pumpApp(tester, harness);
-    await openAccountRag(tester);
-    await askAndDisplaySource(tester, harness);
+  testWidgets(
+    'a closed RAG route during the citation sync refuses late apply',
+    (tester) async {
+      final _RagAppHarness harness = buildHarness();
+      await pumpApp(tester, harness);
+      await openAccountRag(tester);
+      await askAndDisplaySource(tester, harness);
 
-    final Completer<void> gate = Completer<void>();
-    harness.setSyncGate(gate);
-    harness.events.clear();
-    await tester.tap(find.byKey(const ValueKey<String>('rag-source-source-1')));
-    await tester.pump();
+      final Completer<void> gate = Completer<void>();
+      harness.setSyncGate(gate);
+      harness.events.clear();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('rag-source-source-1')),
+      );
+      await tester.pump();
 
-    await tester.pageBack();
-    await tester.pump();
-    gate.complete();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pump();
+      gate.complete();
+      await tester.pumpAndSettle();
 
-    expect(harness.events.where((String e) => e == 'rag:readConsent'), isEmpty);
-    expect(find.byKey(RagPage.questionFieldKey), findsNothing);
-    expect(find.byKey(NoteDetailPage.contentFieldKey), findsNothing);
+      expect(
+        harness.events.where((String e) => e == 'rag:readConsent'),
+        isEmpty,
+      );
+      expect(find.byKey(RagPage.questionFieldKey), findsNothing);
+      expect(find.byKey(NoteDetailPage.contentFieldKey), findsNothing);
 
-    await tester.pumpWidget(const SizedBox());
-    await tester.pumpAndSettle();
-    harness.syncClient.close();
-  });
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      harness.syncClient.close();
+    },
+  );
 
   testWidgets('a citation sync that exceeds its budget never applies', (
     tester,

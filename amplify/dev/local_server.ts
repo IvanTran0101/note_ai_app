@@ -16,7 +16,7 @@ import { NoteSecurityError } from '../protection/protection_store';
 import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
 import { handleShares } from '../sharing/share_handler';
 import { parseChangesQuery, parseMutationBody } from '../sync/request_parser';
-import { appliedMutationResponse, changesResponse, conflictResponse, jsonResponse } from '../sync/sync_response';
+import { appliedMutationResponse, changesResponse, conflictResponse, jsonResponse, invalidMutationResponse } from '../sync/sync_response';
 import { DynamoRelayStore } from '../realtime/dynamo_relay_store';
 import { RevisionRelay } from '../realtime/relay';
 import { LocalDatabase } from './local_database';
@@ -79,7 +79,9 @@ function serialized<T>(work: () => Promise<T>): Promise<T> {
 
 async function dispatch(req: IncomingMessage, url: URL, actor: string, body: string) {
   const v2 = url.pathname.startsWith('/sync/v2/');
-  const path = url.pathname.replace('/sync/v2/', '/sync/');
+  const v3 = url.pathname.startsWith('/sync/v3/');
+  const version = v3 ? 3 : v2 ? 2 : 1;
+  const path = url.pathname.replace(/^\/sync\/v[23]\//, '/sync/');
   const event = { rawPath: url.pathname, body,
     headers: req.headers, queryStringParameters: Object.fromEntries(url.searchParams),
     requestContext: { http: { method: req.method } } } as unknown as Event;
@@ -92,7 +94,7 @@ async function dispatch(req: IncomingMessage, url: URL, actor: string, body: str
   }
   if (req.method === 'GET' && path === '/sync/changes') {
     const parsed = parseChangesQuery(event.queryStringParameters);
-    return parsed.ok ? changesResponse(await sync.listChanges(actor, parsed.cursor, parsed.limit, v2 ? 2 : 1))
+    return parsed.ok ? changesResponse(await sync.listChanges(actor, parsed.cursor, parsed.limit, version))
       : jsonResponse(422, { code: 'INVALID_REQUEST', retryable: false });
   }
   if (req.method === 'POST' && ['/sync/mutations', '/sync/shared-mutations', '/sync/protected-mutations', '/sync/protection-predecessor'].includes(path)) {
@@ -103,19 +105,21 @@ async function dispatch(req: IncomingMessage, url: URL, actor: string, body: str
         return jsonResponse(result.status === 'applied' ? 200 : 409, result);
       }
     }
-    const parsed = parseMutationBody(body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', v2 ? 2 : 1);
-    if (!parsed.ok) return jsonResponse(422, { code: 'INVALID_REQUEST', retryable: false });
+    const parsed = parseMutationBody(body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', version);
+    if (!parsed.ok) return invalidMutationResponse(parsed.problem);
     const result = await sync.applyMutation(parsed.mutation.ownerId ?? actor, parsed.mutation,
       { actorId: actor, grant: unlockGrantOf(event), inspectOnly: path === '/sync/protection-predecessor' });
-    return v2 ? noteV2MutationResponse(result) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+    return v3 || v2 ? noteV2MutationResponse(result, v3 ? 3 : 2) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   }
   return jsonResponse(404, { code: 'NOT_FOUND', retryable: false });
 }
 
 export const server = createServer(async (req, res) => {
   const origin = req.headers.origin;
+  const browserQa = process.env.M09_QA_BROWSER_ORIGINS === '1' &&
+    Boolean(origin && /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(origin));
   if (req.headers.host !== '127.0.0.1:8796' ||
-      (origin && !/^http:\/\/(127\.0\.0\.1|localhost):8776$/.test(origin))) {
+      (origin && !browserQa && !/^http:\/\/(127\.0\.0\.1|localhost):8776$/.test(origin))) {
     res.writeHead(403); res.end(); return;
   }
   if (origin) { res.setHeader('access-control-allow-origin', origin); res.setHeader('vary', 'Origin'); }
@@ -142,12 +146,13 @@ export const server = createServer(async (req, res) => {
     }
     const actor = localActor(req.headers.authorization);
     if (!actor) { res.writeHead(401); res.end(); return; }
-    let body = ''; for await (const part of req) { body += part; if (Buffer.byteLength(body) > 65536) throw Error('Too large'); }
+    let body = ''; for await (const part of req) { body += part; if (Buffer.byteLength(body) > 500000) throw Error('Too large'); }
     const reply = await serialized(() => dispatch(req, url, actor, body));
     res.writeHead(reply.statusCode!, reply.headers as Record<string, string>);
     res.end(reply.isBase64Encoded ? Buffer.from(reply.body!, 'base64') : reply.body);
   } catch (error) {
     const reply = error instanceof NoteSecurityError ? securityErrorResponse(error)
+      : error instanceof SyncInvalidMutationError ? invalidMutationResponse(error.reason)
       : jsonResponse(error instanceof SyncInvalidCursorError || error instanceof SyncInvalidMutationError ? 422 : 503,
         { code: 'LOCAL_DEV_UNAVAILABLE', retryable: true });
     res.writeHead(reply.statusCode!, { 'content-type': 'application/json' }); res.end(reply.body);

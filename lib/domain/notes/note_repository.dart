@@ -51,6 +51,11 @@ abstract interface class INoteMetadataRepository {
   Future<List<NoteMetadata>> findMetadataByOwnerId(String ownerId);
 }
 
+/// Advertised only after the writer can persist the complete document atomically.
+abstract interface class INoteDocumentRepository implements INoteRepository {
+  int get documentVersion;
+}
+
 typedef NoteChange = Note Function(Note current);
 typedef NoteCommitFence = bool Function();
 

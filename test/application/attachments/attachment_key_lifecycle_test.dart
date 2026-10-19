@@ -153,6 +153,8 @@ void main() {
       );
       expect(jsonEncode(blobs.packets), isNot(contains('legacy Pending')));
     },
+    // Multiple production600k PBKDF2 rotations, like the security scenarios.
+    timeout: const Timeout(Duration(minutes: 5)),
   );
 
   test(

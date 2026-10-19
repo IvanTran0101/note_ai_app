@@ -2,6 +2,7 @@ import { parseProtectionChange } from './sync_protection_change';
 import { labelIds } from '../labels/label_models';
 import { manifest } from '../attachments/models';
 import { decodeShare } from '../sharing/share_models';
+import { parseNoteDocument, projectDocument } from '../documents/note_document';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { stableDigest } from './cursor';
@@ -118,11 +119,18 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown, ver
     throw new SyncInvalidMutationError('PAYLOAD_REQUIRED', 'create and update need a title and content payload.');
   }
   const { title, content } = payload;
+  const hasDocument = Object.hasOwn(payload, 'document');
+  if (hasDocument && version !== 3) throw new SyncInvalidMutationError('DOCUMENTS_UNSUPPORTED', 'Document-aware transport required.');
+  if (version === 3 && !hasDocument) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Typed document presence required.');
+  let document;
+  try { document = hasDocument ? payload.document === null ? null : parseNoteDocument(payload.document) : undefined; }
+  catch { throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid rich document.'); }
+  if (document && projectDocument(document) !== content) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid document projection.');
   const hasLabels = Object.hasOwn(payload, 'labelIds');
-  if (hasLabels && version !== 2) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label-aware route required.');
+  if (hasLabels && version < 2) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label-aware route required.');
   const ids = hasLabels ? labelIds(payload.labelIds) : undefined;
   const hasAttachments = Object.hasOwn(payload, 'attachments');
-  if (hasAttachments && version !== 2) throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Attachment-aware route required.');
+  if (hasAttachments && version < 2) throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Attachment-aware route required.');
   let attachments;
   try { attachments = hasAttachments ? manifest(payload.attachments) : undefined; }
   catch { throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Invalid attachment manifest.'); }
@@ -130,7 +138,7 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown, ver
     typeof title !== 'string' ||
     typeof content !== 'string' ||
     title.trim().length === 0 ||
-    content.trim().length === 0
+    (!document && content.trim().length === 0)
   ) {
     throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'A payload needs a string title and content.');
   }
@@ -156,6 +164,7 @@ export const normalizePayload = (operation: SyncOperation, payload: unknown, ver
     ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}),
     ...(ids ? { labelIds: ids } : {}),
     ...(attachments ? {attachments} : {}),
+    ...(hasDocument ? {document} : {}),
   };
 };
 
@@ -201,7 +210,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
   }
   return {
     mutationId,
-    ...(mutation.wireVersion === 2 ? {wireVersion: 2} : {}),
+    ...(mutation.wireVersion === 2 || mutation.wireVersion === 3 ? {wireVersion: mutation.wireVersion} : {}),
     noteId,
     operation,
     baseRevision,
@@ -219,6 +228,7 @@ export const normalizeMutation = (mutation: SyncMutation): NormalizedMutation =>
         ...(protectionChange ? [protectionChange] : []),
         ...(ownerId ? [ownerId, accessRevision] : []),
         ...(mutation.wireVersion === 2 ? [2, 'note', payload?.labelIds ?? null] : []),
+        ...(mutation.wireVersion === 3 ? [3, 'note', payload?.labelIds ?? null, 'basicBlocksV1', payload?.document ?? null] : []),
         // Omitted field preserves the exact legacy/v2 fingerprint. Empty is an explicit remove.
         ...(payload && Object.hasOwn(payload, 'attachments') ? ['attachments-v1', payload.attachments] : []),
       ])}`,
@@ -231,6 +241,7 @@ export const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unkno
   id: snapshot.id,
   title: snapshot.title,
   content: snapshot.content,
+  ...(snapshot.document !== undefined ? {document: snapshot.document} : {}),
   revision: snapshot.revision,
   createdAt: snapshot.createdAt,
   serverUpdatedAt: snapshot.serverUpdatedAt,
@@ -254,6 +265,11 @@ export const stringFieldOf = (item: Record<string, unknown>, name: string): stri
 };
 
 export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
+  const hasDocument = Object.hasOwn(item, 'document');
+  let document;
+  try { document = hasDocument ? item.document === null ? null : parseNoteDocument(item.document) : undefined; }
+  catch { throw corruptData(); }
+  if (document && projectDocument(document) !== item.content) throw corruptData();
   let attachments;
   try { attachments = Object.hasOwn(item, 'attachments') ? manifest(item.attachments, item.id as string) : undefined; }
   catch { throw corruptData(); }
@@ -275,6 +291,7 @@ export const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
     id: stringFieldOf(item, 'id'),
     title: stringFieldOf(item, 'title'),
     content: stringFieldOf(item, 'content'),
+    ...(hasDocument ? {document} : {}),
     revision,
     createdAt: stringFieldOf(item, 'createdAt'),
     serverUpdatedAt: stringFieldOf(item, 'serverUpdatedAt'),
@@ -353,7 +370,16 @@ export const nextSnapshot = (
   request: NormalizedMutation,
   remote: NoteSnapshot | null,
   now: string,
-): NoteSnapshot => ({
+): NoteSnapshot => {
+  // This state guard is evaluated only after lost-ACK receipt lookup/conflict.
+  // Older metadata/title writes preserve rich content; plain-body edits refuse.
+  if (request.operation !== 'delete' && remote?.document &&
+      (!request.payload || !Object.hasOwn(request.payload, 'document')
+        ? request.payload?.content !== remote.content
+        : request.payload.document === null)) {
+    throw new SyncInvalidMutationError('DOCUMENTS_UNSUPPORTED', 'Rich content requires a typed document write.');
+  }
+  const snapshot: NoteSnapshot = {
   id: request.noteId,
   title: request.payload?.title ?? '',
   content: request.payload?.content ?? '',
@@ -369,7 +395,15 @@ export const nextSnapshot = (
   labelIds: request.payload?.labelIds ?? remote?.labelIds ?? [],
   ...(request.payload?.attachments !== undefined || remote?.attachments !== undefined ? {
     attachments: request.operation === 'delete' ? [] : request.payload?.attachments ?? remote?.attachments ?? []} : {}),
-});
+  ...(request.operation === 'delete' ? remote?.document !== undefined ? {document: null} : {} :
+    request.payload && Object.hasOwn(request.payload, 'document') ? {document: request.payload.document} :
+    remote?.document !== undefined ? {document: remote.document} : {}),
+  };
+  if (snapshot.document && Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > MAX_PAYLOAD_BYTES) {
+    throw new SyncInvalidMutationError('PAYLOAD_TOO_LARGE', 'The complete rich snapshot exceeds its byte budget.');
+  }
+  return snapshot;
+};
 
 export function membershipRevision(row: Record<string, unknown>): number {
   const n = row.sharingRevision ?? 0;
@@ -393,6 +427,7 @@ export const transactItemsFor = (
   const sequence = lastSequence + 1;
   const attributes = snapshotAttributes(note);
   const metadata = note.protected ? { ...attributes, title: '', content: '',
+    ...(note.document !== undefined ? {document: null} : {}),
     ...(note.attachments !== undefined ? {attachments: []} : {}) } : attributes;
   // Unused expression attribute values are a DynamoDB validation error, so the
   // revision guard only appears when a stored note has a revision to match.

@@ -114,6 +114,15 @@ final class SyncCoordinatorService implements ISyncCoordinator {
   Future<SyncReport> _syncPass() async {
     requireSession?.call();
     LocalSyncState state = await _reconciliation.read();
+    final int negotiatedVersion = remote is ISyncWireNegotiation
+        ? await (remote as ISyncWireNegotiation).negotiateWireVersion()
+        : labelsEnabled
+        ? 2
+        : 1;
+    requireSession?.call();
+    if (negotiatedVersion == 3) {
+      state = await _reconciliation.retryDocumentUpgrade();
+    }
     final SyncCursor? initialCursor = state.cursor;
     int applied = 0;
     int pulled = 0;
@@ -204,8 +213,9 @@ final class SyncCoordinatorService implements ISyncCoordinator {
           if (!failure.retryable || tries >= 2) {
             await _reconciliation.recordPushFailure(entry.mutationId, failure);
             if (failure.code == SyncErrorCode.forbidden ||
+                failure.code == SyncErrorCode.documentRequiresUpgrade ||
                 failure.code == SyncErrorCode.invalidMutation) {
-              if (failure.code == SyncErrorCode.invalidMutation) {
+              if (failure.code != SyncErrorCode.forbidden) {
                 invalidEntityFailure ??= failure;
               }
               stoppedNotes.add(entry.keyFor(accountUserId));
@@ -256,16 +266,18 @@ final class SyncCoordinatorService implements ISyncCoordinator {
     while (true) {
       state = await _reconciliation.read();
       final String? requestCursor = state.cursor?.value;
-      final SyncChangesPage page = await remote.pull(
-        cursor: labelsEnabled && state.syncWireVersion == 1
-            ? null
-            : requestCursor,
-      );
-      if (labelsEnabled && page.wireVersion != 2) {
+      // A typed capability backfill starts at the beginning. Progress is measured
+      // against the cursor actually requested, while CAS keeps the stored one.
+      final String? pullCursor = state.syncWireVersion < negotiatedVersion
+          ? null
+          : requestCursor;
+      final SyncChangesPage page = await remote.pull(cursor: pullCursor);
+      if (page.wireVersion != negotiatedVersion &&
+          (labelsEnabled || negotiatedVersion == 3)) {
         throw const SyncFailure(code: SyncErrorCode.invalidMutation);
       }
       requireSession?.call();
-      if (page.hasMore && page.nextCursor == requestCursor) {
+      if (page.hasMore && page.nextCursor == pullCursor) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       for (final snapshot in page.snapshots) {

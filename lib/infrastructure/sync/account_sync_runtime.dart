@@ -31,6 +31,7 @@ final class AccountSyncRuntime {
     SyncAccessTokenProvider? tokenProvider,
     this.client,
     this.labelsEnabled = false,
+    this.documentsEnabled = false,
     this.projectionGrant,
     this.onCatalogChanged,
   }) : _clock = clock ?? DateTime.now,
@@ -38,6 +39,7 @@ final class AccountSyncRuntime {
 
   final Uri baseUri;
   final bool labelsEnabled;
+  final bool documentsEnabled;
   final void Function(String actor)? onCatalogChanged;
   final String? Function(String account, LocalNoteState note)? projectionGrant;
   final SyncAccessTokenProvider tokenProvider;
@@ -75,6 +77,7 @@ final class AccountSyncRuntime {
       final HttpRemoteNoteDataSource remote = HttpRemoteNoteDataSource(
         baseUri: baseUri,
         labelsEnabled: labelsEnabled,
+        documentsEnabled: documentsEnabled,
         projectionGrant: (note) => projectionGrant?.call(accountUserId, note),
         tokenProvider: tokenProvider,
         client: client,

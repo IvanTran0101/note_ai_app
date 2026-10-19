@@ -5,6 +5,7 @@ import 'local_sync_codec_schema.dart';
 /// Migrates either published v3 shape without altering queued request payloads.
 /// Encryption's packet version/AAD is independent of this inner schema.
 Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
+  _rejectLegacyDocuments(data);
   SyncCodecObject.from(
     data,
     path: 'localSyncState',
@@ -38,9 +39,13 @@ Map<String, Object?> migrateLocalSyncV3(Map<String, Object?> data) {
         'attachments',
         'labelIds',
         'labelProjections',
+        'document',
         if (!hasSecurity) ...security,
       }),
-      optionalFields: {...optional, 'pinnedAt'},
+      optionalFields: {
+        ...optional.difference({'document', 'includesDocument'}),
+        'pinnedAt',
+      },
     );
     return {
       'protected': false,
@@ -105,10 +110,18 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
       path: 'legacy.v4.note',
       allowedFields:
           (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
-              .difference({'attachments', 'labelIds', 'labelProjections'}),
+              .difference({
+                'attachments',
+                'labelIds',
+                'labelProjections',
+                'document',
+              }),
       optionalFields: remote
-          ? LocalSyncSchema.snapshotOptionalFields
-          : LocalSyncSchema.noteOptionalFields,
+          ? LocalSyncSchema.snapshotOptionalFields.difference({
+              'document',
+              'includesDocument',
+            })
+          : LocalSyncSchema.noteOptionalFields.difference({'document'}),
     );
   }
 
@@ -118,8 +131,9 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
       'attachments',
       'labelIds',
       'labelProjections',
+      'document',
     }),
-    optionalFields: LocalSyncSchema.noteOptionalFields,
+    optionalFields: LocalSyncSchema.noteOptionalFields.difference({'document'}),
   );
   for (final record in envelope.requireObjectList(
     'conflicts',
@@ -135,6 +149,7 @@ Map<String, Object?> migrateLocalSyncV4(Map<String, Object?> data) {
 
 /// Published M03 schema5: preserve cursor and all attempted wire bytes.
 Map<String, Object?> migrateLocalSyncV5(Map<String, Object?> data) {
+  _rejectLegacyDocuments(data);
   final envelope = SyncCodecObject.from(
     data,
     path: 'legacy.v5',
@@ -149,12 +164,12 @@ Map<String, Object?> migrateLocalSyncV5(Map<String, Object?> data) {
       path: 'legacy.v5.note',
       allowedFields:
           (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
-              .difference({'labelIds', 'labelProjections'}),
+              .difference({'labelIds', 'labelProjections', 'document'}),
       optionalFields:
           (remote
                   ? LocalSyncSchema.snapshotOptionalFields
                   : LocalSyncSchema.noteOptionalFields)
-              .difference({'includesLabels'}),
+              .difference({'includesLabels', 'document', 'includesDocument'}),
     );
     record.requireString('id');
     return {
@@ -172,7 +187,7 @@ Map<String, Object?> migrateLocalSyncV5(Map<String, Object?> data) {
   }
   return {
     ...data,
-    'schemaVersion': 6,
+    'schemaVersion': LocalSyncSchema.version,
     'labels': <Object?>[],
     'syncWireVersion': 1,
     'notes': notes.map((n) => note(n, false)).toList(),
@@ -187,4 +202,96 @@ Map<String, Object?> migrateLocalSyncV5(Map<String, Object?> data) {
       };
     }).toList(),
   };
+}
+
+void _rejectLegacyDocuments(Map<String, Object?> data) {
+  void pending(Object? raw) {
+    if (raw is! Map) {
+      throw const LocalSyncCodecException('Invalid legacy mutation.');
+    }
+    final payload = raw['payload'];
+    if (payload is Map && payload.containsKey('document')) {
+      throw const LocalSyncCodecException(
+        'Legacy payload cannot contain document.',
+      );
+    }
+  }
+
+  final outbox = data['outbox'];
+  final conflicts = data['conflicts'];
+  if (outbox is! List || conflicts is! List) {
+    throw const LocalSyncCodecException('Invalid legacy collections.');
+  }
+  for (final entry in outbox) {
+    pending(entry);
+  }
+  for (final conflict in conflicts) {
+    if (conflict is! Map) {
+      throw const LocalSyncCodecException('Invalid legacy conflict.');
+    }
+    pending(conflict['pending']);
+  }
+}
+
+/// Inner v6 has no document. Preserve every payload field, retry and ID exactly.
+Map<String, Object?> migrateLocalSyncV6(Map<String, Object?> data) {
+  final envelope = SyncCodecObject.from(
+    data,
+    path: 'legacy.v6',
+    allowedFields: LocalSyncSchema.envelopeFields,
+  );
+  void note(Object? raw, bool remote) {
+    SyncCodecObject.from(
+      raw,
+      path: 'legacy.v6.note',
+      allowedFields:
+          (remote ? LocalSyncSchema.snapshotFields : LocalSyncSchema.noteFields)
+              .difference({'document'}),
+      optionalFields:
+          (remote
+                  ? LocalSyncSchema.snapshotOptionalFields
+                  : LocalSyncSchema.noteOptionalFields)
+              .difference({'document', 'includesDocument'}),
+    );
+  }
+
+  void pending(Object? raw) {
+    final entry = SyncCodecObject.from(
+      raw,
+      path: 'legacy.v6.pending',
+      allowedFields: LocalSyncSchema.mutationFields,
+      optionalFields: LocalSyncSchema.mutationOptionalFields,
+    );
+    entry.requireNullableObject(
+      'payload',
+      LocalSyncSchema.payloadFields.difference({'document'}),
+      optionalFields: {'pinnedAt', 'attachments', 'labelIds'},
+    );
+  }
+
+  for (final record in envelope.requireObjectList(
+    'notes',
+    LocalSyncSchema.noteFields.difference({'document'}),
+    optionalFields: LocalSyncSchema.noteOptionalFields.difference({'document'}),
+  )) {
+    record.requireString('id');
+  }
+  final outbox = envelope.rawValue('outbox');
+  if (outbox is! List) {
+    throw const LocalSyncCodecException('Invalid legacy outbox.');
+  }
+  for (final entry in outbox) {
+    pending(entry);
+  }
+  for (final conflict in envelope.requireObjectList(
+    'conflicts',
+    LocalSyncSchema.conflictFields,
+  )) {
+    note(conflict.rawValue('local'), false);
+    if (conflict.rawValue('remote') != null) {
+      note(conflict.rawValue('remote'), true);
+    }
+    pending(conflict.rawValue('pending'));
+  }
+  return {...data, 'schemaVersion': LocalSyncSchema.version};
 }

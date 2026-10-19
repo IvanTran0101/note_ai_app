@@ -9,6 +9,8 @@ import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_note_state.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_role.dart';
+import '../../domain/notes/note_document.dart';
+import '../documents/note_document_codec.dart';
 import '../sync/local_sync_state_codec.dart';
 import '../sync/local_sync_store_account_namespace.dart';
 import 'device_envelope_keys.dart';
@@ -16,6 +18,7 @@ import 'note_bundle_projection.dart';
 import 'note_crypto.dart';
 
 part 'encrypted_state_keys.dart';
+part 'encrypted_state_migration.dart';
 part 'encrypted_shared_drafts.dart';
 part 'encrypted_legacy_bindings.dart';
 part 'encrypted_attachment_keys.dart';
@@ -175,45 +178,10 @@ final class EncryptedStateCodec {
       }
     }
     final decoded = LocalSyncStateCodec.decode(state);
+    migrationRequired =
+        state['schemaVersion'] != LocalSyncStateCodec.schemaVersion;
     namespace.requireOwned(decoded);
     return decoded;
-  }
-
-  Future<LocalSyncState> _migrate(Map<String, Object?> old) async {
-    final decoded = LocalSyncStateCodec.decode(
-      NoteBundleProjection.migrateV2(old),
-    );
-    namespace.requireOwned(decoded);
-    // Redaction adds current manifest fields; normalize before quarantining so
-    // subsequent decoding does not mistake them for an invalid legacy record.
-    final state = LocalSyncStateCodec.encode(decoded);
-    if (decoded.notes.length > 10000 ||
-        decoded.outbox.length > 10000 ||
-        decoded.conflicts.length > 10000) {
-      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
-    }
-    await _ensureDeviceKey();
-    _records = {};
-    _quarantine = {};
-    _retained = {};
-    _binaryKeys = {};
-    for (final note in decoded.notes) {
-      _quarantine[note.referenceFor(namespace.accountUserId)] = await crypto
-          .encryptJson(
-            NoteBundleProjection.bundle(
-              state,
-              note.referenceFor(namespace.accountUserId),
-            ),
-            _deviceKey!,
-            _legacyAad(note.referenceFor(namespace.accountUserId)),
-          );
-      NoteBundleProjection.redact(
-        state,
-        note.referenceFor(namespace.accountUserId),
-      );
-    }
-    migrationRequired = true;
-    return LocalSyncStateCodec.decode(state);
   }
 
   Future<String> encode(LocalSyncState state) async {

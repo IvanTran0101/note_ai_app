@@ -40,6 +40,9 @@ extension _AttachmentEditorPreview on _AttachmentEditorPanelState {
     final generation = _generation;
     _update(() {
       _clearPreview();
+      // A previous upload's terminal progress belongs to that transfer. Cached
+      // reads may emit no new progress; keep their Ready status truthful.
+      _progress.remove(item.id);
       _previewItem = item;
       _exporting = exportFile;
       _previewService = _service;

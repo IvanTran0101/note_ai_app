@@ -126,7 +126,7 @@ void main() {
       expect(decoded.notes.last.share, h.store.state.notes.last.share);
       expect(decoded.notes.last.serverRevision, 7);
       expect(decoded.userPreferences.userId, 'actor');
-      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 6);
+      expect(LocalSyncStateCodec.encode(decoded)['schemaVersion'], 7);
     },
   );
 

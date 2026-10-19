@@ -3,6 +3,7 @@ library;
 
 import 'protection_sync_change.dart';
 import '../../domain/notes/attachment.dart';
+import '../../domain/notes/note_document.dart';
 
 import '../../domain/notes/note_identity.dart';
 import '../../domain/labels/label.dart';
@@ -16,6 +17,8 @@ final class SyncNotePayload {
   const SyncNotePayload({
     required this.title,
     required this.content,
+    this.document,
+    this.includesDocument = false,
     this.pinnedAt,
     this.includesPinnedAt = false,
     this.attachmentManifest = const AttachmentManifest.empty(),
@@ -26,6 +29,8 @@ final class SyncNotePayload {
 
   final String title;
   final String content;
+  final NoteDocument? document;
+  final bool includesDocument;
   final AttachmentManifest attachmentManifest;
   List<Attachment> get attachments => attachmentManifest.values;
   final bool includesAttachments;
@@ -43,6 +48,8 @@ final class SyncNotePayload {
     return other is SyncNotePayload &&
         other.title == title &&
         other.content == content &&
+        other.document == document &&
+        other.includesDocument == includesDocument &&
         other.attachmentManifest == attachmentManifest &&
         other.includesAttachments == includesAttachments &&
         other.pinnedAt == pinnedAt &&
@@ -61,6 +68,8 @@ final class SyncNotePayload {
     includesAttachments,
     labelMembership,
     includesLabels,
+    document,
+    includesDocument,
   );
 }
 
@@ -92,6 +101,11 @@ final class SyncMutation {
   }) {
     _requireNonBlank(mutationId, 'mutationId');
     _requireNonBlank(noteId, 'noteId');
+    if (payload?.document != null &&
+        (!payload!.includesDocument ||
+            payload.content != payload.document!.plainText)) {
+      throw ArgumentError('Invalid rich mutation projection.');
+    }
     if (ownerId != null) _requireNonBlank(ownerId, 'ownerId');
     if (accessRevision != null && accessRevision <= 0) {
       throw ArgumentError('Access revision must be positive.');

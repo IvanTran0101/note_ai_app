@@ -3,7 +3,7 @@ library;
 
 abstract final class LocalSyncSchema {
   /// The only schema version this codec reads or writes.
-  static const int version = 6;
+  static const int version = 7;
 
   static const String schemaVersion = 'schemaVersion';
   static const String accountUserId = 'accountUserId';
@@ -19,6 +19,7 @@ abstract final class LocalSyncSchema {
   static const String ownerId = 'ownerId';
   static const String title = 'title';
   static const String content = 'content';
+  static const String document = 'document';
   static const String createdAt = 'createdAt';
   static const String updatedAt = 'updatedAt';
   static const String pinnedAt = 'pinnedAt';
@@ -31,7 +32,7 @@ abstract final class LocalSyncSchema {
   static const String contentAvailable = 'contentAvailable';
   static const String share = 'share';
   static const String accessRevision = 'accessRevision';
-  static const Set<String> noteOptionalFields = {share};
+  static const Set<String> noteOptionalFields = {share, document};
   static const Set<String> mutationOptionalFields = {
     ownerId,
     accessRevision,
@@ -44,6 +45,8 @@ abstract final class LocalSyncSchema {
     share,
     'includesAttachments',
     'includesLabels',
+    document,
+    'includesDocument',
   };
 
   static const String mutationId = 'mutationId';
@@ -87,6 +90,7 @@ abstract final class LocalSyncSchema {
     ownerId,
     title,
     content,
+    document,
     createdAt,
     updatedAt,
     pinnedAt,
@@ -100,6 +104,7 @@ abstract final class LocalSyncSchema {
   static const Set<String> payloadFields = <String>{
     title,
     content,
+    document,
     pinnedAt,
     attachments,
     'labelIds',
@@ -124,6 +129,7 @@ abstract final class LocalSyncSchema {
     id,
     title,
     content,
+    document,
     createdAt,
     serverUpdatedAt,
     revision,

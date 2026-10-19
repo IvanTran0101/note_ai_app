@@ -69,6 +69,7 @@ final class NoteSecurityRuntime implements INoteAccessGuard {
           ? null
           : HttpNoteSecurityGateway(
               baseUri: uri,
+              documentsEnabled: true,
               accountId: account,
               tokenProvider: tokenProvider,
               client: client,

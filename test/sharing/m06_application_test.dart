@@ -22,10 +22,10 @@ import 'package:note_ai_app/infrastructure/notes/http_share_gateway.dart';
 import 'package:note_ai_app/infrastructure/sync/sync_http_mapper.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
-import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/share_management_dialog.dart';
 
 import '../infrastructure/notes/note_repository_test_support.dart';
+import '../presentation/editor/rich_editor_test_support.dart';
 
 final at = DateTime.utc(2026, 10, 2);
 NoteShareGrant grant({
@@ -326,11 +326,10 @@ void main() {
       expect(find.byKey(const ValueKey('new-note')), findsNothing);
       await tester.tap(find.text('Shared title'));
       await tester.pumpAndSettle();
-      final field = tester.widget<TextField>(
-        find.byKey(NoteDetailPage.contentFieldKey),
-      );
-      expect(field.controller!.text, 'Shared body');
-      expect(field.readOnly, true);
+      final editor = visibleRichEditor(tester);
+      expect(editor.plainText, 'Shared body');
+      expect(editor.editable, false);
+      expect(editor.capture(), null);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

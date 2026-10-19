@@ -9,8 +9,11 @@ import 'sync_failure.dart';
 import 'sync_result.dart';
 import 'sync_snapshot.dart';
 import 'sync_page_projection.dart';
+import 'sync_document_projection.dart';
 import '../labels/local_label_state.dart';
 import 'label_sync_reconciliation.dart';
+
+part 'sync_document_recovery.dart';
 
 /// Applies remote outcomes to fresh local state inside store transactions.
 final class SyncStateReconciliation {
@@ -55,10 +58,12 @@ final class SyncStateReconciliation {
               lastError: failure.code,
               blocked:
                   failure.code == SyncErrorCode.invalidMutation ||
+                  failure.code == SyncErrorCode.documentRequiresUpgrade ||
                   failure.code == SyncErrorCode.forbidden,
             );
       final List<LocalNoteState> notes =
           (failure.code == SyncErrorCode.invalidMutation ||
+              failure.code == SyncErrorCode.documentRequiresUpgrade ||
               failure.code == SyncErrorCode.forbidden)
           ? current.notes
                 .map(
@@ -160,6 +165,12 @@ final class SyncStateReconciliation {
     if (requested.payload?.includesLabels == true && !snapshot.includesLabels) {
       throw const SyncFailure(code: SyncErrorCode.invalidMutation);
     }
+    if (requested.payload?.includesDocument == true &&
+        (!snapshot.includesDocument ||
+            snapshot.contentAvailable &&
+                snapshot.document != requested.payload!.document)) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(
@@ -203,6 +214,7 @@ final class SyncStateReconciliation {
               share: snapshot.share ?? local.share,
               title: local.title,
               content: local.content,
+              document: local.document,
               createdAt: local.createdAt,
               updatedAt: local.updatedAt,
               pinnedAt: local.pinnedAt,
@@ -255,7 +267,7 @@ final class SyncStateReconciliation {
           labels.length == current.labels.length &&
           Iterable<int>.generate(labels.length)
               .every((i) => labels[i] == current.labels[i]) &&
-          (page.wireVersion != 2 || current.syncWireVersion == 2)) {
+          page.wireVersion <= current.syncWireVersion) {
         return current;
       }
       return copyState(
@@ -265,7 +277,9 @@ final class SyncStateReconciliation {
         conflicts: projection.conflicts,
         cursor: cursor,
         labels: labels,
-        syncWireVersion: page.wireVersion == 2 ? 2 : current.syncWireVersion,
+        syncWireVersion: page.wireVersion > current.syncWireVersion
+            ? page.wireVersion
+            : current.syncWireVersion,
       );
     });
     final bool cursorMatched =
@@ -325,6 +339,7 @@ final class SyncStateReconciliation {
         share: note.share,
         title: note.title,
         content: note.content,
+        document: note.document,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
         pinnedAt: note.pinnedAt,
@@ -348,6 +363,7 @@ final class SyncStateReconciliation {
     share: snapshot.share,
     title: snapshot.title,
     content: snapshot.content,
+    document: projectSyncDocument(snapshot, previous),
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.serverUpdatedAt,
     pinnedAt: snapshot.pinnedAt,

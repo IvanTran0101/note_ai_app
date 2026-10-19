@@ -13,6 +13,7 @@ void main() {
     Widget? list,
     VoidCallback? onDismiss,
     bool disableAnimations = false,
+    bool preferFullPage = false,
   }) {
     return MaterialApp(
       builder: (BuildContext context, Widget? child) => MediaQuery(
@@ -22,6 +23,7 @@ void main() {
       ),
       home: Scaffold(
         body: ResponsiveNotesWorkspace(
+          preferFullPage: preferFullPage,
           list:
               list ??
               const ColoredBox(
@@ -77,6 +79,55 @@ void main() {
     expect(find.text('Detail'), findsOneWidget);
     expect(find.text('List'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('full page retains the editor across widths and closes safely', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    final field = TextField(
+      key: const ValueKey('full-draft'),
+      controller: controller,
+    );
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.view.physicalSize = const Size(1280, 900);
+    await tester.pumpWidget(
+      buildWorkspace(hasSelection: true, preferFullPage: true, detail: field),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('full-draft')), 'draft');
+    final state = tester.state(find.byKey(const ValueKey('full-draft')));
+    for (final size in const [
+      Size(1280, 900),
+      Size(768, 900),
+      Size(390, 844),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      expect(find.byKey(ResponsiveNotesWorkspace.fullPageKey), findsOneWidget);
+      expect(
+        tester
+            .getSize(find.byKey(ResponsiveNotesWorkspace.detailPaneKey))
+            .width,
+        size.width,
+      );
+      expect(
+        tester.state(find.byKey(const ValueKey('full-draft'))),
+        same(state),
+      );
+      expect(controller.text, 'draft');
+      expect(find.text('List'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(
+      buildWorkspace(hasSelection: false, preferFullPage: true, detail: field),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('List'), findsOneWidget);
+    expect(state.mounted, false);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
   });
 
   testWidgets('compact shows the list when there is no selection', (

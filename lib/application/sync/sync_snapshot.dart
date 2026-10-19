@@ -6,6 +6,7 @@ import '../../domain/labels/label_projection.dart';
 import '../labels/local_label_state.dart';
 
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
 import '../../domain/notes/attachment.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
@@ -15,6 +16,8 @@ final class SyncNoteSnapshot {
     required String id,
     required this.title,
     required this.content,
+    this.document,
+    bool? includesDocument,
     required this.createdAt,
     required this.serverUpdatedAt,
     required int revision,
@@ -31,6 +34,7 @@ final class SyncNoteSnapshot {
     this.includesLabels = false,
   }) : id = _requireNonBlank(id, 'id'),
        includesAttachments = includesAttachments ?? attachments.isNotEmpty,
+       includesDocument = includesDocument ?? document != null,
        attachments = freezeAttachments(attachments, noteId: id),
        labelIds = freezeLabelIds(labelIds),
        labelProjections = List.unmodifiable(labelProjections),
@@ -51,8 +55,13 @@ final class SyncNoteSnapshot {
             content.isNotEmpty ||
             this.attachments.isNotEmpty ||
             this.labelIds.isNotEmpty ||
-            this.labelProjections.isNotEmpty)) {
+            this.labelProjections.isNotEmpty ||
+            document != null)) {
       throw ArgumentError('Unavailable snapshot must be redacted.');
+    }
+    if (document != null &&
+        (!this.includesDocument || content != document!.plainText)) {
+      throw ArgumentError('Invalid rich snapshot projection.');
     }
   }
 
@@ -64,6 +73,8 @@ final class SyncNoteSnapshot {
   bool get accessRemoved => share != null && !share!.isActive;
   final String title;
   final String content;
+  final NoteDocument? document;
+  final bool includesDocument;
   final List<Attachment> attachments;
   final List<String> labelIds;
   final List<LabelProjection> labelProjections;
@@ -85,6 +96,8 @@ final class SyncNoteSnapshot {
         other.id == id &&
         other.title == title &&
         other.content == content &&
+        other.document == document &&
+        other.includesDocument == includesDocument &&
         sameAttachments(other.attachments, attachments) &&
         other.includesAttachments == includesAttachments &&
         sameLabelIds(other.labelIds, labelIds) &&
@@ -120,6 +133,8 @@ final class SyncNoteSnapshot {
     Object.hashAll(labelIds),
     Object.hashAll(labelProjections),
     includesLabels,
+    document,
+    includesDocument,
   );
 }
 

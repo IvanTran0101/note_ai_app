@@ -94,7 +94,7 @@ void main() {
       final Map<String, Object?> record = SyncNoteSnapshotCodec.encode(live);
 
       expect(record.keys.toSet(), {
-        ...LocalSyncSchema.snapshotFields,
+        ...LocalSyncSchema.snapshotFields.difference({'document'}),
         'includesAttachments',
         'includesLabels',
       });

@@ -1,5 +1,6 @@
 import '../sync/local_note_state.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
 import '../../domain/notes/note_identity.dart';
 import '../../domain/notes/note_share_grant.dart';
 import '../../domain/notes/attachment.dart';
@@ -27,6 +28,7 @@ final class NoteDto {
     this.attachmentManifest = const AttachmentManifest.empty(),
     this.labelMembership = const LabelMembership.empty(),
     this.labelProjections = const [],
+    this.document,
   });
 
   /// Creates a presentation-safe projection from a domain Note.
@@ -36,6 +38,7 @@ final class NoteDto {
       ownerId: note.ownerId,
       title: note.contentAvailable ? note.title : '',
       content: note.contentAvailable ? note.content : '',
+      document: note.contentAvailable ? note.document : null,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
       isProtected: note.protection.enabled,
@@ -61,6 +64,7 @@ final class NoteDto {
     ownerId: note.ownerId,
     title: note.contentAvailable ? note.title : '',
     content: note.contentAvailable ? note.content : '',
+    document: note.contentAvailable ? note.document : null,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     pinnedAt: note.pinnedAt,
@@ -93,6 +97,7 @@ final class NoteDto {
   final String ownerId;
   final String title;
   final String content;
+  final NoteDocument? document;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isProtected;
@@ -123,6 +128,7 @@ final class NoteDto {
         other.ownerId == ownerId &&
         other.title == title &&
         other.content == content &&
+        other.document == document &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
         other.isProtected == isProtected &&
@@ -142,6 +148,7 @@ final class NoteDto {
     ownerId,
     title,
     content,
+    document,
     createdAt,
     updatedAt,
     isProtected,

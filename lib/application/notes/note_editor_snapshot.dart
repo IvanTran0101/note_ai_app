@@ -7,3 +7,9 @@ final class NoteEditorChanged implements Exception {
   @override
   String toString() => 'NoteEditorChanged';
 }
+
+final class NoteDocumentStorageUnavailable implements Exception {
+  const NoteDocumentStorageUnavailable();
+  @override
+  String toString() => 'NoteDocumentStorageUnavailable';
+}

@@ -11,7 +11,8 @@ extension _NoteDetailSharing on NoteDetailPageState {
         incoming.protectionRevision != previous.protectionRevision ||
         incoming.share != previous.share ||
         incoming.title != _savedTitle ||
-        incoming.content != _savedContent) {
+        incoming.content != _savedContent ||
+        incoming.document != _savedDocument) {
       return false;
     }
     // An ACK can advance revision/timestamps while the user types a new draft.
@@ -29,7 +30,8 @@ extension _NoteDetailSharing on NoteDetailPageState {
         fresh.contentAvailable &&
         (fresh.contentRevision != old.contentRevision ||
             fresh.title != old.title ||
-            fresh.content != old.content);
+            fresh.content != old.content ||
+            fresh.document != old.document);
   }
 
   Widget _remoteEditorNotice() {
@@ -87,6 +89,8 @@ extension _NoteDetailSharing on NoteDetailPageState {
         _note = fresh;
         _savedTitle = fresh.title;
         _savedContent = fresh.content;
+        _savedDocument = fresh.document;
+        _richEditor?.acceptSavedDocument(fresh.document);
         _pendingSavedNote = null;
         _error = null;
       });
@@ -96,7 +100,7 @@ extension _NoteDetailSharing on NoteDetailPageState {
     }
   }
 
-  Widget _sharingPanel() {
+  Widget _sharingPanel({bool compact = false}) {
     final note = _note!;
     final copy = SharingCopy(context);
     if (note.share != null) {
@@ -111,6 +115,14 @@ extension _NoteDetailSharing on NoteDetailPageState {
     if (!_capabilities.canManage ||
         widget.notesController is! SharingNotesController) {
       return const SizedBox.shrink();
+    }
+    if (compact) {
+      return IconButton(
+        key: const ValueKey('manage-note-sharing'),
+        tooltip: copy.manage,
+        onPressed: _actionBusy ? null : _manageSharing,
+        icon: const Icon(Icons.people_outline, size: 20),
+      );
     }
     return Align(
       alignment: Alignment.centerRight,

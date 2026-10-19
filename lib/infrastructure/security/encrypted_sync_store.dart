@@ -18,8 +18,10 @@ import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/note_sync_status.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../../application/sync/sync_document_projection.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
 import '../sync/local_sync_store_account_namespace.dart';
 import 'encoded_account_store.dart';
 import 'encrypted_state_codec.dart';
@@ -33,7 +35,7 @@ class EncryptedSyncStore
         ILocalSyncStore,
         ILocalNoteVault,
         ILocalFirstNoteVault,
-        ILocalDraftVault {
+        IRichLocalDraftVault {
   EncryptedSyncStore(String accountId, this.backing)
     : codec = EncryptedStateCodec(LocalSyncAccountNamespace(accountId));
   final EncodedAccountStore backing;
@@ -151,13 +153,39 @@ class EncryptedSyncStore
   ) => _enqueue(() => _mutate((state) async => transform(state)));
 
   @override
+  Future<void> retainDocumentDraft(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  ) => _enqueue(() async {
+    await _mutate((state) async {
+      await codec.retainEditorEvidence(
+        selected,
+        title,
+        document.plainText,
+        document: document,
+      );
+      return state;
+    });
+  });
+
+  @override
   Future<void> retainEditorDraft(
     NoteDto selected,
     String title,
     String content,
   ) => _enqueue(() async {
     await _mutate((state) async {
-      await codec.retainEditorEvidence(selected, title, content);
+      if (selected.document != null &&
+          content != selected.document!.plainText) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.invalidInput);
+      }
+      await codec.retainEditorEvidence(
+        selected,
+        title,
+        content,
+        document: selected.document,
+      );
       return state;
     });
   });
@@ -290,6 +318,9 @@ class EncryptedSyncStore
         content: pending && current?.contentAvailable == true
             ? current!.content
             : snapshot.content,
+        document: pending && current?.contentAvailable == true
+            ? current!.document
+            : projectSyncDocument(snapshot, current),
         createdAt: current?.createdAt ?? snapshot.createdAt,
         updatedAt: pending
             ? current?.updatedAt ?? snapshot.serverUpdatedAt

@@ -217,7 +217,12 @@ final class DashboardNoteCard extends StatelessWidget {
           note.share != null || !note.contentAvailable || note.isProtected
           ? null
           : () => onTogglePin!(note),
-      visualDensity: VisualDensity.compact,
+      visualDensity: NoteFlowLayout.isCompact(context)
+          ? VisualDensity.standard
+          : VisualDensity.compact,
+      constraints: NoteFlowLayout.isCompact(context)
+          ? const BoxConstraints(minWidth: 48, minHeight: 48)
+          : null,
       icon: AnimatedSwitcher(
         duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
         child: Icon(

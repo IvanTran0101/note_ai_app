@@ -14,7 +14,7 @@ enum WorkspaceDestination { dashboard, notes }
 /// The shell knows nothing about repositories, controllers, or business rules:
 /// it only keeps both pages alive, switches between them, and reports the
 /// active destination to the composition root through [onDestinationChanged].
-/// Responsive behaviour is driven entirely by the incoming width:
+/// Responsive behaviour uses width and retains mobile layout on rotated phones:
 ///
 /// * `< 600` — a compact brand/search bar and a bottom-sheet navigation menu
 ///   with the remaining workspace actions; the active page fills the screen;
@@ -46,7 +46,7 @@ class WorkspaceShell extends StatefulWidget {
   static const double expandedBreakpoint = NoteFlowLayout.expandedBreakpoint;
 
   /// Expanded sidebar width measured from the active Notion reference.
-  static const double sidebarWidth = 280.0;
+  static const double sidebarWidth = 270.0;
 
   /// Width used by the labelled medium navigation rail.
   static const double navigationRailWidth = 80.0;
@@ -198,6 +198,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   late WorkspaceDestination _destination = widget.initialDestination;
   bool _sidebarCollapsed = false;
   bool _compactSearchActive = false;
+  bool _noteEditorActive = false;
   late final AnimationController _pageMotionController = AnimationController(
     vsync: this,
     duration: NoteFlowMotion.standard,
@@ -216,6 +217,12 @@ class WorkspaceShellState extends State<WorkspaceShell>
       return;
     }
     setState(() => _compactSearchActive = active);
+  }
+
+  /// The note already owns Back and page actions while its editor is open.
+  void setNoteEditorActive(bool active) {
+    if (!mounted || _noteEditorActive == active) return;
+    setState(() => _noteEditorActive = active);
   }
 
   /// Selects [destination], rebuilding the shell and notifying
@@ -281,7 +288,14 @@ class WorkspaceShellState extends State<WorkspaceShell>
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
-        final bool compact = width < WorkspaceShell.compactBreakpoint;
+        final bool compact = NoteFlowLayout.isCompact(
+          context,
+          availableWidth: width,
+        );
+        final bool compactEditor =
+            compact &&
+            _destination == WorkspaceDestination.notes &&
+            _noteEditorActive;
         final bool medium = width < WorkspaceShell.expandedBreakpoint;
         final bool collapsedDesktop = !compact && !medium && _sidebarCollapsed;
         final Widget? navigation = compact
@@ -319,8 +333,10 @@ class WorkspaceShellState extends State<WorkspaceShell>
                 right: compact,
                 bottom: false,
                 child: SizedBox(
-                  height: compact && !_compactSearchActive ? 48 : 0,
-                  child: compact && !_compactSearchActive
+                  height: compact && !_compactSearchActive && !compactEditor
+                      ? 48
+                      : 0,
+                  child: compact && !_compactSearchActive && !compactEditor
                       ? _buildCompactTopBar(copy)
                       : const SizedBox.shrink(),
                 ),
@@ -511,10 +527,9 @@ class WorkspaceShellState extends State<WorkspaceShell>
 
   Widget? _buildCompactBottomBar(WorkspaceCopy copy) {
     final bool canSearch = widget.onOpenSearch != null;
-    final bool canCreate =
-        _destination == WorkspaceDestination.dashboard &&
-        widget.onCreateNote != null;
-    if (!canSearch && !canCreate) {
+    final bool canCreate = widget.onCreateNote != null;
+    final bool canAsk = widget.onOpenRag != null;
+    if (!canSearch && !canCreate && !canAsk) {
       return null;
     }
 
@@ -548,6 +563,28 @@ class WorkspaceShellState extends State<WorkspaceShell>
                       child: SizedBox.square(
                         dimension: 48,
                         child: Icon(Icons.search, color: tokens.textSecondary),
+                      ),
+                    ),
+                  ),
+                ),
+              if (canAsk)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('workspace-bottom-ask-notes'),
+                      onPressed: widget.onOpenRag,
+                      icon: const Icon(Icons.forum_outlined, size: 20),
+                      label: Text(
+                        copy.askNotes,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        foregroundColor: tokens.textSecondary,
+                        side: BorderSide(color: tokens.divider),
+                        shape: const StadiumBorder(),
                       ),
                     ),
                   ),
@@ -910,7 +947,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
               children: <Widget>[
                 _buildSidebarHeader(copy),
                 const Divider(height: 1.0),
-                if (widget.onOpenSearch != null || widget.onCreateNote != null)
+                if (widget.onOpenSearch != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                       NoteFlowSpacing.sm,
@@ -921,41 +958,22 @@ class WorkspaceShellState extends State<WorkspaceShell>
                     child: Column(
                       children: <Widget>[
                         if (widget.onOpenSearch != null)
-                          NoteFlowSidebarRow(
-                            key: WorkspaceShell.sidebarSearchKey,
-                            label: copy.search,
-                            icon: Icons.search,
-                            dense: true,
-                            onTap: widget.onOpenSearch,
-                          ),
-                        if (widget.onCreateNote != null) ...<Widget>[
-                          const SizedBox(height: NoteFlowSpacing.xs),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              key: WorkspaceShell.sidebarNewNoteKey,
-                              onPressed: widget.onCreateNote,
-                              icon: const Icon(Icons.add, size: 18),
-                              label: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(copy.newNote),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: tokens.subtleSurface.withValues(
+                                alpha: .45,
                               ),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(44),
-                                backgroundColor: tokens.selectedSurface,
-                                foregroundColor: tokens.textPrimary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: NoteFlowSpacing.md,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    NoteFlowRadius.row,
-                                  ),
-                                ),
-                              ),
+                              border: Border.all(color: tokens.divider),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: NoteFlowSidebarRow(
+                              key: WorkspaceShell.sidebarSearchKey,
+                              label: copy.search,
+                              icon: Icons.search,
+                              dense: true,
+                              onTap: widget.onOpenSearch,
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -1032,6 +1050,14 @@ class WorkspaceShellState extends State<WorkspaceShell>
               ),
             ),
           ),
+          if (widget.onCreateNote != null)
+            IconButton(
+              key: WorkspaceShell.sidebarNewNoteKey,
+              tooltip: copy.newNote,
+              onPressed: widget.onCreateNote,
+              icon: const Icon(Icons.edit_square, size: 19),
+              visualDensity: VisualDensity.compact,
+            ),
           IconButton(
             key: WorkspaceShell.collapseToggleKey,
             tooltip: copy.collapseSidebar,

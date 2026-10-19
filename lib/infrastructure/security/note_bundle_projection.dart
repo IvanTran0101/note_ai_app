@@ -75,6 +75,7 @@ abstract final class NoteBundleProjection {
     ...n,
     'title': '',
     'content': '',
+    if (n.containsKey('document')) 'document': null,
     'attachments': <Object?>[],
     'labelIds': <Object?>[],
     'labelProjections': <Object?>[],

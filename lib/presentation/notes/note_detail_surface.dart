@@ -8,6 +8,8 @@ import 'note_detail_editor_form.dart';
 import 'note_detail_localizations.dart';
 import 'note_summary_availability.dart';
 import 'notes_theme_tokens.dart';
+import '../sync/sync_presentation_controller.dart';
+import '../sync/sync_widgets.dart';
 
 /// Pure layout surface for the Note Detail editor.
 ///
@@ -42,6 +44,9 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.actionBusy,
     this.readOnly = false,
     this.attachments,
+    this.richEditorBuilder,
+    this.headerActions = const [],
+    this.syncController,
     required this.provisioningReader,
     required this.onProvisioningRetry,
     required this.onProvisioningCancel,
@@ -92,6 +97,9 @@ final class NoteDetailSurface extends StatelessWidget {
   final bool actionBusy;
   final bool readOnly;
   final Widget? attachments;
+  final Widget Function(Widget header, Widget footer)? richEditorBuilder;
+  final List<Widget> headerActions;
+  final SyncPresentationController? syncController;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
   final VoidCallback? onProvisioningCancel;
@@ -134,16 +142,25 @@ final class NoteDetailSurface extends StatelessWidget {
   static const Key scrollKey = ValueKey<String>('note-detail-scroll');
 
   @override
-  Widget build(BuildContext context) {
-    final bool compact =
-        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+  Widget build(BuildContext context) => LayoutBuilder(
+    // Scaffold can resize this subtree without changing its stripped MediaQuery.
+    builder: (context, _) => _buildLayout(context),
+  );
+
+  Widget _buildLayout(BuildContext context) {
+    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool nativeLandscape =
+        NoteFlowLayout.isNativePhone(context) &&
+        MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
     final double editorMaxWidth = compact
         ? NoteFlowLayout.compactEditorMaxWidth
-        : kIsWeb
-        ? NoteFlowLayout.wideWebEditorMaxWidthFor(
-            MediaQuery.sizeOf(context).width,
-          )
         : NoteFlowLayout.editorMaxWidth;
+    final double richMaxWidth = nativeLandscape
+        ? NoteFlowLayout.editorMaxWidth
+        : editorMaxWidth;
+    final bool keyboardTakesHeader =
+        NoteFlowLayout.isShortEditor(context) &&
+        NoteFlowLayout.keyboardInset(context) > 0;
     final double editorTopPadding = compact
         ? NoteFlowLayout.compactEditorTopInset(context) +
               (kIsWeb
@@ -152,6 +169,11 @@ final class NoteDetailSurface extends StatelessWidget {
                     )
                   : 0)
         : NoteFlowLayout.editorTopPadding;
+    final double richTopPadding = compact
+        ? 0
+        : MediaQuery.sizeOf(context).height < 600
+        ? 24
+        : 104;
     final String pageStatus = isSaving
         ? savingLabel
         : isSummarizing
@@ -183,10 +205,19 @@ final class NoteDetailSurface extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (showPageHeader)
+        if (showPageHeader && !keyboardTakesHeader)
           NoteFlowPageHeader(
             breadcrumb: copy.pageBreadcrumb(pageTitle),
             statusLabel: pageStatus,
+            statusIndicator: syncController == null
+                ? null
+                : SyncStatusPanel(
+                    controller: syncController!,
+                    iconOnly: true,
+                    additionalStatus: pageStatus,
+                    localPending: isDirty || isSaving,
+                    localFailed: error != null,
+                  ),
             statusBusy: isSaving || isSummarizing,
             statusUnavailable: statusUnavailable,
             statusDirty: isDirty,
@@ -195,64 +226,110 @@ final class NoteDetailSurface extends StatelessWidget {
             onBack: onBack,
             backTooltip: backTooltip,
             backKey: backKey,
-            actions: <Widget>[actionBar],
+            actions: <Widget>[...headerActions, actionBar],
           ),
         Expanded(
-          child: SingleChildScrollView(
-            key: scrollKey,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.fromLTRB(
-              compact
-                  ? NoteFlowLayout.compactPageLeadingInsetFor(context)
-                  : NoteFlowSpacing.lg,
-              editorTopPadding,
-              NoteFlowSpacing.lg,
-              NoteFlowSpacing.xl,
-            ),
-            child: Align(
-              alignment: compact ? Alignment.topLeft : Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: editorMaxWidth),
-                child: NoteDetailEditorForm(
-                  titleController: titleController,
-                  contentController: contentController,
-                  titleFocusNode: titleFocusNode,
-                  contentFocusNode: contentFocusNode,
-                  contentFieldContextKey: contentFieldContextKey,
-                  copy: copy,
-                  hasSavedNote: hasSavedNote,
-                  isDirty: isDirty,
-                  error: error,
-                  informationalError: error == copy.persistenceUnavailable,
-                  statusMessage: statusMessage,
-                  showSaveState: !showPageHeader,
-                  actionBusy: actionBusy,
-                  readOnly: readOnly,
-                  attachments: attachments,
-                  isSummarizing: isSummarizing,
-                  showBusyIndicator: showBusyIndicator,
-                  provisioningReader: provisioningReader,
-                  onProvisioningRetry: onProvisioningRetry,
-                  onProvisioningCancel: onProvisioningCancel,
-                  summary: summary,
-                  summaryStale: summaryStale,
-                  onCopySummary: onCopySummary,
-                  onRegenerateSummary: onRegenerateSummary,
-                  copySummaryLabel: copySummaryLabel,
-                  regenerateSummaryLabel: regenerateSummaryLabel,
-                  onErrorRetry: onErrorRetry,
-                  errorRetryLabel: errorRetryLabel,
-                  errorRetryEnabled: errorRetryEnabled,
-                  summaryAvailability: summaryAvailability,
-                  summaryCloud: summaryCloud,
-                  onCancelSummary: onCancelSummary,
+          child: richEditorBuilder != null
+              ? Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 24 : NoteFlowSpacing.lg,
+                  ),
+                  child: Align(
+                    alignment: compact
+                        ? Alignment.topLeft
+                        : Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: richMaxWidth),
+                      child: richEditorBuilder!(
+                        Padding(
+                          padding: EdgeInsets.only(top: richTopPadding),
+                          child: _editorForm(
+                            includeContent: false,
+                            includeMetadata: false,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: _editorForm(
+                            includeContent: false,
+                            includeTitle: false,
+                            includeFeedback: false,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  key: scrollKey,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    compact
+                        ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                        : NoteFlowSpacing.lg,
+                    editorTopPadding,
+                    NoteFlowSpacing.lg,
+                    NoteFlowSpacing.xl,
+                  ),
+                  child: Align(
+                    alignment: compact
+                        ? Alignment.topLeft
+                        : Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: editorMaxWidth),
+                      child: _editorForm(),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
         if (!showPageHeader) actionBar,
       ],
     );
   }
+
+  Widget _editorForm({
+    bool includeContent = true,
+    bool includeTitle = true,
+    bool includeMetadata = true,
+    bool includeFeedback = true,
+  }) => NoteDetailEditorForm(
+    titleController: titleController,
+    contentController: contentController,
+    titleFocusNode: titleFocusNode,
+    contentFocusNode: contentFocusNode,
+    contentFieldContextKey: contentFieldContextKey,
+    copy: copy,
+    hasSavedNote: hasSavedNote,
+    isDirty: isDirty,
+    error: error,
+    informationalError: error == copy.persistenceUnavailable,
+    statusMessage: statusMessage,
+    showSaveState: !showPageHeader,
+    actionBusy: actionBusy,
+    readOnly: readOnly,
+    attachments: attachments,
+    includeContent: includeContent,
+    includeTitle: includeTitle,
+    includeMetadata: includeMetadata,
+    quietMetadata: richEditorBuilder != null,
+    includeFeedback: includeFeedback,
+    isSummarizing: isSummarizing,
+    showBusyIndicator: showBusyIndicator,
+    provisioningReader: provisioningReader,
+    onProvisioningRetry: onProvisioningRetry,
+    onProvisioningCancel: onProvisioningCancel,
+    summary: summary,
+    summaryStale: summaryStale,
+    onCopySummary: onCopySummary,
+    onRegenerateSummary: onRegenerateSummary,
+    copySummaryLabel: copySummaryLabel,
+    regenerateSummaryLabel: regenerateSummaryLabel,
+    onErrorRetry: onErrorRetry,
+    errorRetryLabel: errorRetryLabel,
+    errorRetryEnabled: errorRetryEnabled,
+    summaryAvailability: summaryAvailability,
+    summaryCloud: summaryCloud,
+    onCancelSummary: onCancelSummary,
+  );
 }

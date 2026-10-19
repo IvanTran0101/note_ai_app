@@ -27,8 +27,11 @@ import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
 import '../../application/sync/sync_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
+import '../documents/note_document_codec.dart';
 
 part 'sync_note_wire_mapper.dart';
+part 'sync_mutation_wire_encoder.dart';
 
 /// The `status` value of an applied mutation response.
 const String _appliedStatus = 'applied';
@@ -68,61 +71,8 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
   'NOTE_LOCKED': SyncErrorCode.forbidden,
   'NOTE_GRANT_EXPIRED': SyncErrorCode.forbidden,
   'NOTE_ACCESS_DENIED': SyncErrorCode.forbidden,
+  'DOCUMENT_REQUIRES_UPGRADE': SyncErrorCode.documentRequiresUpgrade,
 };
-
-/// One decision owns typed encoding and routing, including M05 mutations that
-/// carry attachment metadata without any labels.
-bool requiresSyncWireV2(SyncMutation mutation) =>
-    mutation.isLabel ||
-    mutation.payload?.includesLabels == true ||
-    mutation.payload?.includesAttachments == true;
-
-/// Encodes one client mutation with its matching negotiated wire version.
-/// `payload` is omitted for a content-free delete; `ownerId` identifies a
-/// canonical shared update, while the authenticated actor remains separate.
-Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
-  if (mutation.isLabel) {
-    return {
-      'wireVersion': 2,
-      'entityType': 'label',
-      'mutationId': mutation.mutationId,
-      'labelId': mutation.noteId,
-      'operation': mutation.operation.name,
-      'baseRevision': mutation.baseRevision,
-      if (mutation.labelName != null) 'payload': {'name': mutation.labelName},
-    };
-  }
-  final Map<String, Object?> body = <String, Object?>{
-    if (requiresSyncWireV2(mutation)) ...{
-      'wireVersion': 2,
-      'entityType': 'note',
-    },
-    'mutationId': mutation.mutationId,
-    'noteId': mutation.noteId,
-    'operation': mutation.operation.name,
-    'baseRevision': mutation.baseRevision,
-    if (mutation.ownerId != null) 'ownerId': mutation.ownerId,
-    if (mutation.accessRevision != null)
-      'accessRevision': mutation.accessRevision,
-    if (mutation.protectionChange != null)
-      'protectionChange': ProtectionSyncCodec.encode(
-        mutation.protectionChange!,
-      ),
-  };
-  final SyncNotePayload? payload = mutation.payload;
-  if (payload != null) {
-    body['payload'] = <String, Object?>{
-      'title': payload.title,
-      'content': payload.content,
-      if (payload.includesLabels) 'labelIds': payload.labelIds,
-      if (payload.includesAttachments)
-        'attachments': payload.attachments.map(AttachmentCodec.encode).toList(),
-      if (payload.includesPinnedAt)
-        'pinnedAt': payload.pinnedAt?.toIso8601String(),
-    };
-  }
-  return body;
-}
 
 /// Decodes one `POST /sync/mutations` response.
 ///
@@ -164,10 +114,12 @@ SyncMutationResult decodeSyncMutationResponse({
     );
   }
 
+  final documents = json['wireVersion'] == 3;
+  if (documents) _requireDocumentCapability(json);
   if (statusCode == 409) {
     return SyncMutationResult.conflict(
       mutationId: _readMutationId(json, mutationId),
-      remote: _readOptionalNote(json, 'remoteNote'),
+      remote: _readOptionalNote(json, 'remoteNote', documents: documents),
     );
   }
   if (statusCode < 200 || statusCode >= 300) {
@@ -184,7 +136,10 @@ SyncMutationResult decodeSyncMutationResponse({
   }
   return SyncMutationResult.applied(
     mutationId: _readMutationId(json, mutationId),
-    note: _decodeNote(_asJsonObject(note, 'mutation response "note"')),
+    note: _decodeNote(
+      _asJsonObject(note, 'mutation response "note"'),
+      documents: documents,
+    ),
   );
 }
 
@@ -207,9 +162,10 @@ SyncChangesPage decodeChangesPage(
     throw const FormatException('Changes page "items" must be an array.');
   }
   final version = json['wireVersion'] ?? 1;
-  if (version != 1 && version != 2) {
+  if (version != 1 && version != 2 && version != 3) {
     throw const FormatException('Unsupported sync version.');
   }
+  if (version == 3) _requireDocumentCapability(json);
   final snapshots = <SyncNoteSnapshot>[];
   final labels = <LocalLabelState>[];
   for (final item in items) {
@@ -223,6 +179,7 @@ SyncChangesPage decodeChangesPage(
         _decodeNote(
           _asJsonObject(row['note'], 'note'),
           authorizedContent: authorizedContent,
+          documents: version == 3,
         ),
       );
     } else if (row['entityType'] == 'label') {
@@ -269,6 +226,9 @@ SyncChangesPage decodeChangesPage(
 /// cross into Application, and user-facing copy is Presentation's concern
 /// rather than Infrastructure's.
 SyncFailure decodeError({int? statusCode, Object? body}) {
+  if (_tryAsJsonObject(body)?['code'] == 'DOCUMENT_REQUIRES_UPGRADE') {
+    return const SyncFailure(code: SyncErrorCode.documentRequiresUpgrade);
+  }
   final SyncErrorCode? fromStatus = statusCode == null
       ? null
       : _statusErrorCodes[statusCode];
@@ -283,10 +243,18 @@ SyncFailure decodeError({int? statusCode, Object? body}) {
 SyncNoteSnapshot decodeSyncNoteSnapshot(
   Object? data, {
   bool authorizedContent = false,
+  bool documents = false,
 }) => _decodeNote(
   _asJsonObject(data, 'note snapshot'),
   authorizedContent: authorizedContent,
+  documents: documents,
 );
+
+void _requireDocumentCapability(Map<String, Object?> json) {
+  if (json['documentCapability'] != 'basicBlocksV1') {
+    throw const FormatException('Document capability required.');
+  }
+}
 
 /// Reads the opaque paging cursor, treating an empty string as absent.
 String? _readOptionalCursor(Map<String, Object?> json) {
@@ -318,13 +286,17 @@ String _readMutationId(Map<String, Object?> json, String? requestMutationId) {
 /// Reads an optional nested note, or throws when the key holds a non-object.
 SyncNoteSnapshot? _readOptionalNote(
   Map<String, Object?> json,
-  String fieldName,
-) {
+  String fieldName, {
+  bool documents = false,
+}) {
   final Object? value = json[fieldName];
   if (value == null) {
     return null;
   }
-  return _decodeNote(_asJsonObject(value, 'mutation response "$fieldName"'));
+  return _decodeNote(
+    _asJsonObject(value, 'mutation response "$fieldName"'),
+    documents: documents,
+  );
 }
 
 /// Classifies an error envelope by its `code` token alone.

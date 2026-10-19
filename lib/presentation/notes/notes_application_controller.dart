@@ -1,11 +1,41 @@
 import '../../application/attachments/attachment_application.dart';
 import '../../application/attachments/attachment_input.dart';
 import '../../application/notes/note_application.dart';
+import '../../application/notes/note_editor_snapshot.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import '../../application/notes/note_sharing_app_service.dart';
+import '../../domain/notes/note_document.dart';
+
+abstract interface class DocumentNotesController {
+  Future<NoteDto> saveDocumentSnapshot(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  );
+  Future<NoteDto> createDocumentNote({
+    required String title,
+    required NoteDocument document,
+  });
+}
+
+extension DocumentNoteCopy on NotesApplicationController {
+  Future<NoteDto> createSnapshotNote({
+    required String title,
+    required String content,
+    NoteDocument? document,
+  }) async {
+    if (document == null) return createNote(title: title, content: content);
+    final Object controller = this;
+    if (controller is! DocumentNotesController ||
+        content != document.plainText) {
+      throw const NoteDocumentStorageUnavailable();
+    }
+    return controller.createDocumentNote(title: title, document: document);
+  }
+}
 
 abstract interface class AttachmentNotesController {
   AttachmentApplicationService? get attachments;
@@ -91,6 +121,7 @@ abstract interface class NotesModule02Controller {
 final class NoteApplicationServiceController
     implements
         NotesApplicationController,
+        DocumentNotesController,
         NotesModule02Controller,
         SecuredNotesController,
         SharingNotesController,
@@ -175,6 +206,23 @@ final class NoteApplicationServiceController
   Future<NoteDto> createNote({required String title, required String content}) {
     return _service.createNote(title: title, content: content);
   }
+
+  @override
+  Future<NoteDto> createDocumentNote({
+    required String title,
+    required NoteDocument document,
+  }) => _service.createNote(
+    title: title,
+    content: document.plainText,
+    document: document,
+  );
+
+  @override
+  Future<NoteDto> saveDocumentSnapshot(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  ) => _service.saveDocumentSnapshot(selected, title, document);
 
   @override
   Future<NoteDto> renameNote({required String noteId, required String title}) {

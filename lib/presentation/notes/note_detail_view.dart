@@ -10,15 +10,11 @@ extension _NoteDetailView on NoteDetailPageState {
         ? currentTitle
         : (_note == null ? copy.newNote : copy.editNote);
     final Widget surface = _buildSurface(copy, pageTitle);
-    final Widget? noteRagAction = _canOpenNoteRag
-        ? _buildNoteRagAction(context)
-        : null;
     final Widget content = widget.onEmbeddedExit != null
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               if (widget.showAppBar) _buildAppBar(copy, pageTitle),
-              ?noteRagAction,
               Expanded(child: surface),
             ],
           )
@@ -51,15 +47,14 @@ extension _NoteDetailView on NoteDetailPageState {
   PreferredSizeWidget _buildAppBar(NoteDetailCopy copy, String pageTitle) {
     final VoidCallback? moreAction = _moreAction(copy);
     final List<Widget> actions = <Widget>[
-      if (_canOpenNoteRag) _buildNoteRagAction(context),
+      ..._contextHeaderActions(),
       if (moreAction != null)
         Builder(
           builder: (BuildContext buttonContext) => IconButton(
             key: const ValueKey<String>('note-detail-more'),
             tooltip: copy.more,
-            onPressed: () => unawaited(
-              _showMoreActions(copy, anchorContext: buttonContext),
-            ),
+            onPressed: () =>
+                unawaited(_showMoreActions(copy, anchorContext: buttonContext)),
             icon: const Icon(Icons.more_horiz),
           ),
         ),
@@ -147,6 +142,9 @@ extension _NoteDetailView on NoteDetailPageState {
       actionBusy: _actionBusy,
       readOnly: _securityBusy || _securityLoading || !_canEdit,
       attachments: _buildNoteExtras(),
+      richEditorBuilder: _richEditor == null ? null : _richEditorWidget,
+      headerActions: widget.showAppBar ? const [] : _contextHeaderActions(),
+      syncController: widget.syncController,
       provisioningReader: widget.provisioningReader,
       onProvisioningRetry: _note == null ? null : _summarize,
       onProvisioningCancel: widget.onProvisioningCancel,
@@ -197,14 +195,15 @@ extension _NoteDetailView on NoteDetailPageState {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final minimumHeight = MediaQuery.textScalerOf(context).scale(320);
+        final minimumHeight = NoteFlowLayout.isShortEditor(context)
+            ? 88.0
+            : MediaQuery.textScalerOf(context).scale(320);
         final content = Column(
           children: <Widget>[
             if (_hasRemoteEditorChange) _remoteEditorNotice(),
-            if (_note != null) _sharingPanel(),
-            if (_note != null) _securityPanel(),
+            if (_note?.share != null) _sharingPanel(),
             if (sync != null && widget.onEmbeddedExit == null)
-              SyncStatusPanel(controller: sync),
+              SyncStatusPanel(controller: sync, compact: true),
             if (conflict != null) _buildConflictNotice(),
             Expanded(child: editor),
           ],
@@ -245,5 +244,35 @@ extension _NoteDetailView on NoteDetailPageState {
         ),
       ),
     );
+  }
+
+  List<Widget> _contextHeaderActions() {
+    final note = _note;
+    if (note == null) {
+      // The first local create must not add a toolbar row while the IME owns
+      // the draft. Reserve only the slots the same note will use after save.
+      return [
+        if (widget.notesController is SharingNotesController)
+          const SizedBox.square(dimension: 48),
+        const SizedBox.square(dimension: 48),
+        if (widget.onOpenNoteRag != null) const SizedBox.square(dimension: 48),
+      ];
+    }
+    if (!_canRead) return const [];
+    return [
+      if (note.share == null &&
+          _capabilities.canManage &&
+          widget.notesController is SharingNotesController)
+        _sharingPanel(compact: true),
+      _securityPanel(),
+      // Keep the horizontal slot across local edits and ACKs.
+      if (widget.onOpenNoteRag != null &&
+          !note.isProtected &&
+          note.share == null)
+        SizedBox.square(
+          dimension: 48,
+          child: _canOpenNoteRag ? _buildNoteRagAction(context) : null,
+        ),
+    ];
   }
 }

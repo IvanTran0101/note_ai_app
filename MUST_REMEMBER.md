@@ -1,5 +1,78 @@
 # MUST REMEMBER
 
+## Latest rule — UI/UX uses existing features only (2026-10-16)
+
+For every UI/UX change, use the app's existing features only. Adjust layout,
+typography, colors, icons, spacing, responsive behavior, safe areas and
+accessibility while preserving existing functionality, data, access guards,
+local-first persistence and sync. Reference images or plan entries do not
+automatically authorize adding a capability that is absent from the app.
+Before adding any new feature, flow, command or block type, record a concrete
+proposal on Notion with purpose, scope, impact and acceptance criteria; mark
+it "Chờ người dùng duyệt" (waiting for user approval). Implement it only after
+the user explicitly approves. Silence is not approval. Fixing an existing
+feature is allowed; adding new behavior still requires this proposal gate.
+This is the latest user instruction for UI/UX work and takes precedence over
+earlier wording that could imply unrestricted feature additions during M09.
+Full policy and proposal register:
+https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
+
+## Visible UI checkpoint — 18 October2026
+
+Reference styling is implemented locally: sidebar/search/new-note icon, neutral
+selection,704px reading column, Web tools below body, folded metadata and
+responsive share panel. Current811 source88194311 and matching actual Web/
+Android captures are in docs/m09/P5_P6_ACCEPTANCE.md. This is a visible P5
+checkpoint, not full M09/95-point acceptance. User prioritizes finishing the
+visual pass over repeating full suites; finish remaining screens then final QA.
+Earlier1926VM/1728Chrome receipts predate these latest visual changes.
+
+## Active request — Integration then complete M09 (2026-10-13)
+
+The user approved updating final-tuankiet, integrating all of anhminh-final,
+fixing conflicts/regressions with automated and actual Chrome/Android emulator
+QA, then implementing M09 through acceptance. This supersedes every historical
+M09 deferred instruction below. Current integrated baseline is 75a90b0.
+Integration3718a60 is published with verified source/local fixes; live AWS/RAG
+and dev M01 setup gates are explicitly recorded. M09 P0 engine/ref proof is
+accepted in a separate synthetic-only app (VM10/Chrome10). P1 pure document and
+P2 encrypted local/schema7 pipeline are accepted: VM1752/4 configured skips,
+Chrome93 and native storage2/2. Typed cloud transport is P3, production rich UI
+is P4-P6; no final UI score yet. P3 source/local typed transport now accepted:
+VM1772/4 configured skips, Chrome66, backend outside RAG145, native transport1/1;
+published23f3652, remote SHA confirmed. P4 rich editor now has verified source/local
+checkpoint807: full VM1898/5 configured skips/0fail, installed Chrome1700/2 skips/
+0fail on199 mains including actual local HTTP, static checks clean. Matching
+APK A76328E3 retains rich data; physical row Undo/Redo and popup position pass.
+Checkpoint092e2c9 is pushed to final-tuankiet; remote SHA verified.
+P5 Native phone-landscape/spacing and final full UI matrix/scoring remain open.
+Read docs/m09/CURRENT_WORK.md for exact current source,
+runtimes, tests and next steps. Final P4/P5 UI acceptance, P6 and
+platform scores remain pending. Continue through all M09; do not treat partial
+source/UI checkpoints as full M09 completion.
+V3 capability/document1 preserves formatting,
+same-revision backfill, exact rich retries and explicit legacy conflict recovery.
+AWS live and missing exact RAG manifests remain separate gates. Preserve packet/AAD3 and exact attempted legacy
+payloads. Do not mistake foundation receipts for full M09 acceptance. Playwright
+with installed Chrome local is explicitly authorized for real browser QA.
+Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
+all existing module data, session/access guards and unrelated local files.
+No C: worktrees. Use docs/m09/CURRENT_WORK.md for active continuity.
+
+M09 uses hinhanh/UI_web_ref and UI_android_ref for mapped NoteFlow screens.
+Keep 13 Basic blocks, no Page/Link to page or child-note flow. Selection toolbar:
+Text/H1-H4, colors/highlight, B/I/U/strike, link, inline code, inline math, clear,
+font sizes 12/14/16/18/24/32 plus custom 12-48 applied to selected text.
+Persist/sync document, marks and size without losing existing data. Follow DDD.
+Each platform must reach >=95/100: visual60/UX20/adaptive10/states10, with
+paired references/screenshots and mandatory flows working. Never invent scores.
+Update Notion/checkboxes only for verified scope and push final-tuankiet after
+each accepted milestone. User has authorized testing/fixes and required schema
+work; source/local results remain distinct from live AWS deployment acceptance.
+Editor plan: https://app.notion.com/p/3f5f9c7a1aa0817f9e0bdbe52bb091fe
+Scorecards: https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
+
+
 ## Active request — Finish M03 (2026-10-05)
 
 The user now authorizes completing all remaining M03 implementation after M04,
