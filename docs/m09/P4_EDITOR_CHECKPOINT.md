@@ -73,8 +73,11 @@ published. Current build/hash details are in the local provenance JSON.
   using the existing controls and callbacks.
 - Finish actual Chrome/Android protection, sharing, files/labels/search/settings,
   resize/rotation/text-scale/navigation-mode and light/dark UI matrix.
-- Review paired references and captures, fix/retest discrepancies, fill all11
-  criteria separately on Web and Android. Each must reach95/100; no scores yet.
+- Updated order19 October: open Notion Web AND the actual Notion Android app,
+  compare matching screens/states and refine UI until EACH resembles them by
+  >=95%, with current paired evidence and Android/iOS safe zones. Old point
+  ratings are withdrawn. Only after this UI gate resume functional acceptance;
+  see MUST_REMEMBER.md and CURRENT_WORK.md for the authoritative next step.
 - Update Notion/checklists and publish each verified checkpoint, then final handoff.
 
 This checkpoint does not establish live AWS/RAG acceptance. The previously

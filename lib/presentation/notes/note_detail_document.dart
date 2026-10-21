@@ -48,7 +48,7 @@ extension _NoteDetailDocument on NoteDetailPageState {
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
       _summaryController.markStaleIfResult();
-    } else if (_pendingSavedNote != null) {
+    } else if (_pendingSavedNote != null && !_saving) {
       _adoptSavedNote(_pendingSavedNote);
     }
     _ignoreNextEditorFocusLoss = false;

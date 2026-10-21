@@ -127,6 +127,10 @@ abstract final class NoteFlowLayout {
   static const double compactWebEditorTitleLeadingInset = 8;
   static const double editorMaxWidth = 704;
   static const double editorTextMaxWidth = 692;
+
+  /// Direct Notion Web title-column measurement, 19 October 2026.
+  /// Native/tablet geometry is reviewed separately against the native app.
+  static const double webDocumentMaxWidth = 720;
   static const double wideWebEditorMaxWidth = 1200;
   static const double dashboardContentMaxWidth = 768;
   static const double dashboardTopPadding = 72;

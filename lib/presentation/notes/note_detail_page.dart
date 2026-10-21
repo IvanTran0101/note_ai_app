@@ -15,6 +15,7 @@ import '../../domain/notes/note_document.dart';
 import '../editor/rich_editor_adapter.dart';
 import '../editor/rich_note_editor.dart';
 import '../editor/editor_projection_map.dart';
+import '../common/note_flow_primitives.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,6 +49,7 @@ part 'note_detail_actions.dart';
 part 'note_detail_conflicts.dart';
 part 'note_detail_rag_part.dart';
 part 'note_detail_view.dart';
+part 'note_detail_compact_actions.dart';
 part 'note_detail_labels.dart';
 part 'note_detail_security.dart';
 part 'note_detail_sharing.dart';

@@ -45,6 +45,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
     this.backKey,
     this.actions = const <Widget>[],
     this.statusIndicator,
+    this.showDivider = true,
   });
 
   final String breadcrumb;
@@ -59,6 +60,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
   final Key? backKey;
   final List<Widget> actions;
   final Widget? statusIndicator;
+  final bool showDivider;
 
   static const Key statusKey = ValueKey<String>('note-flow-page-status');
 
@@ -69,7 +71,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
       color: tokens.pageSurface,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: tokens.divider)),
+          border: showDivider
+              ? Border(bottom: BorderSide(color: tokens.divider))
+              : null,
         ),
         child: SafeArea(bottom: false, child: LayoutBuilder(builder: _layout)),
       ),
@@ -86,7 +90,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ConstrainedBox(
-          constraints: BoxConstraints(minHeight: compact ? 56 : 44),
+          constraints: BoxConstraints(minHeight: compact ? 48 : 44),
           child: _row(context, compact: compact, inlineActions: !wrapActions),
         ),
         if (wrapActions)
@@ -111,7 +115,10 @@ final class NoteFlowPageHeader extends StatelessWidget {
             key: backKey,
             tooltip: backTooltip,
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, size: 20),
+            icon: Icon(
+              compact ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back,
+              size: compact ? 22 : 20,
+            ),
             visualDensity: compact
                 ? VisualDensity.standard
                 : VisualDensity.compact,

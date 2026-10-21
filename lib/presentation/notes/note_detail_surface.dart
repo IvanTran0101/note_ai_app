@@ -154,6 +154,8 @@ final class NoteDetailSurface extends StatelessWidget {
         MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
     final double editorMaxWidth = compact
         ? NoteFlowLayout.compactEditorMaxWidth
+        : kIsWeb
+        ? NoteFlowLayout.webDocumentMaxWidth
         : NoteFlowLayout.editorMaxWidth;
     final double richMaxWidth = nativeLandscape
         ? NoteFlowLayout.editorMaxWidth
@@ -201,13 +203,15 @@ final class NoteDetailSurface extends StatelessWidget {
       summarizingLabel: summarizingLabel,
       summarizeTooltip: hasSavedNote ? null : copy.saveBeforeSummary,
       iconOnly: showPageHeader,
+      showSummarizeAction: !compact,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (showPageHeader && !keyboardTakesHeader)
           NoteFlowPageHeader(
-            breadcrumb: copy.pageBreadcrumb(pageTitle),
+            breadcrumb: compact ? '' : copy.pageBreadcrumb(pageTitle),
+            showDivider: !compact,
             statusLabel: pageStatus,
             statusIndicator: syncController == null
                 ? null
@@ -232,7 +236,11 @@ final class NoteDetailSurface extends StatelessWidget {
           child: richEditorBuilder != null
               ? Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 24 : NoteFlowSpacing.lg,
+                    horizontal: NoteFlowLayout.isNativePhone(context)
+                        ? 26
+                        : compact
+                        ? 24
+                        : NoteFlowSpacing.lg,
                   ),
                   child: Align(
                     alignment: compact

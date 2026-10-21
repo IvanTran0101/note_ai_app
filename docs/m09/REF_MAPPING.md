@@ -1,6 +1,11 @@
 # M09 reference mapping
 
-Status: implementation targets, not a score or final UI acceptance.
+Status updated 19 October 2026: UI similarity NOT ACCEPTED. Open actual
+Notion Web AND the actual Notion Android app and compare the matching screens/
+states before further UI refinement. The mappings below are supporting local
+references, not substitutes for that direct inspection. Target >=95% similarity
+on EACH platform before functional regression/acceptance. Prior96.2 ratings
+are withdrawn; current similarity remains unverified. See VISUAL_REVIEW.md.
 Reviewed local images on 2026-10-14. Inventory: 200 Web / 218 Android.
 Names are lookup keys, not proof of what a capture contains: Web001/002 show
 an editor/sidebar; Android003/040 show loading only and are excluded as final
@@ -38,17 +43,26 @@ refs are not demo content.
   keyboard-safe and dismissible. Lock/unavailable screen replaces private content.
 - Mobile editor rail respects viewInsets and safe-area without duplicate padding.
   Long tables scroll horizontally; toolbar/sheets flip/scroll rather than overflow.
+- Android bottom safe zone must cover gesture AND 3-button system navigation,
+  with keyboard open/closed, portrait/landscape and final scroll controls visible.
+- iOS top safe zone avoids status bar/notch/Dynamic Island; retain bottom Home
+  Indicator clearance. Do not claim iOS validation without an actual environment.
 
-## Evidence and grading
+## Evidence and similarity (%)
 
-For each scored state: record build revision, platform/device/DPR, viewport,
-insets, locale, theme, text scale, keyboard/selection, ref filename and actual
-capture. Use synthetic text and equivalent visible state. If a reference has no
-corresponding product function, compare its applicable tokens, not nonexistent
-content. Missing evidence stays Pending.
+For each compared state: record build, platform/device/DPR, viewport, insets,
+locale, theme, text scale, keyboard/selection, actual Notion inspection time/
+screen and paired NoteFlow capture; add local ref filename where helpful.
+Compare layout, typography/hierarchy, spacing, colors, icons and UI states.
+Use synthetic NoteFlow content; reference private text/accounts are not demos.
+If a reference has no matching product function, document applicable styling
+and the adaptation, preserving existing functionality. No new feature is
+authorized by a reference. Missing evidence stays unverified (—).
 
-Each platform separately: visual60 (layout16/type14/spacing12/color10/icons8),
-UX20 (core10/slash+selection10), adaptive/accessibility10 (5+5), states10 (5+5).
-Score each criterion0–5 and weight it; Web>=95 and Android>=95 individually.
-Data loss, permission bypass, broken required editing or unreadable controls
-fail acceptance regardless of aggregate. No scores are assigned during P0.
+Use similarity percentages with concrete gap/evidence explanations, not the
+retired0–5 weighted points rubric. Do not convert old scores or test counts
+into similarity. Both Web>=95% AND Android>=95% are required; averaging must
+not hide a platform or mandatory screen still visibly different. Until BOTH
+have evidence, continue reference UI work and leave functional acceptance
+queued. Later functional testing still must catch data loss, permission bypass
+or broken required editing; a visual gate does not certify those contracts.

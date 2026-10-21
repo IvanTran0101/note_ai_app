@@ -14,6 +14,7 @@ class EditorStyle {
     required this.selectionColor,
     required this.textStyleConfiguration,
     required this.textSpanDecorator,
+    this.blockPadding,
     this.textSpanOverlayBuilder,
     this.magnifierSize = const Size(72, 48),
     this.mobileDragHandleBallSize = const Size(8, 8),
@@ -32,6 +33,11 @@ class EditorStyle {
 
   // The padding of the editor.
   final EdgeInsets padding;
+
+  /// Resolves outer padding for an individual block in a page.
+  ///
+  /// When omitted, [padding] is used for every block.
+  final EdgeInsets Function(Node node)? blockPadding;
 
   // The max width of the editor.
   final double? maxWidth;
@@ -107,6 +113,7 @@ class EditorStyle {
 
   const EditorStyle.desktop({
     EdgeInsets? padding,
+    this.blockPadding,
     Color? cursorColor,
     Color? selectionColor,
     TextStyleConfiguration? textStyleConfiguration,
@@ -139,6 +146,7 @@ class EditorStyle {
 
   const EditorStyle.mobile({
     EdgeInsets? padding,
+    this.blockPadding,
     Color? cursorColor,
     Color? dragHandleColor,
     Color? selectionColor,
@@ -172,6 +180,7 @@ class EditorStyle {
 
   EditorStyle copyWith({
     EdgeInsets? padding,
+    EdgeInsets Function(Node node)? blockPadding,
     Color? cursorColor,
     Color? dragHandleColor,
     Color? selectionColor,
@@ -194,6 +203,7 @@ class EditorStyle {
   }) {
     return EditorStyle(
       padding: padding ?? this.padding,
+      blockPadding: blockPadding ?? this.blockPadding,
       cursorColor: cursorColor ?? this.cursorColor,
       dragHandleColor: dragHandleColor ?? this.dragHandleColor,
       selectionColor: selectionColor ?? this.selectionColor,

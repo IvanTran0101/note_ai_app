@@ -1,5 +1,53 @@
 # MUST REMEMBER
 
+## Implementation resumed — user-authorized six-agent mode (19 October 2026)
+
+The documentation-only turn is complete. The user now explicitly authorizes
+implementation until the Notion requirements are met, with up to six Luna Max
+subagents and lead review/integration. Follow the ownership map in
+docs/m09/AGENT_IMPLEMENTATION_20261019.md. The UI-first >=95% similarity gate,
+direct Notion Web/Android evidence, safe zones and existing-features-only rule
+below remain mandatory. No previous self-rating is reinstated.
+
+## LATEST USER RULE — UI similarity first (19 October 2026)
+
+READ THIS BEFORE EVERY CODING TURN, including after an interruption or when
+the user says "continue" / "tiếp tục". Then read docs/m09/CURRENT_WORK.md and
+docs/m09/VISUAL_REVIEW.md. Resume REFERENCE UI WORK, not functional acceptance.
+
+The user explicitly says the current UI is not similar enough. WITHDRAW the
+previous Web96.2/100 and Android96.2/100 self-ratings and "UI threshold reached"
+conclusion. The old57.2/60 visual-group calculation also proves no accepted
+similarity percentage. Neither platform is accepted; actual similarity is
+UNVERIFIED. Do not relabel the old scores as percentages or invent a new %.
+
+The target is >=95% UI SIMILARITY SEPARATELY on Web AND Android. Open and
+operate actual Notion Web AND the actual Notion Android app to inspect the
+matching screens/states, then compare and refine NoteFlow. The hinhanh Web/
+Android images remain supporting references; they do not replace direct
+Notion inspection on both platforms. Record paired ref/app evidence, build,
+viewport/device/theme/state/insets, concrete differences and the reasons for
+any estimated %. Missing evidence stays unverified. Do not average platforms,
+hide a visibly mismatched required screen, or turn test counts into similarity.
+
+HARD ORDER: both platforms must have evidence of >=95% similarity BEFORE
+resuming queued functional defects, broad regression or functional/final
+acceptance. Do not self-accept midway. Historical test passes do not open this
+UI gate. On 19 October the user requests DOCUMENTATION FIRST ONLY: update
+Notion, this file and continuity docs; no further UI code/tests in that turn.
+On a later "continue", resume direct Notion comparison and UI refinement.
+
+SAFE ZONE: Android bottom system navbar in BOTH gesture and 3-button modes;
+keep bottom controls, editor toolbar, sheets and final scroll content above
+the navbar and keyboard, without double insets. iOS top header/content must
+avoid the status bar, notch and Dynamic Island; retain Home Indicator handling
+below. iOS checks remain unverified until an actual supported environment is
+available; never tick them from Android screenshots.
+
+Keep existing features only, local-first persistence, guards and user data.
+Notion comparison board (percentages, not points):
+https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
+
 ## Latest rule — UI/UX uses existing features only (2026-10-16)
 
 For every UI/UX change, use the app's existing features only. Adjust layout,
@@ -17,13 +65,19 @@ earlier wording that could imply unrestricted feature additions during M09.
 Full policy and proposal register:
 https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
 
+## Completion requirement — superseded order clarified 19 October 2026
+
+Continue UI refinement until Web AND Android each resemble directly inspected
+Notion by >=95%, with current paired evidence. Only then return to functional
+regression/fix-retest and final acceptance. The old points rubric is retired.
+
 ## Visible UI checkpoint — 18 October2026
 
 Reference styling is implemented locally: sidebar/search/new-note icon, neutral
 selection,704px reading column, Web tools below body, folded metadata and
 responsive share panel. Current811 source88194311 and matching actual Web/
 Android captures are in docs/m09/P5_P6_ACCEPTANCE.md. This is a visible P5
-checkpoint, not full M09/95-point acceptance. User prioritizes finishing the
+checkpoint, not evidence of >=95% similarity or full M09 acceptance. User prioritizes finishing the
 visual pass over repeating full suites; finish remaining screens then final QA.
 Earlier1926VM/1728Chrome receipts predate these latest visual changes.
 
@@ -59,13 +113,15 @@ Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
 all existing module data, session/access guards and unrelated local files.
 No C: worktrees. Use docs/m09/CURRENT_WORK.md for active continuity.
 
-M09 uses hinhanh/UI_web_ref and UI_android_ref for mapped NoteFlow screens.
+M09 must inspect actual Notion Web AND Notion Android for mapped NoteFlow
+screens; hinhanh/UI_web_ref and UI_android_ref are supporting references.
 Keep 13 Basic blocks, no Page/Link to page or child-note flow. Selection toolbar:
 Text/H1-H4, colors/highlight, B/I/U/strike, link, inline code, inline math, clear,
 font sizes 12/14/16/18/24/32 plus custom 12-48 applied to selected text.
 Persist/sync document, marks and size without losing existing data. Follow DDD.
-Each platform must reach >=95/100: visual60/UX20/adaptive10/states10, with
-paired references/screenshots and mandatory flows working. Never invent scores.
+Each platform must reach >=95% UI similarity with direct Notion/app paired
+evidence BEFORE functional acceptance. Retire the old60/20/10/10 points rubric;
+never invent similarity percentages. Follow the latest rule at the top.
 Update Notion/checkboxes only for verified scope and push final-tuankiet after
 each accepted milestone. User has authorized testing/fixes and required schema
 work; source/local results remain distinct from live AWS deployment acceptance.

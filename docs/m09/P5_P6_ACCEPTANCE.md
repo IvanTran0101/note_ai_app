@@ -1,7 +1,30 @@
 # M09 reference styling checkpoint
 
-Status: visual implementation in progress,18 October2026. No final95/100
-platform score or full M09 completion claim.
+## Current gate — NOT ACCEPTED (19 October 2026)
+
+The user rejected the current visual similarity. Previous Web96.2/100 and
+Android96.2/100 ratings and the "UI threshold reached" conclusion are WITHDRAWN;
+the old visual-group percentage cannot establish similarity either. Notion
+threshold checkboxes are reset. Current Web/Android similarity: UNVERIFIED.
+
+Open actual Notion Web AND the actual Notion Android app, compare the matching
+screens/states and refine NoteFlow until EACH platform resembles them by >=95%.
+Record paired captures, build/device/viewport/theme/insets and concrete gaps;
+hinhanh references support this work but cannot replace live Notion inspection.
+Use Android bottom safe zones for gesture/3-button navbar and IME, and iOS top
+status bar/notch/Dynamic Island (retain Home Indicator; iOS unverified).
+
+Functional/regression/final acceptance MUST WAIT until BOTH >=95% similarity
+gates have evidence. A later "continue" resumes UI work; do not jump back to
+queued sharing/protection defects or declare completion from old test passes.
+The present user turn is documentation only. Existing technical receipts below
+remain historical evidence for their exact sources, not UI acceptance.
+Current protocol/status: MUST_REMEMBER.md, CURRENT_WORK.md, VISUAL_REVIEW.md.
+
+## Historical checkpoint — 18 October2026
+
+Status at that time: visual implementation in progress,18 October2026. No
+accepted platform similarity percentage or full M09 completion claim.
 
 ## Current visual pass
 

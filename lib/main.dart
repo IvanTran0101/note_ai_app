@@ -88,6 +88,7 @@ import 'presentation/notes/note_detail_route_result.dart';
 import 'presentation/notes/notes_localizations.dart';
 import 'presentation/notes/notes_application_controller.dart';
 import 'presentation/notes/summary_cloud_settings_tile.dart';
+import 'presentation/common/note_flow_settings.dart';
 import 'presentation/notes/notes_theme_tokens.dart';
 import 'presentation/notes/notes_workspace_page.dart';
 import 'presentation/rag/rag_consent_settings_tile.dart';
@@ -177,6 +178,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
 
   return ThemeData(
     brightness: brightness,
+    fontFamily: kIsWeb ? 'NoteFlowSans' : null,
     colorScheme: colorScheme,
     useMaterial3: true,
     extensions: <ThemeExtension<dynamic>>[
@@ -1370,177 +1372,174 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     // service is created only when the feature is actually configured.
     final RagAppService? ragService = _ragRoot.ensureService();
 
-    await showModalBottomSheet<void>(
+    await showNoteFlowSettings(
       context: context,
-      showDragHandle: true,
       builder: (BuildContext sheetContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setSheetState) {
             final NotesCopy copy = NotesCopy.of(context);
             final AuthCopy authCopy = AuthCopy.of(context);
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Text(
-                      copy.appearanceAndLanguage,
-                      style: Theme.of(context).textTheme.titleLarge,
+            return NoteFlowSettingsSurface(
+              title: copy.appearanceAndLanguage,
+              subtitle: Localizations.localeOf(context).languageCode == 'vi'
+                  ? 'Chọn giao diện và ngôn ngữ cho ứng dụng.'
+                  : 'Choose how the app looks and which language it uses.',
+              children: <Widget>[
+                NoteFlowSettingsChoice<ThemeMode>(
+                  key: ValueKey<ThemeMode>(selectedTheme),
+                  initialValue: selectedTheme,
+                  label: copy.theme,
+                  helperText:
+                      Localizations.localeOf(context).languageCode == 'vi'
+                      ? 'Chọn giao diện cho thiết bị này.'
+                      : 'Choose the appearance on this device.',
+                  items: <DropdownMenuItem<ThemeMode>>[
+                    DropdownMenuItem(
+                      value: ThemeMode.system,
+                      child: Text(copy.themeSystem),
                     ),
-                    const SizedBox(height: 20),
-                    DropdownButtonFormField<ThemeMode>(
-                      key: ValueKey<ThemeMode>(selectedTheme),
-                      initialValue: selectedTheme,
-                      decoration: InputDecoration(
-                        labelText: copy.theme,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: <DropdownMenuItem<ThemeMode>>[
-                        DropdownMenuItem(
-                          value: ThemeMode.system,
-                          child: Text(copy.themeSystem),
-                        ),
-                        DropdownMenuItem(
-                          value: ThemeMode.light,
-                          child: Text(copy.themeLight),
-                        ),
-                        DropdownMenuItem(
-                          value: ThemeMode.dark,
-                          child: Text(copy.themeDark),
-                        ),
-                      ],
-                      onChanged: savingTheme
-                          ? null
-                          : (ThemeMode? value) async {
-                              if (value == null ||
-                                  generation !=
-                                      _currentUserSession.sessionGeneration) {
-                                return;
-                              }
-                              final request = ++_themeRequest;
-                              setSheetState(() {
-                                savingTheme = true;
-                                themeError = null;
-                              });
-                              try {
-                                await _noteApplicationService.setTheme(
-                                  AppThemePreference.values.byName(value.name),
-                                );
-                                if (!mounted ||
-                                    generation !=
-                                        _currentUserSession.sessionGeneration ||
-                                    request != _themeRequest) {
-                                  return;
-                                }
-                                setState(() => _themeMode = value);
-                                if (sheetContext.mounted) {
-                                  setSheetState(() => selectedTheme = value);
-                                }
-                              } on Object {
-                                if (sheetContext.mounted &&
-                                    generation ==
-                                        _currentUserSession.sessionGeneration) {
-                                  setSheetState(
-                                    () => themeError =
-                                        Localizations.localeOf(context)
-                                                .languageCode ==
-                                            'vi'
-                                        ? 'Chưa lưu được giao diện. Hãy thử lại.'
-                                        : 'Theme was not saved. Please try again.',
-                                  );
-                                }
-                              } finally {
-                                if (sheetContext.mounted) {
-                                  setSheetState(() => savingTheme = false);
-                                }
-                              }
-                            },
+                    DropdownMenuItem(
+                      value: ThemeMode.light,
+                      child: Text(copy.themeLight),
                     ),
-                    if (savingTheme) const LinearProgressIndicator(),
-                    if (themeError != null)
-                      Text(
-                        themeError!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<_NoteFlowLanguageChoice>(
-                      key: ValueKey<_NoteFlowLanguageChoice>(selectedLanguage),
-                      initialValue: selectedLanguage,
-                      decoration: InputDecoration(
-                        labelText: copy.language,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: <DropdownMenuItem<_NoteFlowLanguageChoice>>[
-                        DropdownMenuItem(
-                          value: _NoteFlowLanguageChoice.system,
-                          child: Text(copy.languageSystem),
-                        ),
-                        DropdownMenuItem(
-                          value: _NoteFlowLanguageChoice.vietnamese,
-                          child: Text(copy.languageVietnamese),
-                        ),
-                        DropdownMenuItem(
-                          value: _NoteFlowLanguageChoice.english,
-                          child: Text(copy.languageEnglish),
-                        ),
-                      ],
-                      onChanged: (_NoteFlowLanguageChoice? value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setSheetState(() => selectedLanguage = value);
-                        setState(() => _languageChoice = value);
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    if (_summaryConsentService
-                        .requiresCloudConsent) ...<Widget>[
-                      SummaryCloudSettingsTile(service: _summaryConsentService),
-                      const SizedBox(height: 24),
-                    ],
-                    if (ragService != null) ...<Widget>[
-                      RagConsentSettingsTile(
-                        key: const ValueKey<String>('settings-rag-consent'),
-                        service: ragService,
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.person_outline),
-                      label: Text(
-                        Localizations.localeOf(context).languageCode == 'vi'
-                            ? 'Hồ sơ'
-                            : 'Profile',
-                      ),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        context.go(AppRoutes.profile);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.lock_outline),
-                      label: Text(authCopy.changePassword),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        context.go(AppRoutes.changePassword);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.logout),
-                      label: Text(authCopy.logout),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        unawaited(_logout());
-                      },
+                    DropdownMenuItem(
+                      value: ThemeMode.dark,
+                      child: Text(copy.themeDark),
                     ),
                   ],
+                  onChanged: savingTheme
+                      ? null
+                      : (ThemeMode? value) async {
+                          if (value == null ||
+                              generation !=
+                                  _currentUserSession.sessionGeneration) {
+                            return;
+                          }
+                          final request = ++_themeRequest;
+                          setSheetState(() {
+                            savingTheme = true;
+                            themeError = null;
+                          });
+                          try {
+                            await _noteApplicationService.setTheme(
+                              AppThemePreference.values.byName(value.name),
+                            );
+                            if (!mounted ||
+                                generation !=
+                                    _currentUserSession.sessionGeneration ||
+                                request != _themeRequest) {
+                              return;
+                            }
+                            setState(() => _themeMode = value);
+                            if (sheetContext.mounted) {
+                              setSheetState(() => selectedTheme = value);
+                            }
+                          } on Object {
+                            if (sheetContext.mounted &&
+                                generation ==
+                                    _currentUserSession.sessionGeneration) {
+                              setSheetState(
+                                () => themeError =
+                                    Localizations.localeOf(context)
+                                            .languageCode ==
+                                        'vi'
+                                    ? 'Chưa lưu được giao diện. Hãy thử lại.'
+                                    : 'Theme was not saved. Please try again.',
+                              );
+                            }
+                          } finally {
+                            if (sheetContext.mounted) {
+                              setSheetState(() => savingTheme = false);
+                            }
+                          }
+                        },
                 ),
-              ),
+                if (savingTheme) const LinearProgressIndicator(),
+                if (themeError != null)
+                  Text(
+                    themeError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                const Divider(height: 1),
+                NoteFlowSettingsChoice<_NoteFlowLanguageChoice>(
+                  key: ValueKey<_NoteFlowLanguageChoice>(selectedLanguage),
+                  initialValue: selectedLanguage,
+                  label: copy.language,
+                  helperText:
+                      Localizations.localeOf(context).languageCode == 'vi'
+                      ? 'Ngôn ngữ hiển thị trong ứng dụng.'
+                      : 'The language used throughout the app.',
+                  items: <DropdownMenuItem<_NoteFlowLanguageChoice>>[
+                    DropdownMenuItem(
+                      value: _NoteFlowLanguageChoice.system,
+                      child: Text(copy.languageSystem),
+                    ),
+                    DropdownMenuItem(
+                      value: _NoteFlowLanguageChoice.vietnamese,
+                      child: Text(copy.languageVietnamese),
+                    ),
+                    DropdownMenuItem(
+                      value: _NoteFlowLanguageChoice.english,
+                      child: Text(copy.languageEnglish),
+                    ),
+                  ],
+                  onChanged: (_NoteFlowLanguageChoice? value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setSheetState(() => selectedLanguage = value);
+                    setState(() => _languageChoice = value);
+                  },
+                ),
+                const Divider(height: 32),
+                if (_summaryConsentService.requiresCloudConsent) ...<Widget>[
+                  SummaryCloudSettingsTile(service: _summaryConsentService),
+                  const SizedBox(height: 24),
+                ],
+                if (ragService != null) ...<Widget>[
+                  RagConsentSettingsTile(
+                    key: const ValueKey<String>('settings-rag-consent'),
+                    service: ragService,
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_outline, size: 20),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'vi'
+                        ? 'Hồ sơ'
+                        : 'Profile',
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.go(AppRoutes.profile);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.lock_outline, size: 20),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  title: Text(authCopy.changePassword),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.go(AppRoutes.changePassword);
+                  },
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.logout, size: 20),
+                  title: Text(authCopy.logout),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_logout());
+                  },
+                ),
+              ],
             );
           },
         );

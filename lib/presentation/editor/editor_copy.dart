@@ -41,6 +41,7 @@ const _vietnamese = {
   'pink': 'Hồng',
   'red': 'Đỏ',
   'Add block': 'Thêm khối',
+  'Close block menu': 'Đóng menu khối',
   'Expand toggle': 'Mở nội dung thu gọn',
   'Collapse toggle': 'Thu gọn nội dung',
   'Callout style': 'Kiểu chú thích',

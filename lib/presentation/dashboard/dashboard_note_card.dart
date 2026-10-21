@@ -27,6 +27,10 @@ final class DashboardNoteCard extends StatelessWidget {
     this.selected = false,
     this.readable,
     this.showPreview = true,
+    this.dense = false,
+    this.mobileSearch = false,
+    this.searchQueryResult = false,
+    this.compactHomeList = false,
     this.listHorizontalInset = NoteFlowSpacing.md,
     this.listIconGap = NoteFlowSpacing.md,
   });
@@ -55,6 +59,12 @@ final class DashboardNoteCard extends StatelessWidget {
   /// Home can use a compact Notion-style title row/card while other callers
   /// may keep the original preview treatment.
   final bool showPreview;
+  final bool dense;
+  final bool mobileSearch;
+
+  /// Applies smaller title typography to a non-empty native mobile search.
+  final bool searchQueryResult;
+  final bool compactHomeList;
 
   /// Horizontal inset and icon gap used by list rows.
   final double listHorizontalInset;
@@ -103,7 +113,13 @@ final class DashboardNoteCard extends StatelessWidget {
             : (listLayout ? Colors.transparent : tokens.subtleSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
-            listLayout ? NoteFlowRadius.row : NoteFlowRadius.card,
+            listLayout
+                ? mobileSearch || compactHomeList
+                      ? 0
+                      : dense
+                      ? 10
+                      : NoteFlowRadius.row
+                : NoteFlowRadius.card,
           ),
           side: listLayout
               ? BorderSide.none
@@ -116,6 +132,12 @@ final class DashboardNoteCard extends StatelessWidget {
             constraints: BoxConstraints(
               minHeight: layout == DashboardNoteCardLayout.grid
                   ? (showPreview ? 144.0 : 88.0)
+                  : mobileSearch
+                  ? 64.0
+                  : compactHomeList
+                  ? 48.0
+                  : dense
+                  ? 38.0
                   : 56.0,
             ),
             child: Padding(
@@ -123,7 +145,9 @@ final class DashboardNoteCard extends StatelessWidget {
                   ? const EdgeInsets.all(NoteFlowSpacing.md)
                   : EdgeInsets.symmetric(
                       horizontal: listHorizontalInset,
-                      vertical: NoteFlowSpacing.sm,
+                      vertical: dense || compactHomeList
+                          ? 0
+                          : NoteFlowSpacing.sm,
                     ),
               child: layout == DashboardNoteCardLayout.grid
                   ? _buildGrid(
@@ -228,7 +252,7 @@ final class DashboardNoteCard extends StatelessWidget {
         child: Icon(
           isPinned ? Icons.push_pin : Icons.push_pin_outlined,
           key: ValueKey<bool>(isPinned),
-          size: 18,
+          size: dense ? 16 : 18,
         ),
       ),
     );
@@ -243,57 +267,138 @@ final class DashboardNoteCard extends StatelessWidget {
     required Color secondaryForeground,
     required double iconGap,
   }) {
-    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Icon(
-          note.isProtected ? Icons.lock_outline : Icons.description_outlined,
-          size: 20,
-          color: selected ? foreground : tokens.textMuted,
-        ),
-        SizedBox(width: iconGap),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w500, color: foreground),
-              ),
-              NoteLabelChips(note: note, readable: _readable),
-              if (showPreview) ...<Widget>[
-                const SizedBox(height: 2),
-                Text(
-                  preview,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: secondaryForeground),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (showPreview) ...<Widget>[
-          const SizedBox(width: NoteFlowSpacing.md),
-          Flexible(
-            child: Text(
-              copy.updatedOn(updatedDate),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: secondaryForeground),
+    final tokens = NoteFlowWorkspaceTokens.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dateBelow = !mobileSearch && constraints.maxWidth < 520;
+        return Row(
+          children: [
+            Icon(
+              note.isProtected
+                  ? Icons.lock_outline
+                  : Icons.description_outlined,
+              size: dense
+                  ? 16
+                  : mobileSearch || compactHomeList
+                  ? 18
+                  : 20,
+              color: selected ? foreground : tokens.textMuted,
             ),
+            SizedBox(width: iconGap),
+            Expanded(
+              child: _buildListText(
+                context,
+                title,
+                preview,
+                updatedDate,
+                foreground,
+                secondaryForeground,
+                dateBelow: dateBelow,
+              ),
+            ),
+            if (showPreview && !dense && !mobileSearch && !dateBelow) ...[
+              const SizedBox(width: NoteFlowSpacing.md),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160),
+                child: _updatedText(context, updatedDate, secondaryForeground),
+              ),
+            ],
+            if (onTogglePin != null) _pinButton(context),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildListText(
+    BuildContext context,
+    String title,
+    String preview,
+    String date,
+    Color foreground,
+    Color secondary, {
+    required bool dateBelow,
+  }) {
+    final titleStyle = searchQueryResult || mobileSearch || compactHomeList
+        ? Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontSize: searchQueryResult
+                ? 13.3
+                : mobileSearch
+                ? 16
+                : 18,
+            height: 1.2,
+            fontWeight: searchQueryResult ? FontWeight.w500 : FontWeight.w400,
+            color: foreground,
+          )
+        : dense
+        ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: foreground,
+          )
+        : Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w500, color: foreground);
+    final previewStyle = mobileSearch
+        ? Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 13,
+            height: 1.2,
+            fontWeight: FontWeight.w400,
+            color: secondary,
+          )
+        : dense
+        ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: secondary,
+          )
+        : Theme.of(context).textTheme.bodySmall?.copyWith(color: secondary);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (dense && showPreview)
+          Text.rich(
+            TextSpan(
+              style: titleStyle,
+              children: [
+                TextSpan(text: title),
+                TextSpan(text: ' — $preview', style: previewStyle),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          )
+        else
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: titleStyle,
+          ),
+        if (!dense && !mobileSearch)
+          NoteLabelChips(note: note, readable: _readable),
+        if (showPreview && !dense) ...[
+          const SizedBox(height: 2),
+          Text(
+            preview,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: previewStyle,
           ),
         ],
-        if (onTogglePin != null) _pinButton(context),
+        if (showPreview && !dense && !mobileSearch && dateBelow) ...[
+          const SizedBox(height: 2),
+          _updatedText(context, date, secondary),
+        ],
       ],
     );
   }
+
+  Widget _updatedText(BuildContext context, String date, Color color) => Text(
+    copy.updatedOn(date),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+  );
 
   String _preview(String content) {
     final String normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();

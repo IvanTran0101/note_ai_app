@@ -80,7 +80,8 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
                         maxWidth:
                             editorState.editorStyle.maxWidth ?? double.infinity,
                       ),
-                      padding: editorState.editorStyle.padding,
+                      padding: editorState.editorStyle.blockPadding?.call(e) ??
+                          editorState.editorStyle.padding,
                       child: child,
                     );
                   },
@@ -128,7 +129,8 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
               constraints: BoxConstraints(
                 maxWidth: editorState.editorStyle.maxWidth ?? double.infinity,
               ),
-              padding: editorState.editorStyle.padding,
+              padding: editorState.editorStyle.blockPadding?.call(node) ??
+                  editorState.editorStyle.padding,
               child: child,
             ),
           );

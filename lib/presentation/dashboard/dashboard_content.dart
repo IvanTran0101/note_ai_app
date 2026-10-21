@@ -2,6 +2,7 @@ import '../../application/labels/note_query.dart';
 import '../labels/label_catalog_scope.dart';
 import '../labels/label_filter_bar.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/dashboard/dashboard_overview.dart';
@@ -11,6 +12,8 @@ import '../notes/notes_theme_tokens.dart';
 import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
+import 'dashboard_recent_rail.dart';
+import 'dashboard_search_sections.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
 
@@ -111,7 +114,7 @@ final class DashboardContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<NoteDto> filteredNotes = _filtered(context);
     final double viewportWidth = MediaQuery.sizeOf(context).width;
-    final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
+    final bool compact = NoteFlowLayout.isCompact(context);
     final bool showingDesktopSearchHistory =
         searchOpen && searchOverlay && !compact && searchText.trim().isEmpty;
     return RefreshIndicator(
@@ -126,7 +129,7 @@ final class DashboardContent extends StatelessWidget {
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: searchOverlay
-                    ? 1008
+                    ? 600
                     : compact
                     ? NoteFlowLayout.compactPageFrameMaxWidthFor(context)
                     : NoteFlowLayout.dashboardContentMaxWidth,
@@ -135,34 +138,38 @@ final class DashboardContent extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(
                   compact
                       ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                      : searchOverlay
+                      ? NoteFlowSpacing.md
                       : NoteFlowSpacing.xl,
                   compact
                       ? embeddedInWorkspace
                             ? searchOpen
                                   ? NoteFlowSpacing.xl
-                                  : NoteFlowSpacing.sm + NoteFlowSpacing.xs
+                                  : 18
                             : NoteFlowLayout.compactPageTopInset(context)
                       : searchOverlay
-                      ? NoteFlowSpacing.lg
+                      ? NoteFlowSpacing.sm
                       : NoteFlowLayout.dashboardTopPadding,
-                  compact ? NoteFlowSpacing.lg : NoteFlowSpacing.xl,
+                  compact
+                      ? NoteFlowSpacing.lg
+                      : searchOverlay
+                      ? NoteFlowSpacing.md
+                      : NoteFlowSpacing.xl,
                   searchOverlay ? NoteFlowSpacing.lg : NoteFlowSpacing.xxxl,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    if (onLabelsChanged != null)
-                      LabelFilterBar(
-                        notes: notes,
-                        selected: selectedLabels,
-                        onChanged: onLabelsChanged!,
-                        readable: _readable,
-                      ),
                     if (searchOpen) ...<Widget>[
                       if (searchOverlay && !compact)
                         Row(
                           children: <Widget>[
-                            Expanded(child: _buildSearchField(context)),
+                            Expanded(
+                              child: _buildSearchField(
+                                context,
+                                desktopOverlay: true,
+                              ),
+                            ),
                             if (onCloseSearch != null)
                               IconButton(
                                 key: const ValueKey<String>(
@@ -170,6 +177,12 @@ final class DashboardContent extends StatelessWidget {
                                 ),
                                 tooltip: copy.closeSearch,
                                 onPressed: onCloseSearch,
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                ),
+                                padding: EdgeInsets.zero,
+                                iconSize: 20,
                                 icon: const Icon(Icons.close),
                               ),
                           ],
@@ -189,27 +202,50 @@ final class DashboardContent extends StatelessWidget {
                           ),
                           _buildSearchField(context),
                         ],
-                        const SizedBox(height: NoteFlowSpacing.sm),
+                        SizedBox(
+                          height: searchOverlay && !compact
+                              ? 0
+                              : NoteFlowSpacing.sm,
+                        ),
                       ],
                     ],
+                    if (searchOpen &&
+                        !(searchOverlay && !compact) &&
+                        onLabelsChanged != null)
+                      LabelFilterBar(
+                        notes: notes,
+                        selected: selectedLabels,
+                        onChanged: onLabelsChanged!,
+                        readable: _readable,
+                        dense: compact,
+                        singleLine: compact,
+                      ),
+                    if (searchOverlay && !compact)
+                      Padding(
+                        padding: EdgeInsets.zero,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: onLabelsChanged == null
+                                  ? const SizedBox.shrink()
+                                  : LabelFilterBar(
+                                      notes: notes,
+                                      selected: selectedLabels,
+                                      onChanged: onLabelsChanged!,
+                                      readable: _readable,
+                                      dense: true,
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildSortControl(context, iconsOnly: false),
+                          ],
+                        ),
+                      ),
                     if ((!compact || !embeddedInWorkspace) && !searchOpen)
                       _buildHeader(context),
                     if (searchOpen && dockCompactSearch) ...<Widget>[
-                      const SizedBox(height: NoteFlowSpacing.xxxl),
-                      Center(
-                        child: Text(
-                          copy.searchNotes,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: NoteFlowWorkspaceTokens.of(context)
-                                    .textMuted,
-                              ),
-                        ),
-                      ),
-                      if (searchText.trim().isNotEmpty)
-                        const SizedBox(
-                          height: NoteFlowSpacing.xl + NoteFlowSpacing.xs,
-                        ),
+                      const SizedBox(height: NoteFlowSpacing.lg),
                     ] else if (!showingDesktopSearchHistory &&
                         searchText.trim().isEmpty) ...<Widget>[
                       SizedBox(
@@ -229,6 +265,7 @@ final class DashboardContent extends StatelessWidget {
                                 leadingInset: compact && embeddedInWorkspace
                                     ? NoteFlowSpacing.xs
                                     : 0,
+                                compactHome: compact && !searchOpen,
                               ),
                             ),
                             const SizedBox(width: NoteFlowSpacing.xs),
@@ -237,6 +274,7 @@ final class DashboardContent extends StatelessWidget {
                               child: _buildControls(
                                 context,
                                 includeLayout: !searchOverlay,
+                                compactHome: compact && !searchOpen,
                               ),
                             ),
                           ],
@@ -251,11 +289,13 @@ final class DashboardContent extends StatelessWidget {
                               leadingInset: embeddedInWorkspace
                                   ? NoteFlowSpacing.xs
                                   : 0,
+                              compactHome: !searchOpen,
                             ),
                             const SizedBox(height: NoteFlowSpacing.xs),
                             _buildControls(
                               context,
                               includeLayout: !searchOverlay,
+                              compactHome: !searchOpen,
                             ),
                           ],
                         )
@@ -269,7 +309,8 @@ final class DashboardContent extends StatelessWidget {
                             ? NoteFlowSpacing.xs
                             : NoteFlowSpacing.xl,
                       ),
-                    ] else if (!searchOpen || !compact) ...<Widget>[
+                    ] else if ((!searchOpen || !compact) &&
+                        !searchOverlay) ...<Widget>[
                       SizedBox(
                         height: searchOverlay
                             ? NoteFlowSpacing.md
@@ -277,6 +318,15 @@ final class DashboardContent extends StatelessWidget {
                       ),
                       _buildControls(context, includeLayout: !searchOverlay),
                     ],
+                    if (onLabelsChanged != null && !searchOpen)
+                      LabelFilterBar(
+                        notes: notes,
+                        selected: selectedLabels,
+                        onChanged: onLabelsChanged!,
+                        readable: _readable,
+                        dense: compact,
+                        singleLine: compact,
+                      ),
                     if (hasError) ...<Widget>[
                       const SizedBox(height: NoteFlowSpacing.lg),
                       DashboardInlineError(copy: copy, onRetry: onRetry),
@@ -310,10 +360,13 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildSearchField(BuildContext context) {
+  Widget _buildSearchField(
+    BuildContext context, {
+    bool desktopOverlay = false,
+  }) {
     final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final OutlineInputBorder searchBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(desktopOverlay ? 20 : 28),
       borderSide: BorderSide(color: tokens.divider),
     );
     return TextField(
@@ -322,10 +375,18 @@ final class DashboardContent extends StatelessWidget {
       autofocus: true,
       onChanged: onSearchChanged,
       decoration: InputDecoration(
+        isDense: desktopOverlay,
         hintText: copy.searchNotes,
-        filled: true,
+        filled: !desktopOverlay,
         fillColor: tokens.subtleSurface,
-        prefixIcon: const Icon(Icons.search, size: 20),
+        prefixIcon: Icon(
+          Icons.search,
+          size: desktopOverlay ? 18 : 20,
+          color: tokens.textMuted,
+        ),
+        prefixIconConstraints: desktopOverlay
+            ? const BoxConstraints(minWidth: 40, minHeight: 40)
+            : null,
         suffixIcon: searchText.isEmpty
             ? null
             : IconButton(
@@ -334,17 +395,21 @@ final class DashboardContent extends StatelessWidget {
                 icon: const Icon(Icons.clear),
                 onPressed: onClearSearch,
               ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: NoteFlowSpacing.md,
-          vertical: NoteFlowSpacing.md,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: desktopOverlay ? 0 : NoteFlowSpacing.md,
+          vertical: desktopOverlay ? 8 : NoteFlowSpacing.md,
         ),
-        border: searchBorder,
-        enabledBorder: searchBorder.copyWith(
-          borderSide: BorderSide(color: tokens.divider),
-        ),
-        focusedBorder: searchBorder.copyWith(
-          borderSide: BorderSide(color: tokens.focusRing),
-        ),
+        border: desktopOverlay ? InputBorder.none : searchBorder,
+        enabledBorder: desktopOverlay
+            ? InputBorder.none
+            : searchBorder.copyWith(
+                borderSide: BorderSide(color: tokens.divider),
+              ),
+        focusedBorder: desktopOverlay
+            ? InputBorder.none
+            : searchBorder.copyWith(
+                borderSide: BorderSide(color: tokens.focusRing),
+              ),
       ),
     );
   }
@@ -357,8 +422,15 @@ final class DashboardContent extends StatelessWidget {
     final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
     final Text heading = Text(
       copy.search,
-      style: Theme.of(context).textTheme.headlineSmall
-          ?.copyWith(color: tokens.textPrimary, fontWeight: FontWeight.w700),
+      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+        color: tokens.textPrimary,
+        fontSize: NoteFlowLayout.isNativePhone(context)
+            ? 28
+            : compact
+            ? 32
+            : null,
+        fontWeight: FontWeight.w700,
+      ),
     );
     if (!showCloseButton) {
       return Semantics(header: true, child: heading);
@@ -471,10 +543,15 @@ final class DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildControls(BuildContext context, {bool includeLayout = true}) {
+  Widget _buildControls(
+    BuildContext context, {
+    bool includeLayout = true,
+    bool compactHome = false,
+  }) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool iconsOnly = constraints.maxWidth < 520;
+        final tokens = NoteFlowUiTokens.of(context);
         if (!includeLayout) {
           return Align(
             alignment: Alignment.centerLeft,
@@ -482,32 +559,48 @@ final class DashboardContent extends StatelessWidget {
           );
         }
         return Wrap(
-          spacing: NoteFlowSpacing.sm,
-          runSpacing: NoteFlowSpacing.sm,
+          spacing: compactHome ? NoteFlowSpacing.xs : NoteFlowSpacing.sm,
+          runSpacing: compactHome ? NoteFlowSpacing.xs : NoteFlowSpacing.sm,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
             _buildSortControl(context, iconsOnly: iconsOnly),
             SegmentedButton<DashboardLayout>(
               key: const ValueKey<String>('dashboard-layout-toggle'),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected)
+                      ? tokens.textPrimary.withValues(alpha: .07)
+                      : Colors.transparent,
+                ),
+                foregroundColor: WidgetStatePropertyAll(tokens.textSecondary),
+                side: WidgetStatePropertyAll(BorderSide(color: tokens.divider)),
+                iconSize: const WidgetStatePropertyAll(18),
+                minimumSize: WidgetStatePropertyAll<Size?>(
+                  Size(48, compactHome ? 48 : 32),
+                ),
+                padding: const WidgetStatePropertyAll<EdgeInsetsGeometry?>(
+                  EdgeInsets.zero,
+                ),
+                tapTargetSize: compactHome
+                    ? MaterialTapTargetSize.padded
+                    : MaterialTapTargetSize.shrinkWrap,
+              ),
               segments: <ButtonSegment<DashboardLayout>>[
                 ButtonSegment<DashboardLayout>(
                   value: DashboardLayout.list,
                   label: iconsOnly ? const SizedBox.shrink() : Text(copy.list),
-                  icon: Tooltip(
-                    message: copy.list,
-                    child: const Icon(Icons.view_list_outlined),
-                  ),
+                  icon: const Icon(Icons.view_list_outlined),
+                  tooltip: copy.list,
                 ),
                 ButtonSegment<DashboardLayout>(
                   value: DashboardLayout.grid,
                   label: iconsOnly ? const SizedBox.shrink() : Text(copy.grid),
-                  icon: Tooltip(
-                    message: copy.grid,
-                    child: const Icon(Icons.grid_view_outlined),
-                  ),
+                  icon: const Icon(Icons.grid_view_outlined),
+                  tooltip: copy.grid,
                 ),
               ],
               selected: <DashboardLayout>{layout},
+              showSelectedIcon: !iconsOnly,
               onSelectionChanged: (Set<DashboardLayout> value) {
                 onLayoutChanged(value.first);
               },
@@ -544,25 +637,35 @@ final class DashboardContent extends StatelessWidget {
               child: Center(child: Icon(Icons.sort, size: 20)),
             )
           : Container(
-              constraints: const BoxConstraints(minHeight: 48),
-              padding: const EdgeInsets.symmetric(
-                horizontal: NoteFlowSpacing.md,
+              constraints: BoxConstraints(minHeight: searchOverlay ? 36 : 48),
+              padding: EdgeInsets.symmetric(
+                horizontal: searchOverlay ? 8 : NoteFlowSpacing.md,
               ),
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: NoteFlowWorkspaceTokens.of(context).divider,
-                ),
+                border: searchOverlay
+                    ? null
+                    : Border.all(
+                        color: NoteFlowWorkspaceTokens.of(context).divider,
+                      ),
                 borderRadius: BorderRadius.circular(NoteFlowRadius.input),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Icon(Icons.sort, size: 20),
-                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Icon(Icons.sort, size: searchOverlay ? 16 : 20),
+                  SizedBox(width: searchOverlay ? 4 : NoteFlowSpacing.sm),
                   Text(
                     sort == DashboardSort.updated
                         ? copy.sortUpdated
                         : copy.sortCreated,
+                    style: searchOverlay
+                        ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: NoteFlowWorkspaceTokens.of(context)
+                                .textSecondary,
+                          )
+                        : null,
                   ),
                 ],
               ),
@@ -574,7 +677,11 @@ final class DashboardContent extends StatelessWidget {
     BuildContext context,
     String label, {
     double leadingInset = 0,
+    bool subdued = false,
+    bool compactHome = false,
+    bool compactMobileSearch = false,
   }) {
+    final bool muted = subdued || compactHome || compactMobileSearch;
     return Semantics(
       header: true,
       child: Padding(
@@ -582,8 +689,17 @@ final class DashboardContent extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: NoteFlowWorkspaceTokens.of(context).textSecondary,
-            fontWeight: FontWeight.w500,
+            color: muted
+                ? NoteFlowWorkspaceTokens.of(context).textMuted
+                : NoteFlowWorkspaceTokens.of(context).textSecondary,
+            fontSize: compactMobileSearch
+                ? 14
+                : subdued
+                ? (dockCompactSearch ? 14 : 12)
+                : compactHome
+                ? 14
+                : null,
+            fontWeight: muted ? FontWeight.w400 : FontWeight.w500,
           ),
         ),
       ),
@@ -594,121 +710,33 @@ final class DashboardContent extends StatelessWidget {
     BuildContext context,
     List<NoteDto> items,
     double viewportWidth,
-  ) {
-    final int count = items.length > 6 ? 6 : items.length;
-    if (count == 0) {
-      return const SizedBox.shrink();
-    }
-    final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
-    final double cardWidth = compact ? 132 : 196;
-    final double titleFontSize =
-        Theme.of(context).textTheme.titleSmall?.fontSize ?? 14;
-    final double titleScale =
-        MediaQuery.textScalerOf(context).scale(titleFontSize) / titleFontSize;
-    final double cardHeight = compact
-        ? 132 + ((titleScale - 1).clamp(0.0, 1.0) * 8)
-        : 160;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _buildSectionHeading(
-          context,
-          copy.recents,
-          leadingInset: embeddedInWorkspace && viewportWidth < 600
-              ? NoteFlowSpacing.xs
-              : 0,
-        ),
-        const SizedBox(height: NoteFlowSpacing.sm + NoteFlowSpacing.xs),
-        SizedBox(
-          height: cardHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: count,
-            separatorBuilder: (_, _) =>
-                const SizedBox(width: NoteFlowSpacing.md),
-            itemBuilder: (BuildContext context, int index) {
-              final NoteDto note = items[index];
-              final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(
-                context,
-              );
-              final String title = note.title.trim().isEmpty
-                  ? copy.untitled
-                  : note.title.trim();
-              return SizedBox(
-                width: cardWidth,
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  elevation: 0,
-                  color: tokens.pageSurface,
-                  clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-                    side: BorderSide(
-                      color: NoteFlowWorkspaceTokens.of(context).divider,
-                    ),
-                  ),
-                  child: InkWell(
-                    onTap: () => onOpenNote(note),
-                    child: Stack(
-                      children: <Widget>[
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            Expanded(
-                              child: ColoredBox(color: tokens.subtleSurface),
-                            ),
-                            Expanded(
-                              child: ColoredBox(color: tokens.pageSurface),
-                            ),
-                          ],
-                        ),
-                        Positioned(
-                          left: NoteFlowSpacing.md,
-                          top: (cardHeight / 2) - 12,
-                          child: Icon(
-                            Icons.description_outlined,
-                            size: 24,
-                            color: tokens.textMuted,
-                          ),
-                        ),
-                        Positioned(
-                          left: NoteFlowSpacing.md,
-                          right: NoteFlowSpacing.md,
-                          top: (cardHeight / 2) + 19,
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
+  ) => DashboardRecentRail(
+    notes: items,
+    copy: copy,
+    readable: _readable,
+    onOpenNote: onOpenNote,
+    embeddedInWorkspace: embeddedInWorkspace,
+  );
 
   Widget _buildNoteCollection(
     BuildContext context,
     List<NoteDto> items,
     double viewportWidth,
   ) {
-    final bool compact = viewportWidth < NoteFlowLayout.compactBreakpoint;
-    if (searchOpen && searchOverlay && searchText.trim().isEmpty) {
+    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool compactHomeList =
+        compact &&
+        !searchOpen &&
+        !searchOverlay &&
+        layout == DashboardLayout.list;
+    if (searchOpen && searchText.trim().isEmpty) {
       return items.isEmpty
           ? DashboardEmptyView(copy: copy, onCreateNote: onCreateNote)
           : _buildSearchResults(
               context,
               items,
               showResultsHeading: false,
-              groupByDate: !compact,
+              groupByDate: true,
               compact: compact,
             );
     }
@@ -738,8 +766,9 @@ final class DashboardContent extends StatelessWidget {
               onTap: onOpenNote,
               onTogglePin: onTogglePin,
               showPreview: false,
+              compactHomeList: compactHomeList,
             ),
-            if (index < items.length - 1)
+            if (index < items.length - 1 && !compactHomeList)
               const SizedBox(height: NoteFlowSpacing.sm),
           ],
         ],
@@ -784,22 +813,17 @@ final class DashboardContent extends StatelessWidget {
     bool groupByDate = true,
     bool compact = false,
   }) {
-    final Map<String, List<NoteDto>> groupedNotes = <String, List<NoteDto>>{};
-    if (groupByDate) {
-      final DateTime now = DateTime.now();
-      for (final NoteDto note in items) {
-        final DateTime updatedAt = note.updatedAt.toLocal();
-        final int dayDifference = _calendarDayDifference(now, updatedAt);
-        final String section = switch (dayDifference) {
-          0 => copy.today,
-          1 => copy.yesterday,
-          _ => MaterialLocalizations.of(context).formatCompactDate(updatedAt),
-        };
-        groupedNotes.putIfAbsent(section, () => <NoteDto>[]).add(note);
-      }
-    } else if (items.isNotEmpty) {
-      groupedNotes[''] = items;
-    }
+    final bool mobileSearch = compact && searchOpen && !searchOverlay;
+    final bool nativeQuerySearch =
+        mobileSearch && !kIsWeb && searchText.trim().isNotEmpty;
+    final groupedNotes = groupByDate
+        ? dashboardSearchSections(
+            context,
+            items,
+            copy: copy,
+            byCreatedAt: sort == DashboardSort.created,
+          )
+        : <String, List<NoteDto>>{if (items.isNotEmpty) '': items};
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -807,7 +831,13 @@ final class DashboardContent extends StatelessWidget {
         if (showResultsHeading) ...<Widget>[
           Row(
             children: <Widget>[
-              Expanded(child: _buildSectionHeading(context, copy.results)),
+              Expanded(
+                child: _buildSectionHeading(
+                  context,
+                  copy.results,
+                  compactMobileSearch: nativeQuerySearch,
+                ),
+              ),
               if (!dockCompactSearch && !searchOverlay)
                 _buildSortControl(
                   context,
@@ -825,7 +855,7 @@ final class DashboardContent extends StatelessWidget {
         for (final MapEntry<String, List<NoteDto>> section
             in groupedNotes.entries) ...<Widget>[
           if (groupByDate) ...<Widget>[
-            _buildSectionHeading(context, section.key),
+            _buildSectionHeading(context, section.key, subdued: true),
             const SizedBox(height: NoteFlowSpacing.sm),
           ],
           for (
@@ -845,22 +875,33 @@ final class DashboardContent extends StatelessWidget {
               onTap: onOpenNote,
               onTogglePin: onTogglePin,
               showPreview: true,
+              dense: searchOverlay && !compact,
+              mobileSearch: mobileSearch,
+              searchQueryResult: nativeQuerySearch,
               listHorizontalInset: compact ? 2 : NoteFlowSpacing.md,
-              listIconGap: compact ? NoteFlowSpacing.lg : NoteFlowSpacing.md,
+              listIconGap: compact
+                  ? NoteFlowSpacing.lg
+                  : searchOverlay
+                  ? NoteFlowSpacing.sm
+                  : NoteFlowSpacing.md,
             ),
             if (index < section.value.length - 1)
-              const SizedBox(height: NoteFlowSpacing.sm),
+              mobileSearch
+                  ? Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: NoteFlowWorkspaceTokens.of(context).divider,
+                    )
+                  : SizedBox(
+                      height: searchOverlay && !compact
+                          ? 0
+                          : NoteFlowSpacing.sm,
+                    ),
           ],
           if (groupByDate) const SizedBox(height: NoteFlowSpacing.lg),
         ],
       ],
     );
-  }
-
-  int _calendarDayDifference(DateTime today, DateTime date) {
-    final DateTime todayDate = DateTime(today.year, today.month, today.day);
-    final DateTime noteDate = DateTime(date.year, date.month, date.day);
-    return todayDate.difference(noteDate).inDays;
   }
 
   int _columnCount(double width, double viewportWidth) {

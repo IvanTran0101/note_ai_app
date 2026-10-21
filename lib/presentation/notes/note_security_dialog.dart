@@ -6,6 +6,7 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_gateway.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_localizations.dart';
+import 'notes_theme_tokens.dart';
 
 Future<bool?> showNoteSecurityDialog({
   required BuildContext context,
@@ -175,7 +176,17 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
         maxLength: 512,
         enableSuggestions: false,
         autocorrect: false,
-        decoration: InputDecoration(labelText: label, counterText: ''),
+        decoration: InputDecoration(
+          labelText: label,
+          counterText: '',
+          filled: true,
+          fillColor: NoteFlowUiTokens.of(context).subtleSurface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: NoteFlowUiTokens.of(context).divider),
+          ),
+        ),
         validator: (v) => confirm
             ? (v == _password.text ? null : copy.mismatch)
             : (v != null && v.length >= 8 ? null : copy.minimum),
@@ -186,12 +197,33 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
   @override
   Widget build(BuildContext context) {
     final copy = NoteSecurityCopy(context);
+    final tokens = NoteFlowUiTokens.of(context);
     return PopScope(
       canPop: !_busy,
       child: AlertDialog(
         scrollable: true,
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        title: Text(copy.label(widget.action)),
+        backgroundColor: tokens.elevatedSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: tokens.divider),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.lock_outline, size: 22, color: tokens.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                copy.label(widget.action),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: SingleChildScrollView(

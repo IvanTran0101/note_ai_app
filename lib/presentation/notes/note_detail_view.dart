@@ -72,22 +72,18 @@ extension _NoteDetailView on NoteDetailPageState {
   }
 
   VoidCallback? _moreAction(NoteDetailCopy copy) {
-    if (_note == null ||
-        !_capabilities.canDelete ||
-        _actionBusy ||
-        _currentConflict != null) {
+    if (_actionBusy || _currentConflict != null) {
+      return null;
+    }
+    if (!NoteFlowLayout.isCompact(context) &&
+        (_note == null || !_capabilities.canDelete)) {
       return null;
     }
     return () => unawaited(_showMoreActions(copy));
   }
 
   ValueChanged<BuildContext>? _moreActionWithContext(NoteDetailCopy copy) {
-    if (_note == null ||
-        !_capabilities.canDelete ||
-        _actionBusy ||
-        _currentConflict != null) {
-      return null;
-    }
+    if (_moreAction(copy) == null) return null;
     return (BuildContext anchorContext) =>
         unawaited(_showMoreActions(copy, anchorContext: anchorContext));
   }
@@ -101,6 +97,10 @@ extension _NoteDetailView on NoteDetailPageState {
       copy: copy,
       anchorContext: anchorContext,
       onDelete: _delete,
+      allowDelete: _note != null && _capabilities.canDelete,
+      additionalActions: NoteFlowLayout.isCompact(context)
+          ? (menuContext) => _compactMoreActions(menuContext, copy)
+          : null,
     );
   }
 
@@ -143,7 +143,11 @@ extension _NoteDetailView on NoteDetailPageState {
       readOnly: _securityBusy || _securityLoading || !_canEdit,
       attachments: _buildNoteExtras(),
       richEditorBuilder: _richEditor == null ? null : _richEditorWidget,
-      headerActions: widget.showAppBar ? const [] : _contextHeaderActions(),
+      headerActions: widget.showAppBar
+          ? const []
+          : _contextHeaderActions(
+              primaryOnly: NoteFlowLayout.isCompact(context),
+            ),
       syncController: widget.syncController,
       provisioningReader: widget.provisioningReader,
       onProvisioningRetry: _note == null ? null : _summarize,
@@ -188,11 +192,9 @@ extension _NoteDetailView on NoteDetailPageState {
     );
     final SyncConflict? conflict = _currentConflict;
     final SyncPresentationController? sync = widget.syncController;
-    if (_note == null &&
-        conflict == null &&
-        (sync == null || widget.onEmbeddedExit != null)) {
-      return editor;
-    }
+    // Keep this wrapper in both draft and saved states. Returning a draft
+    // directly reparents its surface beneath LayoutBuilder after first save,
+    // which can drop Web IME focus and remount the rich editor.
     return LayoutBuilder(
       builder: (context, constraints) {
         final minimumHeight = NoteFlowLayout.isShortEditor(context)
@@ -210,10 +212,16 @@ extension _NoteDetailView on NoteDetailPageState {
         );
         // Keyboard and accessibility text may leave less room than the fixed
         // controls need. Scroll the complete surface while keeping editor state.
-        if (constraints.hasBoundedHeight &&
-            constraints.maxHeight < minimumHeight) {
+        if (constraints.hasBoundedHeight) {
+          final needsScroll = constraints.maxHeight < minimumHeight;
           return SingleChildScrollView(
-            child: SizedBox(height: minimumHeight, child: content),
+            // Keep the same element path across IME and text-scale changes.
+            // Reparenting the editor used to discard an open block menu.
+            physics: needsScroll ? null : const NeverScrollableScrollPhysics(),
+            child: SizedBox(
+              height: needsScroll ? minimumHeight : constraints.maxHeight,
+              child: content,
+            ),
           );
         }
         return content;
@@ -246,7 +254,7 @@ extension _NoteDetailView on NoteDetailPageState {
     );
   }
 
-  List<Widget> _contextHeaderActions() {
+  List<Widget> _contextHeaderActions({bool primaryOnly = false}) {
     final note = _note;
     if (note == null) {
       // The first local create must not add a toolbar row while the IME owns
@@ -254,8 +262,9 @@ extension _NoteDetailView on NoteDetailPageState {
       return [
         if (widget.notesController is SharingNotesController)
           const SizedBox.square(dimension: 48),
-        const SizedBox.square(dimension: 48),
-        if (widget.onOpenNoteRag != null) const SizedBox.square(dimension: 48),
+        if (!primaryOnly) const SizedBox.square(dimension: 48),
+        if (!primaryOnly && widget.onOpenNoteRag != null)
+          const SizedBox.square(dimension: 48),
       ];
     }
     if (!_canRead) return const [];
@@ -264,9 +273,10 @@ extension _NoteDetailView on NoteDetailPageState {
           _capabilities.canManage &&
           widget.notesController is SharingNotesController)
         _sharingPanel(compact: true),
-      _securityPanel(),
+      if (!primaryOnly) _securityPanel(),
       // Keep the horizontal slot across local edits and ACKs.
-      if (widget.onOpenNoteRag != null &&
+      if (!primaryOnly &&
+          widget.onOpenNoteRag != null &&
           !note.isProtected &&
           note.share == null)
         SizedBox.square(

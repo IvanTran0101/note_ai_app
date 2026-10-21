@@ -121,7 +121,12 @@ extension _NoteDetailSharing on NoteDetailPageState {
         key: const ValueKey('manage-note-sharing'),
         tooltip: copy.manage,
         onPressed: _actionBusy ? null : _manageSharing,
-        icon: const Icon(Icons.people_outline, size: 20),
+        icon: Icon(
+          NoteFlowLayout.isCompact(context)
+              ? Icons.ios_share
+              : Icons.people_outline,
+          size: NoteFlowLayout.isCompact(context) ? 22 : 20,
+        ),
       );
     }
     return Align(
@@ -146,18 +151,26 @@ extension _NoteDetailSharing on NoteDetailPageState {
     }
     final secured = _securityController;
     final generation = secured?.sessionGeneration;
+    final compact = NoteFlowLayout.isCompact(context);
     await showDialog<void>(
       context: context,
-      builder: (_) => ShareManagementDialog(
-        service: service,
-        identity: _note!.identity,
-        sessionEvents: secured?.securityChanges ?? const Stream<void>.empty(),
-        isCurrent: () =>
-            mounted &&
-            identical(controller.sharing, service) &&
-            secured?.sessionGeneration == generation &&
-            _capabilities.canManage,
-      ),
+      useSafeArea: !compact,
+      barrierColor: compact ? Colors.black54 : Colors.transparent,
+      builder: (_) {
+        final dialog = ShareManagementDialog(
+          service: service,
+          identity: _note!.identity,
+          sessionEvents: secured?.securityChanges ?? const Stream<void>.empty(),
+          isCurrent: () =>
+              mounted &&
+              identical(controller.sharing, service) &&
+              secured?.sessionGeneration == generation &&
+              _capabilities.canManage,
+        );
+        // The compact sheet paints behind the navbar; its content consumes the
+        // bottom inset. Keep the route clear of the top and side cutouts here.
+        return compact ? SafeArea(bottom: false, child: dialog) : dialog;
+      },
     );
   }
 }

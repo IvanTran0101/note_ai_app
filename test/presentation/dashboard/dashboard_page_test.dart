@@ -911,9 +911,11 @@ void main() {
       final Rect desktopSearchRect = tester.getRect(
         find.byKey(DashboardPage.desktopSearchSurfaceKey),
       );
-      expect(desktopSearchRect.width, closeTo(1008, 1));
+      expect(desktopSearchRect.width, closeTo(600, 1));
       expect(desktopSearchRect.height, closeTo(704, 1));
-      expect(desktopSearchRect.top, closeTo(65, 1));
+      // The approved reference alignment uses a20px upward offset at this
+      // The compact desktop search is anchored60px below the viewport top.
+      expect(desktopSearchRect.top, closeTo(60, 1));
       expect(
         find.descendant(
           of: desktopSearchOverlay,
@@ -947,7 +949,10 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: desktopSearchOverlay, matching: find.text('Alpha')),
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('Alpha — Alpha body', findRichText: true),
+        ),
         findsOneWidget,
       );
 
@@ -956,7 +961,7 @@ void main() {
       expect(
         find.descendant(
           of: desktopSearchOverlay,
-          matching: find.text('Alpha body'),
+          matching: find.text('Alpha — Alpha body', findRichText: true),
         ),
         findsOneWidget,
       );

@@ -66,20 +66,20 @@ class _LocalDevRootState extends State<_LocalDevRoot> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Material(
-          color: const Color(0xFFFFE3A3),
+          color: const Color(0xFFFAFAF9),
           child: SafeArea(
             bottom: false,
             child: Column(
               children: [
                 Material(
-                  color: const Color(0xFFFFE3A3),
+                  color: const Color(0xFFFAFAF9),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 4,
+                      vertical: 2,
                     ),
-                    constraints: const BoxConstraints(minHeight: 24),
+                    constraints: const BoxConstraints(minHeight: 20),
                     child: Center(
                       child: Text(
                         'LOCAL DEV · ${widget.selected}'
@@ -87,8 +87,8 @@ class _LocalDevRootState extends State<_LocalDevRoot> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black,
+                          fontSize: 11,
+                          color: Color(0xFF60635F),
                         ),
                       ),
                     ),

@@ -304,7 +304,7 @@ void main() {
     final Finder sidebar = find.byKey(WorkspaceShell.sidebarKey);
     expect(sidebar, findsOneWidget);
     expect(find.byKey(WorkspaceShell.navigationRailKey), findsNothing);
-    expect(tester.getSize(sidebar).width, 280.0);
+    expect(tester.getSize(sidebar).width, 270.0);
     expect(find.text('NoteFlow'), findsOneWidget);
     expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
     expect(find.text('Workspace'), findsOneWidget);

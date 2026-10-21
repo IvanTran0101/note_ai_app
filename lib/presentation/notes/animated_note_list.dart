@@ -98,6 +98,7 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
   }) {
     final NotesCopy copy = NotesCopy.of(context);
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final compact = NoteFlowLayout.isCompact(context);
     final bool selected = note.reference == widget.selectedNoteId;
     final bool masked =
         !(widget.readable?.call(note) ?? !note.isProtected) ||
@@ -122,13 +123,13 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
       child: FadeTransition(
         opacity: animation,
         child: Padding(
-          padding: const EdgeInsets.only(bottom: NoteFlowSpacing.md),
+          padding: EdgeInsets.only(bottom: compact ? 0 : 4),
           child: ListTile(
             key: ValueKey<String>(
               '${outgoing ? 'outgoing-' : ''}note-${note.reference}',
             ),
             selected: selected,
-            selectedTileColor: tokens.selectedSurface,
+            selectedTileColor: tokens.textPrimary.withValues(alpha: .07),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(NoteFlowRadius.row),
             ),
@@ -148,7 +149,8 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
+                fontSize: compact ? 18 : 14,
+                fontWeight: FontWeight.w400,
                 color: tokens.textPrimary,
               ),
             ),
@@ -162,8 +164,10 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
                       : '$preview\n${SharingCopy(context).metadata(note.share!)}',
                   maxLines: note.share == null ? 1 : 3,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: tokens.textMuted),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: compact ? 13 : 12,
+                    color: tokens.textMuted,
+                  ),
                 ),
               ],
             ),

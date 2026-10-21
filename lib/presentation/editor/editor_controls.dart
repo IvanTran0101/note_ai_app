@@ -13,9 +13,17 @@ import 'table_commands.dart';
 /// Touch controls keep a guarded caret snapshot while their popup owns focus.
 /// The editor/document writer and history remain the single engine owner.
 final class EditorControls extends StatefulWidget {
-  const EditorControls({super.key, required this.adapter, required this.slash});
+  const EditorControls({
+    super.key,
+    required this.adapter,
+    required this.slash,
+    this.onBlocks,
+    this.blocksOpen = false,
+  });
   final RichEditorAdapter adapter;
   final SlashCommandController slash;
+  final VoidCallback? onBlocks;
+  final bool blocksOpen;
   @override
   State<EditorControls> createState() => _EditorControlsState();
 }
@@ -104,7 +112,11 @@ final class _EditorControlsState extends State<EditorControls> {
           : TableCommands(adapter).tableAt(selection);
       return Row(
         children: [
-          _button('Add block', Icons.add, _blocks),
+          _button(
+            widget.blocksOpen ? 'Close block menu' : 'Add block',
+            Icons.add,
+            widget.onBlocks ?? _blocks,
+          ),
           EditorIconButton(
             label: editorText(context, 'Undo'),
             icon: const Icon(Icons.undo, size: 18),

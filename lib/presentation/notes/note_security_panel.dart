@@ -17,11 +17,13 @@ final class NoteSecurityPanel extends StatelessWidget {
     this.localFirst = false,
     this.pendingProtection = false,
     this.compact = false,
+    this.menuItem = false,
   });
   final NoteDto note;
   final bool locked, busy, serverAvailable, canManage, retained;
   final bool localFirst, pendingProtection;
   final bool compact;
+  final bool menuItem;
   final ValueChanged<NoteSecurityAction> onAction;
   final VoidCallback? onBack;
   @override
@@ -57,7 +59,9 @@ final class NoteSecurityPanel extends StatelessWidget {
           if (retained) copy.retained,
         ].join('. '),
         enabled: !busy,
-        icon: busy
+        icon: menuItem
+            ? null
+            : busy
             ? const SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
@@ -80,6 +84,7 @@ final class NoteSecurityPanel extends StatelessWidget {
               child: Text(copy.label(action)),
             ),
         ],
+        child: menuItem ? _menuLabel(copy) : null,
       );
     }
     Widget button(NoteSecurityAction action, {bool enabled = true}) =>
@@ -142,4 +147,28 @@ final class NoteSecurityPanel extends StatelessWidget {
       ),
     );
   }
+
+  Widget _menuLabel(NoteSecurityCopy copy) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 48),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(
+            note.isProtected ? Icons.lock_outline : Icons.shield_outlined,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              note.isProtected
+                  ? copy.protectedNote
+                  : copy.label(NoteSecurityAction.enable),
+            ),
+          ),
+          const Icon(Icons.chevron_right, size: 18),
+        ],
+      ),
+    ),
+  );
 }

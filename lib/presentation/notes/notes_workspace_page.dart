@@ -210,10 +210,19 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         setState(() {
           _preserveSelection(notes);
           _notes = List.unmodifiable(notes);
+          _error = null;
+          _loading = false;
         });
       }
-    } on Object {
-      // Keep the already masked projection; retry through the normal list flow.
+    } on Object catch (error) {
+      // This read supersedes an initial load too. Its failure must end that
+      // loading state; the stale initial completion cannot do it afterwards.
+      if (mounted && sequence == _loadSequence && _loading) {
+        setState(() {
+          _error = error;
+          _loading = false;
+        });
+      }
     }
   }
 

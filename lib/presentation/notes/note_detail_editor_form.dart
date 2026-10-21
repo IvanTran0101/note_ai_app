@@ -119,7 +119,12 @@ final class NoteDetailEditorForm extends StatelessWidget {
     final double titleLeadingInset = compactWeb
         ? NoteFlowLayout.compactWebEditorTitleLeadingInset
         : 0;
-    final double titleFontSize = NoteFlowLayout.isCompact(context) ? 32 : 40;
+    final nativePhone = NoteFlowLayout.isNativePhone(context);
+    final double titleFontSize = nativePhone
+        ? 34
+        : NoteFlowLayout.isCompact(context)
+        ? 32
+        : 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -136,7 +141,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
               fontSize: titleFontSize,
               fontWeight: FontWeight.w700,
               color: tokens.textPrimary,
-              height: 1.2,
+              height: nativePhone ? 1.18 : 1.2,
             ),
             decoration: InputDecoration(
               hintText: copy.titleLabel,
@@ -144,7 +149,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
                 fontSize: titleFontSize,
                 fontWeight: FontWeight.w700,
                 color: tokens.textMuted,
-                height: 1.2,
+                height: nativePhone ? 1.18 : 1.2,
               ),
               filled: false,
               border: InputBorder.none,
@@ -154,9 +159,9 @@ final class NoteDetailEditorForm extends StatelessWidget {
               focusedErrorBorder: InputBorder.none,
               contentPadding: EdgeInsets.fromLTRB(
                 titleLeadingInset,
-                NoteFlowSpacing.sm,
+                nativePhone ? 4 : NoteFlowSpacing.sm,
                 0,
-                NoteFlowSpacing.sm,
+                nativePhone ? 12 : NoteFlowSpacing.sm,
               ),
             ),
           ),
@@ -173,9 +178,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
                       kIsWeb &&
                           MediaQuery.sizeOf(context).width >=
                               NoteFlowLayout.compactBreakpoint
-                      ? NoteFlowLayout.wideWebEditorTextMaxWidthFor(
-                          MediaQuery.sizeOf(context).width,
-                        )
+                      ? NoteFlowLayout.webDocumentMaxWidth
                       : NoteFlowLayout.editorTextMaxWidth,
                 ),
                 child: NoteSummaryContentMotion(

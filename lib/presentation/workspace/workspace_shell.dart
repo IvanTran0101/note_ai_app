@@ -296,6 +296,12 @@ class WorkspaceShellState extends State<WorkspaceShell>
             compact &&
             _destination == WorkspaceDestination.notes &&
             _noteEditorActive;
+        final bool compactBottomBarVisible =
+            compact &&
+            !_compactSearchActive &&
+            (widget.onOpenSearch != null ||
+                widget.onCreateNote != null ||
+                widget.onOpenRag != null);
         final bool medium = width < WorkspaceShell.expandedBreakpoint;
         final bool collapsedDesktop = !compact && !medium && _sidebarCollapsed;
         final Widget? navigation = compact
@@ -319,16 +325,24 @@ class WorkspaceShellState extends State<WorkspaceShell>
         // it between a compact Scaffold/Column and an expanded Row used to
         // dispose an active editor, losing its unsaved draft on resize.
         return Scaffold(
-          backgroundColor: tokens.pageSurface,
+          backgroundColor:
+              compact &&
+                  _destination == WorkspaceDestination.dashboard &&
+                  !_compactSearchActive
+              ? tokens.compactHomeSurface
+              : tokens.pageSurface,
           floatingActionButton: null,
-          bottomNavigationBar: compact && !_compactSearchActive
+          bottomNavigationBar: compactBottomBarVisible
               ? _buildCompactBottomBar(copy)
               : null,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               SafeArea(
-                top: compact,
+                // Keep content below status bars, notches and Dynamic Island
+                // at every width. The sidebar opts out because this full-width
+                // safe strip already reserves the top inset for the whole row.
+                top: true,
                 left: compact,
                 right: compact,
                 bottom: false,
@@ -342,60 +356,80 @@ class WorkspaceShellState extends State<WorkspaceShell>
                 ),
               ),
               Expanded(
-                child: SafeArea(
-                  top: false,
-                  left: compact,
-                  right: compact,
-                  bottom: false,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: Builder(
+                  builder: (bodyContext) => MediaQuery.removePadding(
+                    // Preserve the Scaffold body's consumed IME metrics. Reading
+                    // the outer context would restore the full inset and make
+                    // the embedded Notes Scaffold subtract the keyboard twice.
+                    context: bodyContext,
+                    // The full-width strip above already consumes the top
+                    // inset, including while its navigation child is hidden.
+                    removeTop: true,
+                    child: SafeArea(
+                      top: false,
+                      left: compact,
+                      right: compact,
+                      // The compact navigation bar handles the system inset when
+                      // present. When it is hidden, keep search/page content above
+                      // the Android navbar or iOS Home Indicator.
+                      bottom: compact && !compactBottomBarVisible,
+                      child: Stack(
+                        fit: StackFit.expand,
                         children: <Widget>[
-                          AnimatedContainer(
-                            // A phone viewport cannot reserve the old desktop
-                            // sidebar width while its page changes layout.
-                            duration: compact
-                                ? Duration.zero
-                                : NoteFlowMotion.duration(context),
-                            curve: Curves.easeOutCubic,
-                            width: navigationWidth,
-                            child: ClipRect(
-                              child: OverflowBox(
-                                alignment: Alignment.centerLeft,
-                                minWidth: medium
-                                    ? WorkspaceShell.navigationRailWidth
-                                    : WorkspaceShell.sidebarWidth,
-                                maxWidth: medium
-                                    ? WorkspaceShell.navigationRailWidth
-                                    : WorkspaceShell.sidebarWidth,
-                                child: NoteFlowStateTransition(
-                                  child: navigation ?? const SizedBox.shrink(),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              AnimatedContainer(
+                                // A phone viewport cannot reserve the old desktop
+                                // sidebar width while its page changes layout.
+                                duration: compact
+                                    ? Duration.zero
+                                    : NoteFlowMotion.duration(context),
+                                curve: Curves.easeOutCubic,
+                                width: navigationWidth,
+                                child: ClipRect(
+                                  child: OverflowBox(
+                                    alignment: Alignment.centerLeft,
+                                    minWidth: medium
+                                        ? WorkspaceShell.navigationRailWidth
+                                        : WorkspaceShell.sidebarWidth,
+                                    maxWidth: medium
+                                        ? WorkspaceShell.navigationRailWidth
+                                        : WorkspaceShell.sidebarWidth,
+                                    child: NoteFlowStateTransition(
+                                      child:
+                                          navigation ?? const SizedBox.shrink(),
+                                    ),
+                                  ),
                                 ),
                               ),
+                              AnimatedContainer(
+                                duration: compact
+                                    ? Duration.zero
+                                    : NoteFlowMotion.duration(context),
+                                curve: Curves.easeOutCubic,
+                                width: dividerWidth,
+                                child: dividerWidth == 0
+                                    ? const SizedBox.shrink()
+                                    : const VerticalDivider(
+                                        width: 1,
+                                        thickness: 1,
+                                      ),
+                              ),
+                              Expanded(
+                                child: _buildSwipePages(compact: compact),
+                              ),
+                            ],
+                          ),
+                          if (collapsedDesktop)
+                            Positioned(
+                              left: 0,
+                              top: WorkspaceShell.collapsedSidebarTopInset,
+                              child: _buildCollapsedSidebar(copy),
                             ),
-                          ),
-                          AnimatedContainer(
-                            duration: compact
-                                ? Duration.zero
-                                : NoteFlowMotion.duration(context),
-                            curve: Curves.easeOutCubic,
-                            width: dividerWidth,
-                            child: dividerWidth == 0
-                                ? const SizedBox.shrink()
-                                : const VerticalDivider(width: 1, thickness: 1),
-                          ),
-                          Expanded(child: _buildSwipePages(compact: compact)),
                         ],
                       ),
-                      if (collapsedDesktop)
-                        Positioned(
-                          left: 0,
-                          top: WorkspaceShell.collapsedSidebarTopInset,
-                          child: _buildCollapsedSidebar(copy),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -729,6 +763,20 @@ class WorkspaceShellState extends State<WorkspaceShell>
             Animation<double> animation,
             Animation<double> secondaryAnimation,
           ) {
+            final double viewportWidth = MediaQuery.sizeOf(sheetContext).width;
+            final double leftInset = MediaQuery.paddingOf(sheetContext).left;
+            final double rightInset = MediaQuery.paddingOf(sheetContext).right;
+            final double preferredDrawerWidth = (viewportWidth * 0.84)
+                .clamp(280.0, 340.0)
+                .toDouble();
+            final double availableDrawerWidth =
+                (viewportWidth - leftInset - rightInset - 16)
+                    .clamp(0.0, 340.0)
+                    .toDouble();
+            final double drawerWidth =
+                preferredDrawerWidth > availableDrawerWidth
+                ? availableDrawerWidth
+                : preferredDrawerWidth;
             return Align(
               alignment: Alignment.centerLeft,
               child: Padding(
@@ -739,10 +787,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
                   top: false,
                   right: false,
                   child: SizedBox(
-                    width: (MediaQuery.sizeOf(context).width * 0.84).clamp(
-                      280.0,
-                      340.0,
-                    ),
+                    width: drawerWidth,
                     height: double.infinity,
                     child: NoteFlowSurface(
                       tone: NoteFlowSurfaceTone.elevated,
@@ -941,6 +986,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
         child: Material(
           color: tokens.sidebarSurface,
           child: SafeArea(
+            top: false,
             right: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -992,6 +1038,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
                           icon: _iconFor(destination, active: false),
                           selectedIcon: _iconFor(destination, active: true),
                           selected: destination == _destination,
+                          dense: true,
                           onTap: () => showDestination(destination),
                         ),
                     ],

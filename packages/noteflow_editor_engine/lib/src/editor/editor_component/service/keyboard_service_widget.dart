@@ -334,8 +334,10 @@ class KeyboardServiceWidgetState extends State<KeyboardServiceWidget>
       'keyboard service - focus changed: ${focusNode.hasFocus}}',
     );
 
-    /// On web, we don't need to close the keyboard when the focus is lost.
+    // Keep Web selection for toolbar commands, but release the old input
+    // client while a popup or another field owns focus.
     if (kIsWeb) {
+      if (!focusNode.hasFocus) textInputService.close();
       return;
     }
 

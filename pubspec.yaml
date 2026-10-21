@@ -109,6 +109,34 @@ flutter:
   assets:
     - assets/branding/notion-logo.png
     - assets/summary_policy.json
+    - assets/fonts/arimo/OFL.txt
+    - assets/fonts/roboto/roboto_license.txt
+
+  fonts:
+    - family: NoteFlowSans
+      fonts:
+        - asset: assets/fonts/arimo/Arimo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/arimo/Arimo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/arimo/Arimo-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/arimo/Arimo-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: NoteFlowHeading
+      fonts:
+        - asset: assets/fonts/roboto/roboto-medium.ttf
+          weight: 500
+        - asset: assets/fonts/roboto/roboto-mediumitalic.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/roboto/roboto-bold.ttf
+          weight: 700
+        - asset: assets/fonts/roboto/roboto-bolditalic.ttf
+          weight: 700
+          style: italic
 
   # To add assets to your application, add an assets section, like this:
   # assets:

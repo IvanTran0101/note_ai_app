@@ -304,12 +304,12 @@ void main() {
       40,
     );
 
-    // The title block matches Notion's 720px block; body text uses 708px.
+    // Reference pass:704px page column with a12px inset for body text.
     final Finder form = find.byType(NoteDetailEditorForm);
-    expect(tester.getSize(form).width, 720);
+    expect(tester.getSize(form).width, 704);
     expect(tester.getCenter(form).dx, 512);
     expect(tester.getTopLeft(form).dy, 48);
-    expect(tester.getSize(find.byKey(contentFieldKey)).width, 708);
+    expect(tester.getSize(find.byKey(contentFieldKey)).width, 692);
     expect(find.byType(Scaffold), findsNothing);
     expect(tester.takeException(), isNull);
   });

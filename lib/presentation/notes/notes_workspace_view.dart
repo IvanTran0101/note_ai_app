@@ -14,21 +14,40 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
         MediaQuery.sizeOf(context).width <
         ResponsiveNotesWorkspace.compactBreakpoint;
     return Scaffold(
-      appBar: _showDetail || (compact && widget.embeddedInWorkspace)
+      appBar: _showDetail || widget.embeddedInWorkspace
           ? null
           : _buildWorkspaceAppBar(copy),
       body: _loading
           ? NotesWorkspaceLoadingView(copy: copy)
           : Column(
               children: <Widget>[
-                if (widget.syncController
-                    case final SyncPresentationController sync)
+                if (widget.syncController != null ||
+                    _application is SharingNotesController)
                   Offstage(
                     offstage: _hasEmbeddedSyncHeader,
-                    child: SyncStatusPanel(controller: sync, compact: true),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _application is SharingNotesController
+                                ? Offstage(
+                                    offstage: _showDetail,
+                                    child: _sharingTabs(),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                          if (widget.syncController
+                              case final SyncPresentationController sync)
+                            SyncStatusPanel(
+                              controller: sync,
+                              compact: true,
+                              iconOnly: true,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                if (_application is SharingNotesController)
-                  Offstage(offstage: _showDetail, child: _sharingTabs()),
                 Expanded(
                   child: CallbackShortcuts(
                     bindings: {

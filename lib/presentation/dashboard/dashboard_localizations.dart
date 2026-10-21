@@ -35,6 +35,8 @@ final class DashboardCopy {
   String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
   String get today => _isVietnamese ? 'Hôm nay' : 'Today';
   String get yesterday => _isVietnamese ? 'Hôm qua' : 'Yesterday';
+  String get pastWeek => _isVietnamese ? 'Tuần qua' : 'Past week';
+  String get past30Days => _isVietnamese ? '30 ngày qua' : 'Past 30 days';
   String get results => _isVietnamese ? 'Kết quả' : 'Results';
   String notesCount(int count) => _isVietnamese
       ? '$count ghi chú'

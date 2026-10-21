@@ -23,6 +23,8 @@ final class NoteDetailUtilities extends StatelessWidget {
       child: ExpansionTile(
         key: const PageStorageKey('note-detail-utilities'),
         maintainState: true,
+        backgroundColor: tokens.pageSurface,
+        collapsedBackgroundColor: tokens.pageSurface,
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 16),
         minTileHeight: 48,

@@ -10,6 +10,8 @@ Future<bool?> showNoteDetailMoreActions({
   required BuildContext context,
   required NoteDetailCopy copy,
   BuildContext? anchorContext,
+  bool allowDelete = true,
+  List<Widget> Function(BuildContext)? additionalActions,
 }) {
   final bool compact = NoteFlowLayout.isCompact(context);
   if (!compact && anchorContext != null) {
@@ -66,13 +68,15 @@ Future<bool?> showNoteDetailMoreActions({
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              NoteFlowMenuItem(
-                key: const ValueKey<String>('note-detail-more-delete'),
-                label: copy.delete,
-                icon: Icons.delete_outline,
-                destructive: true,
-                onTap: () => Navigator.of(context).pop(true),
-              ),
+              ...?additionalActions?.call(context),
+              if (allowDelete)
+                NoteFlowMenuItem(
+                  key: const ValueKey<String>('note-detail-more-delete'),
+                  label: copy.delete,
+                  icon: Icons.delete_outline,
+                  destructive: true,
+                  onTap: () => Navigator.of(context).pop(true),
+                ),
             ],
           ),
         ),
@@ -87,11 +91,15 @@ Future<void> runNoteDetailMoreActions({
   required NoteDetailCopy copy,
   BuildContext? anchorContext,
   required Future<void> Function() onDelete,
+  bool allowDelete = true,
+  List<Widget> Function(BuildContext)? additionalActions,
 }) async {
   final bool? deleteSelected = await showNoteDetailMoreActions(
     context: context,
     copy: copy,
     anchorContext: anchorContext,
+    allowDelete: allowDelete,
+    additionalActions: additionalActions,
   );
   if (deleteSelected == true) {
     await onDelete();
