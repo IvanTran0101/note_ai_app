@@ -8,6 +8,7 @@ import 'infrastructure/users/profile_avatar_picker.dart';
 import 'presentation/profile/profile_page.dart';
 import 'application/labels/label_application.dart';
 import 'presentation/labels/label_catalog_scope.dart';
+import 'presentation/common/note_flow_system_bars.dart';
 import 'infrastructure/security/note_security_runtime.dart';
 import 'infrastructure/security/encrypted_sync_store.dart';
 import 'infrastructure/attachments/attachment_runtime.dart';
@@ -1552,10 +1553,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     return MaterialApp.router(
       title: 'NoteFlow',
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => LabelCatalogHost(
-        application: widget.enableLabels ? _labelApplication : null,
-        securityChanges: _noteSecurityRuntime.changes,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => NoteFlowSystemBars(
+        child: LabelCatalogHost(
+          application: widget.enableLabels ? _labelApplication : null,
+          securityChanges: _noteSecurityRuntime.changes,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       theme: _buildNoteFlowTheme(Brightness.light),
       darkTheme: _buildNoteFlowTheme(Brightness.dark),

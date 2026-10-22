@@ -1,5 +1,14 @@
 # M09 — parallel implementation, 19 October 2026
 
+## Paused by user — 23 October 2026
+
+Push the current UI39 checkpoint, then wait for "tiếp tục". Six actual Luna Max
+agents contributed to this continuation; all delivered UI39 files are owned by
+root. A proposed UI40 allocation to search39 produced no current delta and that
+agent was not found when interrupted. Do not start another worker or continue
+implementation/QA during this pause. CURRENT_WORK.md holds the tested build
+identity and pending comparison tasks; both >=95% gates remain unverified.
+
 ## Objective and current phase
 
 Actual Notion Web AND native Android comparison -> existing UI refinement ->
@@ -16,6 +25,13 @@ before changing visual values. Lead alone changes dependencies/config/tokens.
 ## Ownership (no overlapping writes)
 
 ###22 October priority continuation
+
+UI39 uses sixth actual Luna Max search39 (worker): owned only dashboard_note_card,
+dashboard_content and new dashboard_web_query_rows_test; delivered/frozen. Root
+reviewed current source and owns integration now, including subdued heading and
+legacy assertion update. The other five are frozen or bounded report reviewers.
+Root alone owns system-bar/main/token/searchdock/menu tweaks, all shared UI,
+test/build processes, Notion and Git. No overlapping writers or new features.
 
 Five actual Luna Max agents used in this continuation: header_history28,
 priority28_review, web_pair35_review, ui36_matrix_audit and avatar38_menu.

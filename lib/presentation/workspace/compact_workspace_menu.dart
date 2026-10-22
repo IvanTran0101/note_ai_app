@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'workspace_ui_tokens.dart';
+
 /// A single existing action in the compact workspace popup.
 class CompactWorkspaceMenuItem<T> {
   const CompactWorkspaceMenuItem({
@@ -78,13 +80,14 @@ Future<T?> showCompactWorkspaceMenu<T>({
   final List<PopupMenuEntry<T>> entries = <PopupMenuEntry<T>>[];
   for (final CompactWorkspaceMenuItem<T> item in items) {
     if (item.dividerBefore && entries.isNotEmpty) {
-      entries.add(const PopupMenuDivider(height: 16));
+      entries.add(const PopupMenuDivider(height: 1));
     }
 
     final TextStyle labelStyle =
         (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
           color: theme.colorScheme.onSurface,
           fontSize: 16,
+          letterSpacing: 0,
           fontWeight: item.selected ? FontWeight.w600 : FontWeight.normal,
         );
     Widget content = Row(
@@ -129,7 +132,9 @@ Future<T?> showCompactWorkspaceMenu<T>({
       maxHeight: availableHeight,
     ),
     elevation: 2,
-    color: theme.colorScheme.surface,
+    color: theme.brightness == Brightness.dark
+        ? NoteFlowWorkspaceTokens.of(context).sidebarSurface
+        : theme.colorScheme.surface,
     surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     clipBehavior: Clip.antiAlias,

@@ -4,6 +4,7 @@ import 'package:note_ai_app/application/note_intelligence/summary_consent_app_se
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/labels/label_application.dart';
@@ -958,13 +959,34 @@ void main() {
 
       await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
+      if (kIsWeb) {
+        final queryCard = find.descendant(
           of: desktopSearchOverlay,
-          matching: find.text('Alpha — Alpha body', findRichText: true),
-        ),
-        findsOneWidget,
-      );
+          matching: find.byType(DashboardNoteCard),
+        );
+        expect(
+          find.descendant(
+            of: queryCard,
+            matching: find.text('Alpha'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: queryCard,
+            matching: find.text('Alpha body'),
+          ),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          find.descendant(
+            of: desktopSearchOverlay,
+            matching: find.text('Alpha — Alpha body', findRichText: true),
+          ),
+          findsOneWidget,
+        );
+      }
       expect(
         find.byType(PopupMenuButton<DashboardSort>).hitTestable(),
         findsOneWidget,

@@ -47,7 +47,9 @@ final class DashboardSearchDock extends StatelessWidget {
               tooltip: copy.closeSearch,
               onPressed: onClose,
               style: IconButton.styleFrom(
-                backgroundColor: tokens.pageSurface,
+                backgroundColor: NoteFlowLayout.isNativePhone(context)
+                    ? tokens.compactHomeSurface
+                    : tokens.pageSurface,
                 foregroundColor: tokens.textPrimary,
                 side: BorderSide(color: tokens.divider),
                 minimumSize: const Size(48, 48),
@@ -75,7 +77,9 @@ final class DashboardSearchDock extends StatelessWidget {
         hintText: copy.searchNotes,
         isDense: true,
         filled: true,
-        fillColor: tokens.pageSurface,
+        fillColor: NoteFlowLayout.isNativePhone(context)
+            ? tokens.compactHomeSurface
+            : tokens.pageSurface,
         prefixIcon: const Icon(Icons.search, size: 24),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,

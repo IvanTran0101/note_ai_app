@@ -30,6 +30,7 @@ final class DashboardNoteCard extends StatelessWidget {
     this.dense = false,
     this.mobileSearch = false,
     this.searchQueryResult = false,
+    this.webQueryResult = false,
     this.compactHomeList = false,
     this.listHorizontalInset = NoteFlowSpacing.md,
     this.listIconGap = NoteFlowSpacing.md,
@@ -64,6 +65,9 @@ final class DashboardNoteCard extends StatelessWidget {
 
   /// Applies smaller title typography to a non-empty native mobile search.
   final bool searchQueryResult;
+
+  /// Uses the title/preview hierarchy shown by wide Web search results.
+  final bool webQueryResult;
   final bool compactHomeList;
 
   /// Horizontal inset and icon gap used by list rows.
@@ -132,6 +136,8 @@ final class DashboardNoteCard extends StatelessWidget {
             constraints: BoxConstraints(
               minHeight: layout == DashboardNoteCardLayout.grid
                   ? (showPreview ? 144.0 : 88.0)
+                  : webQueryResult
+                  ? 56.0
                   : mobileSearch
                   ? 64.0
                   : compactHomeList
@@ -145,7 +151,9 @@ final class DashboardNoteCard extends StatelessWidget {
                   ? const EdgeInsets.all(NoteFlowSpacing.md)
                   : EdgeInsets.symmetric(
                       horizontal: listHorizontalInset,
-                      vertical: dense || compactHomeList
+                      vertical: webQueryResult
+                          ? NoteFlowSpacing.sm
+                          : dense || compactHomeList
                           ? 0
                           : NoteFlowSpacing.sm,
                     ),
@@ -319,7 +327,14 @@ final class DashboardNoteCard extends StatelessWidget {
     Color secondary, {
     required bool dateBelow,
   }) {
-    final titleStyle = searchQueryResult || mobileSearch || compactHomeList
+    final titleStyle = webQueryResult
+        ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            height: 1.2,
+            fontWeight: FontWeight.w500,
+            color: foreground,
+          )
+        : searchQueryResult || mobileSearch || compactHomeList
         ? Theme.of(context).textTheme.bodyLarge?.copyWith(
             fontSize: searchQueryResult
                 ? 13.3
@@ -341,7 +356,14 @@ final class DashboardNoteCard extends StatelessWidget {
           )
         : Theme.of(context).textTheme.titleSmall
               ?.copyWith(fontWeight: FontWeight.w500, color: foreground);
-    final previewStyle = mobileSearch
+    final previewStyle = webQueryResult
+        ? Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            height: 1.2,
+            fontWeight: FontWeight.w400,
+            color: secondary,
+          )
+        : mobileSearch
         ? Theme.of(context).textTheme.bodySmall?.copyWith(
             fontSize: 13,
             height: 1.2,
@@ -358,7 +380,7 @@ final class DashboardNoteCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (dense && showPreview)
+        if (dense && showPreview && !webQueryResult)
           Text.rich(
             TextSpan(
               style: titleStyle,
@@ -379,7 +401,7 @@ final class DashboardNoteCard extends StatelessWidget {
           ),
         if (!dense && !mobileSearch)
           NoteLabelChips(note: note, readable: _readable),
-        if (showPreview && !dense) ...[
+        if (showPreview && (!dense || webQueryResult)) ...[
           const SizedBox(height: 2),
           Text(
             preview,

@@ -37,7 +37,7 @@ final class NoteFlowWorkspaceTokens {
   );
 
   static const NoteFlowWorkspaceTokens _dark = NoteFlowWorkspaceTokens(
-    compactHomeSurface: Color(0xFF191919),
+    compactHomeSurface: Color(0xFF202020),
     pageSurface: Color(0xFF191919),
     sidebarSurface: Color(0xFF202020),
     elevatedSurface: Color(0xFF2F2F2F),

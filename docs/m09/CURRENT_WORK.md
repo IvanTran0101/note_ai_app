@@ -1,5 +1,42 @@
 # M09 current work
 
+## USER PAUSE — push checkpoint, then wait (23 October 2026)
+
+Latest user instruction: push to final-tuankiet, then stop until an explicit
+"tiếp tục". The historical ACTIVE notes below do not override this pause.
+No additional implementation, builds or QA are authorized during the pause.
+
+UI39 is packaged and running: source1058 /
+`d440940f109f002eb5b0b3890ccacf9bdf3e793e1b17270881845799046288ac`.
+Focused VM UI17/17 and installed Chrome UI4/4 passed. Analyze13 items clean
+(126.8s); Web59.1s and APK36.0s built; source drift[]. APK/device SHA matched
+`ec33b73fe181ba1a2317e60da9d5188c83732ddf54d3bd1bc7b1563e3cb6ce2c`.
+Local receipts: output/m09/p6-parallel39-build.json and p6-ui39-pipeline.log;
+runtime evidence is not committed. These scoped checks establish neither full
+functional acceptance nor either whole-platform >=95% similarity gate.
+
+UI39 includes the wide Web query title/preview hierarchy, theme-dependent
+system-bar appearance without extra insets, compact Dark surfaces, tighter
+popup grouping/tracking and a36dp painted Theme control with48dp tap target.
+Actual app39 Web query selection opened the existing note; native39 Dark Home
+and avatar popup were captured. Dark navbar background changed; its real OS
+icon appearance is not certified by the widget test alone.
+
+The proposed UI40 recent-card palette task has no source/test delta in this
+checkpoint; search39 was not found when interrupted for the user's pause.
+No UI40 completion or test claim. Root owns all delivered UI39 source.
+Unrelated .playwright-cli/ and final_project.md remain untouched and unstaged.
+_agent_ops/ and its session tools are absent; these existing M09 records serve
+as continuity. No generated ops records are needed for this checkpoint.
+
+Resume only after user continuation: compare remaining native recent-card
+Dark palette, recapture current Theme control, repeat current gesture-grid
+safe-area evidence, and complete paired Web/Android matrix before broad QA.
+Current app39/static8776 and Notion5556 were running at pause; recheck processes
+and build identity before using them. Actual Notion Web is temporarily Light
+(original Use system setting); restore it through ordinary UI when resuming.
+Both emulators are portrait/font1/3-button; no userdata was wiped.
+
 ## ACTIVE — six-agent reference UI implementation (19 October 2026)
 
 The user has now resumed implementation and explicitly requests up to six
@@ -11,6 +48,52 @@ UI>=95% on BOTH platforms remains a hard prerequisite for broad functional
 regression/acceptance; do not inherit the rejected96.2 scores.
 
 ### Latest candidate — continue UI refinement, no acceptance
+
+UI39 FROZEN source1058/d440940f109f002eb5b0b3890ccacf9bdf3e793e1b17270881845799046288ac.
+Pipeline33427: focused VM17/17 and installedChrome4/4 UI PASS; now analyzer/build.
+Plain SDKChrome earlier failed BEFORE suite start (CanvasKit JS/WASM local404);
+used existing tool/run_chrome_tests.py isolated Windows URL overlay, installed
+SDK untouched/no custom server. Its first run had3 new query passes/1 legacy
+assertion failure (Alpha matched input+title); root scoped assertion to card,
+then full4-case rerun PASS. No product changes to satisfy those harness errors.
+Native MSVC hook made VM startup slow; no model or broad functional test run.
+
+Additional actual38 grid geometry: font2 portrait/landscape3button, lastDivider
+fully visible after scroll (portraitbottom2232<navbar2274; landscape right2232
+<verticalnavbar2274 and lastbottom1038<1080). PNG/XML app38-grid-font2-*.
+Switching to gesture produced black transition PNG/null XML, then activity
+returnedHome; app38-grid-font2-landscape-end-gesture-dark is INVALID grid proof.
+Do not tick gesture grid from it. App is being restoredfont1/portrait/3button
+for39 install. Need repeat gesture+current39 after packaging and reopenNotion5556.
+NotionWeb now temporarilyLight for matching note/settings captures, original
+Use system setting must be restored after pairedLight inspection. Notion table
+update task399f9462b82f4be1b41426e11b6bfbc1 SUCCEEDED; body/Home rows now cite38
+paired captures with measuredink, both95 andpostgatefunctional boxes stillopen.
+
+UI38 PUBLISHED b2bb42a82c63415404b9d723ddeb04229ca1ec5e, remoteSHA matched;
+13 explicit files, staged diffcheck/credential diagnostic scan clear. Notion
+progress task20b485ec18ad42aead2fdabc370878aa succeeded. Board fetched after
+two synthetic app38 images:20->22 image tags, page-tag count1 unchanged; both95
+and post-gate functional boxes remain unchecked. Root caught reviewer clipped
+Home-title ROI: corrected full glyph531x39 vs524x39, only1.34%, no further shrink.
+
+UI39 source active: sixth actual Luna Max search39 delivered/froze card/content/
+newquerytest only; root reviewed data order/access/pin preservation and owns them.
+Web query gets56px title14/preview12 row and no date headings; empty/native paths
+retained. Root adds subduedResults heading, SystemBars wrapper/main wiring,
+Dark compactHome32(peractualNotionpixel) vs old25, native searchfield matching
+surface, popup letterSpacing0/divider1 (48dp rows intact), Theme36dp painted
+outline/48dp target. New SystemBars1/1 passed. First querytest VM baseline expected
+38 but SDKpin makes40 in its theme; corrected assertion without runtime shrink.
+Chrome3 query UI cases compiling/running session31670, no pass claimed yet.
+Native actual same query M09 UI comparison captured open/closedIME on both;
+Notion fast input dropped9/o, corrected with Ctrl+A and slow real keyevents,
+verified exactquery. This was harness typing, not appdata loss. Dark navbar
+still light on installed38, source39 not installed. Web quote3–4px baseline
+residual is minor; do not risk engine/selection geometry just to move3px.
+RAM fell to<0.5GB during Chrome compilation. Gracefully stopped only Notion5556
+and closed managed ChromeUI profile (data retained), to release memory; app5554
+and static38 remain. Reopen those owned runtimes after39 packaging/reference QA.
 
 UI38 now RUNNING: static33392/8776 serves p6-parallel38-web; installed APK/device
 0705d4527f19df07c07f887a656cdfdc14e87304b85b5d21c753e359c4731a4e MATCH.

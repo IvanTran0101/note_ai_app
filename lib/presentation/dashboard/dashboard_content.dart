@@ -816,7 +816,10 @@ final class DashboardContent extends StatelessWidget {
     final bool mobileSearch = compact && searchOpen && !searchOverlay;
     final bool nativeQuerySearch =
         mobileSearch && !kIsWeb && searchText.trim().isNotEmpty;
-    final groupedNotes = groupByDate
+    final bool webQuerySearch =
+        kIsWeb && searchOverlay && !compact && searchText.trim().isNotEmpty;
+    final bool showDateSections = groupByDate && !webQuerySearch;
+    final groupedNotes = showDateSections
         ? dashboardSearchSections(
             context,
             items,
@@ -836,6 +839,7 @@ final class DashboardContent extends StatelessWidget {
                   context,
                   copy.results,
                   compactMobileSearch: nativeQuerySearch,
+                  subdued: webQuerySearch,
                 ),
               ),
               if (!dockCompactSearch && !searchOverlay)
@@ -854,7 +858,7 @@ final class DashboardContent extends StatelessWidget {
         ],
         for (final MapEntry<String, List<NoteDto>> section
             in groupedNotes.entries) ...<Widget>[
-          if (groupByDate) ...<Widget>[
+          if (showDateSections) ...<Widget>[
             _buildSectionHeading(context, section.key, subdued: true),
             const SizedBox(height: NoteFlowSpacing.sm),
           ],
@@ -878,6 +882,7 @@ final class DashboardContent extends StatelessWidget {
               dense: searchOverlay && !compact,
               mobileSearch: mobileSearch,
               searchQueryResult: nativeQuerySearch,
+              webQueryResult: webQuerySearch,
               listHorizontalInset: compact ? 2 : NoteFlowSpacing.md,
               listIconGap: compact
                   ? NoteFlowSpacing.lg
@@ -898,7 +903,7 @@ final class DashboardContent extends StatelessWidget {
                           : NoteFlowSpacing.sm,
                     ),
           ],
-          if (groupByDate) const SizedBox(height: NoteFlowSpacing.lg),
+          if (showDateSections) const SizedBox(height: NoteFlowSpacing.lg),
         ],
       ],
     );

@@ -1,5 +1,13 @@
 # MUST REMEMBER
 
+## USER PAUSE — 23 October 2026
+
+The user requested pushing the current checkpoint and then stopping. After
+that push, do not implement or run further QA until the user says "tiếp tục".
+UI39 focused checks and both builds completed; exact receipts and remaining
+work are in docs/m09/CURRENT_WORK.md. Neither platform's >=95% similarity
+gate has been verified. Resume from that record only after the user continues.
+
 ## Latest UI priority — labels, attachments and editor controls (21 October 2026)
 
 Before the usual remaining M09 work, inspect actual Notion Web/Android for
@@ -32,6 +40,12 @@ The narrow media worker is part of the existing guarded viewer. A cache-bypass
 reload loop is a harness configuration issue, not proof of a product failure.
 Verify mouse/keyboard controls with Flutter semantics enabled as well; do not
 force-click through a blocking overlay and report that path as passed.
+
+For focused Flutter Chrome suites on this Windows SDK, use the existing
+tool/run_chrome_tests.py isolated tools overlay (normalizes Windows test URLs).
+Plain flutter test --platform chrome currently serves CanvasKit JS/WASM404 and
+can hang before any case starts; this is a harness failure, never a product pass.
+Do not edit the installed SDK or recreate the blocked custom CanvasKit server.
 
 ## Implementation resumed — user-authorized six-agent mode (19 October 2026)
 
