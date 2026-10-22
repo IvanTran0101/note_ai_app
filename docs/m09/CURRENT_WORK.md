@@ -12,6 +12,82 @@ regression/acceptance; do not inherit the rejected96.2 scores.
 
 ### Latest candidate — continue UI refinement, no acceptance
 
+CHECKPOINT37 ready: Web37 staticPID39780/8776; installed37 device/localSHA
+66260050a0f22b697bc8aadf9d1f3f12e463ce84118586ba48a1fb0d41cd0ef8 matched.
+Actual app37-selection/-selection-drag show gray48dp capsule, range extension
+and rail above IME. ActualCut removed selected first comparison -> Local;
+Undo restored baseline (app37-cut-undo-restored). ActualWeb37 note shows corrected
+bullet/task text and quote positions. NativeHome37 pair independently reviewed:
+shell/card anchors near ref, but shared row title ~17% wider; avatar menu still
+giant drawer versus Notion anchored popup. Next UI38 fixes those concrete gaps.
+Fifth Luna agent avatar38_menu owns ONLY new compact_workspace_menu.dart/test;
+root owns shell wiring/callback dispatch and Home typography. No shared writers.
+This unused helper is excluded from37 checkpoint. Existing _agent_ops/ absent;
+CURRENT_WORK/MUST_REMEMBER and bounded reviews are the continuity records.
+
+LATEST source37 packaged1056/62eea36ee11024462f98b1d7e7d0103bf85363adc23955cb45710c173d73ef26:
+13-item analyze clean122.4s, Web89.8s/APK76.3s, drift[]. APK66260050...cd0ef8.
+Not installed yet; Chrome still static36PID27592/8776.36 installed/device hash
+a0a640151101380b428281126de2b175ad09d790f98638737fbf1c7979aab231 matched;
+actual clipboard/850ms handle drag/formatrail visible. Chrome36 normal mouse
+click into paragraph gives activeTEXTAREA and selecting comparing typography
+shows compact192px toolbar (noforce). Locator targeting textarea itself was
+intercepted by its rendered text semantics, not the old full-editor blocker;
+actual pointer path works. Web36 quote/bar/top now matched; independent pair
+review lists tiny marker gaps, root37 adjusts Webbullet/task text+6/quote+2.
+37 native capsule gray/elevation2/48dp (removes4dp vertical padding) and Web
+sidebar menu glyph, runtime not yet checked.37/37 focused VM UI cases passed
+again before the Web-only marker adjustment; no broad functional regression.
+Notion5556 restarted/unlocked with user-supplied PIN; retained notes, ordinary
+launcher and Home->QA note->selection->Share->Invite were directly inspected.
+Actual Web Notion selection/Share/Preferences also reopened. Share forms keep
+existing roles/ACL; noPublish/general-link/NotionAI controls added. Do not upload
+unredacted Notion Share captures containing real account identity. Both95 OPEN.
+
+36 source frozen1056 paths97d80ba0e75a1ccc6c39ca008cd789929e2af6f755d87e16a5391d2d80d297e0.
+Focused37/37 VM UI cases PASS (clipboard/48dp/IME placement/theme/shell).
+Initial authored-test failures: await void API, SDK44dp toolbar cap, helper
+Positioned nested under TapRegion, and stale desktop footer expectation44
+against published32px dense pointer row. Root corrected implementation/tests;
+native48dp remains required. Full13-item analyzer initially only set-literal
+lint in new test; fixed syntax and full rerun clean6.7s. Build36 now Web/APK
+session88996; no runtime edits until drift check. Native helper accounts for
+overlay origin, ref-compatible neutral pill, wrap/font2 and bounded safe area.
+Notion5556 went unresponsive even to echo/emu kill. Exact Notion qemu identity
+verified then restarted same AVD/no wipe; boot now1, keyguard being reopened.
+Neither current package nor full95% evidence is yet claimed.
+
+CONTINUE22/10 source36: root disabled WorkspaceShell page-swipe recognizer
+while note editor is active. Same actual slow850ms handle drag now invokes
+child pan and extends first -> first comparison; formatting rail returns
+(app36-shell-slow-drag.png). Fast drag was already exercised; no page switch.
+Root adds focused slow-pan/list-swipe test; header_history28 removes ONLY its
+temporary engine diagnostics before packaging. NativeClipboardToolbar new
+widget/test delivered by priority28_review, corrections/review still active;
+root owns RichNoteEditor wiring. Third Luna agent web_pair35_review delivered
+bounded current-pair review; root calibrates Web content+6/quote inset+6/bar24,
+not yet packaged. Graph status/coverage both Transport closed again; exact
+source fallback, no fresh-index claim. Both95 gates remain unverified.
+
+PUBLISHED22/10 UI checkpoint d8c269b12c4905f0fdb057ade8e4ef4de3f0a80f:
+42 explicit paths, credential/diagnostic scan clear, authored diffcheck clean,
+push final-tuankiet and ls-remote SHA matched. All priority ticks including
+review/images/push succeeded on Notion. Both95 gates remain OPEN.
+Progress push-receipt task533960464d3f4c169e5e42dd8b994e64 succeeded.
+CURRENT normal M09: Dart34 hot restart on diagnostic APK33 via flutter attach
+session3232 (ttytrue helper output/m09/attach_ui34.py, targetmain_dev/localowner).
+Do not call this packaged34. Source1053/7feb2673...46c53. Nativefast touchscreen
+drag250ms DOES extend first->first comparison and formattingrail returns;
+child pan starts/ends logged. Slow850ms produces downs but no pan; both parent
+and child receive pointerdown, so hit-bounds hypothesis is disproven. Agent now
+adds coordinate-only move/up/slop summary diagnostics; slow drag also did not
+emit parent longpress, so that second hypothesis is unconfirmed. No blind fix.
+NativeClipboardToolbar existingCopy/Cut/Paste bubble allocated to priority28_review
+(new widget/test only); root owns RichNoteEditor wiring. No new commands/AI.
+Root actual reference Notion33-selection-current.png includes Cut/Copy OS bubble.
+Next remove all TEMP diagnostics, compile/review current theme+clipboard/selection,
+complete matchedUI matrix to both95 BEFORE broad functional regression.
+
 ACTIVE22/10: Chrome31 offline export also downloaded exact67B/hash; network
 restored. New paired app images uploaded and board fetched17images/1childpage.
 Main label/file/controls ticks succeeded; review/push still open. Theme renderer

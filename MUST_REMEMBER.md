@@ -15,12 +15,14 @@ sequence. The separate Web/Android >=95% gate remains unchanged.
 
 ## Current UI continuation —22 October2026
 
-Priority label/file/controls work is still active. Chrome31 first export through
-worker v4->v5 is verified with semantics, correct theme/48px button and exact
-67B hash; native30/31 shows selection handles but dragging is NOT verified.
-Candidate32 contains TEMP debug-only M09_HANDLE pan logs in two engine files.
-Remove those diagnostics before committing. Read docs/m09/CURRENT_WORK.md for
-the exact build/test state and pending steps. Both95% gates remain unverified.
+Priority label/file/controls checkpoint d8c269b is published and remote-verified.
+Chrome31 first/offline exports are verified with semantics/theme and exact67B
+hash. Current36 fixes the WorkspaceShell horizontal recognizer stealing slow
+selection-handle pans: actual850ms drag now extends first->first comparison,
+rail returns. TEMP M09_HANDLE diagnostics have been removed. Native clipboard
+bubble integration, theme renderer fix and small Web geometry/header refinements
+are in progress; read docs/m09/CURRENT_WORK.md for exact build/test identity.
+Both95% gates remain unverified; continue UI work before broad functional QA.
 
 For real Chrome attachment QA, leave Service Workers enabled (CDP bypass=false).
 The narrow media worker is part of the existing guarded viewer. A cache-bypass

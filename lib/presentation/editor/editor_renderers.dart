@@ -19,6 +19,11 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
   return accessibleBuilders(
     {
       ...engine.standardBlockComponentBuilderMap,
+      if (kIsWeb)
+        'bulleted_list': engine.BulletedListBlockComponentBuilder(
+          iconBuilder: (context, node) =>
+              _webBulletIcon(context, node, adapter),
+        ),
       // The upstream heading decorator recursively reapplies block defaults after
       // inline decoration. Span-level defaults preserve explicit range size/marks.
       'heading': engine.HeadingBlockComponentBuilder(
@@ -49,8 +54,12 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
       ),
       'quote': engine.QuoteBlockComponentBuilder(
         iconBuilder: (_, _) => Padding(
-          padding: const EdgeInsetsDirectional.only(end: 14),
-          child: SizedBox(width: 3, child: ColoredBox(color: colors.onSurface)),
+          padding: EdgeInsetsDirectional.only(end: kIsWeb ? 22 : 14),
+          child: SizedBox(
+            width: 3,
+            height: kIsWeb ? 24 : null,
+            child: ColoredBox(color: colors.onSurface),
+          ),
         ),
       ),
       'todo_list': engine.TodoListBlockComponentBuilder(
@@ -58,19 +67,22 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
           padding: (_) => EdgeInsets.symmetric(vertical: kIsWeb ? 3 : 4),
         ),
         textStyleBuilder: (_) => const TextStyle(),
-        iconBuilder: (_, node, onCheck) => SizedBox(
-          width: kIsWeb ? 24 : 48,
-          height: kIsWeb ? 24 : 48,
-          child: Checkbox(
-            value: node.attributes['checked'] == true,
-            semanticLabel: 'Task complete',
-            materialTapTargetSize: kIsWeb
-                ? MaterialTapTargetSize.shrinkWrap
-                : MaterialTapTargetSize.padded,
-            visualDensity: kIsWeb
-                ? VisualDensity.compact
-                : VisualDensity.standard,
-            onChanged: adapter.editable ? (_) => onCheck() : null,
+        iconBuilder: (_, node, onCheck) => Padding(
+          padding: EdgeInsetsDirectional.only(end: kIsWeb ? 6 : 0),
+          child: SizedBox(
+            width: kIsWeb ? 24 : 48,
+            height: kIsWeb ? 24 : 48,
+            child: Checkbox(
+              value: node.attributes['checked'] == true,
+              semanticLabel: 'Task complete',
+              materialTapTargetSize: kIsWeb
+                  ? MaterialTapTargetSize.shrinkWrap
+                  : MaterialTapTargetSize.padded,
+              visualDensity: kIsWeb
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
+              onChanged: adapter.editable ? (_) => onCheck() : null,
+            ),
           ),
         ),
       ),
@@ -95,6 +107,31 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
     adapter.editor,
     focus,
     adapter.editable,
+  );
+}
+
+/// Match the reference's 32px marker column, retaining nested bullet shapes.
+Widget _webBulletIcon(
+  BuildContext context,
+  engine.Node node,
+  RichEditorAdapter adapter,
+) {
+  var level = 0;
+  for (var parent = node.parent; parent != null; parent = parent.parent) {
+    if (parent.type == 'bulleted_list') level++;
+  }
+  final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+  return Container(
+    constraints: const BoxConstraints(minWidth: 32, minHeight: 22) * scale,
+    // Grow the trailing gap while keeping the marker center at its old x.
+    padding: const EdgeInsetsDirectional.only(end: 10),
+    child: Center(
+      child: Text(
+        const ['●', '◯', '□'][level % 3],
+        style: adapter.editor.editorStyle.textStyleConfiguration.text,
+        textScaler: TextScaler.linear(.5 * scale),
+      ),
+    ),
   );
 }
 

@@ -629,27 +629,28 @@ void main() {
     expect(diagnosticsOpened, isTrue);
   });
 
-  testWidgets('desktop footer labels existing actions with touch-sized rows', (
-    WidgetTester tester,
-  ) async {
-    await pumpShell(
-      tester,
-      size: const Size(1200, 900),
-      onOpenSettings: () {},
-      onOpenDiagnostics: () {},
-    );
+  testWidgets(
+    'desktop footer labels existing actions with dense pointer rows',
+    (WidgetTester tester) async {
+      await pumpShell(
+        tester,
+        size: const Size(1200, 900),
+        onOpenSettings: () {},
+        onOpenDiagnostics: () {},
+      );
 
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Diagnostics'), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-  });
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Diagnostics'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+    },
+  );
 
   test('localization alias and delegate cover en and vi', () {
     expect(

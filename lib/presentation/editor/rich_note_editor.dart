@@ -15,6 +15,7 @@ import 'editor_shortcuts.dart';
 import 'editor_controls.dart';
 import 'editor_copy.dart';
 import 'native_editor_rail.dart';
+import 'native_clipboard_toolbar.dart';
 import 'web_editor_controls.dart';
 import 'editor_header_boundary.dart';
 import 'editor_renderers.dart';
@@ -280,7 +281,13 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: _toolbar(context, editor)),
+        Expanded(
+          child: NativeClipboardToolbar(
+            adapter: adapter,
+            focusNode: widget.focusNode,
+            child: _toolbar(context, editor),
+          ),
+        ),
         if (!kIsWeb) _nativeControls(context),
       ],
     );

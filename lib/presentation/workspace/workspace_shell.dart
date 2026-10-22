@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../common/note_flow_primitives.dart';
+import '../common/note_flow_header_inset.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'workspace_localizations.dart';
 import 'workspace_ui_tokens.dart';
@@ -53,7 +54,7 @@ class WorkspaceShell extends StatefulWidget {
 
   /// Size of the floating reopen control while the desktop sidebar is hidden.
   static const double collapsedSidebarWidth = 44.0;
-  static const double collapsedSidebarTopInset = 44.0;
+  static const double collapsedSidebarTopInset = 0.0;
 
   /// Stable key for the Dashboard navigation item.
   static const Key dashboardDestinationKey = ValueKey<String>(
@@ -417,7 +418,12 @@ class WorkspaceShellState extends State<WorkspaceShell>
                                       ),
                               ),
                               Expanded(
-                                child: _buildSwipePages(compact: compact),
+                                child: NoteFlowHeaderInset(
+                                  leading: collapsedDesktop
+                                      ? WorkspaceShell.collapsedSidebarWidth
+                                      : 0,
+                                  child: _buildSwipePages(compact: compact),
+                                ),
                               ),
                             ],
                           ),
@@ -450,15 +456,19 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildSwipePages({required bool compact}) {
+    // The editor owns horizontal text-selection handles and block gestures.
+    // A shell drag recognizer would win slow drags before the inner pan reaches
+    // its slop threshold, even when no page change ultimately occurs.
+    final allowPageSwipe = compact && !_noteEditorActive;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: compact
+      onHorizontalDragStart: allowPageSwipe
           ? (_) {
               _horizontalSwipeDistance = 0;
               _pointerSwipeHandled = false;
             }
           : null,
-      onHorizontalDragUpdate: compact
+      onHorizontalDragUpdate: allowPageSwipe
           ? (DragUpdateDetails details) {
               if (_pointerSwipeHandled) {
                 return;
@@ -476,13 +486,13 @@ class WorkspaceShellState extends State<WorkspaceShell>
               }
             }
           : null,
-      onHorizontalDragEnd: compact
+      onHorizontalDragEnd: allowPageSwipe
           ? (_) {
               _horizontalSwipeDistance = 0;
               _pointerSwipeHandled = false;
             }
           : null,
-      onHorizontalDragCancel: compact
+      onHorizontalDragCancel: allowPageSwipe
           ? () {
               _horizontalSwipeDistance = 0;
               _pointerSwipeHandled = false;
@@ -1182,7 +1192,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
             key: WorkspaceShell.collapseToggleKey,
             tooltip: copy.expandSidebar,
             onPressed: () => setState(() => _sidebarCollapsed = false),
-            icon: const Icon(Icons.keyboard_double_arrow_right, size: 18),
+            icon: const Icon(Icons.menu, size: 20),
             style: IconButton.styleFrom(
               minimumSize: Size.square(WorkspaceShell.collapsedSidebarWidth),
               maximumSize: Size.square(WorkspaceShell.collapsedSidebarWidth),

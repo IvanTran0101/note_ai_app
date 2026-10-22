@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
+import 'note_flow_header_inset.dart';
 
 /// Short fades for display state only; never wrap a live note editor here.
 final class NoteFlowStateTransition extends StatelessWidget {
@@ -110,6 +111,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
     final tokens = NoteFlowUiTokens.of(context);
     return Row(
       children: [
+        SizedBox(width: NoteFlowHeaderInset.of(context)),
         if (onBack != null)
           IconButton(
             key: backKey,

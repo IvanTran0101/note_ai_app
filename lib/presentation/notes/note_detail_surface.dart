@@ -172,10 +172,13 @@ final class NoteDetailSurface extends StatelessWidget {
                     )
                   : 0)
         : NoteFlowLayout.editorTopPadding;
+    // Direct 1280x720 Notion pair: the wide Web text stack needs six more pixels.
     final double richTopPadding = compact
         ? 0
         : MediaQuery.sizeOf(context).height < 600
         ? 24
+        : wideWeb
+        ? 110
         : 104;
     final String pageStatus = isSaving
         ? savingLabel

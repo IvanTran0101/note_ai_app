@@ -17,6 +17,20 @@ before changing visual values. Lead alone changes dependencies/config/tokens.
 
 ###22 October priority continuation
 
+UI36 continuation actually used four Luna Max agents. header_history28 removed
+diagnostics after root identified/fixed the shell recognizer; both diagnostic
+files now match their clean published baseline. priority28_review delivered
+theme invalidation, native clipboard wrapper/helper and tests. Root reviewed,
+corrected API/layout/48dp issues, wired production editor and owns all delivered
+source now. web_pair35_review wrote only WEB35_CURRENT_PAIR_REVIEW.md;
+ui36_matrix_audit wrote only UI36_EVIDENCE_COVERAGE.md. Both reports are bounded
+reviews, not new live inspections or percentages. All agents are frozen; root
+owns shared layout/config, current source, build36, Chrome/ADB, docs and Git.
+Root37/37 focused VM UI cases pass and thirteen-item analyzer is clean. Both
+whole-platform95% gates remain unverified; no broad functional QA yet.
+
+Historical allocations below have been superseded by the ownership transfer.
+
 Two actual Luna Max agents reused: header_history28 implemented guarded Web
 history/header and later native-only handle style; priority28_review independently
 reviewed Label/File/controls and worker lifecycle, then fixed Web generic tap
