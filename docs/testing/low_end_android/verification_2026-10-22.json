@@ -1,0 +1,34 @@
+{
+  "collected_utc": "2026-10-22T08:49:34.951945+00:00",
+  "base_revision": "a874e517dfc61dfadb04378f82d666b9472871c0",
+  "platform": "Windows",
+  "flutter": "3.47.3",
+  "dart": "3.13.3",
+  "analysis": {
+    "scope": "entire project including nested bridge tests",
+    "exit": 0,
+    "result": "No issues found"
+  },
+  "ram_policy_checks": {
+    "command": "dart tool/verify_ram_selection.dart",
+    "pass": 8,
+    "fail": 0,
+    "scope": "actual production catalog/selection, simulated capability snapshots including measured vivo RAM; no model inference"
+  },
+  "flutter_test_attempts": {
+    "full_suite_exit": 1,
+    "targeted_browser_attempt_exit": 1,
+    "executed_tests": 0,
+    "blocked_by": "Windows native build hook invokes an unquoted compiler path under Program Files; C:\\Program is not recognized",
+    "full_regression_pass": false
+  },
+  "android_release": {
+    "exit": 0,
+    "target": "android-arm64",
+    "auth": "local",
+    "evidence_trace": false,
+    "bytes": 35396099,
+    "sha256": "9aa639a3a72701983466cda050981061be393f641a8eeedc7da9689608bcb378"
+  },
+  "physical_device_verification": "paused; new 2/6 GiB build not installed or tested on device"
+}

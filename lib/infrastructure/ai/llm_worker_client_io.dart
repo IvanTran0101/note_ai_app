@@ -17,6 +17,7 @@ import 'dart:isolate';
 import 'package:local_llm_bridge/local_llm_bridge.dart';
 
 import 'llm_worker_contract.dart';
+import '../../evidence/trace.dart';
 
 /// Starts a long-lived worker isolate, loads [modelPath] inside it, and
 /// returns a client bound to that isolate.
@@ -28,14 +29,28 @@ Future<LlmWorkerClient> startLlmWorkerClient({
   int contextSize = 2048,
   int threads = 0,
 }) async {
-  return LocalLlmWorkerClientImpl._start(
-    _llmWorkerIsolateEntry,
-    <String, Object?>{
-      'modelPath': modelPath,
-      'contextSize': contextSize,
-      'threads': threads,
-    },
-  );
+  final Stopwatch watch = Stopwatch()..start();
+  evidencePhase = 'runtime_loading';
+  evidenceTrace('load_client_start', <String, Object?>{
+    'context': contextSize,
+    'threads_configured': threads,
+    'model_path': modelPath,
+  });
+  try {
+    return await LocalLlmWorkerClientImpl._start(
+      _llmWorkerIsolateEntry,
+      <String, Object?>{
+        'modelPath': modelPath,
+        'contextSize': contextSize,
+        'threads': threads,
+      },
+    );
+  } finally {
+    evidenceTrace('load_client_end', <String, Object?>{
+      'elapsed_us': watch.elapsedMicroseconds,
+    });
+    evidencePhase = 'runtime_ready_or_failed';
+  }
 }
 
 /// Worker-isolate entry point (top-level so [Isolate.spawn] can reference it).
@@ -52,6 +67,7 @@ void _llmWorkerIsolateEntry(Map<String, Object?> args) {
     'port': receivePort.sendPort,
   });
 
+  final Stopwatch loadWatch = Stopwatch()..start();
   final LocalLlmBridgeRuntime runtime;
   try {
     runtime = LocalLlmBridgeRuntime.load(
@@ -60,6 +76,10 @@ void _llmWorkerIsolateEntry(Map<String, Object?> args) {
       threads: (args['threads'] as int?) ?? 0,
     );
   } on Object catch (error) {
+    evidenceTrace('native_load_error', <String, Object?>{
+      'elapsed_us': loadWatch.elapsedMicroseconds,
+      'error': error.toString(),
+    });
     mainPort.send(<String, Object?>{
       'type': 'startupError',
       'message': error.toString(),
@@ -67,6 +87,9 @@ void _llmWorkerIsolateEntry(Map<String, Object?> args) {
     receivePort.close();
     return;
   }
+  evidenceTrace('native_load_end', <String, Object?>{
+    'elapsed_us': loadWatch.elapsedMicroseconds,
+  });
   mainPort.send(<String, Object?>{'type': 'started'});
 
   receivePort.listen((Object? message) {

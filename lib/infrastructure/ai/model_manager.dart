@@ -25,6 +25,7 @@ import '../device/hardware_detection.dart';
 import 'llm_worker_contract.dart';
 import 'model_provisioning_contract.dart';
 import 'model_selection.dart';
+import '../../evidence/trace.dart';
 import 'model_storage_contract.dart';
 
 /// Safe, short, user-presentable prose for each provisioning failure class.
@@ -213,6 +214,17 @@ final class ModelManager implements IModelManager {
         capability: capability,
         candidates: _modelCatalog.models,
       );
+      evidenceTrace('hardware_selection', <String, Object?>{
+        'platform': capability.platform,
+        'os_version': capability.osVersion,
+        'physical': capability.isPhysicalDevice,
+        'abis': capability.supportedAbis,
+        'total_memory_bytes': capability.totalMemoryBytes,
+        'free_storage_bytes': capability.freeStorageBytes,
+        'selected_model': selection.selectedModel?.id,
+        'reason': selection.selectionReason,
+        'rejections': selection.rejectionReasons,
+      });
       cancellation.throwIfCancelled();
       selectedModel = selection.selectedModel;
       if (selectedModel == null) {
@@ -462,6 +474,12 @@ final class ModelManager implements IModelManager {
   /// Publishes [state] best-effort: reporting is advisory and must never
   /// change provisioning semantics or mask the original provisioning result.
   void _publishState(ModelProvisioningState state) {
+    evidenceProvisioning(
+      phase: state.phase.name,
+      modelId: state.modelId,
+      downloadedBytes: state.downloadedBytes,
+      totalBytes: state.totalBytes,
+    );
     final IModelProvisioningReporter? reporter = _modelProvisioningReporter;
     if (reporter == null) {
       return;

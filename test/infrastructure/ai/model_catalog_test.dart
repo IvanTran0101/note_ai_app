@@ -43,10 +43,10 @@ void main() {
       );
     });
 
-    test('keeps resource gates unset until real-device measurements', () {
-      expect(gemma3_1bItQ4KmModel.estimatedPeakMemoryBytes, isNull);
+    test('configures RAM policy gates while leaving storage gates unset', () {
+      expect(gemma3_1bItQ4KmModel.estimatedPeakMemoryBytes, 2 << 30);
       expect(gemma3_1bItQ4KmModel.requiredFreeStorageBytes, isNull);
-      expect(gemma4E2bItQ4_0Model.estimatedPeakMemoryBytes, isNull);
+      expect(gemma4E2bItQ4_0Model.estimatedPeakMemoryBytes, 6 << 30);
       expect(gemma4E2bItQ4_0Model.requiredFreeStorageBytes, isNull);
       expect(
         gemma3_1bItQ4KmModel.supportedPlatforms,
@@ -82,6 +82,59 @@ void main() {
         gemma3_1bItQ4KmModel,
         gemma4E2bItQ4_0Model,
       ]);
+    });
+
+    group('production RAM selection boundaries', () {
+      ModelSelectionResult selectForRam(
+        int bytes, {
+        List<String> abis = const <String>['arm64-v8a'],
+      }) => const ModelSelectionPolicy().select(
+        capability: DeviceCapability(
+          platform: 'android',
+          osVersion: '12',
+          isPhysicalDevice: true,
+          supportedAbis: abis,
+          totalMemoryBytes: bytes,
+          freeStorageBytes: 40 << 30,
+        ),
+        candidates: productionModelCatalog.models,
+      );
+
+      test('rejects unknown RAM and RAM below the smaller model gate', () {
+        expect(selectForRam(0).selectedModel, isNull);
+        expect(selectForRam((2 << 30) - 1).selectedModel, isNull);
+      });
+
+      test('selects Gemma 3 from 2 GiB up to the 6 GiB boundary', () {
+        expect(selectForRam(2 << 30).selectedModel, gemma3_1bItQ4KmModel);
+        expect(selectForRam((6 << 30) - 1).selectedModel, gemma3_1bItQ4KmModel);
+      });
+
+      test('selects Gemma 3 for the measured vivo physical RAM snapshot', () {
+        final ModelSelectionResult result = selectForRam(5886804 * 1024);
+        expect(result.selectedModel, gemma3_1bItQ4KmModel);
+        expect(
+          result.rejectionReasonFor(gemma4E2bItQ4_0Model),
+          contains('memory gate'),
+        );
+      });
+
+      test('selects higher-priority Gemma 4 at 6 GiB and above', () {
+        expect(selectForRam(6 << 30).selectedModel, gemma4E2bItQ4_0Model);
+        expect(selectForRam(8 << 30).selectedModel, gemma4E2bItQ4_0Model);
+      });
+
+      test('still rejects an unsupported ABI even with sufficient RAM', () {
+        final ModelSelectionResult result = selectForRam(
+          8 << 30,
+          abis: const <String>['armeabi-v7a'],
+        );
+        expect(result.selectedModel, isNull);
+        expect(
+          result.rejectionReasons.values,
+          everyElement(contains('ABI gate')),
+        );
+      });
     });
   });
 }

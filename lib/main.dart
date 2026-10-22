@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import 'amplify_outputs.dart';
+import 'evidence/frames.dart';
 import 'application/auth/authentication_app_service.dart';
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
@@ -267,6 +268,7 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installEvidenceFrames();
   final ({AuthController authController, CurrentUserSession currentUserSession})
   bootstrap = await _bootstrapAuth();
   runApp(

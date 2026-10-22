@@ -1,0 +1,11 @@
+﻿run_id,status,device,os,abi,build_mode,refresh_hz,model,sha256,context,max_output_tokens,threads,fixture_id,warm_or_cold,verification_ms,load_ms,summary_ms,peak_memory_bytes,chunk_count,generation_calls,offline,failure,raw_trace_file
+run-01,not_run,,,,,,,,,,,,,,,,,,,,,
+run-02,not_run,,,,,,,,,,,,,,,,,,,,,
+run-03,not_run,,,,,,,,,,,,,,,,,,,,,
+run-04,not_run,,,,,,,,,,,,,,,,,,,,,
+run-05,not_run,,,,,,,,,,,,,,,,,,,,,
+run-06,not_run,,,,,,,,,,,,,,,,,,,,,
+run-07,not_run,,,,,,,,,,,,,,,,,,,,,
+run-08,not_run,,,,,,,,,,,,,,,,,,,,,
+run-09,not_run,,,,,,,,,,,,,,,,,,,,,
+run-10,not_run,,,,,,,,,,,,,,,,,,,,,

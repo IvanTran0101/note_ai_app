@@ -2,6 +2,7 @@ import '../../domain/note_intelligence/i_note_summarization_service.dart';
 import '../../domain/note_intelligence/summary.dart';
 
 import '../ai/llm_worker_contract.dart';
+import '../../evidence/trace.dart';
 import 'note_summary_resource_policy.dart';
 
 /// Gemma-compatible instruction sent in the initial user turn.
@@ -89,52 +90,105 @@ final class LocalSummarizationService implements INoteSummarizationService {
 
   /// Context-aware policy used to choose direct or chunked summarization.
   final NoteSummaryResourcePolicy resourcePolicy;
+  int _evidenceCalls = 0;
+  int _evidenceMerges = 0;
 
   @override
   Future<Summary> summarize(String content) async {
-    final String note = content.trim();
-    if (note.isEmpty) {
-      throw ArgumentError.value(content, 'content', 'must not be blank');
-    }
+    final Stopwatch watch = Stopwatch()..start();
+    _evidenceCalls = 0;
+    _evidenceMerges = 0;
+    evidencePhase = 'summarization_setup';
+    evidenceTrace('summary_start', <String, Object?>{
+      'input_characters': content.runes.length,
+      'context': resourcePolicy.contextSize,
+      'max_output_tokens': maxTokens,
+    });
+    String status = 'ok';
+    try {
+      final String note = content.trim();
+      if (note.isEmpty) {
+        throw ArgumentError.value(content, 'content', 'must not be blank');
+      }
 
-    final List<String> chunks = resourcePolicy.split(note);
-    if (chunks.length == 1) {
-      return Summary(
-        await _generate(
-          _buildSummaryUserPrompt(chunks.single),
-          maxTokens: maxTokens,
-        ),
-      );
-    }
+      final List<String> chunks = resourcePolicy.split(note);
+      evidenceTrace('chunks', <String, Object?>{'count': chunks.length});
+      if (chunks.length == 1) {
+        return Summary(
+          await _generate(
+            _buildSummaryUserPrompt(chunks.single),
+            maxTokens: maxTokens,
+          ),
+        );
+      }
 
-    final List<String> sectionSummaries = <String>[];
-    for (final String chunk in chunks) {
-      sectionSummaries.add(
-        await _generate(
-          _buildSectionSummaryPrompt(chunk),
-          maxTokens: resourcePolicy.chunkOutputTokens,
-        ),
-      );
+      final List<String> sectionSummaries = <String>[];
+      for (final String chunk in chunks) {
+        sectionSummaries.add(
+          await _generate(
+            _buildSectionSummaryPrompt(chunk),
+            maxTokens: resourcePolicy.chunkOutputTokens,
+          ),
+        );
+      }
+      return Summary(await _mergeSummaries(sectionSummaries));
+    } on Object catch (error) {
+      status = 'error';
+      evidenceTrace('summary_error', <String, Object?>{
+        'error': error.toString(),
+      });
+      rethrow;
+    } finally {
+      evidenceLastSummaryUs = watch.elapsedMicroseconds;
+      evidenceTrace('summary_end', <String, Object?>{
+        'elapsed_us': watch.elapsedMicroseconds,
+        'status': status,
+        'generation_calls': _evidenceCalls,
+        'merge_rounds': _evidenceMerges,
+      });
+      evidencePhase = 'idle';
     }
-    return Summary(await _mergeSummaries(sectionSummaries));
   }
 
   Future<String> _generate(String prompt, {required int maxTokens}) async {
-    // Gemma 3 IT expects system-level instructions in the initial user turn.
-    // The native formatter omits the system role for an empty value.
-    final String text = await workerClient.generateChat(
-      systemPrompt: '',
-      userPrompt: prompt,
-      maxTokens: maxTokens,
-    );
-    final String summary = text.trim();
-    if (summary.isEmpty) {
-      throw StateError(
-        'summarization returned an empty result: the local model produced '
-        'no output',
+    final int call = ++_evidenceCalls;
+    final Stopwatch watch = Stopwatch()..start();
+    evidencePhase = 'generation';
+    evidenceTrace('generate_start', <String, Object?>{
+      'call': call,
+      'max_tokens': maxTokens,
+    });
+    evidenceText('prompt', prompt, call: call);
+    try {
+      // Gemma 3 IT expects system-level instructions in the initial user turn.
+      // The native formatter omits the system role for an empty value.
+      final String text = await workerClient.generateChat(
+        systemPrompt: '',
+        userPrompt: prompt,
+        maxTokens: maxTokens,
       );
+      evidenceText('native_output', text, call: call);
+      final String summary = text.trim();
+      if (summary.isEmpty) {
+        throw StateError(
+          'summarization returned an empty result: the local model produced '
+          'no output',
+        );
+      }
+      return summary;
+    } on Object catch (error) {
+      evidenceTrace('generate_error', <String, Object?>{
+        'call': call,
+        'error': error.toString(),
+      });
+      rethrow;
+    } finally {
+      evidenceTrace('generate_end', <String, Object?>{
+        'call': call,
+        'elapsed_us': watch.elapsedMicroseconds,
+      });
+      evidencePhase = 'between_calls';
     }
-    return summary;
   }
 
   Future<String> _mergeSummaries(List<String> summaries) async {
@@ -143,6 +197,11 @@ final class LocalSummarizationService implements INoteSummarizationService {
     }
 
     final List<List<String>> groups = _groupSummaries(summaries);
+    evidenceTrace('merge_round', <String, Object?>{
+      'round': ++_evidenceMerges,
+      'input_summaries': summaries.length,
+      'groups': groups.length,
+    });
     if (groups.length == 1) {
       return _generate(_buildMergePrompt(groups.single), maxTokens: maxTokens);
     }

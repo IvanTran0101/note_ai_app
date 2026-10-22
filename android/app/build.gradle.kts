@@ -47,3 +47,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Explicit annotation classes required by the release R8 dependency graph.
+dependencies {
+    implementation("com.google.errorprone:error_prone_annotations:2.30.0")
+    implementation("com.google.code.findbugs:jsr305:3.0.2")
+}

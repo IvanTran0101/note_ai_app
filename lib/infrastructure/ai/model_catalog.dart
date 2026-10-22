@@ -41,9 +41,10 @@ const String kGemma4E2bItQ4_0DownloadUrl =
 
 /// The low-tier fallback model for midterm provisioning.
 ///
-/// The resource thresholds are intentionally null. M3.3b keeps model
-/// selection focused on platform, OS, and ABI compatibility; measured RAM and
-/// storage policy can be introduced after device benchmarks are available.
+/// The user-requested RAM policy applies the historical test's 2 GiB minimum
+/// to Gemma 3 and 6 GiB minimum to Gemma 4. These are initial selection-policy
+/// thresholds, not measured peak runtime memory or a guarantee of model fit.
+/// Storage gating remains unset pending device measurements.
 const ModelDescriptor gemma3_1bItQ4KmModel = ModelDescriptor(
   id: 'gemma-3-1b-it',
   version: kGemma3_1bItQ4KmRevision,
@@ -51,7 +52,7 @@ const ModelDescriptor gemma3_1bItQ4KmModel = ModelDescriptor(
   downloadUrl: kGemma3_1bItQ4KmDownloadUrl,
   sha256: kGemma3_1bItQ4KmSha256,
   fileSizeBytes: kGemma3_1bItQ4KmFileSizeBytes,
-  estimatedPeakMemoryBytes: null,
+  estimatedPeakMemoryBytes: 2 << 30,
   requiredFreeStorageBytes: null,
   supportedPlatforms: <String>['ios', 'android'],
   supportedAbis: <String>['arm64', 'arm64-v8a', 'x86_64'],
@@ -70,9 +71,10 @@ const ModelDescriptor gemma3_1bItQ4KmModel = ModelDescriptor(
 /// The native smoke test verified the `gemma4` architecture and E2B model
 /// type with the current bridge. Its trained context is 131072 tokens, but
 /// the application deliberately caps the runtime context at 4096 for the
-/// mobile midterm. Resource thresholds remain null until real-device memory
-/// and storage measurements are available; the macOS smoke test is not a
-/// mobile fit guarantee.
+/// mobile midterm. The user-requested 6 GiB RAM gate uses the historical
+/// test's larger-model policy. It is not a measured peak-memory requirement;
+/// the macOS smoke test is not a mobile fit guarantee. Storage gating remains
+/// unset pending device measurements.
 const ModelDescriptor gemma4E2bItQ4_0Model = ModelDescriptor(
   id: 'gemma-4-e2b-it',
   version: kGemma4E2bItQ4_0Revision,
@@ -80,7 +82,7 @@ const ModelDescriptor gemma4E2bItQ4_0Model = ModelDescriptor(
   downloadUrl: kGemma4E2bItQ4_0DownloadUrl,
   sha256: kGemma4E2bItQ4_0Sha256,
   fileSizeBytes: kGemma4E2bItQ4_0FileSizeBytes,
-  estimatedPeakMemoryBytes: null,
+  estimatedPeakMemoryBytes: 6 << 30,
   requiredFreeStorageBytes: null,
   supportedPlatforms: <String>['ios', 'android'],
   supportedAbis: <String>['arm64', 'arm64-v8a', 'x86_64'],

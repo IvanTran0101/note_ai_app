@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../evidence/server.dart';
+import '../../evidence/trace.dart';
+
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../domain/note_intelligence/summary.dart';
@@ -41,11 +44,59 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
   String? _error;
   String? _result;
   Future<String?>? _readinessFuture;
+  Future<EvidenceServer>? _evidenceServer;
 
   @override
   void initState() {
     super.initState();
     _refreshReadiness();
+    if (evidenceEnabled) {
+      _evidenceServer = startEvidenceServer(_evidenceHandle);
+      _evidenceServer!.ignore();
+    }
+  }
+
+  Future<Map<String, Object?>> _evidenceHandle(
+    String path,
+    Map<String, Object?> data,
+  ) async {
+    if (path == '/cancel') {
+      widget.onProvisioningCancel?.call();
+      return <String, Object?>{'cancel_requested': true};
+    }
+    if (path == '/status') {
+      return <String, Object?>{
+        'busy': _busy,
+        'error': _error,
+        'result': _result,
+        'phase': widget.provisioningReader?.current.phase.name,
+      };
+    }
+    if (_busy) {
+      return <String, Object?>{'error': 'busy', 'status': 'not_started'};
+    }
+    if (path != '/note' && path != '/summarize') {
+      return <String, Object?>{'error': 'unknown_path'};
+    }
+    evidenceRunId = (data['run_id'] as String?) ?? 'manual';
+    evidenceLastSummaryUs = null;
+    _noteController.text = (data['note'] as String?) ?? _noteController.text;
+    setState(() {
+      _error = null;
+      _result = null;
+    });
+    if (path == '/note') return <String, Object?>{'status': 'input_set'};
+    final Stopwatch watch = Stopwatch()..start();
+    await _onSummarize();
+    return <String, Object?>{
+      'run_id': evidenceRunId,
+      'status': _error == null ? 'ok' : 'error',
+      'note': _noteController.text,
+      'result': _result,
+      'error': _error,
+      'service_summary_us': evidenceLastSummaryUs,
+      'app_callback_us': watch.elapsedMicroseconds,
+    };
   }
 
   void _refreshReadiness() {
@@ -91,6 +142,10 @@ class _LocalLlmDebugPageState extends State<LocalLlmDebugPage> {
 
   @override
   void dispose() {
+    final Future<EvidenceServer>? server = _evidenceServer;
+    if (server != null) {
+      server.then((EvidenceServer s) => s.close()).ignore();
+    }
     _noteController.dispose();
     super.dispose();
   }
