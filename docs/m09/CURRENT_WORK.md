@@ -1,5 +1,68 @@
 # M09 current work
 
+## UI40 COMPLETE FOR TWO ITEMS — publish, then STOP (23 October 2026)
+
+Only the requested label-below-title and Notion-like file presentation slice
+is complete. Do not resume the remaining M09 backlog without the user's next
+instruction. Full review/limits: LABEL_FILE_UI40.md. One actual Luna Max worker
+file_ui40, root reviewed/took ownership and integrated the four label files.
+VM45/45, Chrome10/10, Dart analysis/Flutter analyze7 clean26.5s. Web60.8s/APK66.4s,
+1058 runtime paths/7e977026cb521df016ba14ed38aafc79fcc4c5bac199bcd74514d1c9e825072a,
+drift[]. Installed APK/device SHA a1c93ce2f584e1856dc342227f6e0db43f36f49476fd62ba6731cd0c459091d2 MATCH.
+Static3532/8776 serves Web40; app5554 is40. Managed Chrome is Web40 at1280x740,
+explicit main.dart.js receipt21233619 bytes; initial reused39 was discarded.
+Attachment media SW remains enabled. Notion5556 is closed after direct ref
+capture to reduce memory; data retained. Do not claim it is currently running.
+Actual Web/native label chooser, file menu, preview/download passed; both67B
+exports match96fbf4c9f79c7137d7f3c424b45ac08fb21ee21f344dfe6b74cb815a0ecc7278.
+Web synthetic QA note UI40 Labels and files retained for review; existing notes
+and attachments were not replaced. Initial slow new-title entry kept onlyU;
+saved-title re-entry worked. This repeats the earlier queued observation;
+cause unisolated, no whole-editor typing or full functional acceptance claim.
+Both whole-platform95% gates remain UNVERIFIED. Ops tools are absent; these
+three continuity/review records are the applicable closure records.
+
+## ACTIVE BOUNDED SLICE — labels below title + Notion-like files (23 October)
+
+Source now frozen for UI40: one actual Luna Max file_ui40 implemented only
+file row/prompt/reference test; root reviewed and required outlined glyph,
+no extra Tab stop, hover/focus/accessibility reveal, hidden-pointer exclusion,
+secondary pending status. Root now owns all delivered files and added baseline
+alignment. Labels are a separate header slot (one instance), attachments keep
+the existing footer/access owner. New placement2/2 passed. Full related VM
+first run41pass/4 stale assertions (old native title32 vs established34 and
+header y80 vs current72 with no labels); source diff leaves those metrics
+unchanged. Updated only those expectations; rerunning scoped checks/build.
+Native Notion40 is unlocked/current, real file67B row captured dark at
+[63,637..1018,719], same icon/name/small size hierarchy. Emulator cold-start
+SystemUI/transient blank frames were resolved by ordinary unlock/launch;
+they are not valid product UI evidence. No user data wiped.
+45/45 related VM UI now PASS; existing Windows Chrome wrapper is rebuilding
+the local native bridge test hook with MSVC (no model runs). To reduce memory
+pressure, closed only managed QA Chrome and verified Notion5556 gracefully
+after current file reference capture; data/profile retained. App5554 stays.
+No cleanup/pagefile/config changes or functional regression expansion.
+The first PS-redirected Chrome pipeline ended with host exit -1073741571 before
+any Chrome case started; no Chrome PASS from that run. Retrying the SAME
+normalized tools overlay with Python-owned direct log handles, no SDK edits.
+Current receipts: p6-ui40-chrome-retry.log / p6-ui40-build.log. Bounded independent
+source review by file_ui40 found no actionable integrated label/access issue.
+
+User resumed only these two UI items, then asks to wait for the next task.
+Baseline5d2b846 is published/clean except unrelated .playwright-cli/final_project.md.
+Root owns label placement (note_detail_labels/view/surface/editor_form), shared
+integration, runtime sessions, Notion/Git. Attachment presentation may be assigned
+separately after direct-reference review. No overlapping writers or new features.
+QA inventory: label once between title/body in rich AND plain paths; attachment
+icon/name/inline size, quieter add/actions, long filename/200% text/narrow fit;
+existing open/menu/download and label chooser still usable, protected state
+does not expose metadata; actual Chrome and Android safe-area captures.
+Notion Web40 direct row is28px, font16/24, inline size12/16 with6px gap and no
+Ready/dot separators. App had40px row, always More and status punctuation.
+Native reference and current runtime are being reopened; no new PASS yet.
+Graph generation18October is stale for these paths; coverage metadata_changed/
+not_tracked requires exact-source fallback, used for the touched files.
+
 ## USER PAUSE — push checkpoint, then wait (23 October 2026)
 
 Latest user instruction: push to final-tuankiet, then stop until an explicit

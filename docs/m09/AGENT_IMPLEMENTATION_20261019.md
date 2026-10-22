@@ -1,5 +1,18 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI40 bounded slice — 23 October 2026
+
+User requested only labels below title and attachment UI, then stop. One actual
+Luna Max worker file_ui40 owned attachment_file_row.dart, attachment_editor_rows.dart
+and attachment_file_row_reference_test.dart. Root owned label/view/surface/form,
+all runtime/config/tests/Notion/Git. Worker handed back before checks; root
+reviewed and required hover/focus/a11y corrections and added baseline alignment.
+Worker then performed a bounded read-only integrated review, no actionable
+finding. Root verified45 VM/10 Chrome cases, analyzer/build/device hashes and
+actual label/file/preview/export UI. See LABEL_FILE_UI40.md for evidence/limits.
+All workers are frozen; publish this checkpoint, then wait for the user's next
+instruction. Neither95% whole-platform gate is established by this slice.
+
 ## Paused by user — 23 October 2026
 
 Push the current UI39 checkpoint, then wait for "tiếp tục". Six actual Luna Max

@@ -1,39 +1,38 @@
 part of 'note_detail_page.dart';
 
 extension _NoteDetailLabels on NoteDetailPageState {
-  Widget? _buildNoteExtras() {
+  Widget? _buildNoteLabels() {
     final note = _note;
     if (note == null) return null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        NoteLabelEditor(
-          key: ValueKey(('labels', note.identity)),
-          note: note,
-          readable: _canRead,
-          canManage:
-              _capabilities.canManage &&
-              !_actionBusy &&
-              !_securityBusy &&
-              !_securityLoading &&
-              _currentConflict == null &&
-              !_hasRemoteEditorChange,
-          onChanged: _labelsSaved,
-        ),
-        const SizedBox(height: 8),
-        if (widget.notesController is AttachmentNotesController)
-          AttachmentEditorPanel(
-            key: ValueKey(note.identity),
-            note: note,
-            controller: widget.notesController as AttachmentNotesController,
-            security: _securityController,
-            onChanged: _labelsSaved,
-            onBeforePick: () async => !_isDirty || await _save(),
-            onResumeProtected: () => _resumeProtectedAttachment(note),
-            enabled:
-                !_securityBusy && !_securityLoading && _capabilities.canRead,
-          ),
-      ],
+    return NoteLabelEditor(
+      key: ValueKey(('labels', note.identity)),
+      note: note,
+      readable: _canRead,
+      canManage:
+          _capabilities.canManage &&
+          !_actionBusy &&
+          !_securityBusy &&
+          !_securityLoading &&
+          _currentConflict == null &&
+          !_hasRemoteEditorChange,
+      onChanged: _labelsSaved,
+    );
+  }
+
+  Widget? _buildNoteAttachments() {
+    final note = _note;
+    if (note == null || widget.notesController is! AttachmentNotesController) {
+      return null;
+    }
+    return AttachmentEditorPanel(
+      key: ValueKey(note.identity),
+      note: note,
+      controller: widget.notesController as AttachmentNotesController,
+      security: _securityController,
+      onChanged: _labelsSaved,
+      onBeforePick: () async => !_isDirty || await _save(),
+      onResumeProtected: () => _resumeProtectedAttachment(note),
+      enabled: !_securityBusy && !_securityLoading && _capabilities.canRead,
     );
   }
 

@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/presentation/notes/attachment_file_row.dart';
 
@@ -7,25 +10,158 @@ void main() {
     WidgetTester tester,
     AttachmentFileRow row, {
     double scale = 1,
+    Size viewport = const Size(412, 914),
+    double rowWidth = 280,
+    bool accessibleNavigation = false,
   }) async {
     tester.view
-      ..physicalSize = const Size(412, 914)
+      ..physicalSize = viewport
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(scale)),
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scale),
+            accessibleNavigation: accessibleNavigation,
+          ),
           child: child!,
         ),
         home: Scaffold(
-          body: Center(child: SizedBox(width: 280, child: row)),
+          body: Center(
+            child: SizedBox(width: rowWidth, child: row),
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('desktop actions reveal on hover and keyboard focus', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      AttachmentFileRow(
+        name: 'quarterly-notes.pdf',
+        mimeType: 'application/pdf',
+        sizeLabel: '20 MiB',
+        statusLabel: 'Ready',
+        onOpen: () {},
+        onRemove: () {},
+      ),
+      viewport: kIsWeb ? const Size(900, 914) : const Size(412, 914),
+      rowWidth: kIsWeb ? 640 : 280,
+    );
+
+    final opacity = find.byKey(const ValueKey('attachment-actions-reveal'));
+    expect(tester.widget<AnimatedOpacity>(opacity).opacity, kIsWeb ? 0 : 1);
+
+    if (kIsWeb) {
+      final row = find.byKey(const ValueKey('attachment-file-row-open'));
+      final pointer = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await pointer.moveTo(tester.getCenter(row));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(tester.widget<AnimatedOpacity>(opacity).opacity, 1);
+      await pointer.moveTo(const Offset(1, 1));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(tester.widget<AnimatedOpacity>(opacity).opacity, 0);
+
+      final focusScope = tester.widget<Focus>(
+        find.byKey(const ValueKey('attachment-actions-focus-scope')),
+      );
+      expect(focusScope.canRequestFocus, isFalse);
+      expect(focusScope.skipTraversal, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(tester.widget<AnimatedOpacity>(opacity).opacity, 1);
+      await pointer.removePointer();
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('accessible navigation reveals desktop actions without hover', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      AttachmentFileRow(
+        name: 'quarterly-notes.pdf',
+        mimeType: 'application/pdf',
+        sizeLabel: '20 MiB',
+        statusLabel: 'Ready',
+        onOpen: () {},
+        onRemove: () {},
+      ),
+      viewport: kIsWeb ? const Size(900, 914) : const Size(412, 914),
+      rowWidth: kIsWeb ? 640 : 280,
+      accessibleNavigation: true,
+    );
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey('attachment-actions-reveal')),
+          )
+          .opacity,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pending status sits below filename and size', (tester) async {
+    await pump(
+      tester,
+      AttachmentFileRow(
+        name: 'quarterly-notes.pdf',
+        mimeType: 'application/pdf',
+        sizeLabel: '20 MiB',
+        statusLabel: 'Pending on this device',
+        onOpen: () {},
+        onRemove: () {},
+      ),
+    );
+
+    final name = tester.getRect(find.text('quarterly-notes.pdf'));
+    final size = tester.getRect(find.text('20 MiB'));
+    final status = tester.getRect(find.text('Pending on this device'));
+    expect(status.top, greaterThan(name.bottom - 1));
+    expect(status.top, greaterThan(size.bottom - 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ready file row keeps the Notion-style name and size hierarchy', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      AttachmentFileRow(
+        name: 'quarterly-notes.pdf',
+        mimeType: 'application/pdf',
+        sizeLabel: '20 MiB',
+        statusLabel: 'Ready',
+        onOpen: () {},
+        onRemove: () {},
+      ),
+      viewport: kIsWeb ? const Size(900, 914) : const Size(412, 914),
+      rowWidth: kIsWeb ? 640 : 280,
+    );
+
+    expect(find.text('quarterly-notes.pdf'), findsOneWidget);
+    expect(find.text('20 MiB'), findsOneWidget);
+    expect(find.text('Ready'), findsNothing);
+    expect(find.byTooltip('Ready'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('attachment-file-row-open')))
+          .height,
+      kIsWeb ? 28 : 48,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('file actions dispatch once without opening the preview', (
     tester,
@@ -118,7 +254,7 @@ void main() {
       AttachmentFileRow(
         name: '${List.filled(8, 'Tài liệu ghi chú dài').join(' ')}.pdf',
         mimeType: 'application/pdf',
-        sizeLabel: '20 MiB',
+        sizeLabel: '123456.0 MiB',
         statusLabel: 'Ready',
         onOpen: () {},
         onRemove: () {},
@@ -132,6 +268,7 @@ void main() {
           .height,
       greaterThanOrEqualTo(48),
     );
+    expect(find.text('123456.0 MiB'), findsOneWidget);
     await tester.tap(find.byTooltip('Attachment actions'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

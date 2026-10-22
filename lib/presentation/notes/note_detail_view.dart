@@ -233,7 +233,8 @@ extension _NoteDetailView on NoteDetailPageState {
       statusMessage: _statusMessage,
       actionBusy: _actionBusy,
       readOnly: _securityBusy || _securityLoading || !_canEdit,
-      attachments: _buildNoteExtras(),
+      labels: _buildNoteLabels(),
+      attachments: _buildNoteAttachments(),
       richEditorBuilder: _richEditor == null ? null : _richEditorWidget,
       headerActions: widget.showAppBar
           ? const []

@@ -43,6 +43,7 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.statusMessage,
     required this.actionBusy,
     this.readOnly = false,
+    this.labels,
     this.attachments,
     this.richEditorBuilder,
     this.headerActions = const [],
@@ -96,6 +97,7 @@ final class NoteDetailSurface extends StatelessWidget {
   final String? statusMessage;
   final bool actionBusy;
   final bool readOnly;
+  final Widget? labels;
   final Widget? attachments;
   final Widget Function(Widget header, Widget footer)? richEditorBuilder;
   final List<Widget> headerActions;
@@ -320,6 +322,7 @@ final class NoteDetailSurface extends StatelessWidget {
     showSaveState: !showPageHeader,
     actionBusy: actionBusy,
     readOnly: readOnly,
+    labels: labels,
     attachments: attachments,
     includeContent: includeContent,
     includeTitle: includeTitle,

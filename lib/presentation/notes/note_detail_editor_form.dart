@@ -33,6 +33,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.showSaveState = true,
     required this.actionBusy,
     this.readOnly = false,
+    this.labels,
     this.attachments,
     this.includeContent = true,
     this.includeTitle = true,
@@ -72,6 +73,7 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool showSaveState;
   final bool actionBusy;
   final bool readOnly;
+  final Widget? labels;
   final Widget? attachments;
   final bool includeContent;
   final bool includeTitle, includeMetadata, includeFeedback;
@@ -166,6 +168,13 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         if (includeTitle) const SizedBox(height: NoteFlowSpacing.sm),
+        if (includeTitle && labels != null) ...[
+          KeyedSubtree(
+            key: const ValueKey('note-detail-labels-below-title'),
+            child: labels!,
+          ),
+          const SizedBox(height: NoteFlowSpacing.sm),
+        ],
         if (includeMetadata) ..._metadata(),
         if (includeContent)
           Container(

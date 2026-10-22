@@ -19,7 +19,7 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
     final colors = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -33,8 +33,7 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
             ),
           if (items.isEmpty) _emptyAttachmentPrompt(context),
           for (final item in items) _row(item),
-          if (items.isNotEmpty && _canWrite)
-            _emptyAttachmentPrompt(context, subdued: true),
+          if (items.isNotEmpty && _canWrite) _emptyAttachmentPrompt(context),
           if (_previewItem != null) ...[
             const SizedBox(height: 4),
             const Divider(height: 1),
@@ -85,7 +84,7 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
     ),
   );
 
-  Widget _emptyAttachmentPrompt(BuildContext context, {bool subdued = false}) {
+  Widget _emptyAttachmentPrompt(BuildContext context) {
     if (!_canWrite) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -97,49 +96,33 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
       );
     }
 
+    final compactWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 720;
+
     return Tooltip(
       message: _attachmentLimits,
       child: _addAttachmentMenu(
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: kIsWeb && MediaQuery.sizeOf(context).width >= 720
-                ? 40
-                : 48,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: subdued
-                  ? Colors.transparent
-                  : Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.attach_file,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      subdued
-                          ? 'Add attachment'
-                          : 'Add a file, photo, or video',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+          constraints: BoxConstraints(minHeight: compactWeb ? 28 : 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.add,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Add attachment',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: compactWeb ? 16 : 17,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  Icon(
-                    Icons.add,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

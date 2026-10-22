@@ -35,6 +35,8 @@ void main() {
     double keyboardHeight = 0,
     bool scaffoldHost = false,
     Widget Function(Widget, Widget)? richEditorBuilder,
+    Widget? labels,
+    Widget? attachments,
   }) async {
     tester.view
       ..physicalSize = size
@@ -69,6 +71,8 @@ void main() {
                 Material(
                   child: NoteDetailSurface(
                     richEditorBuilder: richEditorBuilder,
+                    labels: labels,
+                    attachments: attachments,
                     titleController: titleController,
                     contentController: contentController,
                     contentFocusNode: contentFocusNode,
@@ -112,6 +116,55 @@ void main() {
     } else {
       await tester.pumpAndSettle();
     }
+  }
+
+  for (final rich in [false, true]) {
+    testWidgets(
+      'labels stay below title and before ${rich ? 'rich' : 'plain'} body',
+      (tester) async {
+        const labelKey = ValueKey('label-placement-probe');
+        const bodyKey = ValueKey('rich-body-placement-probe');
+        const fileKey = ValueKey('file-placement-probe');
+        await pumpSurface(
+          tester,
+          size: const Size(1280, 740),
+          labels: const Text('Labels UI40', key: labelKey),
+          attachments: const Text('m09-ui-sample.txt', key: fileKey),
+          richEditorBuilder: !rich
+              ? null
+              : (header, footer) => SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      header,
+                      const Text('Body UI40', key: bodyKey),
+                      footer,
+                    ],
+                  ),
+                ),
+        );
+        final title = find.byKey(titleFieldKey);
+        final labels = find.byKey(labelKey);
+        final body = find.byKey(rich ? bodyKey : contentFieldKey);
+        final file = find.byKey(fileKey);
+        expect(labels, findsOneWidget);
+        expect(file, findsOneWidget);
+        expect(
+          tester.getBottomLeft(title).dy,
+          lessThanOrEqualTo(tester.getTopLeft(labels).dy),
+        );
+        expect(
+          tester.getBottomLeft(labels).dy,
+          lessThanOrEqualTo(tester.getTopLeft(body).dy),
+        );
+        if (rich) {
+          expect(
+            tester.getBottomLeft(body).dy,
+            lessThanOrEqualTo(tester.getTopLeft(file).dy),
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('IME header collapse retains the editor and its input service', (
@@ -220,7 +273,7 @@ void main() {
       );
       expect(
         tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-        kIsWeb ? 40 : 32,
+        kIsWeb ? 40 : 34,
       );
       await pumpSurface(
         tester,
@@ -239,7 +292,7 @@ void main() {
     await pumpSurface(tester, size: const Size(390, 844), titleText: '');
 
     final Text titleHint = tester.widget<Text>(find.text('Title'));
-    expect(titleHint.style?.fontSize, 32);
+    expect(titleHint.style?.fontSize, kIsWeb ? 32 : 34);
     expect(titleHint.style?.fontWeight, FontWeight.w700);
     expect(tester.widget<Text>(find.text('Content')).style?.fontSize, 16);
   });
@@ -325,7 +378,7 @@ void main() {
     expect(tester.getTopLeft(form).dy, kIsWeb ? 36 : 24);
     expect(
       tester.widget<TextField>(find.byKey(titleFieldKey)).style?.fontSize,
-      32,
+      kIsWeb ? 32 : 34,
     );
     expect(tester.takeException(), isNull);
   });
@@ -352,7 +405,7 @@ void main() {
 
     final Finder form = find.byType(NoteDetailEditorForm);
     expect(tester.getTopLeft(form).dx, 20);
-    expect(tester.getTopLeft(form).dy, kIsWeb ? 148 : 80);
+    expect(tester.getTopLeft(form).dy, kIsWeb ? 148 : 72);
     expect(tester.getSize(form).width, 354);
     expect(tester.takeException(), isNull);
   });

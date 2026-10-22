@@ -7,7 +7,7 @@ enum AttachmentFileRowAction { retry, download, remove }
 ///
 /// The widget only presents actions supplied by its caller. The caller remains
 /// responsible for the note's access, transfer, and export rules.
-final class AttachmentFileRow extends StatelessWidget {
+final class AttachmentFileRow extends StatefulWidget {
   const AttachmentFileRow({
     super.key,
     required this.name,
@@ -35,100 +35,173 @@ final class AttachmentFileRow extends StatelessWidget {
   final bool removeEnabled;
   final String removeLabel;
 
-  IconData get _fileIcon => switch (mimeType) {
-    final type when type.startsWith('image/') => Icons.image_outlined,
-    'application/pdf' => Icons.picture_as_pdf_outlined,
-    'video/mp4' => Icons.movie_outlined,
-    _ => Icons.description_outlined,
-  };
+  @override
+  State<AttachmentFileRow> createState() => _AttachmentFileRowState();
+}
+
+final class _AttachmentFileRowState extends State<AttachmentFileRow> {
+  bool _hovered = false;
+  bool _actionsFocused = false;
+
+  IconData get _fileIcon => Icons.upload_file_outlined;
+
+  bool get _hasActions =>
+      widget.onRetry != null ||
+      widget.onDownload != null ||
+      widget.onRemove != null;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final desktop = kIsWeb && MediaQuery.sizeOf(context).width >= 720;
+    final compactWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 720;
     final titleStyle = text.bodyMedium?.copyWith(
-      fontSize: desktop ? 16 : 17,
-      height: 1.35,
+      fontSize: compactWeb ? 16 : 17,
+      height: 1.5,
       color: colors.onSurface,
     );
     final detailStyle = text.bodySmall?.copyWith(
       fontSize: 12,
-      height: 1.35,
+      height: 4 / 3,
       color: colors.onSurfaceVariant,
     );
+    final showActions =
+        !compactWeb ||
+        _hovered ||
+        _actionsFocused ||
+        MediaQuery.accessibleNavigationOf(context);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: const ValueKey('attachment-file-row-open'),
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(6),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: desktop ? 40 : 48),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 2,
-              vertical: desktop ? 4 : 0,
-            ),
-            child: Row(
-              children: [
-                Icon(_fileIcon, size: 18, color: colors.onSurfaceVariant),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      style: titleStyle,
-                      children: [
-                        TextSpan(text: name),
-                        TextSpan(text: '  ·  $sizeLabel', style: detailStyle),
-                        TextSpan(text: '  ·  $statusLabel', style: detailStyle),
-                      ],
+    return Tooltip(
+      message: widget.statusLabel,
+      child: MouseRegion(
+        onEnter: (_) {
+          if (!_hovered) setState(() => _hovered = true);
+        },
+        onExit: (_) {
+          if (_hovered) setState(() => _hovered = false);
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: const ValueKey('attachment-file-row-open'),
+            onTap: widget.onOpen,
+            borderRadius: BorderRadius.circular(4),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: compactWeb ? 28 : 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Row(
+                  children: [
+                    Icon(_fileIcon, size: 22, color: colors.onSurfaceVariant),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Flexible(
+                                flex: 3,
+                                child: Text(
+                                  widget.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: titleStyle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                flex: 2,
+                                child: Tooltip(
+                                  message: widget.sizeLabel,
+                                  child: Text(
+                                    widget.sizeLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: detailStyle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (widget.statusLabel != 'Ready') ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.statusLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: detailStyle,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    if (_hasActions)
+                      Focus(
+                        key: const ValueKey('attachment-actions-focus-scope'),
+                        canRequestFocus: false,
+                        skipTraversal: true,
+                        onFocusChange: (focused) {
+                          if (_actionsFocused != focused) {
+                            setState(() => _actionsFocused = focused);
+                          }
+                        },
+                        child: AnimatedOpacity(
+                          key: const ValueKey('attachment-actions-reveal'),
+                          duration: const Duration(milliseconds: 100),
+                          opacity: showActions ? 1 : 0,
+                          alwaysIncludeSemantics: true,
+                          child: IgnorePointer(
+                            ignoring: !showActions,
+                            child: SizedBox.square(
+                              dimension: compactWeb ? 28 : 48,
+                              child: PopupMenuButton<AttachmentFileRowAction>(
+                                tooltip: 'Attachment actions',
+                                padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                icon: Icon(
+                                  Icons.more_horiz,
+                                  color: colors.onSurfaceVariant,
+                                ),
+                                onSelected: _selectAction,
+                                itemBuilder: (context) => [
+                                  if (widget.onRetry != null)
+                                    PopupMenuItem(
+                                      value: AttachmentFileRowAction.retry,
+                                      enabled: widget.retryEnabled,
+                                      child: const _ActionLabel(
+                                        icon: Icons.refresh,
+                                        label: 'Retry upload',
+                                      ),
+                                    ),
+                                  if (widget.onDownload != null)
+                                    const PopupMenuItem(
+                                      value: AttachmentFileRowAction.download,
+                                      child: _ActionLabel(
+                                        icon: Icons.download_outlined,
+                                        label: 'Download attachment',
+                                      ),
+                                    ),
+                                  if (widget.onRemove != null)
+                                    PopupMenuItem(
+                                      value: AttachmentFileRowAction.remove,
+                                      enabled: widget.removeEnabled,
+                                      child: _ActionLabel(
+                                        icon: Icons.close,
+                                        label: widget.removeLabel,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                if (_hasActions)
-                  SizedBox.square(
-                    dimension: desktop ? 28 : 48,
-                    child: PopupMenuButton<AttachmentFileRowAction>(
-                      tooltip: 'Attachment actions',
-                      padding: EdgeInsets.zero,
-                      iconSize: 18,
-                      icon: const Icon(Icons.more_horiz),
-                      onSelected: _selectAction,
-                      itemBuilder: (context) => [
-                        if (onRetry != null)
-                          PopupMenuItem(
-                            value: AttachmentFileRowAction.retry,
-                            enabled: retryEnabled,
-                            child: _ActionLabel(
-                              icon: Icons.refresh,
-                              label: 'Retry upload',
-                            ),
-                          ),
-                        if (onDownload != null)
-                          PopupMenuItem(
-                            value: AttachmentFileRowAction.download,
-                            child: _ActionLabel(
-                              icon: Icons.download_outlined,
-                              label: 'Download attachment',
-                            ),
-                          ),
-                        if (onRemove != null)
-                          PopupMenuItem(
-                            value: AttachmentFileRowAction.remove,
-                            enabled: removeEnabled,
-                            child: _ActionLabel(
-                              icon: Icons.close,
-                              label: removeLabel,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
@@ -136,19 +209,16 @@ final class AttachmentFileRow extends StatelessWidget {
     );
   }
 
-  bool get _hasActions =>
-      onRetry != null || onDownload != null || onRemove != null;
-
   void _selectAction(AttachmentFileRowAction action) {
     switch (action) {
       case AttachmentFileRowAction.retry:
-        onRetry?.call();
+        widget.onRetry?.call();
         break;
       case AttachmentFileRowAction.download:
-        onDownload?.call();
+        widget.onDownload?.call();
         break;
       case AttachmentFileRowAction.remove:
-        onRemove?.call();
+        widget.onRemove?.call();
         break;
     }
   }

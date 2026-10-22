@@ -1,5 +1,18 @@
 # MUST REMEMBER
 
+## CURRENT BOUNDED REQUEST — 23 October 2026
+
+UI40 implementation and bounded QA are complete: VM45/45, Chrome10/10,
+analyzer/Web/APK and actual Chrome/native label/file/menu/preview/download
+checks recorded in docs/m09/LABEL_FILE_UI40.md. Push this milestone, then STOP.
+Do not resume another M09 item until the user supplies the next instruction.
+
+User resumed ONLY two items: put note labels immediately below its title,
+and refine existing attachment UI against actual Notion. Complete and review
+these on Web/Android, update progress and push this milestone, then STOP and
+wait for the user's next task. Do not resume the rest of M09 in this turn.
+Existing capabilities/local-first/access guards remain; both95% gates OPEN.
+
 ## USER PAUSE — 23 October 2026
 
 The user requested pushing the current checkpoint and then stopping. After
