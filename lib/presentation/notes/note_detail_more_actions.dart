@@ -12,6 +12,7 @@ Future<bool?> showNoteDetailMoreActions({
   BuildContext? anchorContext,
   bool allowDelete = true,
   List<Widget> Function(BuildContext)? additionalActions,
+  double? additionalActionsHeight,
 }) {
   final bool compact = NoteFlowLayout.isCompact(context);
   if (!compact && anchorContext != null) {
@@ -34,25 +35,34 @@ Future<bool?> showNoteDetailMoreActions({
         side: BorderSide(color: tokens.divider),
       ),
       items: <PopupMenuEntry<bool>>[
-        PopupMenuItem<bool>(
-          key: const ValueKey<String>('note-detail-more-delete'),
-          value: true,
-          height: 44,
-          child: SizedBox(
-            width: 188,
-            child: Row(
-              children: <Widget>[
-                Icon(Icons.delete_outline, size: 18, color: tokens.error),
-                const SizedBox(width: NoteFlowSpacing.sm),
-                Text(
-                  copy.delete,
-                  style: Theme.of(context).textTheme.bodyMedium
-                      ?.copyWith(color: tokens.error),
-                ),
-              ],
+        if (additionalActions != null)
+          _NoteDetailActionGroupEntry(
+            key: const ValueKey<String>('note-detail-more-actions'),
+            builder: additionalActions,
+            estimatedHeight: additionalActionsHeight ?? 48,
+          ),
+        if (allowDelete && additionalActions != null)
+          PopupMenuDivider(color: tokens.divider),
+        if (allowDelete)
+          PopupMenuItem<bool>(
+            key: const ValueKey<String>('note-detail-more-delete'),
+            value: true,
+            height: 44,
+            child: SizedBox(
+              width: 188,
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.delete_outline, size: 18, color: tokens.error),
+                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Text(
+                    copy.delete,
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: tokens.error),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -85,6 +95,50 @@ Future<bool?> showNoteDetailMoreActions({
   );
 }
 
+/// Builds secondary actions in the menu route so each row receives the right
+/// Navigator context. Its children own their taps; this entry never returns a
+/// menu value or intercepts a child tap.
+final class _NoteDetailActionGroupEntry extends PopupMenuEntry<bool> {
+  const _NoteDetailActionGroupEntry({
+    super.key,
+    required this.builder,
+    required this.estimatedHeight,
+  });
+
+  final List<Widget> Function(BuildContext) builder;
+  final double estimatedHeight;
+
+  @override
+  double get height => estimatedHeight;
+
+  @override
+  bool represents(bool? value) => false;
+
+  @override
+  State<_NoteDetailActionGroupEntry> createState() =>
+      _NoteDetailActionGroupEntryState();
+}
+
+final class _NoteDetailActionGroupEntryState
+    extends State<_NoteDetailActionGroupEntry> {
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 220,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (final Widget action in widget.builder(context))
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: NoteFlowLayout.isCompact(context) ? 48 : 44,
+            ),
+            child: action,
+          ),
+      ],
+    ),
+  );
+}
+
 /// Runs the selected secondary action after the sheet has been dismissed.
 Future<void> runNoteDetailMoreActions({
   required BuildContext context,
@@ -93,6 +147,7 @@ Future<void> runNoteDetailMoreActions({
   required Future<void> Function() onDelete,
   bool allowDelete = true,
   List<Widget> Function(BuildContext)? additionalActions,
+  double? additionalActionsHeight,
 }) async {
   final bool? deleteSelected = await showNoteDetailMoreActions(
     context: context,
@@ -100,6 +155,7 @@ Future<void> runNoteDetailMoreActions({
     anchorContext: anchorContext,
     allowDelete: allowDelete,
     additionalActions: additionalActions,
+    additionalActionsHeight: additionalActionsHeight,
   );
   if (deleteSelected == true) {
     await onDelete();

@@ -10,6 +10,7 @@ extension _NoteDetailCompactActions on NoteDetailPageState {
     void closeMenu() => Navigator.of(menuContext).pop();
     final note = _note;
     return [
+      if (kIsWeb) ..._webHistoryActions(menuContext),
       if (note != null && _canRead)
         _securityPanel(menuItem: true, onBeforeAction: closeMenu),
       if (note != null &&

@@ -75,8 +75,12 @@ extension _NoteDetailView on NoteDetailPageState {
     if (_actionBusy || _currentConflict != null) {
       return null;
     }
-    if (!NoteFlowLayout.isCompact(context) &&
-        (_note == null || !_capabilities.canDelete)) {
+    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool wideWeb = kIsWeb && !compact;
+    if (wideWeb && !_canRead) {
+      return null;
+    }
+    if (!compact && !wideWeb && (_note == null || !_capabilities.canDelete)) {
       return null;
     }
     return () => unawaited(_showMoreActions(copy));
@@ -100,8 +104,96 @@ extension _NoteDetailView on NoteDetailPageState {
       allowDelete: _note != null && _capabilities.canDelete,
       additionalActions: NoteFlowLayout.isCompact(context)
           ? (menuContext) => _compactMoreActions(menuContext, copy)
+          : kIsWeb
+          ? (menuContext) => _wideWebMoreActions(menuContext, copy)
+          : null,
+      additionalActionsHeight: kIsWeb && !NoteFlowLayout.isCompact(context)
+          ? _wideWebMoreActionsHeight()
           : null,
     );
+  }
+
+  double _wideWebMoreActionsHeight() {
+    final NoteDto? note = _note;
+    var rowCount = 3; // Undo, Redo and the existing Summarize action.
+    if (note != null &&
+        _canRead &&
+        (note.isProtected || _capabilities.canManage)) {
+      rowCount++;
+    }
+    if (note != null &&
+        !note.isProtected &&
+        note.share == null &&
+        widget.onOpenNoteRag != null) {
+      rowCount++;
+    }
+    return MediaQuery.textScalerOf(context).scale(48) * rowCount;
+  }
+
+  List<Widget> _wideWebMoreActions(
+    BuildContext menuContext,
+    NoteDetailCopy copy,
+  ) => _compactMoreActions(menuContext, copy);
+
+  List<Widget> _webHistoryActions(BuildContext menuContext) {
+    final RichEditorAdapter? capturedEditor = _richEditor;
+
+    Widget historyRow({required bool undo}) {
+      final Key key = ValueKey<String>(
+        undo ? 'note-detail-more-undo' : 'note-detail-more-redo',
+      );
+      final String label = editorText(menuContext, undo ? 'Undo' : 'Redo');
+      final IconData icon = undo ? Icons.undo : Icons.redo;
+
+      NoteFlowMenuItem row(bool enabled) => NoteFlowMenuItem(
+        key: key,
+        label: label,
+        icon: icon,
+        onTap: enabled
+            ? () => _runWebHistory(menuContext, capturedEditor, undo: undo)
+            : null,
+      );
+
+      if (capturedEditor == null) return row(false);
+      return ListenableBuilder(
+        listenable: capturedEditor,
+        builder: (context, _) =>
+            row(_canRunWebHistory(capturedEditor, undo: undo)),
+      );
+    }
+
+    return <Widget>[historyRow(undo: true), historyRow(undo: false)];
+  }
+
+  bool _canRunWebHistory(RichEditorAdapter? adapter, {required bool undo}) {
+    if (!kIsWeb ||
+        !mounted ||
+        adapter == null ||
+        !identical(adapter, _richEditor) ||
+        !_canRead ||
+        !_canEdit ||
+        !adapter.editable ||
+        _actionBusy ||
+        _currentConflict != null) {
+      return false;
+    }
+    final manager = adapter.editor.undoManager;
+    return undo ? manager.undoStack.isNonEmpty : manager.redoStack.isNonEmpty;
+  }
+
+  void _runWebHistory(
+    BuildContext menuContext,
+    RichEditorAdapter? adapter, {
+    required bool undo,
+  }) {
+    Navigator.of(menuContext).pop();
+    if (!_canRunWebHistory(adapter, undo: undo)) return;
+    final manager = adapter!.editor.undoManager;
+    if (undo) {
+      manager.undo();
+    } else {
+      manager.redo();
+    }
   }
 
   Widget _buildSurface(NoteDetailCopy copy, String pageTitle) {
@@ -255,6 +347,7 @@ extension _NoteDetailView on NoteDetailPageState {
   }
 
   List<Widget> _contextHeaderActions({bool primaryOnly = false}) {
+    final bool wideWeb = kIsWeb && !NoteFlowLayout.isCompact(context);
     final note = _note;
     if (note == null) {
       // The first local create must not add a toolbar row while the IME owns
@@ -262,8 +355,8 @@ extension _NoteDetailView on NoteDetailPageState {
       return [
         if (widget.notesController is SharingNotesController)
           const SizedBox.square(dimension: 48),
-        if (!primaryOnly) const SizedBox.square(dimension: 48),
-        if (!primaryOnly && widget.onOpenNoteRag != null)
+        if (!primaryOnly && !wideWeb) const SizedBox.square(dimension: 48),
+        if (!primaryOnly && !wideWeb && widget.onOpenNoteRag != null)
           const SizedBox.square(dimension: 48),
       ];
     }
@@ -273,9 +366,10 @@ extension _NoteDetailView on NoteDetailPageState {
           _capabilities.canManage &&
           widget.notesController is SharingNotesController)
         _sharingPanel(compact: true),
-      if (!primaryOnly) _securityPanel(),
+      if (!primaryOnly && !wideWeb) _securityPanel(),
       // Keep the horizontal slot across local edits and ACKs.
       if (!primaryOnly &&
+          !wideWeb &&
           widget.onOpenNoteRag != null &&
           !note.isProtected &&
           note.share == null)

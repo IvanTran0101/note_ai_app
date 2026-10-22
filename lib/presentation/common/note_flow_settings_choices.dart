@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
@@ -118,14 +120,13 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
       alignment: Alignment.bottomCenter,
       child: Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: SafeArea(
-          top: false,
-          bottom: true,
-          child: Material(
-            color: tokens.sidebarSurface,
-            elevation: 0,
-            clipBehavior: Clip.antiAlias,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Material(
+          color: tokens.sidebarSurface,
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: SafeArea(
+            top: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -155,7 +156,7 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
     bool isVietnamese,
   ) {
     return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 8),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 5, 16, 8),
       child: Column(
         children: [
           Container(
@@ -166,23 +167,29 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           SizedBox(
-            height: 48,
+            height: math.max(
+              48,
+              MediaQuery.textScalerOf(context).scale(16) * 1.4 + 8,
+            ),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 76),
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(76, 3, 76, 0),
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
                     ),
                   ),
                 ),
@@ -276,7 +283,7 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
                   width: 24,
                   height: 24,
                   child: selected
-                      ? Icon(Icons.check, size: 24, color: tokens.textPrimary)
+                      ? Icon(Icons.check, size: 16, color: tokens.textPrimary)
                       : null,
                 ),
               ],

@@ -15,6 +15,7 @@ import 'editor_shortcuts.dart';
 import 'editor_controls.dart';
 import 'editor_copy.dart';
 import 'native_editor_rail.dart';
+import 'web_editor_controls.dart';
 import 'editor_header_boundary.dart';
 import 'editor_renderers.dart';
 import 'editor_clipboard.dart';
@@ -323,7 +324,13 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       if (kIsWeb)
-        EditorHeaderBoundary(adapter: widget.adapter, child: _controls()),
+        EditorHeaderBoundary(
+          adapter: widget.adapter,
+          child: WebEditorControls(
+            focusNode: widget.focusNode,
+            child: _controls(),
+          ),
+        ),
       ValueListenableBuilder<Widget>(
         valueListenable: footer,
         builder: (_, value, _) =>

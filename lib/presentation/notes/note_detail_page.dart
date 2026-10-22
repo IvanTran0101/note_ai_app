@@ -14,10 +14,12 @@ import 'dart:async';
 import '../../domain/notes/note_document.dart';
 import '../editor/rich_editor_adapter.dart';
 import '../editor/rich_note_editor.dart';
+import '../editor/editor_copy.dart';
 import '../editor/editor_projection_map.dart';
 import '../common/note_flow_primitives.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';

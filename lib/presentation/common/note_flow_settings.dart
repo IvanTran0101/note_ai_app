@@ -76,7 +76,7 @@ final class NoteFlowSettingsSurface extends StatelessWidget {
                         Text(
                           title,
                           style: TextStyle(
-                            fontSize: wideWeb ? 28 : 20,
+                            fontSize: wideWeb ? 26 : 20,
                             fontWeight: FontWeight.w600,
                             color: tokens.textPrimary,
                           ),
@@ -248,7 +248,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
         isExpanded: true,
         alignment: AlignmentDirectional.centerEnd,
         icon: Icon(
-          compact ? Icons.keyboard_arrow_down : Icons.unfold_more,
+          outlined ? Icons.keyboard_arrow_down : Icons.unfold_more,
           size: compact ? 20 : 18,
           color: tokens.textMuted,
         ),
@@ -261,6 +261,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
         decoration: InputDecoration(
           filled: false,
           isDense: true,
+          visualDensity: wideWeb ? VisualDensity.standard : null,
           constraints: BoxConstraints(minHeight: wideWeb ? 28 : 48),
           border: outlined
               ? OutlineInputBorder(
@@ -283,7 +284,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
           contentPadding: EdgeInsets.symmetric(
             horizontal: outlined ? 8 : 12,
             vertical: wideWeb
-                ? 4
+                ? 2
                 : compact
                 ? 6
                 : 8,
@@ -317,7 +318,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
                   Text(
                     helper,
                     style: TextStyle(
-                      fontSize: wideWeb ? 12 : 14,
+                      fontSize: wideWeb ? 13 : 14,
                       color: tokens.textMuted,
                     ),
                   ),

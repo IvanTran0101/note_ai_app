@@ -362,11 +362,12 @@ final class NoteDetailEditorForm extends StatelessWidget {
     return [
       if (isSummarizing) feedback,
       if (summary != null) result,
+      ?attachments,
       NoteDetailUtilities(
         label: copy.noteDetails,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [if (!isSummarizing) feedback, ?attachments],
+          children: [if (!isSummarizing) feedback],
         ),
       ),
     ];

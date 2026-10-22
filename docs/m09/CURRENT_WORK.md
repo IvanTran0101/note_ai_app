@@ -12,6 +12,184 @@ regression/acceptance; do not inherit the rejected96.2 scores.
 
 ### Latest candidate — continue UI refinement, no acceptance
 
+ACTIVE22/10: Chrome31 offline export also downloaded exact67B/hash; network
+restored. New paired app images uploaded and board fetched17images/1childpage.
+Main label/file/controls ticks succeeded; review/push still open. Theme renderer
+map invalidation patch delivered by priority28_review; root reviewed and focused
+production RichNoteEditor theme-switch test1/1 PASS, retains state/node/key/
+selection/keyboard-service/focus. Initial test finder matched caret too; narrowed
+to width3 marker before rerun. Actual new theme patch not yet packaged/runtime.
+APK33 diagnostic a9346e44...caecbb installed-r; service.init log appears, but
+neither parent nor child pan callbacks fire at visible handle (right265..306,
+y653..694 physical). So prior parent-pan explanation is NOT confirmed. VM handle
+test fails before hit assertion because UniversalPlatform reads actualWindows;
+no supported override. Drop newly authored unsupported test; no fake skip/pass.
+header_history28 now investigating parent/child pointer-down and bounds only.
+All debug M09_HANDLE diagnostics still MUST be removed before publish.
+
+LATEST22/10 candidate31: 1053-path runtime65e9ce70...e6070; analyzer clean91.7s,
+Web82.7s/APK39.3s, drift[]. APK9932dee65e005a81badfefb63ef53a28f6bcec7f808bfd284e3b06e4c38c9fdb
+is byte-identical to installed30; device hash verified. Static31PID23012/8776.
+Actual FIRST open through v4->v5 update now uses correct Light CSS/min48 and
+mouse export WITH semantics downloads67B exact96fbf4c9...ecc7278, failure:null,
+page/console errors[]. No forceclick, worker bypass=false. First reload raced
+server startup (connection-refused); server200 verified and Chrome loaded31.
+30 cacheReload fixed v4 cached assets, but iframe still loaded old CSS before
+activation. 31 explicitly awaits registration.update before choosing candidate;
+offline rejection only permits an already activated worker. Post-return updates
+still fail closed/reopen; no atomic iframe-handshake guarantee.
+Native30/31 longpress visibly shows blue range handles above IME. Drag attempts
+left range unchanged and hid formatting rail: NOT a passing drag check. Agent
+header_history28 added TEMP assert-only M09_HANDLE parent/child pan logs to two
+engine files; no text/IDs/tokens. Root reviewed; MUST REMOVE before commit.
+32 source331ee5ac...3a9ca frozen/build66313 running; root also split bridge
+session registration/URI/cleanup into small helpers (same authority/cleanup).
+Next: actual31 Light->Dark same iframe, install32/log drag, bounded fix/remove
+diagnostics, focused retest/current package, upload actual paired images and
+push UI checkpoint. Both95 gates OPEN; no broad regression/acceptance.
+
+CONTINUE22/10 source30: source29 generic semantic overlay is fixed in real
+Chrome (iframe owns pointer hit; normal click accepted with semantics enabled).
+First export during v2->v3 worker upgrade returned403; after reload the same
+67B synthetic file exported with exact SHA. Root source30 fixes single-flight
+worker lifetime, waits for pending worker activation, retries lifecycle change
+once, and cleans local sessions/ports even if postMessage throws. Independent
+Luna review found no concrete new regression; a later update after handle return
+still fails closed and requires reopening (no atomic iframe handshake claimed).
+Actual29 Light theme changed the live iframe data-theme without replacing its
+handle, but cached v3 CSS was stale/blue while network29 CSS was new/neutral.
+Source30 public cache v4 uses cache:reload requests for its allowlisted assets;
+must verify actual installed CSS, first-upgrade export and fresh light/dark PNGs.
+Native29 font_scale2 file menu is readable/no overflow in real PNG; file/More
+48dp at font1, three-button and gesture captures. Restored font_scale1.
+Header_history28 now owns ONLY native handle style + focused test, while root
+owns bridge/media assets. No overlapping writers. Both95% gates still OPEN.
+
+LATEST22/10 — priority UI candidate29 is in progress; source28 packaged and
+actually exercised. Read PRIORITY_UI28.md for scope/references and current receipt.
+Root current branch final-tuankiet, publishedHEAD still ed64394; source23-29
+and reports remain uncommitted. Preserve unrelated .playwright-cli/final_project.md.
+
+28 analyzer clean97.8s, Web74.5s/APK84.9s,837 runtime paths source09ba42ce...cac11;
+APK d145ba1145ead4887e8623558061e8f9d40b29d31a746ac9414758f549f55fa5
+installed-r and device/local SHA matched; drift[]. Static28PID32208/8776.
+Fixture8796/7/8 and AVD5554/5556 running, reverse ports restored; data retained.
+Root13/13 VM UI cases passed(file4/control3/menu2/label4), after fixing extra
+keyboard focus stop on quiet Add block wrapper. Header_history28 delivered;
+root reviewed menu custom PopupMenuEntry, conditional Delete and guarded history.
+
+Actual28 Chrome and Android: label chooser/attach, flat file/menu, TXT preview,
+Download, Add block and Undo/Redo exercised. Both exports67B have SHA256
+96fbf4c9f79c7137d7f3c424b45ac08fb21ee21f344dfe6b74cb815a0ecc7278.
+Chrome normal mouse download succeeded; Web history marker UI28 was undone,
+redone and undone again; native paragraph->H2->Undo->Redo->Undo restored.
+Two clients intentionally/accidentally edited same label baseline concurrently,
+producing expected conflict; Web Resolve/Use remote cleared it before continuing.
+Do not classify this test-created conflict as a product integration regression.
+
+IMPORTANT browser setup: keep Network.setBypassServiceWorker=false for media.
+Bypassing SW creates a host reload loop because viewer requires its own narrow
+worker. Disabling HTTP cache is fine; do not disable/bypass worker or security.
+Earlier timeout was not a failed download proof. With SW restored, normal mouse
+export succeeds. However semantics-enabled editor has a real large generic tap
+node covering iframe controls. Live elementFromPoint confirms full-document
+720x676 semantic overlay; no force-click/bypass used to claim this path passes.
+
+29 root edits: file target exactly48dp native/font17, honest terminal read status,
+export viewer100px, theme-aware public viewer CSS (preserving iframe sandbox,
+capability and access owners). Cache public viewer v2->v3 for updated stylesheet.
+Agent priority28_review delivered Web-only excludeFromSemantics:kIsWeb on generic
+SelectionGestureDetector; root reviewed per-block semantics and corrected new
+focused test APIs/focus/semantics lookup. Native behavior remains unchanged.
+New semantics VM test1/1 passed after test corrections; other13 passed with29
+row changes. Chrome focused14/14 PASS, exit0 via output/m09/run_ui29_chrome.py; no skipped
+cases. Native C++ hook completed normally before Chrome tests loaded.
+Original ignored M05 aggregate restored in helper finally; verified SHA
+57AAFEBE1CBABDAD042B03CB4FE481944DBA62FB7CD9B62694DD8AAAEBCF66D7.
+29 first analysis completed154.8s: only2 deprecated hasFlag test calls; product
+scope otherwise clean. No29Web/APK yet. Test now uses flagsCollection; runtime
+1053-path fingerprint unchanged6ea5572b7f6269e30f9c7339aaa876c71f0838bd583fdb1e2f4ec50dfd0a6675.
+VM API-cleanup retest59006 completed1/1 PASS. Final test-only analyzer clean15.6s.
+29 packaged: Web78.6s/APK51.4s, no runtime drift. Installed-r and device/local SHA
+match d11b4608c427fe6936a88c40d9d535b32b481647a7a59ba3a594de68c6e7d4d1.
+Static29PID42440/8776 (old28server stopped after identity check). Chrome29 reloaded
+SW enabled and Flutter semantics enabled, dark. Android29 file row/More target
+126physicalpx/2.625 =48dp confirmed; gesture and3-button captures exist.
+Actual29 iframe pointer and theme/narrow checks are now in progress.
+Old manifest bounded Dart/assets subset and did not include host.css.
+
+Direct Notion22/10: Web file1280x720/dark, file/menu captures; native0.6.4222
+1080x2400/420dpi/Light/gesture, normal Media>File picker, synthetic67B only.
+Current idle Page Actions>More Web did not show history (don't claim otherwise).
+Native rail Redo precedes Undo. Board new refs uploaded/inserted and fetched (15images/1childpage); preserve existing13images/1childpage. Main first inspection tick
+and progress update succeeded. Both overall95% gates remain UNVERIFIED.
+
+NEXT: finish build29 session20709 (source frozen),
+install-r/hash, restart static8776 to29, verify iframe click WITH semantics,
+light/dark/narrow native target/safe zones. Upload paired29 app images, update
+Notion and push explicit UI checkpoint. Then resume remaining M09, especially
+native selection handles (desktop EditorStyle currently hides them; diagnosis
+only, not changed), full matched state matrix, both95% gates, THEN broad QA.
+
+24 packaged/installed-r: source835/6b894b6bd7b061d5e0288f1b8cb29b7dc28b4b8f581c822d3a62607787b355a3;
+APK a7c3b04ad7d78f22d5c6e1c90338116acee193635fb6bcbaaa2026b7e8ab3a2f;
+analyzer clean186.8s, Web80.4s/APK68.2s, drift[]. Native selection dialog
+options previously36dp now have a32dp content minimum plus16dp padding =48dp;
+large text may grow. Web keeps its compact rows. Actual24 validation ongoing.
+
+25 source frozen: Web Settings title26/w600, helper13, standard input density
+and single down-chevron after fresh direct Notion Preferences DOM inspection.
+Ref title26/32/w600, label14/20/w500, helper13/18, selector28px. Notion's full
+Settings route is1332px at1480 viewport (includes sidebar); older900px note
+does not describe this current full route. App keeps its reduced existing
+settings set/900px pane as an explicit adaptation; no new settings features.
+25 helper first failed before build because old8 source manifest had disappeared;
+rerun derives the835-path manifest from24, runtime source unchanged by recovery.
+
+Focused chooser4 Chrome cases still NOT EXECUTED: direct runner CanvasKit/path
+bootstrap failed; existing helper+official SDK CDN stalled before Chrome/test
+loading, then interrupted. Agent's temporary8780 server after a policy rejection
+was a workflow deviation and is stopped; do not restart/bypass. No product pass
+or failure from these attempts. Prior focus/padding6/6 remain historical21.
+
+Fresh native Notion24 Settings briefly showed spinner-only while XML retained
+underlying cached controls: those PNG/XML are NOT matched visual evidence.
+Ordinary force-stop/relaunch retained data and restoredHome; root recapturing.
+Named earlier native ref PNGs are now absent locally (board-uploaded pairs
+remain). Do not claim their current existence or reuse a loading image as ref.
+Native24 Search query and gesture grid23 captured; both95 gates still OPEN.
+ed64394 Notion progress receipt8737955a8e0e4725b909213ad1fefa3b succeeded.
+
+23 packaged/installed-r/hash matched: source835/0b75eff7ad1c211d08a9a95c3d966f85c906d58714242c4784219e16d9fd4ed0;
+APK d5f2aa21910660dfb1e04e672bc4f12ce7d49c739520c0bfd4cd5bbb36922ee6;
+analyze clean152.2s, Web66.4s/APK37.9s, drift[]. Static23PID30060/8776;
+server200 verified beforeChrome reload. Native23 Theme sheet actual clean
+portrait3button capture app23theme-light-threebutton.png: previous green frame
+absent; historicalcause remainsunknown, no image pixels modified. Header/group
+anchors now match ref afterDEV52.5px; navbar surface paints light with controls
+above it. Rows keep48dp targets (ref about45dp, explicit accessibility adaptation).
+Current23 Web editor captured; menu/selection/remainingdialogs ongoing. Focused
+chooser4case Chrome test launched33885, no result yet; no pass claimed.
+
+22 Theme landscape/font2/3button REAL capture is
+app22theme-landscape-font2-threebutton-real.png, all3choices/Done inside safe
+left128/right126. Earlier similarly named without-real was HOME PORTRAIT after
+system-overlay recreation; invalid as a theme/landscape receipt. Do not reuse it.
+
+21 October progress22 published: final-tuankiet local/remote both
+ed643949a6100780fc466e95849a944ae688a50c (98 explicit UI/fonts/docs/tests paths).
+Unrelated .playwright-cli and final_project.md retained untracked. Credential
+scan clear; authored diffcheck clean; original vendorOFL warning preserved.
+Notion progress push-receipt update task8737955a8e0e4725b909213ad1fefa3b pending.
+
+23 runtime FROZEN/build running: only native chooser header gaps/vertical
+alignment and Material outside SafeArea (paint navbar surface, keep content safe).
+48dp targets kept; header grows with textscale. Actual22 sheet comparison:
+Notion title ink32px; app same font scale but header lower; adjusted handle/gap
+by7dp and top-align title to match ref anchors afterDEV52.5px. No new choice or
+callback. Root testing current22 landscape/font2 while23 builds; label captures
+as22, not23. Both95 gates still open; remaining matched UI matrix before ratings.
+
 21 October22 packaged/installed-r: analyzer clean80.7s; Web85.1s/APK90.4s;
 835 runtime paths fingerprint48ead4784dc6e9e6d2a9967b3e3b9fbbff7251bb834697f7c75fe813e3419605;
 APK6f010da8743955fb66231a90ffdc9bd69d104d8cc8fb2ace111aae15ae290079

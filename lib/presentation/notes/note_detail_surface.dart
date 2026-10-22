@@ -149,6 +149,7 @@ final class NoteDetailSurface extends StatelessWidget {
 
   Widget _buildLayout(BuildContext context) {
     final bool compact = NoteFlowLayout.isCompact(context);
+    final bool wideWeb = kIsWeb && !compact;
     final bool nativeLandscape =
         NoteFlowLayout.isNativePhone(context) &&
         MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
@@ -203,7 +204,7 @@ final class NoteDetailSurface extends StatelessWidget {
       summarizingLabel: summarizingLabel,
       summarizeTooltip: hasSavedNote ? null : copy.saveBeforeSummary,
       iconOnly: showPageHeader,
-      showSummarizeAction: !compact,
+      showSummarizeAction: !compact && !wideWeb,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,7 +292,7 @@ final class NoteDetailSurface extends StatelessWidget {
                   ),
                 ),
         ),
-        if (!showPageHeader) actionBar,
+        if (!showPageHeader && !wideWeb) actionBar,
       ],
     );
   }

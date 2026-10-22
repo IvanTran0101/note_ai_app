@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart' as engine;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
@@ -110,7 +111,7 @@ Color? _headerColor(ColorScheme colors, engine.Node cell) {
 engine.EditorStyle documentEditorStyle(BuildContext context) {
   final colors = Theme.of(context).colorScheme;
   final nativePhone = NoteFlowLayout.isNativePhone(context);
-  return engine.EditorStyle.desktop(
+  final style = engine.EditorStyle.desktop(
     padding: EdgeInsets.symmetric(vertical: nativePhone ? 4 : 8),
     blockPadding: kIsWeb
         ? (node) =>
@@ -139,5 +140,21 @@ engine.EditorStyle documentEditorStyle(BuildContext context) {
       ),
     ),
     textSpanDecorator: documentSpan,
+  );
+  final nativeMobile =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  if (!nativeMobile) return style;
+
+  // Keep the shared document styling above, while restoring AppFlowy's native
+  // selection affordances that the desktop preset intentionally disables.
+  return style.copyWith(
+    dragHandleColor: colors.primary,
+    magnifierSize: const Size(72, 48),
+    mobileDragHandleBallSize: const Size(8, 8),
+    mobileDragHandleWidth: 2,
+    enableHapticFeedbackOnAndroid: true,
+    autoDismissCollapsedHandleDuration: const Duration(seconds: 3),
   );
 }

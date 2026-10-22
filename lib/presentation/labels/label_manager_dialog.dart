@@ -1,6 +1,7 @@
 import 'label_action_fence.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../application/labels/label_application.dart';
 import '../../application/labels/local_label_state.dart';
@@ -70,7 +71,11 @@ final class _LabelManagerState extends State<_LabelManager> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(copy.confirmDelete),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          copy.confirmDelete,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         content: Builder(
           builder: (c) => Text(fence.visible(c) ? label.name : copy.error),
         ),
@@ -117,9 +122,10 @@ final class _LabelManagerState extends State<_LabelManager> {
             .toList() ??
         [];
     return AlertDialog(
-      title: Text(copy.manage),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(copy.manage, style: Theme.of(context).textTheme.titleMedium),
       content: SizedBox(
-        width: 480,
+        width: 420,
         height: MediaQuery.sizeOf(context).height * .5,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,10 +133,23 @@ final class _LabelManagerState extends State<_LabelManager> {
             if (scope?.status == LabelCatalogStatus.loading)
               const LinearProgressIndicator(),
             if (scope?.status == LabelCatalogStatus.error) Text(copy.error),
-            FilledButton.icon(
-              onPressed: _busy ? null : () => _edit(null),
-              icon: const Icon(Icons.add),
-              label: Text(copy.add),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _busy ? null : () => _edit(null),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(copy.add),
+                style: TextButton.styleFrom(
+                  minimumSize: Size(
+                    0,
+                    kIsWeb && MediaQuery.sizeOf(context).width >= 720 ? 36 : 48,
+                  ),
+                  foregroundColor: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
             ),
             if (_error != null)
               Text(
@@ -158,7 +177,7 @@ final class _LabelManagerState extends State<_LabelManager> {
   }
 
   Widget _row(LocalLabelState label, LabelCopy copy) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
+    padding: const EdgeInsets.symmetric(vertical: 2),
     child: Column(
       children: [
         Row(
@@ -186,6 +205,7 @@ final class _LabelManagerState extends State<_LabelManager> {
             ),
           ],
         ),
+        const Divider(height: 1),
         if (label.status == NoteSyncStatus.conflict)
           Wrap(
             children: [
@@ -237,7 +257,13 @@ Future<String?> _nameDialog(
               ],
             )
           : AlertDialog(
-              title: Text(initial == null ? copy.add : copy.rename),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              title: Text(
+                initial == null ? copy.add : copy.rename,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               content: TextField(
                 controller: controller,
                 autofocus: true,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_dto.dart';
@@ -85,7 +86,11 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
         .toSet();
     final obsolete = captured.labelIds.where((id) => !activeIds.contains(id));
     return AlertDialog(
-      title: Text(copy.organize),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(
+        copy.organize,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
       content: SizedBox(
         width: 400,
         height: MediaQuery.sizeOf(context).height * .4,
@@ -97,6 +102,8 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
               CheckboxListTile(
                 title: Text(label.name),
                 value: captured.labelIds.contains(label.id),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                 onChanged: (_) => Navigator.pop(context, label.id),
               ),
             for (final id in obsolete)
@@ -105,6 +112,8 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
                   deletedIds.contains(id) ? copy.removed : copy.unavailable,
                 ),
                 value: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                 onChanged: (_) => Navigator.pop(context, id),
               ),
           ],
@@ -132,21 +141,49 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
       return const SizedBox.shrink();
     }
     final copy = LabelCopy(context);
+    final canEdit = widget.canManage && widget.note.ownerId == scope.actor;
+    final targetSize = kIsWeb && MediaQuery.sizeOf(context).width >= 720
+        ? 36.0
+        : 48.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        NoteLabelChips(note: widget.note, readable: widget.readable),
-        if (widget.canManage && widget.note.ownerId == scope.actor)
-          TextButton.icon(
-            onPressed: _busy ? null : _choose,
-            icon: const Icon(Icons.label_outline),
-            label: Text(copy.organize),
+        NoteLabelChips(
+          note: widget.note,
+          readable: widget.readable,
+          showCaption: true,
+          trailing: canEdit
+              ? TextButton.icon(
+                  onPressed: _busy ? null : _choose,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: Text(
+                    copy.organize,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant,
+                    minimumSize: Size(0, targetSize),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+              : null,
+        ),
+        if (_busy)
+          const Padding(
+            padding: EdgeInsets.only(top: 3),
+            child: SizedBox(height: 2, child: LinearProgressIndicator()),
           ),
-        if (_busy) const LinearProgressIndicator(),
         if (_error != null)
-          Text(
-            _error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              _error!,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
           ),
       ],
     );

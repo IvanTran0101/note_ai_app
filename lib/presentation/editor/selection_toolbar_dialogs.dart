@@ -14,7 +14,7 @@ extension _SelectionToolbarDialogs on SelectionToolbar {
         title: Text(editorText(context, 'Text style')),
         children: [
           for (final choice in basicBlockChoices.take(5))
-            SimpleDialogOption(
+            _selectionDialogOption(
               onPressed: () => Navigator.pop(context, choice),
               child: Text(editorText(context, choice.label)),
             ),
@@ -41,15 +41,15 @@ extension _SelectionToolbarDialogs on SelectionToolbar {
         title: Text(editorText(context, 'Font size')),
         children: [
           for (final size in [12, 14, 16, 18, 24, 32])
-            SimpleDialogOption(
+            _selectionDialogOption(
               onPressed: () => Navigator.pop(context, '$size'),
               child: Text('$size pt'),
             ),
-          SimpleDialogOption(
+          _selectionDialogOption(
             onPressed: () => Navigator.pop(context, 'custom'),
             child: Text(editorText(context, 'Custom size (12–48)')),
           ),
-          SimpleDialogOption(
+          _selectionDialogOption(
             onPressed: () => Navigator.pop(context, 'reset'),
             child: Text(editorText(context, 'Reset size')),
           ),
@@ -122,12 +122,12 @@ extension _SelectionToolbarDialogs on SelectionToolbar {
           editorText(context, highlight ? 'Highlight' : 'Text color'),
         ),
         children: [
-          SimpleDialogOption(
+          _selectionDialogOption(
             onPressed: () => Navigator.pop(context, 'reset'),
             child: Text(editorText(context, 'Default')),
           ),
           for (final color in DocumentColor.values)
-            SimpleDialogOption(
+            _selectionDialogOption(
               onPressed: () => Navigator.pop(context, color.name),
               child: Row(
                 children: [
@@ -157,3 +157,20 @@ extension _SelectionToolbarDialogs on SelectionToolbar {
     }
   }
 }
+
+Widget _selectionDialogOption({
+  required VoidCallback onPressed,
+  required Widget child,
+}) => SimpleDialogOption(
+  onPressed: onPressed,
+  child: ConstrainedBox(
+    // SimpleDialogOption contributes another 16px of vertical padding. Keep
+    // native touch targets at least 48px while allowing large text to grow.
+    constraints: BoxConstraints(minHeight: kIsWeb ? 0 : 32),
+    child: Align(
+      alignment: AlignmentDirectional.centerStart,
+      heightFactor: 1,
+      child: child,
+    ),
+  ),
+);

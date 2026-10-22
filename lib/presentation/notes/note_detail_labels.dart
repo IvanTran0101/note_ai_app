@@ -20,6 +20,7 @@ extension _NoteDetailLabels on NoteDetailPageState {
               !_hasRemoteEditorChange,
           onChanged: _labelsSaved,
         ),
+        const SizedBox(height: 8),
         if (widget.notesController is AttachmentNotesController)
           AttachmentEditorPanel(
             key: ValueKey(note.identity),

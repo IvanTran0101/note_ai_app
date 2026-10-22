@@ -1,5 +1,33 @@
 # MUST REMEMBER
 
+## Latest UI priority — labels, attachments and editor controls (21 October 2026)
+
+Before the usual remaining M09 work, inspect actual Notion Web/Android for
+labels, file attachments and Add block/Undo/Redo. Refine these existing app
+surfaces first. For labels without a matching standalone-page reference, use
+a minimal neutral presentation consistent with Notion; do not add a database
+or change the independent-note flow. Preserve file picking, preview, download,
+retry/cancel/remove, permissions and local-first storage. Match the placement
+and visibility of existing editor controls to directly inspected Notion;
+keep Undo/Redo available when applicable, without inventing new capabilities.
+After this priority slice is reviewed and exercised, resume the existing M09
+sequence. The separate Web/Android >=95% gate remains unchanged.
+
+## Current UI continuation —22 October2026
+
+Priority label/file/controls work is still active. Chrome31 first export through
+worker v4->v5 is verified with semantics, correct theme/48px button and exact
+67B hash; native30/31 shows selection handles but dragging is NOT verified.
+Candidate32 contains TEMP debug-only M09_HANDLE pan logs in two engine files.
+Remove those diagnostics before committing. Read docs/m09/CURRENT_WORK.md for
+the exact build/test state and pending steps. Both95% gates remain unverified.
+
+For real Chrome attachment QA, leave Service Workers enabled (CDP bypass=false).
+The narrow media worker is part of the existing guarded viewer. A cache-bypass
+reload loop is a harness configuration issue, not proof of a product failure.
+Verify mouse/keyboard controls with Flutter semantics enabled as well; do not
+force-click through a blocking overlay and report that path as passed.
+
 ## Implementation resumed — user-authorized six-agent mode (19 October 2026)
 
 The documentation-only turn is complete. The user now explicitly authorizes

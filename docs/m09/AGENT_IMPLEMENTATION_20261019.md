@@ -15,6 +15,21 @@ before changing visual values. Lead alone changes dependencies/config/tokens.
 
 ## Ownership (no overlapping writes)
 
+###22 October priority continuation
+
+Two actual Luna Max agents reused: header_history28 implemented guarded Web
+history/header and later native-only handle style; priority28_review independently
+reviewed Label/File/controls and worker lifecycle, then fixed Web generic tap
+semantics. Root reviewed source and ran focused checks/actual UI.
+
+Current allocation: header_history28 owns only the two native handle diagnostic
+engine files and new mobile_handle_hit_test.dart (if needed); TEMP logs must be
+removed before publishing those files. priority28_review owns only engine
+editor_component/service/editor.dart plus editor_renderer_theme_test.dart for
+renderer-map invalidation after theme change. Root owns all other delivered
+files, bridge/public assets/config/docs, builds and actual Chrome/ADB/Git. No
+agent may edit another allocation. Both95 gates remain open; no broad QA.
+
 ###21 October review continuation
 
 Six fresh Luna Max workers were actually used: web_review21, native_review21,

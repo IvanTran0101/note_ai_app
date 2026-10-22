@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/attachments/attachment_application.dart';
@@ -12,6 +13,7 @@ import '../../application/attachments/local_attachment_draft.dart';
 import '../../application/notes/note_access.dart';
 import '../../application/notes/note_application.dart';
 import '../../domain/notes/attachment.dart';
+import 'attachment_file_row.dart';
 import 'attachment_media_surface.dart';
 import 'notes_application_controller.dart';
 part 'attachment_editor_actions.dart';

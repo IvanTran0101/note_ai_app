@@ -21,6 +21,24 @@ captures and remaining gaps. Both similarity percentages remain unverified.
 
 ## Matched native typography — round9 (partial evidence only)
 
+###22 October priority UI checkpoint (no platform percentage)
+
+Actual Notion Web/native label/file/control inspection and NoteFlow28–31
+interactions are recorded in PRIORITY_UI28.md. Neutral labels are an explicit
+standalone-note adaptation; files remain note-level attachments. Flat file rows,
+context menus, quiet Web Add block/More history and native Redo/Undo are now
+implemented. Three main Notion priority UI ticks have bounded receipts.
+Web31 first export through worker v4->v5 and offline export both downloaded the
+same67B/hash with Flutter semantics enabled. Same iframe follows Light/Dark.
+Native file/More targets48dp and200% text menu were checked. Board images17,
+childpage1 were fetched after inserting current app images; old refs preserved.
+
+Remaining observed UI gaps include native range-handle dragging/clipboard
+affordance and renderer colors after theme change. The latter now has a source
+fix plus focused theme-rebuild1/1 pass, but actual updated UI remains to check.
+The handle diagnostic is not a passing gesture result. Continue the complete
+matched screen/state matrix; these observations do not establish either95% gate.
+
 ###21 October follow-up (source16, still no whole-platform%)
 
 Web16 packaged at833/d82c9e0...0226b, Web76.4s/APK34.6s. Native installed APK

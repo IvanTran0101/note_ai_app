@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'editor_popup_guard.dart';
 import 'editor_copy.dart';
@@ -54,6 +55,7 @@ final class _EditorControlsState extends State<EditorControls> {
       label: editorText(context, label),
       icon: Icon(icon, size: 20),
       onPressed: action,
+      compact: kIsWeb && MediaQuery.sizeOf(context).width >= 720,
     ),
   );
 
@@ -117,20 +119,22 @@ final class _EditorControlsState extends State<EditorControls> {
             Icons.add,
             widget.onBlocks ?? _blocks,
           ),
-          EditorIconButton(
-            label: editorText(context, 'Undo'),
-            icon: const Icon(Icons.undo, size: 18),
-            onPressed: adapter.editor.undoManager.undoStack.isEmpty
-                ? null
-                : adapter.editor.undoManager.undo,
-          ),
-          EditorIconButton(
-            label: editorText(context, 'Redo'),
-            icon: const Icon(Icons.redo, size: 18),
-            onPressed: adapter.editor.undoManager.redoStack.isEmpty
-                ? null
-                : adapter.editor.undoManager.redo,
-          ),
+          if (!kIsWeb)
+            EditorIconButton(
+              label: editorText(context, 'Redo'),
+              icon: const Icon(Icons.redo, size: 22),
+              onPressed: adapter.editor.undoManager.redoStack.isEmpty
+                  ? null
+                  : adapter.editor.undoManager.redo,
+            ),
+          if (!kIsWeb)
+            EditorIconButton(
+              label: editorText(context, 'Undo'),
+              icon: const Icon(Icons.undo, size: 22),
+              onPressed: adapter.editor.undoManager.undoStack.isEmpty
+                  ? null
+                  : adapter.editor.undoManager.undo,
+            ),
           const Spacer(),
           if (table != null)
             _button(
