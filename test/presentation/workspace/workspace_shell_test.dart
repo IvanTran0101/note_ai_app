@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -278,7 +279,7 @@ void main() {
     expect(tester.getTopLeft(avatar).dx, closeTo(21, 0.1));
     expect(tester.getSize(avatar), const Size(38, 38));
     expect(tester.getTopLeft(homePill).dx, closeTo(68, 0.1));
-    expect(tester.getSize(homePill), const Size(64, 40));
+    expect(tester.getSize(homePill), Size(kIsWeb ? 64 : 75, 40));
   });
 
   testWidgets('medium width shows a labelled NavigationRail', (
@@ -485,7 +486,7 @@ void main() {
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
   });
 
-  testWidgets('compact menu sheet switches destinations', (
+  testWidgets('compact avatar popup switches destinations', (
     WidgetTester tester,
   ) async {
     await pumpShell(tester, size: const Size(480, 900));
@@ -493,7 +494,7 @@ void main() {
 
     await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<VoidCallback>), findsWidgets);
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));

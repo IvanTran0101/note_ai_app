@@ -355,7 +355,12 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
                 children: [
                   Expanded(child: title),
                   const SizedBox(width: 16),
-                  SizedBox(width: 160, child: control),
+                  kIsWeb
+                      ? SizedBox(width: 160, child: control)
+                      : ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: IntrinsicWidth(child: control),
+                        ),
                 ],
               );
             }

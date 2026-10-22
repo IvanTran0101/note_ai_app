@@ -12,6 +12,49 @@ regression/acceptance; do not inherit the rejected96.2 scores.
 
 ### Latest candidate — continue UI refinement, no acceptance
 
+UI38 now RUNNING: static33392/8776 serves p6-parallel38-web; installed APK/device
+0705d4527f19df07c07f887a656cdfdc14e87304b85b5d21c753e359c4731a4e MATCH.
+Source1057/7e8b4dbce95416342968f1326fa7201a189c147155884dd92c0808b791afcebc,
+analyze20 clean76.5s, Web80.7s/APK66.4s, drift[]. Actual avatar popup opened,
+outside tap dismissed, reopened->Settings, Theme sheet and Light->Dark worked;
+app38-{start,avatar-light,avatar-outside,settings-light,theme-options,settings-dark,
+home-dark}.png/xml. Current Notion38 Light/Dark Theme/Home/note and WebSearch/
+slash were directly operated; Web slash '/' restored to original text afterward.
+One ADB navigation mistakenly opened Help sheet, then outside dismissed it;
+notion38-native-note-dark.png is that Help state, NOT valid note proof. Use
+notion38-qa-note-dark.png for actual note. Chrome strict-label/timeouts were
+stale harness locators (duplicate Home card/list; search result full accessible
+label), not failed product interactions. Current Web38 note/search captured.
+Web38 pair review confirms list/task/quote horizontal inset fixes; quote baseline
+still3–4px high. Next: native dark navbar remains light from main_dev outer style;
+Web query results have a separate date heading and one-line title/preview unlike
+Notion's compact title/metadata hierarchy. Continue UI39, both95 OPEN.
+Progress UI38 task3957090b02ee4dff9fdc2527ce28ec7f SUCCEEDED. No broad regression.
+
+UI38 source is frozen for packaging (build session66898). Native Home title15.5,
+75dp pills and anchored288dp avatar popup now wired. Popup selection uses only
+existing callbacks and one shell dispatcher; root adopted independent review's
+rotation/IME issue by dismissing ONLY that route when metrics change. Focused
+43/43 VM UI cases PASS (menu, shell, editor chrome, RAG entry and settings),
+including48dp, narrow/200% text, outside/back and metrics dismissal. Native
+Settings control now sizes to its content with32dp painted outline/48dp tap
+target, per directly opened Notion Theme. Web setting remains unchanged.
+Failed initial tests were stale64dp expectation, missing FakeFlutterView.padding,
+and an Ahem-width assertion; documented/fixed without shrinking production text.
+Current installed/served build remains37 until38 build/install/hash checks.
+Graph index_status/coverage Transport closed; exact current source read fallback.
+UI38_REMAINING_REFERENCE_MATRIX.md is a bounded docs audit, no new percentage.
+
+PUBLISHED7f48ac8e1d20ef38fc9f3285c4a2a0d15677ab0d (UI37), remoteSHA matched;
+19 explicit paths, staged diffcheck and credential/runtime-diagnostic scan clean.
+Initial scan hit was historical prose 'M09_HANDLE parent/child', not a runtime
+log or secret. Progress taskdc34ded02069468481a63882cfde119b succeeded. Board
+prepended three synthetic-only current images (Web37/native37/nativeNotion37);
+preserve prior17images/1childpage and verify after. No account/share-screen
+identity exported. Root UI38 native Home title15.5 from18 per measured ink,
+capsule75dp from64; agent avatar38_menu helper/test only, shell wiring pending.
+Do not rebuild/restart UI37 as if these38 values were already installed.
+
 CHECKPOINT37 ready: Web37 staticPID39780/8776; installed37 device/localSHA
 66260050a0f22b697bc8aadf9d1f3f12e463ce84118586ba48a1fb0d41cd0ef8 matched.
 Actual app37-selection/-selection-drag show gray48dp capsule, range extension

@@ -1,8 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/presentation/common/note_flow_settings_choices.dart';
+import 'package:note_ai_app/presentation/common/note_flow_settings.dart';
 
 void main() {
+  testWidgets('native setting uses a content-sized control with 48dp target', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(412, 914)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(18),
+            child: NoteFlowSettingsChoice<ThemeMode>(
+              label: 'Theme',
+              helperText: 'Choose the appearance on this device.',
+              initialValue: ThemeMode.light,
+              items: const [
+                DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+              ],
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final control = find.byType(OutlinedButton);
+    // Test Ahem uses wider glyphs than the packaged Roboto face.
+    expect(tester.getSize(control).width, lessThan(140));
+    expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in [const Size(412, 914), const Size(914, 412)]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets('native choices $size scale$scale stay safe and dismiss', (

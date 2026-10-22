@@ -17,11 +17,14 @@ sequence. The separate Web/Android >=95% gate remains unchanged.
 
 Priority label/file/controls checkpoint d8c269b is published and remote-verified.
 Chrome31 first/offline exports are verified with semantics/theme and exact67B
-hash. Current36 fixes the WorkspaceShell horizontal recognizer stealing slow
-selection-handle pans: actual850ms drag now extends first->first comparison,
-rail returns. TEMP M09_HANDLE diagnostics have been removed. Native clipboard
-bubble integration, theme renderer fix and small Web geometry/header refinements
-are in progress; read docs/m09/CURRENT_WORK.md for exact build/test identity.
+hash. UI37 checkpoint7f48ac8 is published: slow selection drag, native clipboard,
+theme renderer and Web geometry fixes. UI38 is packaged/installed/hash-verified:
+native Home text/pills, anchored avatar popup, content-sized Settings controls.
+Focused43/43 UI cases and20-item analyze pass; actual outside/reopen/Settings/
+Light->Dark paths exercised. Continue current paired reference matrix; next
+confirmed gaps include native dark system navbar style and Web search row
+hierarchy, plus a3–4px Web quote baseline. No runtime diagnostics remain.
+Read docs/m09/CURRENT_WORK.md for exact current build/test identity.
 Both95% gates remain unverified; continue UI work before broad functional QA.
 
 For real Chrome attachment QA, leave Service Workers enabled (CDP bypass=false).

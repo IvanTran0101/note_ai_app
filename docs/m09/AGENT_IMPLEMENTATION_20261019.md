@@ -17,6 +17,16 @@ before changing visual values. Lead alone changes dependencies/config/tokens.
 
 ###22 October priority continuation
 
+Five actual Luna Max agents used in this continuation: header_history28,
+priority28_review, web_pair35_review, ui36_matrix_audit and avatar38_menu.
+The fifth owned only compact_workspace_menu.dart/new test, delivered and froze.
+Root wired shell, corrected safe-view test setup and added metrics dismissal
+after its independent review, then reviewed/retested43 cases and built UI38.
+Web/matrix agents own only their named new reports; they never drive shared
+browser/ADB or run builds. Root owns all delivered source, system bars/theme,
+config/dependencies, current UI sessions, testing, Notion and Git. UI38 reports
+are bounded static comparisons, not whole-platform scores or live AWS evidence.
+
 UI36 continuation actually used four Luna Max agents. header_history28 removed
 diagnostics after root identified/fixed the shell recognizer; both diagnostic
 files now match their clean published baseline. priority28_review delivered

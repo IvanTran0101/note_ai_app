@@ -70,14 +70,17 @@ final class NoteFlowNativeSettingsChoice<T> extends StatelessWidget {
         foregroundColor: tokens.textSecondary,
         disabledForegroundColor: tokens.textMuted,
         side: BorderSide(color: tokens.divider),
-        minimumSize: const Size(0, 48),
-        padding: const EdgeInsetsDirectional.only(start: 12, end: 8),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.padded,
+        visualDensity: VisualDensity.standard,
+        padding: const EdgeInsetsDirectional.only(start: 8, end: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
+          Flexible(
             child: DefaultTextStyle.merge(
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -89,8 +92,8 @@ final class NoteFlowNativeSettingsChoice<T> extends StatelessWidget {
               child: selected?.child ?? const SizedBox.shrink(),
             ),
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.keyboard_arrow_down, size: 20, color: tokens.textMuted),
+          const SizedBox(width: 6),
+          Icon(Icons.keyboard_arrow_down, size: 18, color: tokens.textMuted),
         ],
       ),
     );

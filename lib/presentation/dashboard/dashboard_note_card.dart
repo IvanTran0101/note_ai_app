@@ -325,6 +325,9 @@ final class DashboardNoteCard extends StatelessWidget {
                 ? 13.3
                 : mobileSearch
                 ? 16
+                // Calibrated from the shared title's actual native ink bounds.
+                : NoteFlowLayout.isNativePhone(context)
+                ? 15.5
                 : 18,
             height: 1.2,
             fontWeight: searchQueryResult ? FontWeight.w500 : FontWeight.w400,
