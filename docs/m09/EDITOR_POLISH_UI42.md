@@ -155,6 +155,11 @@ Publication: explicit source/test/docs paths only; preserve unrelated untracked
 .playwright-cli/ and final_project.md. Do not stage output, uploads or logs.
 Stop after this milestone is pushed; wait for the user's next request.
 
+Source checkpoint842e814933d28894515742af3f0affc55bff185e was pushed and verified
+against origin/final-tuankiet with0/0 divergence. Notion progress includes its
+commit link and stop state. The followup documentation commit records only this
+publication and QA Chrome closure; runtime50 source/hash evidence is unchanged.
+
 ## Closure receipt
 
 | Continuity record | Resolution |

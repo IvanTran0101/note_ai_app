@@ -2,6 +2,12 @@
 
 ## UI42 COMPLETE FOR THE THREE ITEMS — publish then STOP (24 October 2026)
 
+Publication verified: source/test/docs checkpoint842e814933d28894515742af3f0affc55bff185e
+is on origin/final-tuankiet; local/remote matched0/0. Notion progress records the
+commit and stop. This followup records closure only; runtime source is unchanged.
+Managed QA Chrome was closed with its profile retained; reopen it for future QA.
+Native5554 remains on50, static8776 serves50 and local fixture services remain.
+
 Final50 supersedes48/49: VM36/36, Chrome15/15, scoped13 analysis49 + the only
 subsequent changed gutter50 clean. Web81.7s/APK31.4s;1074 runtime paths/source
 ab4bdfc0af180c83388baf8011e4c4bcfbcd1fd62d2da8e7076074efe9ba45f1, drift[].
@@ -18,7 +24,7 @@ Two actual Luna Max deliveries reviewed; root owns all runtime changes now.
 No worker remains active for this slice. STOP at this checkpoint after verified
 publication; wait for the user's next request before any further implementation.
 Runtime: server72210/8776 serves50, fixture34698 retains8796/8797/8798;
-managed app48/chrome48 variables now run50 in owner profile; native5554 has50.
+managed QA Chrome50 was closed, owner profile retained; native5554 has50.
 Notion5556 closed/data retained and stay-awake restored1. Graph transport closed,
 exact-source fallback used. Unrelated .playwright-cli/final_project preserved.
 
