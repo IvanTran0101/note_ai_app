@@ -1,5 +1,47 @@
 # M09 current work
 
+## UI41 COMPLETE FOR THE BOUNDED SLICE — publish then STOP
+
+Final47 source1073 paths/a12c74dd6c4933693213c73817b448cd0b824e58967c3726e829cc18251d4f0e,
+drift[]. VM40/40,Chrome19/19,backend8/8,strict tsc,analyze11 clean47.3s;
+Web65.8s/APK35.7s. Chrome main.dart.js21347709 bytes/hash
+e5016d38e6ae7677aac0e938c3c5c6b5aedba3f768d15eb771192bfb8d41da68 matches disk.
+Installed native5554 APK hash c81b36881c8d021bf9d8681ce21c1645395eff414fdc0d02f1f4dd083f093907 matches.
+Actual47 +query/Escape/typing,/file, Upload, real67B file picking, cancel/reopen,
+inline location, old files, preview/download and note reopening verified. Browser
+offline reopened its local note; both exports67B/SHA96fbf4c9...ecc7278 match.
+Final source fixes late IME composition replay, menu query focus and Escape
+return after query disposal. Intermediate44-46 were NOT final acceptance.
+Notion board ticked only attachment,24 old images preserved plus7 UI41 images.
+FILE_BLOCK_UI41.md has full evidence/limits/closure. Three Luna Max deliveries
+reviewed and integrated by root; no worker remains active. Publish this milestone
+on final-tuankiet, record commit on Notion, then STOP for user's next request.
+Do not continue other M09 work. Both95% gates remain UNVERIFIED.
+Runtime: static77467 serves47/8776; fixture31266 retains8796/8797/8798; browser
+app47/chrome47 owner profile/light; native5554 has47. Notion5556 closed, retained.
+Graph transport closed, recorded18Oct generation stale; exact source fallback.
+Unrelated .playwright-cli/ and final_project.md are preserved and not staged.
+
+User rejected footer Add attachment UX even though file row styling changed.
+Current authorized work: inspect real Notion /file and block +, then implement
+File in the insertion menu with inline placeholder/file at the chosen block;
+remove separate Add attachment footer. Keep labels below title. Do not work on
+other M09 items. Baseline7199cd7 published; unrelated untracked files preserved.
+Direct Web /file -> filtered File -> placeholder Upload or embed a file atcursor
+plus Upload/Choose a file popover confirmed. Link tab is Notion-only capability
+and will not be added. Root currently inspects +/native and owns integration/QA.
+
+Proposed shared contract: DocumentBlockKind.attachment, optional attachmentId;
+NoteDocument.inlineAttachments=false by default (omitted in old serialization).
+Engine type m09_file, attrs m09_attachment_id; root m09_inline_attachments. No
+filenames/bytes/URLs in document or AI projection. File insert marks layout and
+moves legacy file refs to blocks in one transaction, preserving old data. Once
+inline mode is entered, deleting a file block must not resurrect a footer row.
+Byte/manifest association remains canonical attachment owner; block history
+only changes references, allowing Undo without deleting ciphertext.
+Graph18Oct is stale; coverage metadata_changed/not_tracked. Current source reads
+required for all delegated paths. Not a graph completeness claim.
+
 ## UI40 COMPLETE FOR TWO ITEMS — publish, then STOP (23 October 2026)
 
 Only the requested label-below-title and Notion-like file presentation slice

@@ -10,14 +10,21 @@ export 'document/document_table.dart';
 
 /// Canonical business content, independent of UI/editor/storage serialization.
 final class NoteDocument {
-  factory NoteDocument(Iterable<DocumentBlock> blocks) {
-    final result = NoteDocument._(List.unmodifiable(blocks));
+  factory NoteDocument(
+    Iterable<DocumentBlock> blocks, {
+    bool inlineAttachments = false,
+  }) {
+    final result = NoteDocument._(List.unmodifiable(blocks), inlineAttachments);
     result._validate();
     return result;
   }
-  const NoteDocument._(this.blocks);
+  const NoteDocument._(this.blocks, this.inlineAttachments);
   static const version = 1;
   final List<DocumentBlock> blocks;
+
+  /// True when file references are represented as positioned document blocks.
+  /// False is omitted from the provider-neutral wire format for compatibility.
+  final bool inlineAttachments;
   String get plainText => blocks.map((block) => block.plainText).join('\n');
 
   void _validate() {
@@ -52,17 +59,29 @@ final class NoteDocument {
     for (final block in blocks) {
       visit(block, 1);
     }
+    if (!inlineAttachments && blocks.any(_containsAttachmentBlock)) {
+      throw ArgumentError(
+        'Inline attachment blocks require inline attachment mode.',
+      );
+    }
     if (utf8.encode(plainText).length > 100000) {
       throw ArgumentError('Document projection exceeds its byte budget.');
     }
   }
 
+  static bool _containsAttachmentBlock(DocumentBlock block) =>
+      block.kind == DocumentBlockKind.attachment ||
+      block.children.any(_containsAttachmentBlock);
+
   @override
   bool operator ==(Object other) =>
-      other is NoteDocument && sameDocumentValues(other.blocks, blocks);
+      other is NoteDocument &&
+      other.inlineAttachments == inlineAttachments &&
+      sameDocumentValues(other.blocks, blocks);
   @override
-  int get hashCode => Object.hashAll(blocks);
+  int get hashCode => Object.hash(inlineAttachments, Object.hashAll(blocks));
   @override
   String toString() =>
-      'NoteDocument(version:1, blocks:${blocks.length}, content:<redacted>)';
+      'NoteDocument(version:1, blocks:${blocks.length}, '
+      'inlineAttachments:$inlineAttachments, content:<redacted>)';
 }

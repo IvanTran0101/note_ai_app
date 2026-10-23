@@ -9,16 +9,20 @@ import 'container_block.dart';
 import 'document_span.dart';
 import 'divider_controls.dart';
 import 'rich_editor_adapter.dart';
+import 'file_block_builder.dart';
 
 Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
   BuildContext context,
   RichEditorAdapter adapter,
-  FocusNode focus,
-) {
+  FocusNode focus, {
+  Widget Function(String blockId, String? attachmentId)? fileBlockBuilder,
+  ValueChanged<engine.Node>? onAddBlock,
+}) {
   final colors = Theme.of(context).colorScheme;
   return accessibleBuilders(
     {
       ...engine.standardBlockComponentBuilderMap,
+      'm09_file': FileBlockBuilder(fileBuilder: fileBlockBuilder),
       if (kIsWeb)
         'bulleted_list': engine.BulletedListBlockComponentBuilder(
           iconBuilder: (context, node) =>
@@ -107,6 +111,8 @@ Map<String, engine.BlockComponentBuilder> documentBlockBuilders(
     adapter.editor,
     focus,
     adapter.editable,
+    adapter: adapter,
+    onAddBlock: onAddBlock,
   );
 }
 

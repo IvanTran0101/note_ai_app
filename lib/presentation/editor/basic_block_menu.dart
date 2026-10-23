@@ -4,11 +4,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../domain/notes/note_document.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'basic_block_commands.dart';
 import 'basic_block_grid.dart';
 import 'editor_popup_area.dart';
 import 'slash_command_controller.dart';
+
+part 'basic_block_menu_choices.dart';
 
 final class BasicBlockMenu extends StatefulWidget {
   static const double desktopPopupWidth = 324;
@@ -50,6 +53,12 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
   String _query = '';
   bool get _desktopCompact =>
       BasicBlockMenu.isCompactDesktop(context) && !widget.sheet;
+  List<BasicBlockChoice> get _basicChoices => controller.choices
+      .where((choice) => choice.kind != DocumentBlockKind.attachment)
+      .toList(growable: false);
+  List<BasicBlockChoice> get _mediaChoices => controller.choices
+      .where((choice) => choice.kind == DocumentBlockKind.attachment)
+      .toList(growable: false);
   double get rowHeight {
     final textHeight = MediaQuery.textScalerOf(context).scale(14);
     return math.max(_desktopCompact ? 33 : 48, textHeight + 19);
@@ -79,12 +88,22 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scroll.hasClients) return;
       final grid = widget.sheet && !kIsWeb;
+      final selectedIsMedia =
+          controller.selected >= _basicChoices.length &&
+          _mediaChoices.isNotEmpty;
+      if (grid && selectedIsMedia) {
+        scroll.jumpTo(scroll.position.maxScrollExtent);
+        return;
+      }
       final extent = grid
           ? BasicBlockGrid.rowHeightFor(context) + 4
           : rowHeight;
+      final selectedRow =
+          controller.selected +
+          (!grid && _showMediaHeader && selectedIsMedia ? 1 : 0);
       final row = grid
-          ? controller.selected ~/ BasicBlockGrid.columnsFor(context)
-          : controller.selected;
+          ? selectedRow ~/ BasicBlockGrid.columnsFor(context)
+          : selectedRow;
       final start = row * extent;
       final end = start + extent;
       final viewport = scroll.position.viewportDimension;
@@ -155,24 +174,35 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
                       ),
                     )
                   : nativeGrid
-                  ? BasicBlockGrid(
-                      choices: controller.choices,
-                      controller: scroll,
-                      labelFor: (choice) => vi
-                          ? _vietnameseLabels[basicBlockChoices.indexOf(choice)]
-                          : choice.label,
-                      iconFor: (choice) =>
-                          _icons[basicBlockChoices.indexOf(choice)],
-                      onChoose: _choose,
-                    )
+                  ? _nativeChoices(vi: vi)
                   : ListView.builder(
                       controller: scroll,
                       itemExtent: rowHeight,
                       padding: EdgeInsets.zero,
-                      itemCount: controller.choices.length,
-                      itemBuilder: (context, index) => desktop
-                          ? _desktopChoiceRow(index, vi, colors)
-                          : _nativeChoiceRow(index, vi),
+                      itemCount: _displayChoiceCount,
+                      itemBuilder: (context, index) {
+                        final basicCount = _basicChoices.length;
+                        if (_showMediaHeader && index == basicCount) {
+                          return _mediaSectionHeader(vi: vi, desktop: desktop);
+                        }
+                        final choiceIndex =
+                            _showMediaHeader && index > basicCount
+                            ? index - 1
+                            : index;
+                        final choice = controller.choices[choiceIndex];
+                        return desktop
+                            ? _desktopChoiceRow(
+                                choice,
+                                vi,
+                                colors,
+                                selected: choiceIndex == controller.selected,
+                              )
+                            : _nativeChoiceRow(
+                                choice,
+                                vi,
+                                selected: choiceIndex == controller.selected,
+                              );
+                      },
                     ),
             ),
             if (desktop) _footer(vi: vi, colors: colors),
@@ -202,7 +232,9 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
             child: Padding(
               padding: EdgeInsets.only(top: widget.sheet && !kIsWeb ? 14 : 0),
               child: Text(
-                vi ? 'Khối cơ bản' : 'Basic blocks',
+                controller.query.isNotEmpty
+                    ? (vi ? 'Kết quả lọc' : 'Filtered results')
+                    : (vi ? 'Khối cơ bản' : 'Basic blocks'),
                 style: desktop
                     ? TextStyle(
                         color: colors.onSurfaceVariant,
@@ -224,89 +256,10 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     ),
   );
 
-  Widget _nativeChoiceRow(int index, bool vi) {
-    final choice = controller.choices[index];
-    final choiceIndex = basicBlockChoices.indexOf(choice);
-    return ListTile(
-      dense: true,
-      selected: index == controller.selected,
-      title: Text(
-        vi ? _vietnameseLabels[choiceIndex] : choice.label,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      leading: Icon(_icons[choiceIndex], size: 20),
-      onTap: () => _choose(choice),
-    );
-  }
-
-  Widget _desktopChoiceRow(int index, bool vi, ColorScheme colors) {
-    final choice = controller.choices[index];
-    final choiceIndex = basicBlockChoices.indexOf(choice);
-    final selected = index == controller.selected;
-    final neutral = colors.onSurface.withValues(alpha: 0.075);
-    return Material(
-      color: selected ? neutral : Colors.transparent,
-      child: InkWell(
-        onTap: () => _choose(choice),
-        hoverColor: neutral,
-        splashColor: neutral,
-        child: SizedBox(
-          height: rowHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                ExcludeSemantics(
-                  child: SizedBox(
-                    width: 20,
-                    child: choice.level != null || choiceIndex == 0
-                        ? FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              choice.level == null
-                                  ? 'T'
-                                  : 'H${_headingSubscripts[choice.level!]}',
-                              maxLines: 1,
-                              softWrap: false,
-                              style: TextStyle(
-                                fontSize: choice.level == null ? 16 : 14,
-                                height: 1,
-                                fontFamily: choice.level == null
-                                    ? 'serif'
-                                    : null,
-                                color: selected
-                                    ? colors.onSurface
-                                    : colors.onSurfaceVariant,
-                              ),
-                            ),
-                          )
-                        : Icon(
-                            _icons[choiceIndex],
-                            size: 16,
-                            color: selected
-                                ? colors.onSurface
-                                : colors.onSurfaceVariant,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    vi ? _vietnameseLabels[choiceIndex] : choice.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.onSurface, fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  int get _displayChoiceCount =>
+      controller.choices.length + (_showMediaHeader ? 1 : 0);
+  bool get _showMediaHeader =>
+      controller.query.isEmpty && _mediaChoices.isNotEmpty;
 
   Widget _footer({required bool vi, required ColorScheme colors}) => InkWell(
     onTap: _close,

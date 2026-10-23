@@ -3,6 +3,7 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import 'note_security_dialog.dart';
 import 'attachment_editor_panel.dart';
+import 'attachment_editor_controller.dart';
 import 'note_security_localizations.dart';
 import 'note_security_panel.dart';
 import 'sharing_localizations.dart';
@@ -56,6 +57,7 @@ part 'note_detail_labels.dart';
 part 'note_detail_security.dart';
 part 'note_detail_sharing.dart';
 part 'note_detail_document.dart';
+part 'note_detail_files.dart';
 part 'note_detail_autosave.dart';
 part 'note_detail_sync_state.dart';
 
@@ -134,6 +136,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   final FocusNode _contentFocusNode = FocusNode();
   final GlobalKey _contentFieldContextKey = GlobalKey();
   RichEditorAdapter? _richEditor;
+  late final AttachmentEditorController _inlineFiles =
+      AttachmentEditorController(readReferencedIds: () => _fileReferences);
   NoteDocument? _savedDocument;
   int _editorEpoch = 0;
   Timer? _autosaveTimer;
@@ -392,6 +396,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
     _contentController.dispose();
     _editorEpoch++;
     _richEditor?.dispose();
+    _inlineFiles.dispose();
     _titleFocusNode.dispose();
     _contentFocusNode.dispose();
     super.dispose();

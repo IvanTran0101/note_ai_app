@@ -21,6 +21,7 @@ abstract final class RichDocumentCodec {
     DocumentBlockKind.quote: 'quote',
     DocumentBlockKind.table: 'table',
     DocumentBlockKind.divider: 'divider',
+    DocumentBlockKind.attachment: 'm09_file',
   };
 
   static engine.Document encode(NoteDocument document) {
@@ -34,7 +35,14 @@ abstract final class RichDocumentCodec {
       });
       nodes.add(empty);
     }
-    return engine.Document(root: engine.pageNode(children: nodes));
+    final root = engine.pageNode(children: nodes);
+    if (document.inlineAttachments) {
+      root.updateAttributes({
+        ...root.attributes,
+        'm09_inline_attachments': true,
+      });
+    }
+    return engine.Document(root: root);
   }
 
   static engine.Node encodeBlock(DocumentBlock block) => _node(block);
@@ -49,11 +57,15 @@ abstract final class RichDocumentCodec {
     return engine.Document(root: engine.pageNode(children: [paragraph]));
   }
 
-  static NoteDocument decode(engine.Document document) => NoteDocument([
-    for (final node in document.root.children)
-      if (document.root.children.length != 1 || !_unchangedEmpty(node))
-        _block(node),
-  ]);
+  static NoteDocument decode(engine.Document document) => NoteDocument(
+    [
+      for (final node in document.root.children)
+        if (document.root.children.length != 1 || !_unchangedEmpty(node))
+          _block(node),
+    ],
+    inlineAttachments:
+        document.root.attributes['m09_inline_attachments'] == true,
+  );
 
   static bool _unchangedEmpty(engine.Node node) =>
       node.type == 'paragraph' &&
@@ -74,12 +86,14 @@ abstract final class RichDocumentCodec {
       type: types[block.kind]!,
       attributes: {
         identity: block.id,
-        if (block.kind != DocumentBlockKind.divider)
+        if (block.kind != DocumentBlockKind.divider &&
+            block.kind != DocumentBlockKind.attachment)
           'delta': RichInlineCodec.encode(block.runs).toJson(),
         if (block.level != null) 'level': block.level,
         if (block.checked != null) 'checked': block.checked,
         if (block.icon != null) 'm09_icon': block.icon,
         if (block.tone != null) 'm09_tone': block.tone!.name,
+        if (block.attachmentId != null) 'm09_attachment_id': block.attachmentId,
       },
       children: block.children.map(_node).toList(),
     );
@@ -95,9 +109,14 @@ abstract final class RichDocumentCodec {
     return DocumentBlock(
       id: id(node),
       kind: kind,
-      runs: kind == DocumentBlockKind.divider
+      runs:
+          kind == DocumentBlockKind.divider ||
+              kind == DocumentBlockKind.attachment
           ? const []
           : RichInlineCodec.decode(node.delta),
+      attachmentId: kind == DocumentBlockKind.attachment
+          ? node.attributes['m09_attachment_id'] as String?
+          : null,
       children: node.children.map(_block),
       level: kind == DocumentBlockKind.heading
           ? node.attributes['level'] as int

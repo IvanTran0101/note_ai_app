@@ -1,5 +1,15 @@
 # M09 — UI similarity review (%)
 
+## UI41 — bounded File / and + review (23 October 2026)
+
+Actual Notion + query, Media/File and positioned Upload reference were used.
+Build47 replaces the rejected footer UX with inline File insertion; labels stay
+below title. Chrome/native interaction, cancel/reopen, picker/export and exact
+build identities are recorded in FILE_BLOCK_UI41.md. This bounded slice passes,
+with40 VM/19 Chrome/8 parser cases and clean analysis/builds. Notion24 old images
+preserved,7 UI41 images added. Neither overall95% gate is established. Stop
+after publishing this slice; await the user before another M09 change.
+
 ## Current status — NOT ACCEPTED (19 October 2026)
 
 The user explicitly says the current UI is not similar enough. WITHDRAW the

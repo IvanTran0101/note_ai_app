@@ -1,5 +1,26 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI41 UX correction — 23 October 2026
+
+Three actual Luna Max workers were used: file_wire41 owned domain/JSON/editor
+codec and backend parsing; file_menu41 owned menu/insertion/RichNoteEditor;
+file_panel41 owned the single attachment panel/controller/inline surfaces.
+Each allocation was disjoint, current source fallback was required because the
+graph generation18Oct was stale, and workers ran no shared Flutter processes,
+browser/ADB or Git. All delivered; root owns their runtime files now.
+
+Root directly integrated adapter binding, selectable File renderer, contextual
+Web gutter, stable input callback and NoteDetail owner outside native lazy list.
+Root reviewed source, caught codec/newline/remount/frame-refresh errors, split
+menu/chrome/inline widget-picker-transfer responsibilities into small parts,
+and controls all focused checks/builds/runtime/Notion/Git. Final47:40/40 VM,
+19/19 Chrome,8/8 backend pass; strict tsc/analyze11 clean, Web/APK source drift[].
+Root fixed late IME composition/query ownership/Escape focus and verified actual
+Chrome/native picker/cancel/reopen/inline/preview/export plus hashes. Notion
+checks only this attachment item, adds7 images and retains24. Publish then STOP.
+FILE_BLOCK_UI41.md records the bounded inventory, results and limits.
+No whole-platform95% or full-functional acceptance follows from this slice.
+
 ## UI40 bounded slice — 23 October 2026
 
 User requested only labels below title and attachment UI, then stop. One actual

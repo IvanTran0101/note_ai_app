@@ -1,10 +1,6 @@
 part of 'attachment_editor_panel.dart';
 
 extension _AttachmentEditorRows on _AttachmentEditorPanelState {
-  static const _attachmentLimits =
-      'Images 10 MiB · MP4 50 MiB · PDF/TXT/CSV 20 MiB. '
-      'Up to 10 files / 100 MiB per note.';
-
   Widget _buildPanel(BuildContext context) {
     final items = <_AttachmentItem>[
       for (final draft in _pending.where(
@@ -17,6 +13,8 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
         _AttachmentItem.associated(attachment),
     ];
     final colors = Theme.of(context).colorScheme;
+
+    if (items.isEmpty && _previewItem == null) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -31,9 +29,7 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
               padding: const EdgeInsets.only(top: 4, bottom: 4),
               child: Text(_error!, style: TextStyle(color: colors.error)),
             ),
-          if (items.isEmpty) _emptyAttachmentPrompt(context),
           for (final item in items) _row(item),
-          if (items.isNotEmpty && _canWrite) _emptyAttachmentPrompt(context),
           if (_previewItem != null) ...[
             const SizedBox(height: 4),
             const Divider(height: 1),
@@ -43,29 +39,6 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
       ),
     );
   }
-
-  PopupMenuButton<AttachmentSource> _addAttachmentMenu({
-    Widget? child,
-  }) => PopupMenuButton<AttachmentSource>(
-    enabled: !_busy,
-    tooltip: 'Add attachment',
-    icon: child == null ? const Icon(Icons.add) : null,
-    padding: EdgeInsets.zero,
-    child: child,
-    onSelected: (source) => unawaited(_pick(source)),
-    itemBuilder: (_) => const [
-      PopupMenuItem(value: AttachmentSource.files, child: Text('Choose files')),
-      PopupMenuItem(value: AttachmentSource.gallery, child: Text('Gallery')),
-      PopupMenuItem(
-        value: AttachmentSource.cameraPhoto,
-        child: Text('Take photo'),
-      ),
-      PopupMenuItem(
-        value: AttachmentSource.cameraVideo,
-        child: Text('Record video'),
-      ),
-    ],
-  );
 
   Widget _localFirstHint(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
@@ -83,52 +56,6 @@ extension _AttachmentEditorRows on _AttachmentEditorPanelState {
       ),
     ),
   );
-
-  Widget _emptyAttachmentPrompt(BuildContext context) {
-    if (!_canWrite) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          'No attachments',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-      );
-    }
-
-    final compactWeb = kIsWeb && MediaQuery.sizeOf(context).width >= 720;
-
-    return Tooltip(
-      message: _attachmentLimits,
-      child: _addAttachmentMenu(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: compactWeb ? 28 : 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.add,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Add attachment',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: compactWeb ? 16 : 17,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _row(_AttachmentItem item) {
     final progress = _progress[item.id], ready = _ready.contains(item.id);

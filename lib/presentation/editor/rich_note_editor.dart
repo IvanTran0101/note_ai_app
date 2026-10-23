@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'basic_block_menu.dart';
 import 'basic_block_commands.dart';
+import 'block_filter_input.dart';
 import 'editor_popup_guard.dart';
 import 'editor_popup_area.dart';
 import 'editor_shortcuts.dart';
@@ -16,16 +17,18 @@ import 'editor_controls.dart';
 import 'editor_copy.dart';
 import 'native_editor_rail.dart';
 import 'native_clipboard_toolbar.dart';
-import 'web_editor_controls.dart';
 import 'editor_header_boundary.dart';
 import 'editor_renderers.dart';
 import 'editor_clipboard.dart';
+import 'editor_input_focus.dart';
 import 'rich_editor_adapter.dart';
 import 'selection_toolbar.dart';
 import 'selection_toolbar_layout.dart';
 import 'slash_command_controller.dart';
 
 part 'rich_note_editor_overlays.dart';
+part 'rich_note_editor_blocks.dart';
+part 'rich_note_editor_focus.dart';
 
 /// Host rendering and menus; persistence stays in the NoteDetail Application port.
 final class RichNoteEditor extends StatefulWidget {
@@ -35,11 +38,13 @@ final class RichNoteEditor extends StatefulWidget {
     required this.focusNode,
     required this.header,
     this.footer = const SizedBox.shrink(),
+    this.fileBlockBuilder,
   });
   final RichEditorAdapter adapter;
   final FocusNode focusNode;
   final Widget header;
   final Widget footer;
+  final Widget Function(String blockId, String? attachmentId)? fileBlockBuilder;
   @override
   State<RichNoteEditor> createState() => _RichNoteEditorState();
 }
@@ -51,7 +56,7 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     // Web semantics retain DOM focus in a stable bounded viewport.
     shrinkWrap: kIsWeb,
   );
-  OverlayEntry? _blockMenu;
+  final _blockPortal = OverlayPortalController();
   bool _touchMenuShowing = false;
   late final header = ValueNotifier<Widget>(widget.header);
   late final footer = ValueNotifier<Widget>(widget.footer);
@@ -61,8 +66,10 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   bool? _cachedShort;
   double? _cachedScale;
   VoidCallback? _dismissFormatting;
+  Rect? _blockFilterAnchor;
   ModalRoute<dynamic>? _editorRoute;
   bool _editorRouteCurrent = true;
+  void Function(VoidCallback reconnect, bool forceReconnect)? _lastInputFocus;
 
   @override
   void didChangeDependencies() {
@@ -98,6 +105,10 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   }
 
   void menuChanged() {
+    final restoreInput = kIsWeb && !slash.touchOpen && !widget.adapter.composing
+        ? (captureEditorInputFocus() ?? _lastInputFocus)
+        : null;
+    final inputSelection = widget.adapter.capture(range: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (slash.touchOpen && !kIsWeb) {
@@ -105,15 +116,16 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         if (!_touchMenuShowing) unawaited(_showTouchMenu());
         return;
       }
+      final changedVisibility = slash.visible != _blockPortal.isShowing;
       if (slash.visible) {
-        if (_blockMenu == null) {
-          _blockMenu = OverlayEntry(builder: _menuOverlay);
-          Overlay.of(context, rootOverlay: true).insert(_blockMenu!);
-        } else {
-          _blockMenu!.markNeedsBuild();
-        }
+        if (!_blockPortal.isShowing) _blockPortal.show();
       } else {
         _closeBlockMenu();
+        _lastInputFocus = null;
+        _blockFilterAnchor = null;
+      }
+      if (restoreInput != null && inputSelection != null) {
+        _restoreMenuInput(restoreInput, changedVisibility, inputSelection);
       }
     });
     // A touch open/close can occur while the document has no active animation
@@ -197,7 +209,6 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   @override
   void dispose() {
     widget.adapter.editor.autoScroller?.stopAutoScroll();
-    _closeBlockMenu();
     slash.removeListener(menuChanged);
     slash.dispose();
     scroll.dispose();
@@ -207,9 +218,7 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   }
 
   void _closeBlockMenu() {
-    _blockMenu?.remove();
-    _blockMenu?.dispose();
-    _blockMenu = null;
+    if (_blockPortal.isShowing) _blockPortal.hide();
   }
 
   void _dismissFormattingOverlay() {
@@ -251,7 +260,32 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
       _cachedScale = scale;
       _cachedView = _buildEditor(context);
     }
-    return _cachedView!;
+    // Keep popup semantics under this owner. A separate root OverlayEntry can
+    // reparent the route's Web DOM subtree and blur its active text field.
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      includeSemantics: false,
+      onKeyEvent: (_, event) {
+        if (kIsWeb && event is KeyDownEvent && !widget.adapter.composing) {
+          _lastInputFocus = captureEditorInputFocus() ?? _lastInputFocus;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        child: OverlayPortal(
+          overlayLocation: OverlayChildLocation.rootOverlay,
+          controller: _blockPortal,
+          overlayChildBuilder: (context) => ListenableBuilder(
+            listenable: slash,
+            builder: (context, _) => _menuOverlay(context),
+          ),
+          child: _cachedView!,
+        ),
+      ),
+    );
   }
 
   Widget _buildEditor(BuildContext context) {
@@ -276,6 +310,10 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         context,
         adapter,
         widget.focusNode,
+        fileBlockBuilder: (block, attachment) =>
+            widget.fileBlockBuilder?.call(block, attachment) ??
+            const SizedBox.shrink(),
+        onAddBlock: _openAfterBlock,
       ),
     );
     return Column(
@@ -285,7 +323,11 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
           child: NativeClipboardToolbar(
             adapter: adapter,
             focusNode: widget.focusNode,
-            child: _toolbar(context, editor),
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              child: _toolbar(context, editor),
+            ),
           ),
         ),
         if (!kIsWeb) _nativeControls(context),
@@ -293,70 +335,6 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     );
   }
 
-  Widget _header() => EditorHeaderBoundary(
-    adapter: widget.adapter,
-    child: Column(
-      children: [
-        ValueListenableBuilder<Widget>(
-          valueListenable: header,
-          builder: (_, value, _) => value,
-        ),
-      ],
-    ),
-  );
-
-  Widget _controls({VoidCallback? onBlocks}) => ListenableBuilder(
-    listenable: widget.adapter,
-    builder: (_, _) => widget.adapter.editable
-        ? EditorControls(
-            adapter: widget.adapter,
-            slash: slash,
-            onBlocks: onBlocks,
-            blocksOpen: onBlocks != null,
-          )
-        : const SizedBox.shrink(),
-  );
-
-  Widget _nativeControls(BuildContext context) => EditorHeaderBoundary(
-    adapter: widget.adapter,
-    interceptSelection: false,
-    child: NativeEditorRail(
-      key: const ValueKey('document-controls-rail'),
-      adapter: widget.adapter,
-      focusNode: widget.focusNode,
-      controls: _controls(),
-    ),
-  );
-  Widget _footer(ColorScheme colors) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (kIsWeb)
-        EditorHeaderBoundary(
-          adapter: widget.adapter,
-          child: WebEditorControls(
-            focusNode: widget.focusNode,
-            child: _controls(),
-          ),
-        ),
-      ValueListenableBuilder<Widget>(
-        valueListenable: footer,
-        builder: (_, value, _) =>
-            EditorHeaderBoundary(adapter: widget.adapter, child: value),
-      ),
-      ListenableBuilder(
-        listenable: widget.adapter,
-        builder: (context, _) => widget.adapter.error == null
-            ? const SizedBox(height: 120)
-            : Semantics(
-                liveRegion: true,
-                child: Text(
-                  widget.adapter.error!,
-                  style: TextStyle(color: colors.error),
-                ),
-              ),
-      ),
-    ],
-  );
   Widget _toolbar(BuildContext context, Widget editor) {
     final adapter = widget.adapter, colors = Theme.of(context).colorScheme;
     return engine.FloatingToolbar(

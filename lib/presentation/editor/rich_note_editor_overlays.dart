@@ -4,7 +4,10 @@ part of 'rich_note_editor.dart';
 extension _RichNoteEditorOverlays on _RichNoteEditorState {
   Widget _menuOverlay(BuildContext context) {
     final rects = widget.adapter.editor.selectionRects();
-    final rect = rects.isEmpty
+    final filtering = kIsWeb && slash.touchOpen;
+    final rect = filtering && _blockFilterAnchor != null
+        ? _blockFilterAnchor!
+        : rects.isEmpty
         ? const Rect.fromLTWH(24, 220, 0, 0)
         : rects.last;
     final popup = EditorPopupArea.of(context);
@@ -18,12 +21,47 @@ extension _RichNoteEditorOverlays on _RichNoteEditorState {
       BasicBlockMenu.popupSizeFor(context),
       preferBelow: true,
     );
-    return Positioned.fromRect(
+    final menu = Positioned.fromRect(
       rect: placed,
       child: TapRegion(
+        groupId: slash,
         onTapOutside: (_) => _dismissTransientEditorUi(),
-        child: BasicBlockMenu(controller: slash),
+        child: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          child: ExcludeFocus(
+            excluding: !slash.touchOpen,
+            child: BasicBlockMenu(controller: slash),
+          ),
+        ),
       ),
+    );
+    if (!filtering) return menu;
+    final left = (rect.left - popup.origin.dx).clamp(
+      popup.bounds.left,
+      popup.bounds.right - 1,
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          left: left,
+          top: (rect.top - popup.origin.dy).clamp(
+            popup.bounds.top,
+            popup.bounds.bottom - 27,
+          ),
+          width: math.min(
+            rect.width > 1 ? rect.width : 720,
+            popup.bounds.right - left,
+          ),
+          height: math.max(27, rect.height),
+          child: TapRegion(
+            groupId: slash,
+            child: BlockFilterInput(controller: slash),
+          ),
+        ),
+        menu,
+      ],
     );
   }
 

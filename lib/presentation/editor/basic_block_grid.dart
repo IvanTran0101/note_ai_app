@@ -10,12 +10,14 @@ final class BasicBlockGrid extends StatelessWidget {
     super.key,
     required this.choices,
     required this.controller,
+    this.shrinkWrap = false,
     required this.labelFor,
     required this.iconFor,
     required this.onChoose,
   });
   final List<BasicBlockChoice> choices;
-  final ScrollController controller;
+  final ScrollController? controller;
+  final bool shrinkWrap;
   final String Function(BasicBlockChoice) labelFor;
   final IconData Function(BasicBlockChoice) iconFor;
   final ValueChanged<BasicBlockChoice> onChoose;
@@ -32,6 +34,8 @@ final class BasicBlockGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GridView.builder(
     controller: controller,
+    shrinkWrap: shrinkWrap,
+    physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: columnsFor(context),

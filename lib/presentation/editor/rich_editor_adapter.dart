@@ -9,6 +9,7 @@ import 'editor_identity_normalizer.dart';
 import 'rich_document_codec.dart';
 
 part 'rich_editor_composition.dart';
+part 'rich_editor_files.dart';
 
 /// Owns transient editing state only. Immutable business snapshots are passed
 /// to the existing Application controller; this class has no persistence port.
@@ -21,6 +22,8 @@ final class RichEditorAdapter extends ChangeNotifier {
     required this.isLive,
     required this.accessGeneration,
     required this.onChanged,
+    this.readLegacyAttachmentIds,
+    this.onFileInserted,
   }) : _source = document {
     engine.AppFlowyLogConfiguration()
       ..level = engine.AppFlowyEditorLogLevel.off
@@ -32,7 +35,10 @@ final class RichEditorAdapter extends ChangeNotifier {
     );
     _guardSubscription = editor.transactionStream.listen((event) {
       if (event.$1 == engine.TransactionTime.before &&
-          (!isLive() || !canEdit())) {
+          (!isLive() || !canEdit() || _menuOwnsInput.value)) {
+        // Text edits are composed lazily by Transaction.operations. Disable
+        // that deferred composition before clearing, or it recreates the edit.
+        event.$2.markNeedsComposing = false;
         event.$2.operations = [];
         event.$2.afterSelection = event.$2.beforeSelection;
       }
@@ -48,6 +54,10 @@ final class RichEditorAdapter extends ChangeNotifier {
   final bool Function() canEdit, canRead, isLive;
   final int Function() accessGeneration;
   final VoidCallback onChanged;
+  final List<String> Function()? readLegacyAttachmentIds;
+  final ValueChanged<String>? onFileInserted;
+  List<String> get legacyAttachmentIds =>
+      List<String>.unmodifiable(readLegacyAttachmentIds?.call() ?? const []);
   late final engine.EditorState editor;
   late final EditorIdentityNormalizer _normalizer;
   late final _RichEditorComposition _composition;
@@ -58,6 +68,14 @@ final class RichEditorAdapter extends ChangeNotifier {
   NoteDocument? _source;
   bool _disposed = false;
   final ValueNotifier<bool> active = ValueNotifier(true);
+
+  /// The + palette owns its temporary query input until it closes.
+  final ValueNotifier<bool> _menuOwnsInput = ValueNotifier(false);
+  ValueListenable<bool> get menuOwnsInput => _menuOwnsInput;
+  void setMenuInput(bool value) {
+    if (!_disposed) _menuOwnsInput.value = value;
+  }
+
   int revision = 0;
   String? error;
   final Map<String, bool> expandedToggles = {};
@@ -173,7 +191,10 @@ final class RichEditorAdapter extends ChangeNotifier {
     RichSelectionSnapshot snapshot, {
     bool popupOwnsFocus = false,
   }) async {
-    if (!accepts(snapshot, popupOwnsFocus: popupOwnsFocus)) return false;
+    if (_menuOwnsInput.value ||
+        !accepts(snapshot, popupOwnsFocus: popupOwnsFocus)) {
+      return false;
+    }
     if (editor.undoManager.undoStack.isNonEmpty) {
       editor.undoManager.undoStack.last.seal();
     }
@@ -200,6 +221,7 @@ final class RichEditorAdapter extends ChangeNotifier {
     _normalizer.dispose();
     editor.dispose();
     active.dispose();
+    _menuOwnsInput.dispose();
     super.dispose();
   }
 }

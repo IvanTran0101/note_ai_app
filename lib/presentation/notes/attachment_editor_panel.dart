@@ -14,8 +14,12 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_application.dart';
 import '../../domain/notes/attachment.dart';
 import 'attachment_file_row.dart';
+import 'attachment_editor_controller.dart';
 import 'attachment_media_surface.dart';
 import 'notes_application_controller.dart';
+part 'attachment_inline.dart';
+part 'attachment_inline_picker.dart';
+part 'attachment_inline_transfer.dart';
 part 'attachment_editor_actions.dart';
 part 'attachment_editor_rows.dart';
 part 'attachment_editor_preview.dart';
@@ -32,6 +36,10 @@ final class AttachmentEditorPanel extends StatefulWidget {
     this.onChanged,
     this.onResumeProtected,
     this.onBeforePick,
+    this.inlineController,
+    this.inlineLayout = false,
+    this.hiddenOwner = false,
+    this.onFilesPicked,
   });
   final NoteDto note;
   final AttachmentNotesController controller;
@@ -40,6 +48,11 @@ final class AttachmentEditorPanel extends StatefulWidget {
   final ValueChanged<NoteDto>? onChanged;
   final Future<void> Function()? onResumeProtected;
   final Future<bool> Function()? onBeforePick;
+  final AttachmentEditorController? inlineController;
+  final bool inlineLayout;
+  final bool hiddenOwner;
+  final Future<bool> Function(String blockId, List<String> attachmentIds)?
+  onFilesPicked;
   @override
   State<AttachmentEditorPanel> createState() => _AttachmentEditorPanelState();
 }
@@ -54,6 +67,7 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   final _retryAfter = <String, DateTime>{};
   bool _loading = false;
   String? _error;
+  String? _inlineErrorBlock;
   int _generation = 0;
   _AttachmentItem? _previewItem;
   Uint8List? _preview;
@@ -91,12 +105,28 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   bool _current(int generation) =>
       mounted && _allowed && generation == _generation;
   void _update(VoidCallback change) {
-    if (mounted) setState(change);
+    if (!mounted) return;
+    setState(change);
+    widget.inlineController?.refresh();
+  }
+
+  void _bindInlineController() {
+    widget.inlineController?.bind(
+      owner: this,
+      buildBlock: _buildInlineBlock,
+      buildLegacy: _buildPanel,
+      openPicker: _showInlinePicker,
+      readAttachmentIds: () => {
+        ...widget.note.attachments.map((item) => item.id),
+        ..._pending.map((item) => item.cacheId),
+      }.toList(growable: false),
+    );
   }
 
   @override
   void initState() {
     super.initState();
+    _bindInlineController();
     _listen();
     unawaited(_reload());
     _refresh = Timer.periodic(
@@ -128,12 +158,17 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
       _progress.clear();
       _working.clear();
       _error = null;
+      _inlineErrorBlock = null;
     });
   }
 
   @override
   void didUpdateWidget(covariant AttachmentEditorPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.inlineController != widget.inlineController) {
+      oldWidget.inlineController?.unbind(this);
+      _bindInlineController();
+    }
     final authorityChanged =
         oldWidget.security != widget.security ||
         oldWidget.controller != widget.controller;
@@ -182,7 +217,8 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
       if (_canWrite && !_busy) {
         for (final draft in pending) {
           if (!_current(generation) || !_canWrite) break;
-          if (!(_retryAfter[draft.cacheId]?.isAfter(DateTime.now()) ?? false)) {
+          if (_shouldRetryDraft(draft) &&
+              !(_retryAfter[draft.cacheId]?.isAfter(DateTime.now()) ?? false)) {
             await _retry(draft.cacheId, background: true);
           }
         }
@@ -197,6 +233,7 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   @override
   void dispose() {
     _generation++;
+    widget.inlineController?.unbind(this);
     _refresh?.cancel();
     _clearPreview();
     unawaited(_securityEvents?.cancel());
@@ -205,7 +242,8 @@ final class _AttachmentEditorPanelState extends State<AttachmentEditorPanel> {
   }
 
   @override
-  Widget build(BuildContext context) => !_allowed || _service == null
+  Widget build(BuildContext context) =>
+      !_allowed || _service == null || widget.hiddenOwner
       ? const SizedBox.shrink()
       : _buildPanel(context);
 }

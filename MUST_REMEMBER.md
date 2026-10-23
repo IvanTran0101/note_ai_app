@@ -1,5 +1,26 @@
 # MUST REMEMBER
 
+## UI41 BOUNDED COMPLETE — publish then STOP (23 October 2026)
+
+Labels below title and File in / plus contextual + are complete on build47.
+40/40 VM,19/19 Chrome,8/8 parser cases; analyzer/strict tsc and Web/APK pass.
+Actual Chrome/native picker, cancel/reopen, inline placement and download
+checked. FILE_BLOCK_UI41.md contains identities, evidence and remaining limits.
+Only this slice is signed off. Both whole-platform95% gates stay UNVERIFIED.
+Publish this checkpoint on final-tuankiet and record it on Notion, then STOP.
+Do not resume other M09 work until the user explicitly supplies the next task.
+
+## LATEST CORRECTION — File belongs to / and block + (23 October 2026)
+
+User rejected UI40 attachment UX. Do NOT treat a restyled footer/Add attachment
+row as Notion parity. Actual /file creates an inline File placeholder at the
+active block, opens Upload/Choose a file, then displays the picked file there.
+Implement existing attachment actions through / and contextual block +, remove
+the separate Add attachment/footer UX. Preserve labels below title. Persist file
+position/reference locally and through existing sync; preserve access/transfer
+owners and old files. No Link/embed, new media capability or other M09 work.
+UI40 attachment completion is superseded, both95% gates remain OPEN.
+
 ## CURRENT BOUNDED REQUEST — 23 October 2026
 
 UI40 implementation and bounded QA are complete: VM45/45, Chrome10/10,

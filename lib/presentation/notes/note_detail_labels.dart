@@ -20,6 +20,19 @@ extension _NoteDetailLabels on NoteDetailPageState {
   }
 
   Widget? _buildNoteAttachments() {
+    if (_richEditor != null) {
+      return ListenableBuilder(
+        listenable: _inlineFiles,
+        builder: (context, _) =>
+            !_canRead || (_editorDocument?.inlineAttachments ?? false)
+            ? const SizedBox.shrink()
+            : _inlineFiles.buildLegacy(context),
+      );
+    }
+    return _buildAttachmentOwner();
+  }
+
+  Widget? _buildAttachmentOwner({bool hiddenOwner = false}) {
     final note = _note;
     if (note == null || widget.notesController is! AttachmentNotesController) {
       return null;
@@ -30,6 +43,11 @@ extension _NoteDetailLabels on NoteDetailPageState {
       controller: widget.notesController as AttachmentNotesController,
       security: _securityController,
       onChanged: _labelsSaved,
+      inlineController: _inlineFiles,
+      hiddenOwner: hiddenOwner,
+      inlineLayout: _editorDocument?.inlineAttachments ?? false,
+      onFilesPicked: (block, ids) async =>
+          await _richEditor?.bindFiles(block, ids) ?? false,
       onBeforePick: () async => !_isDirty || await _save(),
       onResumeProtected: () => _resumeProtectedAttachment(note),
       enabled: !_securityBusy && !_securityLoading && _capabilities.canRead,

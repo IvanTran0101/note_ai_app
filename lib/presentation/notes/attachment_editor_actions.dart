@@ -7,6 +7,7 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
     bool write = false,
     bool picker = false,
     bool background = false,
+    bool deferReload = false,
   }) async {
     if (!_allowed || write && !_canWrite || _working.contains(key)) return;
     final service = _service;
@@ -31,30 +32,7 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
     } finally {
       if (current()) {
         _update(() => _working.remove(key));
-        await _reload();
-      }
-    }
-  }
-
-  Future<void> _pick(AttachmentSource source) async {
-    if (_busy) return;
-    if (widget.onBeforePick != null && !await widget.onBeforePick!()) return;
-    if (!mounted || !_canWrite) return;
-    await _perform(
-      'picker',
-      (service) => service.pickAndStage(
-        _reference,
-        () => widget.controller.pickAttachments(source),
-        resumeProtected: widget.onResumeProtected,
-      ),
-      write: true,
-      picker: true,
-    );
-    if (mounted && _canWrite) {
-      await _reload();
-      for (final draft in List<LocalAttachmentDraft>.of(_pending)) {
-        if (!_canWrite) break;
-        await _retry(draft.cacheId, background: true);
+        if (!deferReload) await _reload();
       }
     }
   }
@@ -115,8 +93,8 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
 String _attachmentFailureMessage(Object failure) => switch (failure) {
   AttachmentSelectionFailure(:final code) =>
     code == AttachmentSelectionFailureCode.denied
-        ? 'File or camera access was denied. Allow access in device settings, or use Add files.'
-        : 'This picker is unavailable. Use Add files or choose from the gallery.',
+        ? 'File or camera access was denied. Allow access in device settings, then try again.'
+        : 'This picker is unavailable. Choose another file source and try again.',
   NoteSecurityFailure(:final code) =>
     {
           NoteSecurityFailureCode.unavailable,

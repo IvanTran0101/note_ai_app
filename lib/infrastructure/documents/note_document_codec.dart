@@ -11,6 +11,7 @@ abstract final class NoteDocumentCodec {
     final result = <String, Object?>{
       'version': NoteDocument.version,
       'blocks': document.blocks.map(_block).toList(),
+      if (document.inlineAttachments) 'inlineAttachments': true,
     };
     if (utf8.encode(jsonEncode(result)).length > 180000) {
       throw const LocalSyncCodecException(
@@ -27,14 +28,23 @@ abstract final class NoteDocumentCodec {
   static NoteDocument decode(Object? data) {
     final reader = DocumentCodecReader()..inspect(data);
     try {
-      final root = reader.object(data, const {'version', 'blocks'});
+      final root = reader.object(
+        data,
+        const {'version', 'blocks'},
+        const {'inlineAttachments'},
+      );
       if (reader.integer(root['version']) != NoteDocument.version) {
         reader.fail();
       }
-      final document = NoteDocument([
-        for (final block in reader.list(root['blocks'], 512))
-          _decodeBlock(block, reader, 1),
-      ]);
+      final document = NoteDocument(
+        [
+          for (final block in reader.list(root['blocks'], 512))
+            _decodeBlock(block, reader, 1),
+        ],
+        inlineAttachments: root.containsKey('inlineAttachments')
+            ? reader.boolean(root['inlineAttachments'])
+            : false,
+      );
       // Escaping can increase JSON bytes beyond the preflight traversal count.
       encode(document);
       return document;
@@ -46,8 +56,10 @@ abstract final class NoteDocumentCodec {
   static Map<String, Object?> _block(DocumentBlock block) => {
     'id': block.id,
     'type': block.kind.name,
+    if (block.attachmentId != null) 'attachmentId': block.attachmentId,
     if (block.kind != DocumentBlockKind.table &&
-        block.kind != DocumentBlockKind.divider)
+        block.kind != DocumentBlockKind.divider &&
+        block.kind != DocumentBlockKind.attachment)
       'runs': block.runs.map(_run).toList(),
     if (block.children.isNotEmpty)
       'children': block.children.map(_block).toList(),
@@ -124,6 +136,7 @@ abstract final class NoteDocumentCodec {
         'rows',
         'headerRow',
         'headerColumn',
+        'attachmentId',
       },
     );
     final kind = DocumentBlockKind.values
@@ -132,7 +145,8 @@ abstract final class NoteDocumentCodec {
     if (kind == null) reader.fail();
     final table = kind == DocumentBlockKind.table;
     final divider = kind == DocumentBlockKind.divider;
-    if (table || divider) {
+    final attachment = kind == DocumentBlockKind.attachment;
+    if (table || divider || attachment) {
       if (map.containsKey('runs') || map.containsKey('children')) reader.fail();
     } else if (!map.containsKey('runs')) {
       reader.fail();
@@ -141,6 +155,7 @@ abstract final class NoteDocumentCodec {
         kind != DocumentBlockKind.todo && map.containsKey('checked') ||
         kind != DocumentBlockKind.callout &&
             (map.containsKey('icon') || map.containsKey('tone')) ||
+        !attachment && map.containsKey('attachmentId') ||
         !table && ['rows', 'headerRow', 'headerColumn'].any(map.containsKey)) {
       reader.fail();
     }
@@ -151,7 +166,9 @@ abstract final class NoteDocumentCodec {
     return DocumentBlock(
       id: reader.string(map['id']),
       kind: kind,
-      runs: table || divider ? const [] : _runs(map['runs'], reader),
+      runs: table || divider || attachment
+          ? const []
+          : _runs(map['runs'], reader),
       children: map.containsKey('children')
           ? [
               for (final child in reader.list(map['children'], 512))
@@ -171,6 +188,9 @@ abstract final class NoteDocumentCodec {
       headerColumn: map.containsKey('headerColumn')
           ? reader.boolean(map['headerColumn'])
           : false,
+      attachmentId: attachment && map.containsKey('attachmentId')
+          ? reader.string(map['attachmentId'])
+          : null,
     );
   }
 
