@@ -1,5 +1,24 @@
 # MUST REMEMBER
 
+## UI42 COMPLETE — publish then STOP (24 October 2026)
+
+Only the three requested fixes are complete on50: first-line contextual +
+including correct Web hit region, Notion-style toggle, and canonical File-block
+removal including local pending cancellation. VM36/36, Chrome15/15, scoped
+analysis/builds and actual UI checks passed. EDITOR_POLISH_UI42.md records proof,
+two Luna Max deliveries, history boundary and remaining broader limitations.
+Notion checked only3 UI42 items and preserved31 old images plus8 new. Both95%
+gates remain UNVERIFIED. Push final-tuankiet, then STOP for the next request.
+
+## UI42 scope history (23 October 2026)
+
+Fix + alignment to the first text line for each block, match toggle UI/UX to
+actual Notion, and remove the File block when its attachment is successfully
+removed (not for generic unavailable/revoked state). Preserve text, styles,
+other files, local-first writer and access guards. Check Chrome/native, update
+Notion and publish final-tuankiet, then stop for next task. Read CURRENT_WORK.
+UI41 pause is superseded only for this slice; whole-platform95% stays open.
+
 ## UI41 BOUNDED COMPLETE — publish then STOP (23 October 2026)
 
 Labels below title and File in / plus contextual + are complete on build47.

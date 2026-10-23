@@ -165,6 +165,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
+  int _attachmentRemovalReconciliations = 0;
+  Future<void> _attachmentRemovalTail = Future<void>.value();
 
   /// Last text observed from the editor fields, so a listener firing for a
   /// selection/cursor change is not mistaken for a title/content edit.
@@ -317,6 +319,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
       _saving ||
       _deleting ||
       _resolvingConflict ||
+      _attachmentRemovalReconciliations > 0 ||
       _summaryController.isBusy ||
       _securityBusy ||
       _securityLoading;

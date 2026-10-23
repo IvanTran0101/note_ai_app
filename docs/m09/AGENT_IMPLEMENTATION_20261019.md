@@ -1,5 +1,20 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI42 bounded fixes — 24 October 2026
+
+Two actual Luna Max workers: toggle42 owned container/nested/shortcuts and tests;
+file_remove42 owned canonical removal/page ACK/live prune and tests. No overlap,
+shared builds, browser/ADB or Git delegation. Lead reviewed both, rejected title
+overflow/first-run font approximation, required actual cursor geometry, atomic
+pending cancel, typed cleanup error, correct caret transforms/history boundary
+and immediate ACK/autosave fence. Lead added ordered ACKs and page regression.
+Lead implemented first-line gutter/shared hover and replaced paint-only follower
+with official layout positioning after actual Web hit regions blocked toggle.
+Final50 VM36/36, Chrome15/15, clean scoped analysis, Web/APK and exact bundle/APK
+identity checks passed. Actual Chrome/native, Notion images and remaining limits
+are in EDITOR_POLISH_UI42.md. Only these3 items complete; both95% gates remain
+open. Publish final-tuankiet, then STOP for next task. Closure receipt in report.
+
 ## UI41 UX correction — 23 October 2026
 
 Three actual Luna Max workers were used: file_wire41 owned domain/JSON/editor

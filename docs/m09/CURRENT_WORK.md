@@ -1,5 +1,79 @@
 # M09 current work
 
+## UI42 COMPLETE FOR THE THREE ITEMS — publish then STOP (24 October 2026)
+
+Final50 supersedes48/49: VM36/36, Chrome15/15, scoped13 analysis49 + the only
+subsequent changed gutter50 clean. Web81.7s/APK31.4s;1074 runtime paths/source
+ab4bdfc0af180c83388baf8011e4c4bcfbcd1fd62d2da8e7076074efe9ba45f1, drift[].
+Chrome received21,410,128 bytes/SHA5367dde7...b24018 matching disk. APK/device
+SHA c71ba999...33eb1 match. Actual50 Web normal toggle click works: arrow
+x415.5/w24, +x387.5/w26, no overlap. + palette, callout/task gutter and actual
+offline67B pick -> Remove local attachment -> offline reopen with no File row
+or unavailable tombstone verified. Native49 associated/pending-offline removal
+and cold reopen passed;50 removal code unchanged, installed50 collapse/open
+smoke retained child. API mapping8796 and browser network restored. Both95%
+remain UNVERIFIED. Notion3 checks +8 images, all31 old images retained (39 total).
+EDITOR_POLISH_UI42.md has full review, broader typing limitation and receipt.
+Two actual Luna Max deliveries reviewed; root owns all runtime changes now.
+No worker remains active for this slice. STOP at this checkpoint after verified
+publication; wait for the user's next request before any further implementation.
+Runtime: server72210/8776 serves50, fixture34698 retains8796/8797/8798;
+managed app48/chrome48 variables now run50 in owner profile; native5554 has50.
+Notion5556 closed/data retained and stay-awake restored1. Graph transport closed,
+exact-source fallback used. Unrelated .playwright-cli/final_project preserved.
+
+## ACTIVE UI42 — gutter, toggle and attachment removal (23 October 2026)
+
+49 IS NOT FINAL: actual Chrome disclosed a Web semantics hit box bug. Visual
+gutter at x400 was exposed to DOM near x431, intercepting toggle triangle. Root
+replaced paint-only CompositedTransformFollower with Flutter's official
+OverlayPortal.overlayChildLayoutBuilder, positioning paint/hit/semantics during
+layout from the same transform. Latest source needs Chrome15 rerun, analysis,
+build50 and actual DOM rectangle/click proof before publication. Do NOT count
+49's widget15/VM36 as final evidence for this followup.49 native actual associated
+and pure pending-offline cancel/cold-reopen passed; headerOffline verified.
+QA UI41_Native edited on both devices raised an expected stale sync conflict;
+Use local resolved it to All synced. No suppression of conflict guard.
+
+24 October resume: latest49 VM36/36 pass;48 Chrome14/14 pass. Root found an
+ACK-ordering race on concurrent removals after48 QA and serialized page ACK
+reconciliation;49 Web/APK + Chrome15 and final analysis are running.49 source
+1074 paths/b26b70e152ff8384eaee886a601083840a1219ea147e792896634ab5c2e7fd2e.
+48 actual Chrome/native scoped UI passed; native real offline pure pending
+Remove local attachment + cold reopen retained3 other rows/text without tombstone.
+Only cold restart after reverse-map removal proves offline; existing tunnels
+survived the first map removal. Mapping restored8796 and app All synced.
+EDITOR_POLISH_UI42.md records review/results and a broader heading fast-input
+observation; no full typing acceptance. Final49 actual retest/Notion/Git remain.
+Source compile fixes integrated (EdgeInsets type, invalid const test factories);
+legacy pending-file tests updated to current inline Upload/action menu harness.
+Root added page-level ACK/autosave/newer-draft regression and caret-to-parent on
+toggle collapse. Shared gutter hover prevents simultaneous parent/child +;
+cursor-zero geometry verified at100%/150%, mixed inline48px and wrapped title.
+Canonical onCommitted callback precedes async cleanup, page reconciliation
+counter fences autosave, pending cancel removes refs through the sole writer.
+History is cleared at irreversible removal to avoid restoring missing bytes.
+Notion temporary Web/native reference edits restored; native stayawake restored1,
+5556 closed with data retained. Notion board/progress now mark UI42 pending.
+Building source48 Web/APK and running final scoped analysis. Actual app Chrome
+and Android QA on48, Notion final evidence, publication and stop still pending.
+
+User explicitly resumed only: + aligned to first text line for heading/callout/
+quote/task etc; toggle UI/UX follows actual Notion; deleting an attachment also
+removes its positioned block rather than leaving File unavailable. Baseline
+published eee558c. Existing untracked .playwright-cli/final_project preserved.
+Two actual Luna Max workers: toggle42 owns container/nested/shortcuts+new tests;
+file_remove42 owns canonical removal+NoteDetail/adapter reconciliation+new tests.
+Root owns gutter anchor/builders/renderers, actual reference/runtime/checks,
+docs/Notion/Git. No overlapping edits. Graph status/search/coverage Transport
+closed; exact source fallback; ops tools/records absent. No completeness claim.
+Actual Notion Web toggle observed: small filled right/down triangle, creation
+collapsed, open empty hint, child aligned to title (~32px indent); click hint
+creates child; Enter at end title adds first child before existing children.
+Temporary UI42 reference blocks will be restored via ordinary Undo/recoverable
+UI. Root added first-line selectable geometry anchor; testing/runtime pending.
+Only this slice is authorized now; both overall95% gates remain UNVERIFIED.
+
 ## UI41 COMPLETE FOR THE BOUNDED SLICE — publish then STOP
 
 Final47 source1073 paths/a12c74dd6c4933693213c73817b448cd0b824e58967c3726e829cc18251d4f0e,

@@ -1,6 +1,7 @@
 // Renderer extension uses AppFlowy's public selectable/text/transaction services.
 // It does not implement an input, caret, selection, or undo engine.
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 
 import 'rich_editor_adapter.dart';
@@ -59,16 +60,42 @@ final class _ContainerBlockState extends State<_ContainerBlock>
   GlobalKey<State<StatefulWidget>> get containerKey => widget.node.key;
   @override
   final blockComponentKey = GlobalKey(debugLabel: 'm09_container_block');
+  double? _measuredToggleCursorCenterY;
+  bool _toggleCursorMeasurementScheduled = false;
   @override
   BlockComponentConfiguration get configuration => widget.configuration;
   @override
   Node get node => widget.node;
+  @override
+  EdgeInsets get indentPadding {
+    final base = super.indentPadding;
+    if (!widget.toggle || !kIsWeb) return base;
+    final extra = base.left > base.right
+        ? const EdgeInsets.only(left: 8)
+        : const EdgeInsets.only(right: 8);
+    return EdgeInsets.fromLTRB(
+      base.left + extra.left,
+      base.top + extra.top,
+      base.right + extra.right,
+      base.bottom + extra.bottom,
+    );
+  }
+
   bool get collapsed =>
-      !(widget.adapter.expandedToggles[RichDocumentCodec.id(node)] ?? true);
+      !(widget.adapter.expandedToggles[RichDocumentCodec.id(node)] ??
+          node.children.isNotEmpty);
   late bool _wasCollapsed;
   @override
   void initState() {
     super.initState();
+    if (widget.toggle) {
+      // New empty toggles start collapsed like Notion. Existing toggles with
+      // content stay visible when an editor is reopened.
+      widget.adapter.expandedToggles.putIfAbsent(
+        RichDocumentCodec.id(node),
+        () => node.children.isNotEmpty,
+      );
+    }
     _wasCollapsed = collapsed;
     widget.adapter.addListener(_expansionChanged);
   }
@@ -86,22 +113,62 @@ final class _ContainerBlockState extends State<_ContainerBlock>
   }
 
   @override
-  Widget build(BuildContext context) => widget.toggle && collapsed
-      ? buildComponent(context)
-      : super.build(context);
+  Widget build(BuildContext context) {
+    final component = widget.toggle && collapsed
+        ? buildComponent(context)
+        : super.build(context);
+    if (!widget.toggle ||
+        collapsed ||
+        node.children.isNotEmpty ||
+        !widget.adapter.editable) {
+      return component;
+    }
 
-  void _toggle() => widget.adapter.expand(RichDocumentCodec.id(node));
-
-  Widget _leading() => widget.toggle
-      ? EditorIconButton(
-          label: editorText(
-            context,
-            collapsed ? 'Expand toggle' : 'Collapse toggle',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        component,
+        Padding(
+          padding: EdgeInsetsDirectional.only(start: kIsWeb ? 32 : 24, top: 2),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('m09-toggle-empty-${RichDocumentCodec.id(node)}'),
+              onTap: () => NestedBlockCommands(widget.adapter).addChild(node),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  editorText(context, 'Empty toggle. Click to add a block.'),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
           ),
-          onPressed: _toggle,
-          icon: Icon(collapsed ? Icons.chevron_right : Icons.expand_more),
-        )
-      : widget.adapter.editable
+        ),
+      ],
+    );
+  }
+
+  void _toggle() {
+    final selection = editorState.selection;
+    bool insideChild(Position position) =>
+        position.path.length > node.path.length &&
+        listEquals(position.path.take(node.path.length).toList(), node.path);
+    if (!collapsed &&
+        selection != null &&
+        (insideChild(selection.start) || insideChild(selection.end))) {
+      // Keep the caret visible when its child disappears behind the disclosure.
+      editorState.selection = Selection.collapsed(
+        Position(path: node.path, offset: node.delta?.length ?? 0),
+      );
+    }
+    widget.adapter.expand(RichDocumentCodec.id(node));
+  }
+
+  Widget _leading() => widget.adapter.editable
       ? EditorIconButton(
           label: editorText(context, 'Callout style'),
           onPressed: () => showCalloutOptions(context, node, widget.adapter),
@@ -117,6 +184,112 @@ final class _ContainerBlockState extends State<_ContainerBlock>
             style: const TextStyle(fontSize: 20),
           ),
         );
+
+  Widget _toggleRow(Widget text) {
+    final label = editorText(
+      context,
+      collapsed ? 'Expand toggle' : 'Collapse toggle',
+    );
+    final hitTarget = kIsWeb ? 24.0 : 48.0;
+    final firstLineHeight = _toggleFirstLineHeight;
+    const targetWidth = 24.0;
+    const iconSize = 16.0;
+    final iconCenterY = _measuredToggleCursorCenterY ?? firstLineHeight / 2;
+    final iconTop = (iconCenterY - iconSize / 2)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final targetHeight = [
+      hitTarget,
+      firstLineHeight,
+      iconCenterY + iconSize / 2,
+    ].reduce((a, b) => a > b ? a : b);
+    _scheduleToggleCursorMeasurement();
+    final icon = AnimatedRotation(
+      turns: collapsed ? 0 : .25,
+      duration: const Duration(milliseconds: 120),
+      child: Icon(
+        Icons.play_arrow,
+        size: iconSize,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+
+    return Row(
+      key: ValueKey('m09-toggle-row-${RichDocumentCodec.id(node)}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MergeSemantics(
+          child: Semantics(
+            key: ValueKey(
+              'm09-toggle-disclosure-${RichDocumentCodec.id(node)}',
+            ),
+            label: label,
+            button: true,
+            expanded: !collapsed,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggle,
+                child: SizedBox(
+                  width: targetWidth,
+                  height: targetHeight,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: iconTop),
+                      child: icon,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (kIsWeb) const SizedBox(width: 8),
+        Expanded(child: text),
+      ],
+    );
+  }
+
+  void _scheduleToggleCursorMeasurement() {
+    if (_toggleCursorMeasurementScheduled) return;
+    _toggleCursorMeasurementScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _toggleCursorMeasurementScheduled = false;
+      if (!mounted || !widget.toggle) return;
+      final selectable = node.selectable;
+      final cursor = selectable?.getCursorRectInPosition(
+        Position(path: node.path, offset: 0),
+      );
+      final blockContext = blockComponentKey.currentContext;
+      final blockObject = blockContext?.findRenderObject();
+      if (cursor == null || blockObject is! RenderBox) return;
+      final cursorCenterGlobal = selectable!.localToGlobal(cursor.center);
+      final rowTopGlobal = blockObject.localToGlobal(Offset(0, padding.top));
+      final centerY = cursorCenterGlobal.dy - rowTopGlobal.dy;
+      if (!centerY.isFinite ||
+          (_measuredToggleCursorCenterY != null &&
+              (centerY - _measuredToggleCursorCenterY!).abs() < .25)) {
+        return;
+      }
+      setState(() => _measuredToggleCursorCenterY = centerY);
+    });
+  }
+
+  double get _toggleFirstLineHeight {
+    final configuration = editorState.editorStyle.textStyleConfiguration;
+    var fontSize = configuration.text.fontSize ?? 16;
+    final inserts = node.delta?.whereType<TextInsert>() ?? const [];
+    for (final insert in inserts) {
+      if (insert.text.isEmpty) continue;
+      final explicitSize = insert.attributes?['font_size'];
+      if (explicitSize is num) fontSize = explicitSize.toDouble();
+      break;
+    }
+    return fontSize *
+        configuration.lineHeight *
+        editorState.editorStyle.textScaleFactor;
+  }
 
   @override
   Widget buildComponent(
@@ -153,20 +326,22 @@ final class _ContainerBlockState extends State<_ContainerBlock>
                     DocumentColor.gray,
                 Theme.of(context).brightness,
               ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _leading(),
-            Expanded(child: text),
-            if (widget.adapter.editable)
-              EditorIconButton(
-                label: editorText(context, 'Add nested block'),
-                onPressed: () =>
-                    NestedBlockCommands(widget.adapter).addChild(node),
-                icon: const Icon(Icons.add, size: 18),
+        child: widget.toggle
+            ? _toggleRow(text)
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _leading(),
+                  Expanded(child: text),
+                  if (widget.adapter.editable)
+                    EditorIconButton(
+                      label: editorText(context, 'Add nested block'),
+                      onPressed: () =>
+                          NestedBlockCommands(widget.adapter).addChild(node),
+                      icon: const Icon(Icons.add, size: 18),
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }

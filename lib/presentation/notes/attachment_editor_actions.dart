@@ -8,6 +8,7 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
     bool picker = false,
     bool background = false,
     bool deferReload = false,
+    bool Function()? alreadyReconciled,
   }) async {
     if (!_allowed || write && !_canWrite || _working.contains(key)) return;
     final service = _service;
@@ -25,6 +26,15 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
       await action(service);
     } on AttachmentAwaitingNoteSync {
       // The panel describes this normal Pending state without a false error.
+    } on AttachmentRemovalCleanupFailure catch (failure) {
+      // The canonical Note/outbox already removed this File reference. Accept
+      // that DTO even though the separate encrypted-cache cleanup needs retry.
+      if (current() && alreadyReconciled?.call() != true) {
+        widget.onChanged?.call(failure.note);
+      }
+      if (current() && (!background || _error == null)) {
+        _update(() => _error = _attachmentFailureMessage(failure));
+      }
     } on Object catch (failure) {
       if (current() && (!background || _error == null)) {
         _update(() => _error = _attachmentFailureMessage(failure));
@@ -78,15 +88,40 @@ extension _AttachmentEditorActions on _AttachmentEditorPanelState {
           : 'The pending encrypted copy on this device will be removed and its upload cancelled.',
     );
     if (!confirmed || !_current(generation) || !_canWrite) return;
+    if (widget.onBeforePick != null && !await widget.onBeforePick!()) return;
+    if (!_current(generation) || !_canWrite) return;
     _clearPreview();
-    await _perform('remove/${item.id}', (service) async {
-      if (item.attachment != null) {
-        final result = await service.remove(_reference, item.id);
-        if (mounted && _canWrite) widget.onChanged?.call(result);
-      } else {
-        await service.cancel(_reference, item.id);
-      }
-    }, write: true);
+    var committed = false;
+    void onCommitted(NoteDto note) {
+      committed = true;
+      if (_current(generation)) widget.onChanged?.call(note);
+    }
+    await _perform(
+      'remove/${item.id}',
+      (service) async {
+        if (item.attachment != null) {
+          final result = await service.remove(
+            _reference,
+            item.id,
+            onCommitted: onCommitted,
+          );
+          if (!committed && _current(generation)) {
+            widget.onChanged?.call(result);
+          }
+        } else {
+          final result = await service.cancel(
+            _reference,
+            item.id,
+            onCommitted: onCommitted,
+          );
+          if (!committed && _current(generation)) {
+            widget.onChanged?.call(result);
+          }
+        }
+      },
+      write: true,
+      alreadyReconciled: () => committed,
+    );
   }
 }
 
@@ -95,6 +130,8 @@ String _attachmentFailureMessage(Object failure) => switch (failure) {
     code == AttachmentSelectionFailureCode.denied
         ? 'File or camera access was denied. Allow access in device settings, then try again.'
         : 'This picker is unavailable. Choose another file source and try again.',
+  AttachmentRemovalCleanupFailure() =>
+    'The File block was removed, but encrypted file cleanup failed. Reopen the note to retry cleanup.',
   NoteSecurityFailure(:final code) =>
     {
           NoteSecurityFailureCode.unavailable,

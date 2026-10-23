@@ -4,9 +4,10 @@ import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
 
 import 'rich_editor_adapter.dart';
+import 'block_insert_anchor.dart';
 
-/// A follower occupies the reading column's margin without moving its text.
-/// The overlay has its own hit region, including outside the block's bounds.
+/// Layout positions the margin control and its semantics in the same space.
+/// Paint-only follower transforms can leave Web click regions over the text.
 final class BlockInsertGutter extends StatefulWidget {
   const BlockInsertGutter({
     super.key,
@@ -24,11 +25,12 @@ final class BlockInsertGutter extends StatefulWidget {
 }
 
 final class _BlockInsertGutterState extends State<BlockInsertGutter> {
-  final _link = LayerLink();
+  final _targetKey = GlobalKey();
   final _portal = OverlayPortalController();
   Timer? _leave;
   bool _hovered = false, _overButton = false;
   bool _routeCurrent = true;
+  String get _id => widget.node.attributes['m09_id'] as String;
 
   bool get _selected {
     final selection = widget.adapter.editor.selection;
@@ -44,6 +46,7 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
   void initState() {
     super.initState();
     widget.adapter.addListener(_changed);
+    widget.adapter.gutterHover.addListener(_changed);
   }
 
   @override
@@ -58,7 +61,9 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.adapter != widget.adapter) {
       oldWidget.adapter.removeListener(_changed);
+      oldWidget.adapter.gutterHover.removeListener(_changed);
       widget.adapter.addListener(_changed);
+      widget.adapter.gutterHover.addListener(_changed);
     }
     _changed();
   }
@@ -69,27 +74,32 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
       final visible =
           _routeCurrent &&
           widget.adapter.editable &&
-          (_hovered || _overButton || _selected);
+          (widget.adapter.gutterHover.value == _id ||
+              widget.adapter.gutterHover.value == null && _selected);
       if (!visible) {
         _hide();
-      } else if (!_portal.isShowing) {
-        _portal.show();
+      } else {
+        if (!_portal.isShowing) _portal.show();
       }
     });
     WidgetsBinding.instance.scheduleFrame();
   }
 
-  Widget _button(BuildContext context) => Positioned(
-    left: 0,
-    top: 0,
-    child: CompositedTransformFollower(
-      link: _link,
-      showWhenUnlinked: false,
-      offset: const Offset(-28, 0),
+  Widget _button(BuildContext context, OverlayChildLayoutInfo info) {
+    final target = _targetKey.currentContext?.findRenderObject();
+    if (target is! RenderBox || !target.hasSize) return const SizedBox.shrink();
+    final point = MatrixUtils.transformPoint(
+      info.childPaintTransform,
+      blockInsertAnchor(widget.node, target),
+    );
+    return Positioned(
+      left: point.dx,
+      top: point.dy,
       child: MouseRegion(
         onEnter: (_) {
           _leave?.cancel();
           _overButton = true;
+          widget.adapter.gutterHover.value = _id;
         },
         onExit: (_) {
           _overButton = false;
@@ -131,12 +141,34 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   void _scheduleLeave() {
     _leave?.cancel();
-    _leave = Timer(const Duration(milliseconds: 120), _changed);
+    _leave = Timer(const Duration(milliseconds: 120), () {
+      if (!_hovered &&
+          !_overButton &&
+          widget.adapter.gutterHover.value == _id) {
+        widget.adapter.gutterHover.value = null;
+      }
+      _changed();
+    });
+  }
+
+  void _hover(PointerEvent event) {
+    final target = _targetKey.currentContext?.findRenderObject();
+    if (target is! RenderBox || !target.hasSize) return;
+    final line = blockInsertLine(widget.node, target).inflate(4);
+    final local = target.globalToLocal(event.position);
+    // A container includes its descendants; only its first line owns its +.
+    _hovered = local.dy >= line.top && local.dy <= line.bottom;
+    if (_hovered) {
+      _leave?.cancel();
+      widget.adapter.gutterHover.value = _id;
+    } else {
+      _scheduleLeave();
+    }
   }
 
   void _hide() {
@@ -147,24 +179,19 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
   Widget build(BuildContext context) => Semantics(
     container: true,
     explicitChildNodes: true,
-    child: OverlayPortal(
+    child: OverlayPortal.overlayChildLayoutBuilder(
       overlayLocation: OverlayChildLocation.rootOverlay,
       controller: _portal,
       overlayChildBuilder: _button,
-      child: CompositedTransformTarget(
-        link: _link,
-        child: MouseRegion(
-          onEnter: (_) {
-            _leave?.cancel();
-            _hovered = true;
-            _changed();
-          },
-          onExit: (_) {
-            _hovered = false;
-            _scheduleLeave();
-          },
-          child: widget.child,
-        ),
+      child: MouseRegion(
+        key: _targetKey,
+        onEnter: _hover,
+        onHover: _hover,
+        onExit: (_) {
+          _hovered = false;
+          _scheduleLeave();
+        },
+        child: widget.child,
       ),
     ),
   );
@@ -173,6 +200,11 @@ final class _BlockInsertGutterState extends State<BlockInsertGutter> {
   void dispose() {
     _leave?.cancel();
     widget.adapter.removeListener(_changed);
+    widget.adapter.gutterHover.removeListener(_changed);
+    if (widget.adapter.active.value &&
+        widget.adapter.gutterHover.value == _id) {
+      widget.adapter.gutterHover.value = null;
+    }
     super.dispose();
   }
 }

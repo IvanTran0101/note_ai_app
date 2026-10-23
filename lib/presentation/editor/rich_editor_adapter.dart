@@ -69,6 +69,9 @@ final class RichEditorAdapter extends ChangeNotifier {
   bool _disposed = false;
   final ValueNotifier<bool> active = ValueNotifier(true);
 
+  /// One hovered gutter wins over the selected ancestor in nested blocks.
+  final ValueNotifier<String?> gutterHover = ValueNotifier(null);
+
   /// The + palette owns its temporary query input until it closes.
   final ValueNotifier<bool> _menuOwnsInput = ValueNotifier(false);
   ValueListenable<bool> get menuOwnsInput => _menuOwnsInput;
@@ -221,6 +224,7 @@ final class RichEditorAdapter extends ChangeNotifier {
     _normalizer.dispose();
     editor.dispose();
     active.dispose();
+    gutterHover.dispose();
     _menuOwnsInput.dispose();
     super.dispose();
   }

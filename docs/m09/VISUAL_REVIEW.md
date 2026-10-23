@@ -1,5 +1,18 @@
 # M09 — UI similarity review (%)
 
+## UI42 — bounded gutter, toggle and File removal (24 October 2026)
+
+PASS only for the3 requested items on final50. Public first-line geometry aligns
+contextual + for H1-H4/callout/quote/task/nested text; layout-positioned Web hit
+regions no longer cover the toggle arrow. Actual Notion toggle reference led
+to filled triangle, empty hint,32dp Web/24dp native inset and natural title height.
+Explicit file removal prunes its positioned blocks; offline pending cancellation
+and reopen keep other content without unavailable tombstones. VM36/Chrome15,
+static analysis/build identities and actual evidence: EDITOR_POLISH_UI42.md.
+Notion checks3 UI42 items and adds8 images, retaining all31 prior ones. This is
+not a platform similarity score; both >=95% gates remain UNVERIFIED. Publish and
+stop at this boundary. Broader typing/whole-app safe-area backlog remains open.
+
 ## UI41 — bounded File / and + review (23 October 2026)
 
 Actual Notion + query, Media/File and positioned Upload reference were used.

@@ -46,6 +46,8 @@ const _vietnamese = {
   'Collapse toggle': 'Thu gọn nội dung',
   'Callout style': 'Kiểu chú thích',
   'Add nested block': 'Thêm khối bên trong',
+  'Empty toggle. Click to add a block.':
+      'Khối thu gọn trống. Bấm để thêm nội dung.',
   'Undo': 'Hoàn tác',
   'Redo': 'Làm lại',
   'Table options': 'Tùy chọn bảng',

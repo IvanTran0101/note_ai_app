@@ -17,6 +17,7 @@ import 'package:note_ai_app/domain/notes/attachment.dart';
 import 'package:note_ai_app/domain/notes/note_protection.dart';
 import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
 import 'package:note_ai_app/presentation/notes/attachment_editor_panel.dart';
+import 'package:note_ai_app/presentation/notes/attachment_editor_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 
 import '../../infrastructure/notes/note_repository_test_support.dart';
@@ -176,7 +177,9 @@ void main() {
     expect(find.textContaining('Attachment operation failed'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(uploads, 0);
-    await tester.tap(find.byTooltip('Retry upload'));
+    await tester.tap(find.byTooltip('Attachment actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry upload'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('Attachment operation failed'), findsNothing);
@@ -189,15 +192,28 @@ void main() {
       tester,
     ) async {
       final selected = Completer<List<AttachmentInput>>();
+      final inline = AttachmentEditorController();
+      addTearDown(inline.dispose);
       final note = await tester.runAsync(() => repository.findById('note'));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: AttachmentEditorPanel(
-              note: NoteDto.fromDomain(note!),
-              controller: _Controller(service, pick: () => selected.future),
-              security: security,
-              enabled: true,
+            body: Column(
+              children: [
+                AttachmentEditorPanel(
+                  note: NoteDto.fromDomain(note!),
+                  controller: _Controller(service, pick: () => selected.future),
+                  inlineController: inline,
+                  hiddenOwner: true,
+                  security: security,
+                  enabled: true,
+                ),
+                ListenableBuilder(
+                  listenable: inline,
+                  builder: (context, _) =>
+                      inline.buildBlock(context, 'test-placeholder', null),
+                ),
+              ],
             ),
           ),
         ),
@@ -212,9 +228,13 @@ void main() {
       }
 
       await settle();
-      await tester.tap(find.byTooltip('Add attachment'));
+      await tester.tap(
+        find.byKey(
+          const ValueKey('attachment-inline-placeholder-test-placeholder'),
+        ),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Choose files'));
+      await tester.tap(find.text('Choose a file'));
       await tester.pump();
       if (mode == 'new-session') security.epoch++;
       security.events.add(null); // Platform picker pauses/resumes the Activity.
