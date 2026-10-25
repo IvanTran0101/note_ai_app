@@ -147,14 +147,17 @@ const routeOf = (method: string, path: string): SyncRoute => {
 };
 
 /**
- * The Cognito subject that owns every note these routes read and write. Verified
- * claims are the only identity source the handler trusts; optional chaining
- * keeps an authorizer-less direct invocation from throwing, so a missing
- * identity is a 401 rather than a 500.
+ * The Cognito subject that owns every note these routes read and write - the
+ * subject of an ACCESS token only: an ID token carries the same `sub` but is
+ * addressed to the client, not to this API, so it never authenticates a data
+ * route. Verified claims are the only identity source the handler trusts;
+ * optional chaining keeps an authorizer-less direct invocation from throwing,
+ * so a missing identity - or the wrong token type - is a 401 rather than a 500.
  */
-const ownerSubOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined => {
-  const sub = event.requestContext?.authorizer?.jwt?.claims?.['sub'];
-  return typeof sub === 'string' ? sub : undefined;
+const accessTokenSubOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined => {
+  const claims = event.requestContext?.authorizer?.jwt?.claims;
+  const sub = claims?.['sub'];
+  return claims?.token_use === 'access' && typeof sub === 'string' ? sub : undefined;
 };
 
 /** An error's class name is a classifier, never request content. */
@@ -259,16 +262,16 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
   try {
     route = routeOf(methodOf(event), event.rawPath);
     if (event.rawPath.startsWith('/me/')) {
-      const actor = ownerSubOf(event);
-      if (!actor || event.requestContext.authorizer?.jwt?.claims?.token_use !== 'access') {
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) {
         return unauthorizedResponse();
       }
       return profileService ? await handleProfile(event, actor, profileService)
         : jsonResponse(503, {code: 'PROFILE_UNAVAILABLE'});
     }
     if (event.rawPath.startsWith('/notes/')) {
-      const actor = ownerSubOf(event);
-      if (!actor) return unauthorizedResponse();
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) return unauthorizedResponse();
       if (isAttachmentPath(event.rawPath)) return attachmentService
         ? await handleAttachments(event, actor, attachmentService)
         : jsonResponse(503, {code: 'ATTACHMENT_UNAVAILABLE', retryable: true});
@@ -286,9 +289,10 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
       return notFoundResponse();
     }
 
-    const ownerId = ownerSubOf(event);
+    const ownerId = accessTokenSubOf(event);
     if (ownerId === undefined) {
-      // Only reachable when the authorizer was bypassed (a direct invoke).
+      // Reachable when the authorizer was bypassed (a direct invoke) or the
+      // token presented is not a Cognito access token.
       return unauthorizedResponse();
     }
     if (event.rawPath === '/sync/v2/label-projections' && methodOf(event) === 'POST') {

@@ -9,7 +9,7 @@ process.env.NOTES_TABLE_REGION = 'us-east-1';
 const {handler} = await import('./handler');
 const event = (body: unknown, actor: string | null = 'owner'): Event => ({
   rawPath: '/sync/v2/label-projections', body: typeof body === 'string' ? body : JSON.stringify(body),
-  requestContext: {http: {method: 'POST'}, authorizer: {jwt: {claims: actor ? {sub: actor} : {}}}},
+  requestContext: {http: {method: 'POST'}, authorizer: {jwt: {claims: actor ? {sub: actor, token_use: 'access'} : {}}}},
 }) as Event;
 async function invoke(body: unknown, actor: string | null = 'owner') {
   const value = await handler(event(body, actor), {} as never, () => {});
