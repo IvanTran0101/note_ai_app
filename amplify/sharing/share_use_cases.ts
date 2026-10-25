@@ -40,9 +40,15 @@ export class ShareUseCases {
     }
     const recipient = email ? await this.resolver.resolve(email) : identifier(cmd.recipientId);
     if (recipient === owner) throw new ShareError('selfShare');
-    const [previous, note, shares] = await Promise.all([
-      this.store.read(owner, id, recipient), this.store.note(owner, id), this.store.list(owner, id),
-    ]);
+    // The note is read FIRST because it pins the sharingRevision the commit CAS
+    // binds to; the share list is read AFTER it, so its count reflects at least
+    // the pinned revision. Any concurrent share write that lands after the pin
+    // bumps sharingRevision and cancels the CAS below. Reading these in
+    // Promise.all instead could pair an older list snapshot with a newer note
+    // revision and admit one share beyond the cap.
+    const note = await this.store.note(owner, id);
+    const previous = await this.store.read(owner, id, recipient);
+    const shares = await this.store.list(owner, id);
     if (!note || note.deletedAt) throw new NoteSecurityError('denied');
     if (cmd.action === 'create' && previous?.status === 'active') throw new ShareError('duplicate');
     if ((previous?.accessRevision ?? 0) !== cmd.expectedAccessRevision ||

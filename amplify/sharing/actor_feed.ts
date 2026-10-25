@@ -20,6 +20,10 @@ export class ActorFeed {
     const row = await this.item(owner, `NOTE#${id}`);
     return row ? toNoteSnapshot(row) : null;
   }
+  /** Every share row of one note, paginated. Read-only: the active-recipient
+   *  cap is enforced on the create path (ShareUseCases.apply), never here -
+   *  fanout for note mutations and protection commits depends on this read, and
+   *  an over-limit row set must not brick writes or revokes. */
   async shares(owner: string, id: string): Promise<ShareRecord[]> {
     const result: ShareRecord[] = [];
     let start: Record<string, unknown> | undefined;
@@ -35,7 +39,6 @@ export class ActorFeed {
       }
       start = r.LastEvaluatedKey;
     } while (start);
-    if (result.filter(s => s.status === 'active').length > MAX_ACTIVE_RECIPIENTS) throw new ShareError('limit');
     return result;
   }
   async append(actor: string, snapshot: NoteSnapshot): Promise<Writes> {

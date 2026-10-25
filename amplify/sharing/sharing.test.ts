@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CognitoRecipientResolver } from './cognito_recipient_resolver';
 import { TestDynamo } from './test_dynamo';
-import { DynamoNoteAcl } from './dynamo_note_acl';
+import { DynamoNoteAcl, shareKey } from './dynamo_note_acl';
 import { DynamoShareStore } from './dynamo_share_store';
 import { ShareUseCases } from './share_use_cases';
-import { ShareError, type ShareCommand } from './share_models';
+import { MAX_ACTIVE_RECIPIENTS } from './actor_feed';
+import { ShareError, type ShareCommand, type ShareStore } from './share_models';
 import { ProtectionUseCases } from '../protection/use_cases';
 import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
 import { TestPasswordHasher } from '../protection/test_support';
@@ -35,6 +36,28 @@ function fixture() {
   const mutation = (id = 'edit', epoch = 1) => ({ ownerId: 'owner', accessRevision: epoch,
     mutationId: id, noteId: 'alpha', operation: 'update' as const, baseRevision: 1, payload: { title: 'edited', content: 'edited body' } });
   return { db, acl, p, security, shares, sync, create, command, mutation };
+}
+/** Notes already at/past the active-share cap. Seeded directly because the
+ *  fixed create path can no longer produce an over-limit row set. */
+function crowdedFixture(active = MAX_ACTIVE_RECIPIENTS + 1) {
+  const db = new TestDynamo(); db.put({ ...note, ownerId: 'OWNER#owner', noteId: 'NOTE#alpha' });
+  for (let i = 1; i <= active; i++) {
+    db.put({ ...shareKey('owner', 'alpha', `r${i}`), share: { ownerId: 'owner', noteId: 'alpha',
+      recipientId: `r${i}`, role: 'viewer', accessRevision: 1, status: 'active',
+      sharedAt: '2026-10-02T00:00:00Z', updatedAt: '2026-10-02T00:00:00Z', revokedAt: null } });
+  }
+  const acl = new DynamoNoteAcl('test', db.client), p = new DynamoProtectionStore('test', db.client, true);
+  const security = new ProtectionUseCases(p, new TestPasswordHasher(), acl, { async sendCode() {} });
+  const shares = new ShareUseCases(new DynamoShareStore('test', db.client),
+    { async resolve(email: string) { return email.split('@')[0]; } }, security);
+  const sync = new DynamoSyncStore({ tableName: 'test', documentClient: db.client, security, sharing: true });
+  const create = (rid: string, request = `create-${rid}`) => shares.apply('owner', 'owner', 'alpha', {
+    requestId: request, action: 'create', email: `${rid}@example.invalid`, role: 'editor', expectedAccessRevision: 0 });
+  const revoke = (rid: string) => shares.apply('owner', 'owner', 'alpha', {
+    requestId: `revoke-${rid}`, action: 'revoke', recipientId: rid, expectedAccessRevision: 1 });
+  const ownerEdit = (id = 'edit') => ({ mutationId: id, noteId: 'alpha', operation: 'update' as const,
+    baseRevision: 1, payload: { title: 'edited', content: 'edited body' } });
+  return { db, acl, p, security, shares, sync, create, revoke, ownerEdit };
 }
 
 test('registered verified recipient lookup is exact, private and rejects unknown/unverified/ambiguous/disabled', async () => {
@@ -156,4 +179,68 @@ test('Summary pins actor ACL before input work and at result commit; viewer allo
   const run = await authority.begin(request, 'recipient'); await run.revalidate();
   await f.command('revoke', 1); await assert.rejects(run.complete('private summary'));
   assert.ok(![...f.db.rows.values()].some(r => r.outputs?.includes('private summary')));
+});
+
+test('two concurrent creates at 19 active admit one recipient; the loser is refused and the cap holds', async () => {
+  const f = crowdedFixture(MAX_ACTIVE_RECIPIENTS - 1);
+  const outcomes = await Promise.allSettled([f.create('r20'), f.create('r21')]);
+  assert.equal(outcomes.filter(o => o.status === 'fulfilled').length, 1);
+  for (const o of outcomes.filter(o => o.status === 'rejected')) {
+    assert.ok(o.reason instanceof ShareError && ['staleAccess', 'limit'].includes(o.reason.code),
+      `unexpected rejection: ${String(o.reason)}`);
+  }
+  const active = (await f.shares.list('owner', 'owner', 'alpha')).filter(s => s.status === 'active').length;
+  assert.ok(active <= MAX_ACTIVE_RECIPIENTS, `active count ${active} exceeded the cap`);
+});
+
+test('apply completes the note read before the share-list read, closing the stale-count/newer-revision interleaving', async () => {
+  const f = fixture();
+  const events: string[] = [];
+  const inner = new DynamoShareStore('test', f.db.client);
+  const timed: ShareStore = {
+    async note(owner: string, id: string) { events.push('note:start'); const n = await inner.note(owner, id); events.push('note:end'); return n; },
+    async read(owner: string, id: string, recipient: string) { events.push('read:start'); const r = await inner.read(owner, id, recipient); events.push('read:end'); return r; },
+    async list(owner: string, id: string) { events.push('list:start'); const rows = await inner.list(owner, id); events.push('list:end'); return rows; },
+    receipt: (...args: Parameters<ShareStore['receipt']>) => inner.receipt(...args),
+    commit: (...args: Parameters<ShareStore['commit']>) => inner.commit(...args),
+  };
+  await new ShareUseCases(timed, { async resolve() { return 'recipient'; } }, f.security)
+    .apply('owner', 'owner', 'alpha', { requestId: 'order', action: 'create',
+      email: 'recipient@example.invalid', role: 'editor', expectedAccessRevision: 0 });
+  assert.ok(events.indexOf('note:end') < events.indexOf('list:start'),
+    'the list snapshot must never be older than the sharingRevision the commit CAS pins');
+});
+
+test('a note at 21 active is not bricked: list reads every row, revoke recovers, create stays refused', async () => {
+  const f = crowdedFixture();
+  assert.equal((await f.shares.list('owner', 'owner', 'alpha')).length, MAX_ACTIVE_RECIPIENTS + 1);
+  await assert.rejects(f.create('r22'), shareError('limit'));
+  await f.revoke('r1');
+  const active = (await f.shares.list('owner', 'owner', 'alpha')).filter(s => s.status === 'active');
+  assert.equal(active.length, MAX_ACTIVE_RECIPIENTS);
+  await assert.rejects(f.create('r22'), shareError('limit'));
+});
+
+test('owner edits and protection commits fan out on a 21-active note instead of failing on the cap', async () => {
+  const f = crowdedFixture();
+  const applied = await f.sync.applyMutation('owner', f.ownerEdit(), { actorId: 'owner' });
+  assert.equal(applied.status, 'applied');
+  assert.equal(f.db.get('owner', 'NOTE#alpha')?.content, 'edited body');
+  assert.equal(f.db.get('r1', 'CHANGE#1')?.content, 'edited body');
+  assert.equal(f.db.get(`r${MAX_ACTIVE_RECIPIENTS + 1}`, 'CHANGE#1')?.content, 'edited body');
+  const event = [...f.db.rows.values()].find(r => r.noteId.startsWith('EVENT#'))!;
+  assert.equal(event.actors.length, MAX_ACTIVE_RECIPIENTS + 2);
+  await f.security.enable('owner', 'owner', 'alpha', 'test-password-alpha', 2);
+  assert.equal(f.db.get('owner', 'PROTECTION#alpha')?.enabled, true);
+  assert.equal(f.db.get('r2', 'CHANGE#2')?.title, '');
+});
+
+test('lost-ACK replay after revoke returns the revoked record and never resurrects access', async () => {
+  const f = fixture(); await f.create();
+  await f.command('revoke', 1);
+  const replay = await f.create();
+  assert.equal(replay.status, 'revoked');
+  assert.equal(replay.accessRevision, 2);
+  await assert.rejects(f.security.content('recipient', 'owner', 'alpha'), denied);
+  await assert.rejects(f.sync.applyMutation('owner', f.mutation(), { actorId: 'recipient' }), denied);
 });
