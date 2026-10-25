@@ -43,6 +43,15 @@ final class AuthController extends ChangeNotifier {
   bool _initializationCompleted;
   StreamSubscription<AuthUserDto?>? _authStateSubscription;
 
+  /// Sequence of the most recently started operation; see [_beginOperation].
+  int _operationSeq = 0;
+
+  /// Sequence of the operation currently in flight, `null` when idle.
+  ///
+  /// Tracked independently of auth-state events, which report the hub's view
+  /// without ending an in-flight operation.
+  int? _runningOperation;
+
   AuthState get state => _state;
 
   String? pendingProfileDisplayName;
@@ -53,10 +62,14 @@ final class AuthController extends ChangeNotifier {
     }
     if (user?.userId != _state.user?.userId) pendingProfileDisplayName = null;
     _initializationCompleted = true;
+    // An in-flight operation owns the busy flag: the hub event reports the
+    // user it saw without ending the operation, so a second operation stays
+    // rejected until the running one completes or fails.
+    final bool isBusy = _runningOperation != null;
     _emit(
       user == null
-          ? const AuthState.unauthenticated()
-          : AuthState.authenticated(user: user),
+          ? AuthState.unauthenticated(isBusy: isBusy)
+          : AuthState.authenticated(user: user, isBusy: isBusy),
     );
   }
 
@@ -124,20 +137,29 @@ final class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     pendingProfileDisplayName = null;
     _ensureActive();
-    _ensureNotBusy();
+    // Sign-out is never blocked by an in-flight operation: it supersedes it,
+    // and the superseded operation's completion no longer emits state.
+    final int sequence = _beginOperation();
     if (authenticationAppService == null) {
       _emit(const AuthState.unauthenticated());
+      _endOperation(sequence);
       return;
     }
     _emit(_busyState());
     try {
       await _service.logout();
-      _emit(const AuthState.unauthenticated());
+      if (_isCurrentOperation(sequence)) {
+        _emit(const AuthState.unauthenticated());
+      }
     } on Object catch (error, stackTrace) {
       // AuthenticationAppService clears its local session in finally, even
       // when the provider sign-out fails.
-      _emit(AuthState.unauthenticated(error: _mapError(error)));
+      if (_isCurrentOperation(sequence)) {
+        _emit(AuthState.unauthenticated(error: _mapError(error)));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
@@ -199,27 +221,41 @@ final class AuthController extends ChangeNotifier {
   }) async {
     _ensureActive();
     _ensureNotBusy();
+    final int sequence = _beginOperation();
     _emit(_busyState());
     try {
       final T result = await operation();
-      _emit(onSuccess(result));
+      if (_isCurrentOperation(sequence)) {
+        _emit(onSuccess(result));
+      }
       return result;
     } on Object catch (error, stackTrace) {
-      _emit(_failureState(error));
+      if (_isCurrentOperation(sequence)) {
+        _emit(_failureState(error));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
   Future<void> _executeVoid(Future<void> Function() operation) async {
     _ensureActive();
     _ensureNotBusy();
+    final int sequence = _beginOperation();
     _emit(_busyState());
     try {
       await operation();
-      _emit(_stableState());
+      if (_isCurrentOperation(sequence)) {
+        _emit(_stableState());
+      }
     } on Object catch (error, stackTrace) {
-      _emit(_failureState(error));
+      if (_isCurrentOperation(sequence)) {
+        _emit(_failureState(error));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
@@ -314,8 +350,28 @@ final class AuthController extends ChangeNotifier {
   }
 
   void _ensureNotBusy() {
-    if (_state.isBusy) {
+    if (_runningOperation != null) {
       throw StateError('Authentication operation already in progress.');
+    }
+  }
+
+  /// Starts an operation: advances the sequence and marks it in flight.
+  ///
+  /// Only the latest sequence may emit state on completion or error, so a
+  /// superseded operation — for example a login that a logout overtook —
+  /// returns or throws to its own caller without overwriting the state the
+  /// newer operation published.
+  int _beginOperation() {
+    _operationSeq++;
+    _runningOperation = _operationSeq;
+    return _operationSeq;
+  }
+
+  bool _isCurrentOperation(int sequence) => sequence == _operationSeq;
+
+  void _endOperation(int sequence) {
+    if (_runningOperation == sequence) {
+      _runningOperation = null;
     }
   }
 

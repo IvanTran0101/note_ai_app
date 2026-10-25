@@ -25,18 +25,32 @@ abstract interface class IAuthenticationAppService {
   Future<RegistrationResult> register(RegisterInput input);
 
   /// Authenticates [input] and publishes the identity to the session.
+  ///
+  /// A completion that lands after the session moved on — a sign-out, a
+  /// provider session expiry, or a newer account taking the session — is
+  /// rejected as unauthenticated instead of publishing.
   Future<AuthUserDto> login(LoginInput input);
 
   /// Signs out and always drops the local session.
   Future<void> logout();
 
   /// Restores the provider's current identity into the session, if any.
+  ///
+  /// Like [login], a completion that lands after the session moved on is
+  /// rejected as unauthenticated instead of publishing.
   Future<AuthUserDto?> restoreSession();
 
   /// Emits provider session changes and keeps the local session in sync.
+  ///
+  /// A delivered signed-out event also invalidates operations still in
+  /// flight, even when the local session is already empty.
   Stream<AuthUserDto?> observeAuthState();
 
   /// Reloads the authenticated identity and publishes it to the session.
+  ///
+  /// The refreshed identity is published only while the session still holds
+  /// the user being refreshed; a refresh completing after a sign-out or an
+  /// account switch is rejected as unauthenticated.
   Future<AuthUserDto> refreshIdentity();
 
   /// Re-requests verification for the authenticated identity.
@@ -170,10 +184,17 @@ final class AuthenticationAppService implements IAuthenticationAppService {
     );
     _requirePassword(input.password);
 
+    final int epoch = _authEpoch;
+    final int generation = currentUserSession.sessionGeneration;
     final AuthIdentity identity = await authenticationService.login(
       email: email,
       password: input.password,
     );
+    if (!_sessionUnchanged(epoch, generation, identity.userId)) {
+      throw const AuthenticationFailure(
+        AuthenticationFailureCode.unauthenticated,
+      );
+    }
     currentUserSession.setIdentity(identity);
     return AuthUserDto.fromIdentity(identity);
   }
@@ -192,8 +213,15 @@ final class AuthenticationAppService implements IAuthenticationAppService {
 
   @override
   Future<AuthUserDto?> restoreSession() async {
+    final int epoch = _authEpoch;
+    final int generation = currentUserSession.sessionGeneration;
     final AuthIdentity? identity = await authenticationService
         .getCurrentIdentity();
+    if (!_sessionUnchanged(epoch, generation, identity?.userId)) {
+      throw const AuthenticationFailure(
+        AuthenticationFailureCode.unauthenticated,
+      );
+    }
     if (identity == null) {
       currentUserSession.clear();
       return null;
@@ -219,6 +247,10 @@ final class AuthenticationAppService implements IAuthenticationAppService {
         })
         .map((identity) {
           if (identity == null) {
+            // A delivered sign-out invalidates operations still in flight
+            // even when the local session is already empty, so a pending
+            // login or restore cannot publish over the expiry.
+            _authEpoch++;
             currentUserSession.clear();
             return null;
           }
@@ -230,7 +262,18 @@ final class AuthenticationAppService implements IAuthenticationAppService {
   @override
   Future<AuthUserDto> refreshIdentity() async {
     _requireAuthenticatedUser();
+    final String userId = currentUserSession.requiredUserId;
+    final int epoch = _authEpoch;
+    final int generation = currentUserSession.sessionGeneration;
     final AuthIdentity identity = await authenticationService.refreshIdentity();
+    // `_sessionUnchanged` reduces to "the session still holds the user being
+    // refreshed": an unchanged generation implies the same user id, and the
+    // user-id branch covers a same-user echo that advanced the generation.
+    if (!_sessionUnchanged(epoch, generation, userId)) {
+      throw const AuthenticationFailure(
+        AuthenticationFailureCode.unauthenticated,
+      );
+    }
     currentUserSession.setIdentity(identity);
     return AuthUserDto.fromIdentity(identity);
   }
@@ -327,6 +370,25 @@ final class AuthenticationAppService implements IAuthenticationAppService {
   /// Rejects the call when no user is signed in, before any provider call.
   void _requireAuthenticatedUser() {
     currentUserSession.requiredUserId;
+  }
+
+  /// Whether an operation that captured [epoch] and [generation] may still
+  /// publish [userId] to the session.
+  ///
+  /// Publishing is stale once a sign-out, a provider session expiry, or a
+  /// foreign sign-in event advanced the epoch: the operation would resurrect
+  /// the ended session or overwrite a newer account. Otherwise publishing
+  /// stays valid when the session never moved (same generation) or when it
+  /// already holds [userId]: the operation's own signed-in echo legally
+  /// re-records that identity, which advances the generation from an empty or
+  /// switched session without invalidating the operation.
+  bool _sessionUnchanged(int epoch, int generation, String? userId) {
+    if (_authEpoch != epoch) {
+      return false;
+    }
+    final CurrentUserSession session = currentUserSession;
+    return session.sessionGeneration == generation ||
+        session.userId == userId;
   }
 }
 

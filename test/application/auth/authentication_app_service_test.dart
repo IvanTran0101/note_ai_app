@@ -68,6 +68,138 @@ void main() {
     );
   });
 
+  group('stale completions', () {
+    test('a login completing after logout does not resurrect the session', () async {
+      session.setIdentity(identity(userId: 'user-9'));
+      final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+      authentication.loginGate = gate;
+      final Future<AuthUserDto> login = service.login(
+        const LoginInput(email: 'switch@example.com', password: 'secret'),
+      );
+      await pumpEventQueue();
+
+      await service.logout();
+      gate.complete(identity());
+
+      await expectLater(login, throwsA(unauthenticatedFailure()));
+      expect(session.isAuthenticated, isFalse);
+      expect(session.identity, isNull);
+      // Generation 1 recorded the prior sign-in; 2 records the logout clear.
+      expect(session.sessionGeneration, 2);
+    });
+
+    test(
+      'a session-expiry event during a pending login rejects the late login',
+      () async {
+        // The session is already empty, so the null event's clear() alone
+        // changes nothing; only the epoch invalidates the pending login.
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen((AuthUserDto? _) {});
+        addTearDown(subscription.cancel);
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        authentication.authState.add(null);
+        await pumpEventQueue();
+        gate.complete(identity());
+
+        await expectLater(login, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+      },
+    );
+
+    test(
+      'a same-user signed-in echo during a pending login keeps the login valid',
+      () async {
+        final AuthIdentity echoed = identity(isEmailVerified: true);
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen((AuthUserDto? _) {});
+        addTearDown(subscription.cancel);
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        authentication.authState.add(echoed);
+        await pumpEventQueue();
+        gate.complete(echoed);
+
+        final AuthUserDto user = await login;
+        expect(user.userId, 'user-1');
+        expect(user.isEmailVerified, isTrue);
+        expect(session.identity, same(echoed));
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test(
+      'a login completing after another account signed in does not overwrite it',
+      () async {
+        final Completer<AuthIdentity> gateA = Completer<AuthIdentity>();
+        authentication.loginGate = gateA;
+        final Future<AuthUserDto> loginA = service.login(
+          const LoginInput(email: 'a@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        authentication.loginGate = null;
+        authentication.loginResult = identity(userId: 'user-b');
+        final AuthUserDto userB = await service.login(
+          const LoginInput(email: 'b@example.com', password: 'secret'),
+        );
+        expect(userB.userId, 'user-b');
+
+        gateA.complete(identity(userId: 'user-a'));
+        await expectLater(loginA, throwsA(unauthenticatedFailure()));
+
+        expect(session.userId, 'user-b');
+        expect(session.identity, same(authentication.loginResult));
+      },
+    );
+
+    test('a restore completing after logout does not resurrect the session', () async {
+      session.setIdentity(identity(userId: 'user-9'));
+      final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+      authentication.getCurrentIdentityGate = gate;
+      final Future<AuthUserDto?> restore = service.restoreSession();
+      await pumpEventQueue();
+
+      await service.logout();
+      gate.complete(identity());
+
+      await expectLater(restore, throwsA(unauthenticatedFailure()));
+      expect(session.isAuthenticated, isFalse);
+      expect(session.identity, isNull);
+    });
+
+    test(
+      'an identity refresh completing after logout does not resurrect the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.refreshGate = gate;
+        final Future<AuthUserDto> refresh = service.refreshIdentity();
+        await pumpEventQueue();
+
+        await service.logout();
+        gate.complete(identity());
+
+        await expectLater(refresh, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+      },
+    );
+  });
+
   group('logout', () {
     test(
       'clears the local session even when provider sign-out fails',
@@ -673,6 +805,15 @@ Matcher reasonIs(AuthValidationReason reason) {
   );
 }
 
+/// Matcher for the stale-completion rejection shared by fenced operations.
+Matcher unauthenticatedFailure() {
+  return isA<AuthenticationFailure>().having(
+    (AuthenticationFailure failure) => failure.code,
+    'code',
+    AuthenticationFailureCode.unauthenticated,
+  );
+}
+
 AuthIdentity identity({
   String userId = 'user-1',
   String email = 'user@example.com',
@@ -695,6 +836,12 @@ final class FakeAuthenticationService implements IAuthenticationService {
   AuthIdentity? storedIdentity;
   AuthIdentity loginResult = identity();
   AuthIdentity refreshResult = identity();
+
+  /// When set, the call parks until the completer resolves, so a test can
+  /// interleave session work between the call and its completion.
+  Completer<AuthIdentity>? loginGate;
+  Completer<AuthIdentity?>? getCurrentIdentityGate;
+  Completer<AuthIdentity>? refreshGate;
 
   /// Provider auth-state events the fake replays to its observer.
   final StreamController<AuthIdentity?> authState =
@@ -725,6 +872,12 @@ final class FakeAuthenticationService implements IAuthenticationService {
       'login.email': email,
       'login.password': password,
     });
+    final Completer<AuthIdentity>? gate = loginGate;
+    if (gate != null) {
+      final AuthIdentity result = await gate.future;
+      storedIdentity = result;
+      return result;
+    }
     storedIdentity = loginResult;
     return loginResult;
   }
@@ -737,6 +890,10 @@ final class FakeAuthenticationService implements IAuthenticationService {
   @override
   Future<AuthIdentity?> getCurrentIdentity() async {
     _record('getCurrentIdentity');
+    final Completer<AuthIdentity?>? gate = getCurrentIdentityGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return storedIdentity;
   }
 
@@ -758,6 +915,10 @@ final class FakeAuthenticationService implements IAuthenticationService {
   @override
   Future<AuthIdentity> refreshIdentity() async {
     _record('refreshIdentity');
+    final Completer<AuthIdentity>? gate = refreshGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return refreshResult;
   }
 

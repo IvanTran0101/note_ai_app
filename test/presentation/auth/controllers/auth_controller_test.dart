@@ -188,6 +188,84 @@ void main() {
     },
   );
 
+  group('operation races', () {
+    test(
+      'a hub unauthenticated event during login keeps the operation busy',
+      () async {
+        final Completer<AuthUserDto> gate = Completer<AuthUserDto>();
+        service.loginGate = gate;
+        final Future<AuthUserDto> login = controller.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        service.authState.add(null);
+        await pumpEventQueue();
+
+        expect(controller.state.status, AuthStatus.unauthenticated);
+        expect(controller.state.isBusy, isTrue);
+        await expectLater(controller.refreshIdentity(), throwsStateError);
+
+        gate.complete(testUser);
+        final AuthUserDto user = await login;
+
+        expect(user, testUser);
+        expect(controller.state.status, AuthStatus.authenticated);
+        expect(controller.state.user, testUser);
+        expect(controller.state.isBusy, isFalse);
+        expect(controller.state.error, isNull);
+      },
+    );
+
+    test(
+      'a stale login error after logout does not overwrite the logout state',
+      () async {
+        final Completer<AuthUserDto> gate = Completer<AuthUserDto>();
+        service.loginGate = gate;
+        final List<AuthState> states = <AuthState>[];
+        controller.addListener(() => states.add(controller.state));
+        final Future<AuthUserDto> login = controller.login(
+          const LoginInput(email: 'a@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        await controller.logout();
+        gate.completeError(
+          const AuthenticationFailure(
+            AuthenticationFailureCode.unauthenticated,
+          ),
+        );
+
+        await expectLater(login, throwsA(isA<AuthenticationFailure>()));
+        expect(controller.state.status, AuthStatus.unauthenticated);
+        expect(controller.state.isBusy, isFalse);
+        expect(controller.state.error, isNull);
+        expect(
+          states.where((AuthState state) => state.error != null),
+          isEmpty,
+        );
+      },
+    );
+
+    test('a normal login still emits exactly one authenticated state', () async {
+      service.loginResult = testUser;
+      final List<AuthState> states = <AuthState>[];
+      controller.addListener(() => states.add(controller.state));
+
+      await controller.login(
+        const LoginInput(email: 'user@example.com', password: 'secret'),
+      );
+
+      expect(
+        states.map((AuthState state) => state.status),
+        <AuthStatus>[AuthStatus.initializing, AuthStatus.authenticated],
+      );
+      expect(states.last.user, testUser);
+      expect(states.last.isBusy, isFalse);
+      expect(states.last.error, isNull);
+    });
+  });
+
   group('auth state stream', () {
     test('subscribes to the service stream on construction', () {
       expect(service.hasAuthStateListener, isTrue);
@@ -286,6 +364,10 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   );
   LoginInput? loginInput;
 
+  /// When set, [login] parks until the completer resolves, so a test can
+  /// deliver auth-state events between the call and its completion.
+  Completer<AuthUserDto>? loginGate;
+
   /// Application auth-state events the fake replays to its observer.
   final StreamController<AuthUserDto?> authState =
       StreamController<AuthUserDto?>.broadcast();
@@ -310,6 +392,10 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   Future<AuthUserDto> login(LoginInput input) async {
     _record('login');
     loginInput = input;
+    final Completer<AuthUserDto>? gate = loginGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return loginResult;
   }
 
