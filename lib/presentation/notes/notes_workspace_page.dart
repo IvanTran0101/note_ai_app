@@ -196,6 +196,16 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   @override
+  void didUpdateWidget(covariant NotesWorkspacePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.syncController != widget.syncController) {
+      oldWidget.syncController?.removeListener(_workspaceSyncChanged);
+      widget.syncController?.addListener(_workspaceSyncChanged);
+      _workspaceSyncChanged();
+    }
+  }
+
+  @override
   void dispose() {
     unawaited(_securitySubscription?.cancel());
     widget.syncController?.removeListener(_workspaceSyncChanged);

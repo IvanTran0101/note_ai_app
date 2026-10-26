@@ -43,6 +43,9 @@ final class AuthController extends ChangeNotifier {
   bool _initializationCompleted;
   StreamSubscription<AuthUserDto?>? _authStateSubscription;
 
+  /// Shared in-flight restore backing [initialize]; see [initialize].
+  Future<AuthUserDto?>? _inFlightRestore;
+
   /// Sequence of the most recently started operation; see [_beginOperation].
   int _operationSeq = 0;
 
@@ -88,26 +91,75 @@ final class AuthController extends ChangeNotifier {
     return service;
   }
 
-  /// Restores the provider session once. A failed initialization can be
-  /// retried; a completed initialization is idempotent.
+  /// Restores the provider session once, coalescing concurrent callers.
+  ///
+  /// Concurrent calls share one in-flight restore:
+  /// [IAuthenticationAppService.restoreSession] runs a single time and every
+  /// caller awaits the same future with the same terminal state. The shared
+  /// future is cleared once it settles, so a failed or superseded restore
+  /// stays retryable, while a completed initialization short-circuits
+  /// idempotently.
+  ///
+  /// The restore participates in the operation fence like every other
+  /// operation. Before starting a new restore it obeys the same busy admission
+  /// as every other operation: a pending login or registration is never
+  /// superseded by initialization. A caller that joins an already-running
+  /// shared restore is not blocked by that shared operation, and a completed
+  /// initialization stays an idempotent no-op.
+  ///
+  /// When a newer operation — a logout, for example — supersedes a pending
+  /// restore, the late result or error still returns or throws to its own
+  /// caller, but it no longer overwrites the state the newer operation
+  /// published, and initialization stays retryable.
   Future<AuthUserDto?> initialize() async {
     _ensureActive();
     if (_initializationCompleted) {
       return _state.user;
     }
+    final Future<AuthUserDto?>? pending = _inFlightRestore;
+    if (pending != null) {
+      return pending;
+    }
+    // A completed initialization short-circuits above and coalesced callers
+    // join their own in-flight restore above, so only a genuinely new restore
+    // reaches this admission check.
+    _ensureNotBusy();
+    return _inFlightRestore = _startSharedRestore();
+  }
+
+  /// Runs the fenced restore shared by every coalesced [initialize] caller.
+  ///
+  /// Exactly one operation is begun for the shared run, so coalesced callers
+  /// neither emit nor fence against each other. Terminal emits and the
+  /// completion flag are gated on that sequence; the memo is cleared in
+  /// [finally] so both failed and superseded runs leave [initialize]
+  /// retryable.
+  Future<AuthUserDto?> _startSharedRestore() async {
+    final int sequence = _beginOperation();
     _emit(const AuthState.initializing(isBusy: true));
     try {
       final AuthUserDto? user = await _service.restoreSession();
-      _initializationCompleted = true;
-      _emit(
-        user == null
-            ? const AuthState.unauthenticated()
-            : AuthState.authenticated(user: user),
-      );
+      if (_isCurrentOperation(sequence)) {
+        _initializationCompleted = true;
+        _emit(
+          user == null
+              ? const AuthState.unauthenticated()
+              : AuthState.authenticated(user: user),
+        );
+      }
       return user;
     } on Object catch (error, stackTrace) {
-      _emit(AuthState.initializing(error: _mapError(error)));
+      if (_isCurrentOperation(sequence)) {
+        // A Hub event may mark completion before this restore fails; keep Retry usable.
+        _initializationCompleted = false;
+        _emit(AuthState.initializing(error: _mapError(error)));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
+      // Only this shared future can be memoized while it is in flight, so
+      // an unconditional clear keeps failures and superseded runs retryable.
+      _inFlightRestore = null;
     }
   }
 

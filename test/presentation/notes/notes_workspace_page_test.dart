@@ -9,10 +9,20 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/sync/local_note_state.dart';
+import 'package:note_ai_app/application/sync/local_sync_state.dart';
+import 'package:note_ai_app/application/sync/pending_mutation.dart';
+import 'package:note_ai_app/application/sync/sync_conflict.dart';
+import 'package:note_ai_app/application/sync/local_sync_store.dart';
+import 'package:note_ai_app/application/sync/sync_coordinator.dart';
+import 'package:note_ai_app/application/sync/sync_conflict_resolver.dart';
+import 'package:note_ai_app/application/sync/sync_report.dart';
+import 'package:note_ai_app/application/sync/sync_status.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/sync/sync_presentation_controller.dart';
 
 final DateTime _baseTime = DateTime.utc(2026, 1, 1);
 
@@ -80,6 +90,104 @@ void main() {
     expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(567), -56);
     expect(NoteFlowLayout.compactWebPageTopAdjustmentFor(600), 0);
   });
+
+  testWidgets(
+    'swapping the sync controller rebinds the workspace listener',
+    (WidgetTester tester) async {
+      LocalSyncState stateOf() => LocalSyncState(
+        accountUserId: 'account-1',
+        notes: const <LocalNoteState>[],
+        outbox: const <PendingMutation>[],
+        conflicts: const <SyncConflict>[],
+      );
+
+      final _SwapMemoryStore storeA = _SwapMemoryStore();
+      final _SwapMemoryStore storeB = _SwapMemoryStore();
+      final _SwapCoordinator coordinatorA = _SwapCoordinator();
+      final _SwapCoordinator coordinatorB = _SwapCoordinator();
+
+      SyncPresentationController controllerFor(
+        _SwapMemoryStore store,
+        _SwapCoordinator coordinator,
+      ) => SyncPresentationController(
+        accountUserId: 'account-1',
+        localStore: store,
+        coordinator: coordinator,
+        conflictResolver: SyncConflictResolver(
+          localSyncStore: store,
+          generateNoteId: () => 'replacement-note',
+          generateMutationId: () => 'replacement-mutation',
+          now: () => _baseTime,
+        ),
+      );
+
+      final SyncPresentationController controllerA = controllerFor(
+        storeA,
+        coordinatorA,
+      );
+      final SyncPresentationController controllerB = controllerFor(
+        storeB,
+        coordinatorB,
+      );
+      addTearDown(coordinatorA.close);
+      addTearDown(coordinatorB.close);
+      addTearDown(controllerA.dispose);
+      addTearDown(controllerB.dispose);
+
+      SyncPresentationController current = controllerA;
+      final _FakeNotesController notes = _FakeNotesController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return NotesWorkspacePage(
+                controller: notes,
+                syncController: current,
+                embeddedInWorkspace: true,
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Baseline: the initial bind already consumed controller A's state.
+      final int baseline = notes.listNotesCalls;
+
+      // Swap to controller B in the SAME element (same type, same position).
+      current = controllerB;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return NotesWorkspacePage(
+                controller: notes,
+                syncController: current,
+                embeddedInWorkspace: true,
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The rebind handler ran once for B's fresh state.
+      expect(notes.listNotesCalls, baseline + 1);
+
+      // The retired controller no longer drives the page.
+      storeA.state = stateOf();
+      coordinatorA.publish(const SyncStatusSnapshot.idle());
+      await tester.pumpAndSettle();
+      expect(notes.listNotesCalls, baseline + 1,
+          reason: 'retired controller notifications must not refresh');
+
+      // The new controller does.
+      storeB.state = stateOf();
+      coordinatorB.publish(const SyncStatusSnapshot.idle());
+      await tester.pumpAndSettle();
+      expect(notes.listNotesCalls, baseline + 2);
+    },
+  );
 
   testWidgets('workspace entry points open notes and drafts inline', (
     WidgetTester tester,
@@ -825,4 +933,48 @@ final class _FakeNotesController implements NotesApplicationController {
     notes[notes.indexOf(current)] = updated;
     return updated;
   }
+}
+
+final class _SwapMemoryStore implements ILocalSyncStore {
+  LocalSyncState state = LocalSyncState(
+    accountUserId: 'account-1',
+    notes: const <LocalNoteState>[],
+    outbox: const <PendingMutation>[],
+    conflicts: const <SyncConflict>[],
+  );
+
+  @override
+  Future<LocalSyncState> read() async => state;
+
+  @override
+  Future<LocalSyncState> update(
+    LocalSyncState Function(LocalSyncState current) transform,
+  ) async => state = transform(state);
+
+  @override
+  Future<void> replace(LocalSyncState state) async {
+    this.state = state;
+  }
+}
+
+final class _SwapCoordinator implements ISyncCoordinator {
+  final StreamController<SyncStatusSnapshot> _changes =
+      StreamController<SyncStatusSnapshot>.broadcast();
+  SyncStatusSnapshot _status = const SyncStatusSnapshot.idle();
+
+  @override
+  SyncStatusSnapshot get status => _status;
+
+  @override
+  Stream<SyncStatusSnapshot> get statusChanges => _changes.stream;
+
+  @override
+  Future<SyncReport> syncNow() async => SyncReport();
+
+  void publish(SyncStatusSnapshot value) {
+    _status = value;
+    _changes.add(value);
+  }
+
+  Future<void> close() => _changes.close();
 }

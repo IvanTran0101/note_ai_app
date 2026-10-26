@@ -69,24 +69,27 @@ void main() {
   });
 
   group('stale completions', () {
-    test('a login completing after logout does not resurrect the session', () async {
-      session.setIdentity(identity(userId: 'user-9'));
-      final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
-      authentication.loginGate = gate;
-      final Future<AuthUserDto> login = service.login(
-        const LoginInput(email: 'switch@example.com', password: 'secret'),
-      );
-      await pumpEventQueue();
+    test(
+      'a login completing after logout does not resurrect the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'switch@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
 
-      await service.logout();
-      gate.complete(identity());
+        await service.logout();
+        gate.complete(identity());
 
-      await expectLater(login, throwsA(unauthenticatedFailure()));
-      expect(session.isAuthenticated, isFalse);
-      expect(session.identity, isNull);
-      // Generation 1 recorded the prior sign-in; 2 records the logout clear.
-      expect(session.sessionGeneration, 2);
-    });
+        await expectLater(login, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+        // Generation 1 recorded the prior sign-in; 2 records the logout clear.
+        expect(session.sessionGeneration, 2);
+      },
+    );
 
     test(
       'a session-expiry event during a pending login rejects the late login',
@@ -141,63 +144,139 @@ void main() {
       },
     );
 
+    test('a login completing after another account signed in does not overwrite it', () async {
+      final Completer<AuthIdentity> gateA = Completer<AuthIdentity>();
+      authentication.loginGate = gateA;
+      final Future<AuthUserDto> loginA = service.login(
+        const LoginInput(email: 'a@example.com', password: 'secret'),
+      );
+      await pumpEventQueue();
+
+      authentication.loginGate = null;
+      authentication.loginResult = identity(userId: 'user-b');
+      final AuthUserDto userB = await service.login(
+        const LoginInput(email: 'b@example.com', password: 'secret'),
+      );
+      expect(userB.userId, 'user-b');
+
+      gateA.complete(identity(userId: 'user-a'));
+      await expectLater(loginA, throwsA(unauthenticatedFailure()));
+
+      expect(session.userId, 'user-b');
+      expect(session.identity, same(authentication.loginResult));
+    });
+
     test(
-      'a login completing after another account signed in does not overwrite it',
+      'a restore started before login cannot publish a stale null over it',
       () async {
-        final Completer<AuthIdentity> gateA = Completer<AuthIdentity>();
-        authentication.loginGate = gateA;
-        final Future<AuthUserDto> loginA = service.login(
-          const LoginInput(email: 'a@example.com', password: 'secret'),
+        // The session starts empty: only the epoch advanced by login can
+        // invalidate the older restore, not a generation change.
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(userId: 'user-2');
+        final AuthUserDto user = await service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        expect(user.userId, 'user-2');
+        expect(session.userId, 'user-2');
+
+        gate.complete(null);
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
+        expect(session.userId, 'user-2');
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test(
+      'a login invalidates an older restore even when it returns stale null',
+      () async {
+        // The session starts empty, so only the login epoch can reject the
+        // older restore: it finishes null while login is still pending.
+        final Completer<AuthIdentity?> restoreGate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = restoreGate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        final Completer<AuthIdentity> loginGate = Completer<AuthIdentity>();
+        authentication.loginGate = loginGate;
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
         );
         await pumpEventQueue();
 
-        authentication.loginGate = null;
-        authentication.loginResult = identity(userId: 'user-b');
-        final AuthUserDto userB = await service.login(
-          const LoginInput(email: 'b@example.com', password: 'secret'),
+        final Future<void> restoreRejected = expectLater(
+          restore,
+          throwsA(unauthenticatedFailure()),
         );
-        expect(userB.userId, 'user-b');
+        restoreGate.complete(null);
+        await restoreRejected;
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
 
-        gateA.complete(identity(userId: 'user-a'));
-        await expectLater(loginA, throwsA(unauthenticatedFailure()));
+        // The pending login outlives the rejected restore and still publishes.
+        loginGate.complete(identity(userId: 'user-2'));
+        final AuthUserDto user = await login;
+        expect(user.userId, 'user-2');
+        expect(session.userId, 'user-2');
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
 
-        expect(session.userId, 'user-b');
+    test(
+      'a restore started before login cannot overwrite the newer identity',
+      () async {
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(userId: 'user-2');
+        await service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+
+        gate.complete(identity(userId: 'user-1'));
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
+        expect(session.userId, 'user-2');
         expect(session.identity, same(authentication.loginResult));
       },
     );
 
-    test('a restore completing after logout does not resurrect the session', () async {
-      session.setIdentity(identity(userId: 'user-9'));
-      final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
-      authentication.getCurrentIdentityGate = gate;
-      final Future<AuthUserDto?> restore = service.restoreSession();
-      await pumpEventQueue();
-
-      await service.logout();
-      gate.complete(identity());
-
-      await expectLater(restore, throwsA(unauthenticatedFailure()));
-      expect(session.isAuthenticated, isFalse);
-      expect(session.identity, isNull);
-    });
-
     test(
-      'an identity refresh completing after logout does not resurrect the session',
+      'a restore completing after logout does not resurrect the session',
       () async {
         session.setIdentity(identity(userId: 'user-9'));
-        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
-        authentication.refreshGate = gate;
-        final Future<AuthUserDto> refresh = service.refreshIdentity();
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
         await pumpEventQueue();
 
         await service.logout();
         gate.complete(identity());
 
-        await expectLater(refresh, throwsA(unauthenticatedFailure()));
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
         expect(session.isAuthenticated, isFalse);
         expect(session.identity, isNull);
       },
     );
+
+    test('an identity refresh completing after logout does not resurrect the session', () async {
+      session.setIdentity(identity(userId: 'user-9'));
+      final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+      authentication.refreshGate = gate;
+      final Future<AuthUserDto> refresh = service.refreshIdentity();
+      await pumpEventQueue();
+
+      await service.logout();
+      gate.complete(identity());
+
+      await expectLater(refresh, throwsA(unauthenticatedFailure()));
+      expect(session.isAuthenticated, isFalse);
+      expect(session.identity, isNull);
+    });
   });
 
   group('logout', () {
@@ -560,6 +639,36 @@ void main() {
       await check;
       expect(session.isAuthenticated, isFalse);
     });
+
+    test(
+      'a restore started before registration cannot publish its stale result',
+      () async {
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(isEmailVerified: true);
+        final Future<RegistrationResult> registration = service.register(input);
+        await pumpEventQueue();
+
+        // Both reads wait on the same provider gate; registration already
+        // advanced the epoch, so only its read may publish. Attach the
+        // restore's expectation before releasing the gate so its rejection is
+        // never observed as an unhandled asynchronous error.
+        final Future<void> restoreRejected = expectLater(
+          restore,
+          throwsA(unauthenticatedFailure()),
+        );
+        gate.complete(authentication.loginResult);
+        final RegistrationResult result = await registration;
+        await restoreRejected;
+
+        expect(result.user.userId, 'user-1');
+        expect(session.userId, 'user-1');
+        expect(profiles.saved.single.userId, 'user-1');
+      },
+    );
 
     test('publishes the session only after the profile is saved', () async {
       authentication.loginResult = identity(isEmailVerified: true);

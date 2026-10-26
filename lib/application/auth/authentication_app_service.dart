@@ -115,7 +115,10 @@ final class AuthenticationAppService implements IAuthenticationAppService {
 
     // Validate the profile before Cognito creates an account.
     UserProfile.create(userId: 'validation', displayName: displayName);
-    final epoch = _authEpoch;
+    // Beginning a credential-changing operation invalidates older restore and
+    // refresh reads before this call awaits the provider. Without this bump an
+    // older read captured the same epoch and could publish its stale result.
+    final int epoch = ++_authEpoch;
     final generation = currentUserSession.sessionGeneration;
     _registrationEmail = email.toLowerCase();
     try {
@@ -184,7 +187,11 @@ final class AuthenticationAppService implements IAuthenticationAppService {
     );
     _requirePassword(input.password);
 
-    final int epoch = _authEpoch;
+    // Beginning a credential-changing operation invalidates older restore and
+    // refresh reads before this call awaits the provider. Without this bump an
+    // older read captured the same epoch and could publish its stale result —
+    // including a stale null over an initially empty session.
+    final int epoch = ++_authEpoch;
     final int generation = currentUserSession.sessionGeneration;
     final AuthIdentity identity = await authenticationService.login(
       email: email,
@@ -387,8 +394,7 @@ final class AuthenticationAppService implements IAuthenticationAppService {
       return false;
     }
     final CurrentUserSession session = currentUserSession;
-    return session.sessionGeneration == generation ||
-        session.userId == userId;
+    return session.sessionGeneration == generation || session.userId == userId;
   }
 }
 

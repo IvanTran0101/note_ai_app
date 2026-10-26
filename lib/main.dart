@@ -339,23 +339,222 @@ ThemeData _buildNoteFlowTheme(Brightness brightness) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final ({AuthController authController, CurrentUserSession currentUserSession})
-  bootstrap = await _bootstrapAuth();
-  runApp(
-    NoteFlowApp(
-      authController: bootstrap.authController,
-      currentUserSession: bootstrap.currentUserSession,
-    ),
+  // The bootstrap root mounts immediately: a configuration failure must land
+  // on a visible retry screen, never on a blank window, because the app shell
+  // (and its startup-error route) only exists once runApp has run.
+  runApp(const NoteFlowBootstrapRoot());
+}
+
+typedef NoteFlowBootstrapRunner =
+    Future<
+      ({AuthController authController, CurrentUserSession currentUserSession})
+    >
+    Function();
+
+/// Builds the app shell from one successful bootstrap result.
+///
+/// The builder borrows [authController] and [currentUserSession]: the
+/// bootstrap root keeps sole ownership of the controller's lifetime and
+/// disposes it exactly once after the mounted shell (or an abandoned result)
+/// goes away. A builder must not dispose the controller, retain it beyond the
+/// returned widget, or share it with another root.
+typedef NoteFlowAppBuilder = Widget Function({
+  required AuthController authController,
+  required CurrentUserSession currentUserSession,
+});
+
+Widget _defaultAppBuilder({
+  required AuthController authController,
+  required CurrentUserSession currentUserSession,
+}) {
+  return NoteFlowApp(
+    authController: authController,
+    currentUserSession: currentUserSession,
+    // The bootstrap root owns the controller; the shell borrows it.
+    ownsAuthController: false,
   );
+}
+
+/// Runs the real bootstrap once; injectable so tests never touch Amplify.
+NoteFlowBootstrapRunner get _defaultBootstrapRunner => _bootstrapAuth;
+
+/// Startup root: loading while the auth bootstrap runs, the real app on
+/// success, a retry screen on failure.
+///
+/// The app shell is constructed exactly once per successful boot (the child
+/// widget is memoized across rebuilds), and retry is guarded against
+/// concurrent execution. There is deliberately no local-mode fallback here:
+/// a Cognito configuration failure is surfaced with a message that the
+/// configuration must be fixed or the app reloaded — a retry button cannot
+/// repair configuration.
+class NoteFlowBootstrapRoot extends StatefulWidget {
+  const NoteFlowBootstrapRoot({
+    this.bootstrapRunner,
+    this.appBuilder = _defaultAppBuilder,
+    super.key,
+  });
+
+  /// Test seam; production uses the real [_bootstrapAuth].
+  @visibleForTesting
+  final NoteFlowBootstrapRunner? bootstrapRunner;
+
+  /// Test seam; production builds the full [NoteFlowApp].
+  @visibleForTesting
+  final NoteFlowAppBuilder appBuilder;
+
+  @override
+  State<NoteFlowBootstrapRoot> createState() => _NoteFlowBootstrapRootState();
+}
+
+class _NoteFlowBootstrapRootState extends State<NoteFlowBootstrapRoot> {
+  Object? _error;
+  bool _running = false;
+  Widget? _appChild;
+
+  /// The controller returned by the current run, owned by this root until the
+  /// mounted app shell (or an abandoned result) is torn down.
+  AuthController? _ownedAuthController;
+
+  bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runBootstrap();
+  }
+
+  Future<void> _runBootstrap() async {
+    if (_running) {
+      return;
+    }
+    setState(() {
+      _running = true;
+      _error = null;
+    });
+
+    AuthController? resultController;
+    try {
+      final bootstrap =
+          await (widget.bootstrapRunner ?? _defaultBootstrapRunner)();
+      if (!mounted || _disposed) {
+        // The root (or a newer root) abandoned this run: release the result and
+        // its live auth-state subscription.
+        bootstrap.authController.dispose();
+        return;
+      }
+
+      resultController = bootstrap.authController;
+      _ownedAuthController = resultController;
+      final Widget app = widget.appBuilder(
+        authController: resultController,
+        currentUserSession: bootstrap.currentUserSession,
+      );
+      if (!mounted || _disposed) {
+        _release(resultController);
+        return;
+      }
+      setState(() {
+        // Memoized: rebuilds reuse this widget, so exactly one app shell
+        // exists for a successful boot.
+        _appChild ??= app;
+        _running = false;
+      });
+    } on Object catch (error) {
+      // An appBuilder failure abandons the result before any shell exists.
+      final AuthController? abandoned = resultController;
+      if (abandoned != null) {
+        _release(abandoned);
+      }
+      if (!mounted || _disposed) {
+        return;
+      }
+      setState(() {
+        _error = error;
+        _running = false;
+      });
+    }
+  }
+
+  void _release(AuthController controller) {
+    if (identical(_ownedAuthController, controller)) {
+      _ownedAuthController = null;
+    }
+    controller.dispose();
+  }
+
+  /// A blank/unsupported configuration or a terminal SDK failure cannot be
+  /// repaired by retrying in this process.
+  bool get _configurationLooksBroken =>
+      _error is ArgumentError ||
+      _error is AmplifyAuthInitializationFailure ||
+      _error is _UnsupportedAuthModeFailure;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget? app = _appChild;
+    if (app != null) {
+      return app;
+    }
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: _running
+                ? const CircularProgressIndicator()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('NoteFlow could not start.'),
+                      if (_configurationLooksBroken)
+                        const Text(
+                          'The configuration is broken: fix it or reload the app. '
+                          'Retry cannot repair configuration.',
+                        ),
+                      if (!_configurationLooksBroken) ...[
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          key: const Key('bootstrap-retry'),
+                          onPressed: _runBootstrap,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    final AuthController? owned = _ownedAuthController;
+    _ownedAuthController = null;
+    owned?.dispose();
+    super.dispose();
+  }
+}
+
+/// Startup configuration that a retry cannot repair.
+final class _UnsupportedAuthModeFailure implements Exception {
+  const _UnsupportedAuthModeFailure(this.mode);
+
+  final String mode;
+
+  @override
+  String toString() =>
+      'Unsupported NOTEFLOW_AUTH_MODE: $mode. Use local or cognito.';
 }
 
 Future<({AuthController authController, CurrentUserSession currentUserSession})>
 _bootstrapAuth() async {
   if (_noteFlowAuthMode != 'local' && _noteFlowAuthMode != 'cognito') {
-    throw StateError(
-      'Unsupported NOTEFLOW_AUTH_MODE: $_noteFlowAuthMode. '
-      'Use local or cognito.',
-    );
+    // Typed so the startup screen can say a retry cannot repair it without
+    // matching exception text.
+    throw _UnsupportedAuthModeFailure(_noteFlowAuthMode);
   }
 
   final CurrentUserSession session = CurrentUserSession();
@@ -418,10 +617,18 @@ class NoteFlowApp extends StatefulWidget {
     this.connection,
     this.ragGateway,
     this.ragApiBaseUri,
+    this.ownsAuthController = true,
   });
 
   final AuthController authController;
   final CurrentUserSession currentUserSession;
+
+  /// Whether this shell owns [authController] and disposes it on teardown.
+  ///
+  /// Direct callers keep the historical default (`true`). Composition roots
+  /// that already own the controller — such as [NoteFlowBootstrapRoot] — pass
+  /// `false` so exactly one owner disposes it.
+  final bool ownsAuthController;
 
   /// Optional composition collaborators for offline acceptance runs.
   final SummaryRunRuntime? summaryRuntime;
@@ -620,14 +827,22 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         accessGuardForAccount: (_) => _noteSecurityRuntime,
         grantHeaderForRun: _noteSecurityRuntime.summaryGrant,
       );
-  late final DashboardController _dashboardController = DashboardController(
-    securityEvents: _noteSecurityRuntime.changes,
-    query: GetDashboardOverview(
-      noteRepository: _noteRepository,
-      currentUser: _currentUserSession,
-    ),
-    recentLimit: 20,
-  );
+  DashboardController? _dashboardControllerInstance;
+
+  /// Dashboard controller, created lazily on first access.
+  ///
+  /// Nullable backing on purpose: the root [dispose] must be able to dispose
+  /// the controller when it exists without force-constructing it when the
+  /// dashboard was never visited.
+  DashboardController get _dashboardController =>
+      _dashboardControllerInstance ??= DashboardController(
+        securityEvents: _noteSecurityRuntime.changes,
+        query: GetDashboardOverview(
+          noteRepository: _noteRepository,
+          currentUser: _currentUserSession,
+        ),
+        recentLimit: 20,
+      );
   final GlobalKey<WorkspaceShellState> _workspaceShellKey =
       GlobalKey<WorkspaceShellState>();
   final GlobalKey<DashboardPageState> _dashboardPageKey =
@@ -1684,6 +1899,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    // The dashboard controller subscribes to the security runtime's stream,
+    // so it must be disposed before that dependency closes below.
+    _dashboardControllerInstance?.dispose();
     _closeProfileClients();
     _stopRealtime();
     _noteSecurityRuntime.dispose();
@@ -1702,7 +1920,9 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _disposeSyncPresentationController();
     _ragRootInstance?.dispose();
     _router.dispose();
-    widget.authController.dispose();
+    if (widget.ownsAuthController) {
+      widget.authController.dispose();
+    }
     final LlmWorkerClient? client = _workerClient;
     if (client != null) {
       unawaited(client.dispose());
