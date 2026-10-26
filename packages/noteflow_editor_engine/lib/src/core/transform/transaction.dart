@@ -16,6 +16,12 @@ class Transaction {
   /// The operations to be applied.
   final List<Operation> _operations = [];
 
+  /// Text deltas waiting to be composed into [_operations].
+  ///
+  /// Every transaction owns its queue, so consuming or cancelling one
+  /// transaction cannot drain or resurrect another transaction's edits.
+  final Map<Node, List<Delta>> _composeMap = {};
+
   List<Operation> get operations {
     if (markNeedsComposing) {
       // compose the delta operations
@@ -26,8 +32,17 @@ class Transaction {
   }
 
   set operations(List<Operation> value) {
-    _operations.clear();
-    _operations.addAll(value);
+    // Replacing the operations cancels every pending text edit; otherwise the
+    // next read would compose the stale queue back into the transaction.
+    _composeMap.clear();
+    markNeedsComposing = false;
+    if (identical(value, _operations)) {
+      return;
+    }
+    final replacement = List<Operation>.of(value);
+    _operations
+      ..clear()
+      ..addAll(replacement);
   }
 
   /// The selection to be applied.
@@ -187,12 +202,6 @@ class Transaction {
 }
 
 extension TextTransaction on Transaction {
-  /// We use this map to cache the delta waiting to be composed.
-  ///
-  /// This is for make calling the below function as chained.
-  /// For example, transaction..deleteText(..)..insertText(..);
-  static final Map<Node, List<Delta>> _composeMap = {};
-
   /// Inserts the [text] at the given [index].
   ///
   /// If the [attributes] is null, the attributes of the previous character will be used.

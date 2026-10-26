@@ -667,6 +667,12 @@ class EditorState {
     Transaction transaction,
     bool skipDebounce,
   ) {
+    // A before-transaction guard can cancel the edit by emptying the
+    // operations. Such a refused transaction must not create an empty history
+    // entry or invalidate the redo stack.
+    if (transaction.operations.isEmpty) {
+      return;
+    }
     if (options.recordUndo) {
       final undoItem = undoManager.getUndoHistoryItem();
       undoItem.addAll(transaction.operations);
