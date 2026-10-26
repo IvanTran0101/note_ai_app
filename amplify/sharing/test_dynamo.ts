@@ -9,10 +9,17 @@ const rowKey = (r: Row) => JSON.stringify([r.ownerId, r.noteId]);
 export class TestDynamo {
   rows = new Map<string, Row>();
   transactions: TransactWriteCommand[] = [];
+  updates: UpdateCommand[] = [];
   beforeTransaction?: () => void;
+  afterTransaction?: () => void;
+  /** Inject one command failure without weakening condition/update semantics. */
+  failWhen?: (command: any) => Error | undefined;
   put(row: Row) { this.rows.set(rowKey(row), structuredClone(row)); }
   get(owner: string, sort: string) { return this.rows.get(rowKey({ ownerId: `OWNER#${owner}`, noteId: sort })); }
-  client = { send: async (c: any) => this.send(c) } as unknown as DynamoDBDocumentClient;
+  client = { send: async (c: any, options?: { abortSignal?: AbortSignal }) => {
+    options?.abortSignal?.throwIfAborted();
+    return this.send(c);
+  } } as unknown as DynamoDBDocumentClient;
   private value(path: string, row: Row, names: Row) {
     return path.trim().split('.').reduce((r, p) => r?.[names[p] ?? p], row as any);
   }
@@ -52,14 +59,21 @@ export class TestDynamo {
           const [name, value] = assignment.trim().split(sections[i] === 'SET' ? ' = ' : ' ');
           const field = op.ExpressionAttributeNames?.[name] ?? name;
           if (sections[i] === 'REMOVE') delete row[field];
-          else if (sections[i] === 'ADD') row[field] = (row[field] ?? 0) + op.ExpressionAttributeValues[value];
-          else row[field] = op.ExpressionAttributeValues[value];
+          else if (sections[i] === 'ADD') {
+            const current = row[field] ?? 0;
+            if (typeof current !== 'number' || typeof op.ExpressionAttributeValues[value] !== 'number') {
+              throw Object.assign(new Error('Invalid UpdateExpression: ADD requires numbers'),
+                { name: 'ValidationException' });
+            }
+            row[field] = current + op.ExpressionAttributeValues[value];
+          } else row[field] = op.ExpressionAttributeValues[value];
         }
       }
       this.put(row);
     }
   }
   private async send(c: any): Promise<Row> {
+    const failure = this.failWhen?.(c); if (failure) throw failure;
     if (c instanceof GetCommand) return { Item: structuredClone(this.rows.get(rowKey(c.input.Key!))) };
     if (c instanceof QueryCommand) {
       const v = c.input.ExpressionAttributeValues!;
@@ -81,19 +95,23 @@ export class TestDynamo {
       const keys = items.map(x => rowKey((x.Put?.Item ?? x.Update?.Key ?? x.ConditionCheck?.Key)!));
       assert.equal(new Set(keys).size, keys.length, 'Dynamo forbids two operations on one item');
       assert.ok(items.length <= 100);
-      for (const item of items) {
+      const reasons = items.map((item) => {
         const op = item.Put ?? item.Update ?? item.ConditionCheck!;
         const old = this.rows.get(rowKey((item.Put?.Item ?? item.Update?.Key ?? item.ConditionCheck?.Key)!));
-        if (!this.check(op.ConditionExpression, old, op.ExpressionAttributeNames, op.ExpressionAttributeValues)) {
-          throw new TransactionCanceledException({ message: 'Conditional', $metadata: {},
-            CancellationReasons: [{ Code: 'ConditionalCheckFailed' }] });
-        }
+        return this.check(op.ConditionExpression, old, op.ExpressionAttributeNames, op.ExpressionAttributeValues)
+          ? { Code: 'None' } : { Code: 'ConditionalCheckFailed' };
+      });
+      if (reasons.some(reason => reason.Code === 'ConditionalCheckFailed')) {
+        throw new TransactionCanceledException({ message: 'Conditional', $metadata: {},
+          CancellationReasons: reasons });
       }
       this.transactions.push(c); for (const item of items) if (item.Put ?? item.Update) this.apply(item.Put ?? item.Update!);
+      const after = this.afterTransaction; this.afterTransaction = undefined; after?.();
       return {};
     }
     assert.ok(c instanceof PutCommand || c instanceof UpdateCommand);
     const op = c.input as Row;
+    if (c instanceof UpdateCommand) this.updates.push(c);
     if (!this.check(op.ConditionExpression, this.rows.get(rowKey(op.Item ?? op.Key)), op.ExpressionAttributeNames, op.ExpressionAttributeValues)) {
       throw Object.assign(new Error('Conditional'), { name: 'ConditionalCheckFailedException' });
     }

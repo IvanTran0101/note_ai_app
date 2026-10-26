@@ -7,6 +7,8 @@ import type { ShareRecord } from './share_models';
 
 type Writes = NonNullable<TransactWriteCommandInput['TransactItems']>;
 export const MAX_ACTIVE_RECIPIENTS = 20;
+/** One relay event per shard; keeps every transaction write well-formed. */
+export const MAX_EVENT_ACTORS = 21;
 const key = (actor: string, sort: string) => ({ ownerId: `OWNER#${actor}`, noteId: sort });
 
 /** One counter/feed per actor, shared with existing owned-note sync. */
@@ -61,17 +63,30 @@ export class ActorFeed {
     const active = (await this.shares(owner, note.id)).filter(s => s.status === 'active');
     const writes = (await Promise.all(active.map(s =>
       this.append(s.recipientId, { ...note, ownerId: owner, share: s })))).flat();
-    if (active.length) writes.push(this.event(owner, note, [owner, ...active.map(s => s.recipientId)]));
+    if (active.length) writes.push(...this.events(owner, note, [owner, ...active.map(s => s.recipientId)]));
     return writes;
   }
+  /** Bounded future fanout: every actor appears in exactly one event shard. */
+  events(owner: string, note: NoteSnapshot, actors: readonly string[], now = Date.now()): Writes {
+    const unique = [...new Set(actors)];
+    const writes: Writes = [];
+    for (let index = 0; index < unique.length; index += MAX_EVENT_ACTORS) {
+      writes.push(this.eventAt(owner, note, unique.slice(index, index + MAX_EVENT_ACTORS), now));
+    }
+    return writes;
+  }
+  /** Two-actor create/revoke path. Bulk fanout uses events() above. */
   event(owner: string, note: NoteSnapshot, actors: readonly string[]): Writes[number] {
+    return this.eventAt(owner, note, actors, Date.now());
+  }
+  private eventAt(owner: string, note: NoteSnapshot, actors: readonly string[], now: number): Writes[number] {
     const eventId = crypto.randomUUID();
     // Durable invalidation only. Private content, email and grants never enter events.
     return { Put: { TableName: this.table, Item: { ...key(owner, `EVENT#${eventId}`),
       eventId, canonicalOwnerId: owner, targetNoteId: note.id, revision: note.revision,
       protectionRevision: note.protectionRevision ?? 0, sharingRevision: note.sharingRevision ?? 0,
       actors: [...new Set(actors)], relayStatus: 'pending', attempts: 0,
-        nextAttemptAt: Date.now(), relayQueue: 'pending', relayDueAt: Date.now(),
-        createdAt: new Date().toISOString() } } };
+        nextAttemptAt: now, relayQueue: 'pending', relayDueAt: now,
+        createdAt: new Date(now).toISOString() } } };
   }
 }

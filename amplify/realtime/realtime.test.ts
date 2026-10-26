@@ -53,7 +53,7 @@ test('lost ACK retries same event and rechecks revoked access before metadata fa
   assert.equal(f.db.get('owner', 'EVENT#event')?.relayStatus, 'pending');
   f.time(f.db.get('owner', 'EVENT#event')!.relayDueAt); f.fail(false); f.access(null);
   await f.relay.recover(); assert.equal(new Set(f.sent.map(x => x.signal.eventId)).size, 1);
-  const revoked = f.sent.find(x => x.actor === 'recipient')!.signal;
+  const revoked = f.sent.filter(x => x.actor === 'recipient').at(-1)!.signal;
   assert.deepEqual(Object.keys(revoked).sort(), ['eventId','invalidate','noteId','ownerId','version']);
 });
 test('ACL unavailable is retried without recipient publication; terminal failures remain durable', async () => {

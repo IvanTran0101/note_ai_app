@@ -5,7 +5,7 @@ import { TestDynamo } from './test_dynamo';
 import { DynamoNoteAcl, shareKey } from './dynamo_note_acl';
 import { DynamoShareStore } from './dynamo_share_store';
 import { ShareUseCases } from './share_use_cases';
-import { MAX_ACTIVE_RECIPIENTS } from './actor_feed';
+import { ActorFeed, MAX_ACTIVE_RECIPIENTS, MAX_EVENT_ACTORS } from './actor_feed';
 import { ShareError, type ShareCommand, type ShareStore } from './share_models';
 import { ProtectionUseCases } from '../protection/use_cases';
 import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
@@ -216,24 +216,51 @@ test('a note at 21 active is not bricked: list reads every row, revoke recovers,
   assert.equal((await f.shares.list('owner', 'owner', 'alpha')).length, MAX_ACTIVE_RECIPIENTS + 1);
   await assert.rejects(f.create('r22'), shareError('limit'));
   await f.revoke('r1');
+  assert.ok(f.db.transactions.at(-1)!.input.TransactItems!.length <= 100);
   const active = (await f.shares.list('owner', 'owner', 'alpha')).filter(s => s.status === 'active');
   assert.equal(active.length, MAX_ACTIVE_RECIPIENTS);
   await assert.rejects(f.create('r22'), shareError('limit'));
 });
 
-test('owner edits and protection commits fan out on a 21-active note instead of failing on the cap', async () => {
+test('owner edits and protection commits fan out on a 21-active note as bounded event shards', async () => {
   const f = crowdedFixture();
   const applied = await f.sync.applyMutation('owner', f.ownerEdit(), { actorId: 'owner' });
   assert.equal(applied.status, 'applied');
   assert.equal(f.db.get('owner', 'NOTE#alpha')?.content, 'edited body');
   assert.equal(f.db.get('r1', 'CHANGE#1')?.content, 'edited body');
   assert.equal(f.db.get(`r${MAX_ACTIVE_RECIPIENTS + 1}`, 'CHANGE#1')?.content, 'edited body');
-  const event = [...f.db.rows.values()].find(r => r.noteId.startsWith('EVENT#'))!;
-  assert.equal(event.actors.length, MAX_ACTIVE_RECIPIENTS + 2);
+  const expected = ['owner', ...Array.from({ length: MAX_ACTIVE_RECIPIENTS + 1 }, (_, i) => `r${i + 1}`)];
+  const events = [...f.db.rows.values()].filter(r => r.noteId.startsWith('EVENT#'));
+  assert.ok(events.length >= 2);
+  assert.ok(events.every(e => e.actors.length <= MAX_EVENT_ACTORS));
+  const union = events.flatMap(e => e.actors);
+  assert.equal(union.length, new Set(union).size, 'event shards must be disjoint');
+  assert.deepEqual([...union].sort(), expected.sort(), 'every actor is represented exactly once');
+  assert.ok(f.db.transactions.at(-1)!.input.TransactItems!.length <= 100);
   await f.security.enable('owner', 'owner', 'alpha', 'test-password-alpha', 2);
   assert.equal(f.db.get('owner', 'PROTECTION#alpha')?.enabled, true);
   assert.equal(f.db.get('r2', 'CHANGE#2')?.title, '');
 });
+
+test('event sharding is bounded and lossless at 22 and 43 actors', () => {
+  const db = new TestDynamo(); const feed = new ActorFeed('test', db.client);
+  const note = { ...noteFixture(), id: 'alpha', revision: 3, protectionRevision: 1 };
+  for (const count of [22, 43]) {
+    const actors = Array.from({ length: count }, (_, i) => `a${i}`);
+    const events = feed.events('owner', note, actors, 1000);
+    const emitted = events.flatMap(w => w.Put!.Item!.actors as string[]);
+    assert.equal(events.length, Math.ceil(count / MAX_EVENT_ACTORS));
+    assert.ok(events.every(w => (w.Put!.Item!.actors as string[]).length <= MAX_EVENT_ACTORS));
+    assert.equal(emitted.length, new Set(emitted).size);
+    assert.deepEqual([...emitted].sort(), actors.sort());
+    assert.ok(events.every(w => w.Put!.Item!.relayQueue === 'pending'));
+  }
+});
+
+function noteFixture() {
+  return { id: 'alpha', title: '', content: '', revision: 1, createdAt: '2026-10-02T00:00:00Z',
+    serverUpdatedAt: '2026-10-02T00:00:00Z', deletedAt: null, protected: false, protectionRevision: 0 };
+}
 
 test('lost-ACK replay after revoke returns the revoked record and never resurrects access', async () => {
   const f = fixture(); await f.create();

@@ -10,9 +10,9 @@ export const shareKey = (owner: string, note: string, recipient: string) =>
 
 export class DynamoNoteAcl implements NoteAcl {
   constructor(private readonly table: string, private readonly db: DynamoDBDocumentClient) {}
-  async read(actor: string, owner: string, noteId: string): Promise<ShareRecord | null> {
+  async read(actor: string, owner: string, noteId: string, signal?: AbortSignal): Promise<ShareRecord | null> {
     const r = await this.db.send(new GetCommand({ TableName: this.table,
-      Key: shareKey(owner, noteId, actor), ConsistentRead: true }));
+      Key: shareKey(owner, noteId, actor), ConsistentRead: true }), signal ? { abortSignal: signal } : undefined);
     const s = r.Item ? decodeShare(r.Item) : null;
     if (s && (s.ownerId !== owner || s.noteId !== noteId || s.recipientId !== actor)) {
       throw new NoteSecurityError('unavailable');

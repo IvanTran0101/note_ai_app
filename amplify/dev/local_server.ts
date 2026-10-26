@@ -56,10 +56,12 @@ const attachments = new AttachmentUseCases(attempts, objects, security);
 const sync = new DynamoSyncStore({ tableName: 'local-dev', documentClient: db.client, security, sharing: true, attachments: attempts });
 const labels = new DynamoLabelStore('local-dev', db.client);
 const relay = new RevisionRelay(new DynamoRelayStore('local-dev', db.client), {
-  async read(actor, owner, note) { const s = await acl.read(actor, owner, note); return s?.status === 'active' ? s.accessRevision : null; },
-}, { async publish(actor, signal) {
+  async read(actor, owner, note, signal) { const s = await acl.read(actor, owner, note, signal); return s?.status === 'active' ? s.accessRevision : null; },
+}, { async publish(actor, signal, requestSignal) {
+  const timeout = AbortSignal.timeout(2000);
   const reply = await fetch('http://127.0.0.1:8798/publish', { method: 'POST',
-    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor, signal }), signal: AbortSignal.timeout(2000) });
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor, signal }),
+    signal: requestSignal ? AbortSignal.any([requestSignal, timeout]) : timeout });
   if (!reply.ok) throw Error('Local socket unavailable');
 } });
 

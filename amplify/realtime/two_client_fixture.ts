@@ -33,10 +33,10 @@ let loseNextAck = false;
 let eventPublishes = 0;
 let recovering = false;
 const relay = new RevisionRelay(new DynamoRelayStore('test', db.client), {
-  async read(actor, owner, note) { const s = await acl.read(actor, owner, note); return s?.status === 'active' ? s.accessRevision : null; },
-}, { async publish(actor, signal) {
+  async read(actor, owner, note, signal) { const s = await acl.read(actor, owner, note, signal); return s?.status === 'active' ? s.accessRevision : null; },
+}, { async publish(actor, signal, requestSignal) {
   const reply = await fetch('http://127.0.0.1:8788/publish', { method:'POST',
-    headers:{'content-type':'application/json'}, body:JSON.stringify({actor,signal}) });
+    headers:{'content-type':'application/json'}, body:JSON.stringify({actor,signal}), signal: requestSignal });
   if (!reply.ok) throw Error('Fixture socket unavailable');
   eventPublishes++;
   if (loseNextAck) { loseNextAck=false; throw Error('Synthetic lost ACK'); }
