@@ -1,0 +1,12 @@
+{
+  "model": "cohere.embed-multilingual-v3",
+  "repository": "CohereLabs/Cohere-embed-multilingual-v3.0",
+  "revision": "0909d6e3b0912a0dc72f15cc70cab568495d0df0",
+  "package": "@huggingface/tokenizers",
+  "packageVersion": "0.2.0",
+  "framingMarginTokens": 8,
+  "files": {
+    "tokenizer.json": "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626",
+    "tokenizer_config.json": "4259974eb341eb2743c342301e5127799482f33eb3f82993658095491e16ec35"
+  }
+}
