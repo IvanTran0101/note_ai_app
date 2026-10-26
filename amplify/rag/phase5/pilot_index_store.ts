@@ -4,7 +4,10 @@
  * `createIndexStore` and never rewrites a state, epoch, fingerprint or the publish CAS: `load`
  * hands back the original canonical `IndexState` object, `acquire`/`publish` forward the exact
  * original bound state, lease, manifest and clock, and `reserveEmbedding` is replaced by the
- * atomic generic pilot `budget.acquireEmbedding`.
+ * atomic generic pilot `budget.acquireEmbedding` — preferring the inner store's light
+ * `loadMarkers` read (membership + consent-from-markers; the reviewed-mode corpus digest loop
+ * runs only at the load/acquire/publish boundaries) and falling back to the full authorize when
+ * the inner store has no marker read.
  *
  * Every call re-reads the immutable runtime config and compares the whole captured identity
  * (version, generation, policy, corpus). A config that moved mid-run fails closed as
@@ -29,7 +32,9 @@ import { isEligibleNote } from '../authority';
 import { bindIndexState, fingerprint } from '../indexing/jobs';
 import { embeddingInputDigest } from '../indexing/snapshot';
 import { IndexFailure } from '../indexing/types';
-import type { IndexState, IndexStore, JobStatus, Lease, Manifest } from '../indexing/types';
+import type {
+  Consent, FreshnessMarkers, IndexState, IndexStore, JobStatus, Lease, Manifest,
+} from '../indexing/types';
 import { RagFailure } from '../types';
 import {
   RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig, sameRuntimeConfig,
@@ -56,6 +61,10 @@ const requireSignal = (signal: unknown): AbortSignal => {
 /** The worker's own consent reading; a wrong version is not a permit, so it stays cleanup. */
 const consentAccepted = (state: IndexState): boolean =>
   state.consent.accepted === true && state.consent.version === CONSENT_VERSION;
+
+/** The same permit over a marker consent triple (the light `reserveEmbedding` path). */
+const consentMarkersAccepted = (consent: Consent): boolean =>
+  consent.accepted === true && consent.version === CONSENT_VERSION;
 
 /**
  * Transient port failures must stay replayable: the SDK/config reader reports 429/5xx as
@@ -175,6 +184,20 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
     return state;
   };
 
+  /**
+   * The inner store's light freshness read is forwarded under the same config/membership fence as
+   * the body load, so the worker's per-chunk marker path stays pilot-scoped. Absent on the inner
+   * store means absent on the decorator: the worker then keeps the full legacy re-read.
+   */
+  const innerLoadMarkers = store.loadMarkers;
+  const loadMarkers = innerLoadMarkers === undefined ? undefined :
+    async (ownerId: string, deadline: AbortSignal): Promise<FreshnessMarkers> => {
+      await readConfigNow(deadline);
+      if (!isValidIdentifier(ownerId)) throw new IndexFailure('INVALID_INPUT', false);
+      if (!isListedOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+      return innerLoadMarkers(ownerId, deadline);
+    };
+
   return Object.freeze({
     async load(ownerId: string, signal: AbortSignal): Promise<IndexState> {
       const deadline = requireSignal(signal);
@@ -235,9 +258,23 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
       const deadline = requireSignal(signal);
       try {
         const config = await readConfigNow(deadline);
-        const fresh = await authorize(ownerId, deadline);
-        if (config.policy.enabled !== true || !consentAccepted(fresh)) {
-          throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+        if (innerLoadMarkers !== undefined) {
+          // Light pilot revalidation: membership plus a marker read replace the full canonical
+          // authorize on every paid chunk. The reviewed-mode corpus digest loop deliberately does
+          // NOT run here — corpus is enforced at the load/acquire/publish boundaries, and
+          // mid-flight content drift is caught by the revision/epoch markers per the indexing
+          // writer invariant (jobs.markersOf).
+          if (!isValidIdentifier(ownerId)) throw new IndexFailure('INVALID_INPUT', false);
+          if (!isListedOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+          const markers = await innerLoadMarkers(ownerId, deadline);
+          if (config.policy.enabled !== true || !consentMarkersAccepted(markers.consent)) {
+            throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+          }
+        } else {
+          const fresh = await authorize(ownerId, deadline);
+          if (config.policy.enabled !== true || !consentAccepted(fresh)) {
+            throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+          }
         }
         // Exactly one atomic pilot debit; the underlying global embedding counter is never used
         // directly and the deprecated Cohere counter is preserved, not incremented.
@@ -253,5 +290,7 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
     ): Promise<void> {
       return store.finish(ownerId, lease, status, code, nowMs, signal);
     },
+
+    ...(loadMarkers === undefined ? {} : { loadMarkers }),
   });
 }

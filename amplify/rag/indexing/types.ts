@@ -1,4 +1,5 @@
 import jobPolicy from '../../../docs/rag/index_job_policy_v1.json';
+import type { Checkpoint } from './checkpoint';
 import type { CanonicalNote, Chunk, Counter } from '../types';
 export type Job = Readonly<{
   jobVersion: 1; kind: 'RECONCILE_NOTE' | 'RECONCILE_ACCOUNT'; ownerId: string;
@@ -16,6 +17,20 @@ export type IndexState = Readonly<{
   manifest: Manifest | null;
 }>;
 export type Lease = Readonly<{ token: string; expiresAt: number; fingerprint: string }>;
+/** One NOTE# row reduced to the fields a fingerprint can move on (see `FreshnessMarkers`). */
+export type NoteMarker = Readonly<{ noteId: string; revision: number; deleted: boolean; available: boolean }>;
+/** One PROTECTION# row reduced to the fields a fingerprint can move on. */
+export type ProtectionMarker = Readonly<{ noteId: string; enabled: boolean; revision: number }>;
+/**
+ * The light mid-flight freshness view of an account: epoch, consent and per-note
+ * revision/deleted/available/protection rows — exactly the transactional marker set that covers
+ * every canonical fingerprint input (see `markersOf` for the writer invariant). Notes and
+ * protections are sorted by noteId, like `IndexState.notes`.
+ */
+export type FreshnessMarkers = Readonly<{
+  ownerId: string; accountEpoch: number; consent: Consent;
+  notes: readonly NoteMarker[]; protections: readonly ProtectionMarker[];
+}>;
 export type Document = Readonly<{ chunk: Chunk; vectorKey: string; embeddingDigest: string }>;
 export type Snapshot = Readonly<{
   schemaVersion: 1; ownerId: string; version: string; consentGeneration: number;
@@ -25,6 +40,13 @@ export type StageResult = Readonly<{ snapshot: Snapshot; snapshotKey: string; ch
 export type JobStatus = 'RUNNING' | 'SUCCEEDED' | 'SUPERSEDED' | 'BLOCKED' | 'FAILED';
 export type IndexStore = Readonly<{
   load(ownerId: string, signal: AbortSignal): Promise<IndexState>;
+  /**
+   * Optional light freshness read for mid-flight revalidation. A store that exposes it lets the
+   * worker compare `FreshnessMarkers` instead of re-reading and re-hashing the whole account per
+   * chunk; any store (or test fake) without it keeps the exact legacy full-revalidate behavior,
+   * so optionality IS the fallback.
+   */
+  loadMarkers?(ownerId: string, signal: AbortSignal): Promise<FreshnessMarkers>;
   acquire(state: IndexState, fingerprint: string, nowMs: number, signal: AbortSignal): Promise<Lease | null>;
   publish(state: IndexState, lease: Lease, manifest: Manifest, nowMs: number, signal: AbortSignal): Promise<boolean>;
   finish(ownerId: string, lease: Lease, status: JobStatus, code: string, nowMs: number, signal: AbortSignal): Promise<void>;
@@ -45,6 +67,37 @@ export type Artifacts = Readonly<{
    */
   queryScored?(vector: readonly number[], ownerId: string, version: string, noteId: string | null, signal: AbortSignal): Promise<readonly VectorSearchHit[]>;
   cleanup(manifest: Manifest, signal: AbortSignal): Promise<void>;
+  /**
+   * Optional staged-key vector delete (checkpoint inventory reaping). Deletes
+   * exactly the given keys in bounded batches; absent on fakes that never
+   * stage vectors, in which case checkpoint sweeping is simply unavailable.
+   */
+  deleteStagedVectors?(keys: readonly string[], signal: AbortSignal): Promise<void>;
+  /**
+   * Patch 5B durable checkpoint ports. All four are optional, exactly like `loadMarkers`: an
+   * artifacts object (or test fake) without them keeps the exact legacy worker behavior — no
+   * resume, no staging, no checkpoint writes, no stop-margin early exit. Optionality IS the
+   * fallback. Production `createArtifacts` implements all four, so real wiring opts in by
+   * construction and needs no changes.
+   */
+  /**
+   * Stages one produced vector under its FINAL publish key through the exact PutVectors entry
+   * shape and metadata whitelist `putVectors` writes, so a resumed attempt can fetch it by key
+   * before any manifest exists. `metadata.manifestVersion` is the staging lease token.
+   */
+  stageVector?(entry: Readonly<{
+    key: string;
+    vector: readonly number[];
+    metadata: Readonly<{
+      ownerId: string; manifestVersion: string; noteId: string; revision: number; chunkId: string;
+    }>;
+  }>, signal: AbortSignal): Promise<void>;
+  /** All checkpoints of one owner, newest-first by `createdAt`; corrupt objects are skipped. */
+  listCheckpoints?(ownerId: string, signal: AbortSignal): Promise<readonly Checkpoint[]>;
+  /** Durably records one lease's progress under its lease-scoped key; leases never clash. */
+  putCheckpoint?(checkpoint: Checkpoint, signal: AbortSignal): Promise<void>;
+  /** Deletes exactly the listed leases' checkpoints of one owner; never a prefix delete. */
+  deleteCheckpoints?(ownerId: string, signal: AbortSignal, ...tokens: string[]): Promise<void>;
 }>;
 export type Embedding = Readonly<{
   count: Counter;

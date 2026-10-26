@@ -20,15 +20,23 @@
  * fails the call: there is no fallback request and no silent downgrade. Cleanup reads the exact
  * previous snapshot, deletes exactly its vector keys, and deletes the snapshot object last, so
  * an interrupted cleanup can be retried and always fails closed.
+ *
+ * Checkpoints (Patch 5B) are small JSON objects at `rag/checkpoints/<sha256(ownerId)>/
+ * <leaseToken>.json` — the key is lease-scoped, so a stale lease can never overwrite a newer
+ * lease's checkpoint and no conditional writes are needed. Staging shares the exact PutVectors
+ * entry path with `putVectors`; listing skips corrupt objects (a corrupt checkpoint only means
+ * "rebuild"); deletion touches exactly the listed tokens, never a prefix.
  */
 import {
-  DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client,
+  DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
 } from '@aws-sdk/client-s3';
 import { isValidIdentifier } from '../contract';
 import { isSafeInteger } from '../chunking';
 import { EMBEDDING_DIMENSIONS } from '../retrieval';
-import { policy, type Chunk } from '../types';
+import { policy, RagFailure, type Chunk } from '../types';
 import { IndexFailure, type Artifacts, type Manifest, type Snapshot, type VectorSearchHit } from './types';
+import type { Checkpoint } from './checkpoint';
+import { decodeCheckpoint, encodeCheckpoint, validateCheckpoint } from './checkpoint';
 import {
   SHA256_HEX, checksum, decodeSnapshot, encodeSnapshot, sha256Hex, validateManifest,
   validateSnapshot,
@@ -38,6 +46,7 @@ import {
 } from './aws_http';
 
 export const SNAPSHOT_PREFIX = 'rag/snapshots/';
+export const CHECKPOINT_PREFIX = 'rag/checkpoints/';
 /** S3 Vectors accepts at most 500 keys per PutVectors/DeleteVectors call. */
 export const VECTOR_WRITE_BATCH = 500;
 /** GetVectors accepts at most 100 keys per call. */
@@ -60,7 +69,11 @@ export type ArtifactsConfig = Readonly<{
 }>;
 
 export type S3SendOptions = Readonly<{ abortSignal?: AbortSignal }>;
-export type S3Command = PutObjectCommand | GetObjectCommand | DeleteObjectCommand;
+export type S3Command =
+  | PutObjectCommand
+  | GetObjectCommand
+  | DeleteObjectCommand
+  | ListObjectsV2Command;
 
 /** Injected S3 client port (`{ send }`); production passes an `S3Client` with maxAttempts 1. */
 export interface S3Port {
@@ -110,6 +123,10 @@ const isSafeVersion = (value: unknown): value is string =>
 /** The only snapshot key shape this code reads, writes or deletes. */
 const snapshotKeyFor = (ownerId: string, version: string): string =>
   `${SNAPSHOT_PREFIX}${sha256Hex(ownerId)}/${version}.json`;
+
+/** The only checkpoint key shape this code writes, lists or deletes: owner hash + lease token. */
+const checkpointKeyFor = (ownerId: string, leaseToken: string): string =>
+  `${CHECKPOINT_PREFIX}${sha256Hex(ownerId)}/${leaseToken}.json`;
 
 const requireManifest = (value: unknown): Manifest => {
   if (!isRecord(value) || typeof value['ownerId'] !== 'string') notReady();
@@ -336,6 +353,13 @@ export function createArtifacts(config: ArtifactsConfig, options?: ArtifactsOpti
     invalidOutput();
   };
 
+  /** The one PutVectors wire path behind both the full publish write and single-vector staging. */
+  const writeVectorEntries = async (entries: readonly VectorEntry[], signal: AbortSignal): Promise<void> => {
+    for (const batch of batchesOf(entries, VECTOR_WRITE_BATCH)) {
+      await request('s3vectors', '/PutVectors', { indexArn, vectors: batch }, signal);
+    }
+  };
+
   return Object.freeze({
     read: async (manifest, signal) => {
       const bound = requireManifest(manifest);
@@ -383,9 +407,7 @@ export function createArtifacts(config: ArtifactsConfig, options?: ArtifactsOpti
           metadata: metadataFor(version, document.chunk),
         }));
       }
-      for (const batch of batchesOf(entries, VECTOR_WRITE_BATCH)) {
-        await request('s3vectors', '/PutVectors', { indexArn, vectors: batch }, deadline);
-      }
+      await writeVectorEntries(entries, deadline);
     },
 
     getVectors: async (keys, signal) => {
@@ -453,6 +475,121 @@ export function createArtifacts(config: ArtifactsConfig, options?: ArtifactsOpti
       }
       // Only these exact keys: no list, no prefix delete, no current/other-owner namespace.
       await sendS3(s3, new DeleteObjectCommand({ Bucket: bucket, Key: key }), deadline);
+    },
+
+    /** Deletes exactly these staged vector keys (checkpoint inventory reaping). */
+    deleteStagedVectors: async (keys, signal) => {
+      if (!Array.isArray(keys) || keys.some((key) => typeof key !== 'string' || !SHA256_HEX.test(key))) {
+        invalidInput();
+      }
+      const deadline = requireSignal(signal);
+      for (const batch of batchesOf(keys, VECTOR_WRITE_BATCH)) {
+        await request('s3vectors', '/DeleteVectors', { indexArn, keys: batch }, deadline);
+      }
+    },
+
+    stageVector: async (entry, signal) => {
+      if (!isRecord(entry)) invalidInput();
+      const key = entry['key'];
+      if (typeof key !== 'string' || !SHA256_HEX.test(key)) invalidInput();
+      if (!Array.isArray(entry['vector'])) invalidInput();
+      const metadata = entry['metadata'];
+      if (!isRecord(metadata) || !hasExactKeys(metadata, METADATA_KEYS)) invalidInput();
+      if (
+        !isValidIdentifier(metadata['ownerId']) || !isSafeVersion(metadata['manifestVersion']) ||
+        !isValidIdentifier(metadata['noteId']) || !isValidIdentifier(metadata['chunkId'])
+      ) {
+        invalidInput();
+      }
+      const revision = metadata['revision'];
+      if (!isSafeInteger(revision) || revision < 1) invalidInput();
+      // Exactly the putVectors entry path: same whitelist, same float32 narrowing, one key.
+      await writeVectorEntries([Object.freeze({
+        key,
+        data: Object.freeze({ float32: float32(entry['vector'], 'INVALID_INPUT') }),
+        metadata: Object.freeze({
+          ownerId: metadata['ownerId'],
+          manifestVersion: metadata['manifestVersion'],
+          noteId: metadata['noteId'],
+          revision,
+          chunkId: metadata['chunkId'],
+        }),
+      })], requireSignal(signal));
+    },
+
+    listCheckpoints: async (ownerId, signal) => {
+      if (!isValidIdentifier(ownerId)) invalidInput();
+      const deadline = requireSignal(signal);
+      const prefix = `${CHECKPOINT_PREFIX}${sha256Hex(ownerId)}/`;
+      const keys: string[] = [];
+      let token: string | undefined;
+      for (let page = 0; ; page += 1) {
+        if (page >= MAX_GET_PAGES) invalidOutput();
+        const output = await sendS3(s3, new ListObjectsV2Command({
+          Bucket: bucket, Prefix: prefix, ...(token === undefined ? {} : { ContinuationToken: token }),
+        }), deadline);
+        if (!isRecord(output) || !Array.isArray(output['Contents'])) invalidOutput();
+        for (const object of output['Contents']) {
+          if (!isRecord(object)) invalidOutput();
+          const listed = object['Key'];
+          if (typeof listed !== 'string' || !listed.startsWith(prefix) || !listed.endsWith('.json')) {
+            invalidOutput();
+          }
+          keys.push(listed);
+        }
+        const next = output['NextContinuationToken'];
+        if (next === undefined || next === null || next === '') break;
+        if (typeof next !== 'string') invalidOutput();
+        token = next;
+      }
+      const checkpoints: Checkpoint[] = [];
+      for (const key of keys) {
+        let checkpoint: Checkpoint;
+        try {
+          const object = await sendS3(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), deadline);
+          if (!isRecord(object)) continue;
+          checkpoint = decodeCheckpoint(await readBody(object['Body'], deadline));
+        } catch (error) {
+          // Listed-then-deleted or corrupt: a corrupt checkpoint only ever means "rebuild".
+          if (error instanceof IndexFailure && error.code === 'SNAPSHOT_NOT_FOUND') continue;
+          if (error instanceof RagFailure && error.code === 'INDEX_NOT_READY') continue;
+          throw error;
+        }
+        checkpoints.push(checkpoint);
+      }
+      // Newest-first by the checkpoint's own createdAt: the resume takes the first binding match.
+      checkpoints.sort((left, right) => right.createdAt - left.createdAt);
+      return Object.freeze(checkpoints);
+    },
+
+    putCheckpoint: async (checkpoint, signal) => {
+      let validated: Checkpoint;
+      // Shared codec with the worker; the port re-validates before anything is staged and keeps
+      // its own typed-code contract.
+      try {
+        validated = validateCheckpoint(checkpoint);
+      } catch {
+        throw new IndexFailure('INDEX_NOT_READY', false);
+      }
+      const leaseToken = isSafeVersion(validated.leaseToken) ? validated.leaseToken : notReady();
+      await sendS3(s3, new PutObjectCommand({
+        Bucket: bucket,
+        Key: checkpointKeyFor(validated.ownerId, leaseToken),
+        Body: encodeCheckpoint(validated),
+        ContentType: SNAPSHOT_CONTENT_TYPE,
+      }), requireSignal(signal));
+    },
+
+    deleteCheckpoints: async (ownerId, signal, ...tokens) => {
+      if (!isValidIdentifier(ownerId)) invalidInput();
+      const deadline = requireSignal(signal);
+      // Exactly these tokens' keys: no list, no prefix delete, no other owner's namespace.
+      for (const token of tokens) {
+        if (!isSafeVersion(token)) notReady();
+        await sendS3(s3, new DeleteObjectCommand({
+          Bucket: bucket, Key: checkpointKeyFor(ownerId, token),
+        }), deadline);
+      }
     },
   });
 }

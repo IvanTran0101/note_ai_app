@@ -1,7 +1,7 @@
 import {runtime} from './runtime';
 import {createIndexWorker} from './worker';
 import {createWorkerDispatch,createWorkerHandler,resolveWorkerMode} from './entrypoints';
-import {createRetirementRecovery,createOrphanRecovery} from './recovery';
+import {createRetirementRecovery,createOrphanRecovery,createCheckpointRecovery} from './recovery';
 import {WORKER_MARGIN_MS,remainingUntil} from './stream';
 import {createPilotWorkerHandler} from '../phase5/pilot_worker';
 import {createRuntimeConfigReader} from '../phase5/runtime_config';
@@ -38,8 +38,10 @@ export const invocationDeadlineFrom=(context:unknown,now:()=>number=Date.now):nu
 const composePrivate=(deps:ReturnType<typeof runtime>,streamArn:string):Handler=>{
   const retired=createRetirementRecovery(deps.stateTable,deps.region,deps.store,deps.artifacts);
   const orphans=createOrphanRecovery(deps.snapshotBucket,deps.region,deps.store,deps.artifacts);
+  const checkpoints=createCheckpointRecovery(deps.store,deps.artifacts);
   return createWorkerHandler(createIndexWorker(deps),streamArn,async(owner,signal)=>({
-    retired:await retired(owner,signal),orphans:await orphans(owner,signal)}));
+    retired:await retired(owner,signal),orphans:await orphans(owner,signal),
+    checkpoints:await checkpoints(owner,signal)}));
 };
 
 /**
@@ -58,7 +60,8 @@ const composePilot=(deps:ReturnType<typeof runtime>,streamArn:string):Handler=>{
     budget,
     recover:async(owner:string,signal:AbortSignal,store:IndexStore)=>({
       retired:await createRetirementRecovery(deps.stateTable,deps.region,store,deps.artifacts)(owner,signal),
-      orphans:await createOrphanRecovery(deps.snapshotBucket,deps.region,store,deps.artifacts)(owner,signal)}),
+      orphans:await createOrphanRecovery(deps.snapshotBucket,deps.region,store,deps.artifacts)(owner,signal),
+      checkpoints:await createCheckpointRecovery(store,deps.artifacts)(owner,signal)}),
     streamArn,
   });
   return createWorkerDispatch(composePrivate(deps,streamArn),pilot);

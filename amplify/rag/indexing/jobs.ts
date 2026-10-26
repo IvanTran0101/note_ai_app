@@ -16,7 +16,9 @@
  */
 import type { DynamoDBStreamEvent } from 'aws-lambda';
 import { JOB_POLICY_VERSION, IndexFailure } from './types';
-import type { IndexNote, IndexState, Job, Manifest } from './types';
+import type {
+  FreshnessMarkers, IndexNote, IndexState, Job, Manifest, NoteMarker, ProtectionMarker,
+} from './types';
 import { isValidIdentifier } from '../contract';
 import { isSafeInteger, isWellFormed } from '../chunking';
 import { embeddingInputDigest, policyIdentity, sha256Hex, validateManifest } from './snapshot';
@@ -313,4 +315,79 @@ export function fingerprint(state: IndexState): string {
     bound.notes.map(noteIdentity),
     policyIdentity(),
   ]));
+}
+
+/**
+ * Freshness markers derived from a bound canonical state — the same fail-closed rebind as
+ * `fingerprint`. Proven writer invariant that makes these markers a complete freshness cover of
+ * every fingerprint input; any new writer that changes a fingerprint input without updating a
+ * marker in the SAME transaction breaks freshness safety and must update this comment and the
+ * equivalence tests:
+ *  - every sync mutation bumps the note `revision` and META `lastSequence` (the account epoch) in
+ *    one transaction (amplify/sync/sync_store_codec.ts); title/content/deletes only change that way;
+ *  - protection commits bump the PROTECTION `revision`, flip the NOTE protection flags and bump
+ *    `lastSequence` in one transaction (amplify/protection/dynamo_protection_store.ts);
+ *  - share commits bump `lastSequence` via ActorFeed.append in the same transaction;
+ *  - `RAG#CONSENT` writes are CAS'd on accepted/version/generation;
+ *  - label-projection writers touch no fingerprint input.
+ * `IndexState` carries protections only as per-note `protected`/`protectionRevision`, and a stored
+ * PROTECTION row always has revision >= 1 (commits go 0 -> 1 -> ...), so a note had a row iff it
+ * is protected or carries protectionRevision > 0. Orphan rows (whose note row was hard-deleted)
+ * are invisible in `IndexState` and contribute no document in `load`, so both sides compare the
+ * NOTE-merged view: `markersOf` derives protections from notes, and the store's `loadMarkers`
+ * emits protection rows only for noteIds present in its note marker set.
+ */
+export function markersOf(state: IndexState): FreshnessMarkers {
+  const raw: unknown = state;
+  const ownerId = isRecord(raw) ? raw['ownerId'] : undefined;
+  if (!isValidIdentifier(ownerId)) invalidState();
+  const bound = bindIndexState(raw, ownerId);
+  const notes: NoteMarker[] = bound.notes.map((note) => Object.freeze({
+    noteId: note.noteId,
+    revision: note.revision,
+    deleted: note.deleted === true,
+    available: note.available === true,
+  }));
+  const protections: ProtectionMarker[] = [];
+  for (const note of bound.notes) {
+    if (note.protected !== true && note.protectionRevision === 0) continue;
+    protections.push(Object.freeze({
+      noteId: note.noteId, enabled: note.protected === true, revision: note.protectionRevision,
+    }));
+  }
+  return Object.freeze({
+    ownerId: bound.ownerId,
+    accountEpoch: bound.accountEpoch,
+    consent: bound.consent,
+    notes: Object.freeze(notes),
+    protections: Object.freeze(protections),
+  });
+}
+
+/** Deep equality over the sorted frozen marker shapes: owner, epoch, consent triple, notes, protections. */
+export function sameMarkers(a: FreshnessMarkers, b: FreshnessMarkers): boolean {
+  if (a === b) return true;
+  if (a.ownerId !== b.ownerId || a.accountEpoch !== b.accountEpoch ||
+      a.consent.accepted !== b.consent.accepted || a.consent.version !== b.consent.version ||
+      a.consent.generation !== b.consent.generation ||
+      a.notes.length !== b.notes.length || a.protections.length !== b.protections.length) {
+    return false;
+  }
+  for (let index = 0; index < a.notes.length; index += 1) {
+    const left = a.notes[index];
+    const right = b.notes[index];
+    if (left.noteId !== right.noteId || left.revision !== right.revision ||
+        left.deleted !== right.deleted || left.available !== right.available) {
+      return false;
+    }
+  }
+  for (let index = 0; index < a.protections.length; index += 1) {
+    const left = a.protections[index];
+    const right = b.protections[index];
+    if (left.noteId !== right.noteId || left.enabled !== right.enabled ||
+        left.revision !== right.revision) {
+      return false;
+    }
+  }
+  return true;
 }

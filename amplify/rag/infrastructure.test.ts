@@ -50,6 +50,91 @@ test('Phase3 resources are private, retained, disabled and query role cannot mut
       assert.equal(resource.DeletionPolicy,'Retain',id);
 });
 
+type SynthStatement=Record<string,any>;
+const statementActions=(statement:SynthStatement):string[]=>[statement.Action].flat()
+  .filter((action):action is string=>typeof action==='string');
+const statementResources=(statement:SynthStatement):string[]=>[statement.Resource].flat()
+  .map(resource=>JSON.stringify(resource));
+const bucketArn=(bucketId:string):string=>JSON.stringify({'Fn::GetAtt':[bucketId,'Arn']});
+const bucketObjectArn=(bucketId:string,suffix:string):string=>JSON.stringify({'Fn::Join':['',
+  [{'Fn::GetAtt':[bucketId,'Arn']},suffix]]});
+const rolePolicyStatements=(resources:Record<string,any>,prefix:string):SynthStatement[]=>{
+  const policy=Object.entries(resources).find(([id])=>id.startsWith(prefix));
+  assert.ok(policy,`${prefix} policy exists`);
+  return policy![1].Properties.PolicyDocument.Statement as SynthStatement[];
+};
+
+test('worker-only checkpoint S3 grants are exact while probe read and failure guards stay unchanged',()=>{
+  const app=new App({outdir:mkdtempSync(join(tmpdir(),'rag-checkpoint-iam-synth-'))});
+  const stack=new Stack(app,'Test',{env:{account:'864946423771',region:'ap-southeast-1'}});
+  const notes=new Table(stack,'ExistingNotes',{partitionKey:{name:'ownerId',type:AttributeType.STRING},
+    sortKey:{name:'noteId',type:AttributeType.STRING},stream:StreamViewType.NEW_IMAGE});
+  createRagInfrastructure(stack,notes);
+  const resources=Template.fromStack(stack).toJSON().Resources as Record<string,any>;
+  const worker=workerFunction(resources);
+  const snapshotsId=worker.Properties.Environment.Variables.RAG_SNAPSHOT_BUCKET.Ref as string;
+  assert.ok(snapshotsId,'worker points at the snapshot bucket');
+  const failuresId=Object.keys(resources).find(id=>resources[id].Type==='AWS::S3::Bucket'
+    && resources[id].Properties.LifecycleConfiguration!==undefined);
+  assert.ok(failuresId,'failure bucket exists');
+  assert.notEqual(failuresId,snapshotsId,'checkpoint grants never touch the failure bucket');
+  const snapshotPrefix=bucketObjectArn(snapshotsId,'/rag/snapshots/*');
+  const checkpointPrefix=bucketObjectArn(snapshotsId,'/rag/checkpoints/*');
+  const snapshotBucketArn=bucketArn(snapshotsId);
+  const workerStatements=rolePolicyStatements(resources,'RagWorkerServiceRoleDefaultPolicy')
+    .filter(statement=>statement.Effect==='Allow');
+  // Compare granted resources by action, independent of how CDK groups statements.
+  for(const action of ['s3:GetObject','s3:PutObject','s3:DeleteObject']){
+    const prefixes=new Set(workerStatements.filter(statement=>statementActions(statement).includes(action))
+      .flatMap(statementResources).filter(resource=>resource.includes(snapshotsId)));
+    assert.deepEqual([...prefixes].sort(),[checkpointPrefix,snapshotPrefix].sort(),action);
+  }
+  const listStatements=workerStatements.filter(statement=>statementActions(statement).includes('s3:ListBucket')
+    &&statementResources(statement).includes(snapshotBucketArn));
+  assert.ok(listStatements.length>0,'snapshot bucket listing is granted');
+  const prefixes=new Set<string>();
+  for(const statement of listStatements){
+    assert.deepEqual(statementResources(statement),[snapshotBucketArn]);
+    const allowed=statement.Condition?.StringLike?.['s3:prefix'];
+    assert.ok(allowed!==undefined,'every snapshot listing grant is prefix constrained');
+    for(const prefix of [allowed].flat()){
+      assert.equal(typeof prefix,'string');
+      prefixes.add(prefix);
+    }
+  }
+  assert.deepEqual([...prefixes].sort(),['rag/checkpoints/*','rag/snapshots/*']);
+  const allowedS3Actions=new Set(['s3:GetObject','s3:PutObject','s3:DeleteObject','s3:ListBucket']);
+  const allowedS3Resources=new Set([snapshotBucketArn,snapshotPrefix,checkpointPrefix,
+    bucketArn(failuresId!),bucketObjectArn(failuresId!,'/*')]);
+  for(const statement of workerStatements){
+    const actions=statementActions(statement);
+    assert.ok(actions.every(action=>!action.includes('*')),'no wildcard IAM action');
+    if(actions.some(action=>action.startsWith('s3:'))){
+      assert.ok(actions.every(action=>allowedS3Actions.has(action)),'only approved S3 actions');
+      assert.ok(statementResources(statement).every(resource=>allowedS3Resources.has(resource)),
+        'S3 grants stay on exact approved bucket resources');
+    }
+  }
+  // The probe keeps only its existing snapshot read: no checkpoint, mutation or list rights.
+  const probeStatements=rolePolicyStatements(resources,'RagRetrievalProbeServiceRoleDefaultPolicy')
+    .filter(statement=>statement.Effect==='Allow');
+  assert.ok(!JSON.stringify(probeStatements).includes('rag/checkpoints/'),'probe has no checkpoint prefix');
+  assert.deepEqual([...new Set(probeStatements.flatMap(statementResources)
+    .filter(resource=>resource.includes(snapshotsId)))],[snapshotPrefix],'probe reads only rag/snapshots/*');
+  for(const statement of probeStatements)
+    for(const denied of ['s3:PutObject','s3:DeleteObject','s3:ListBucket'])
+      assert.ok(!statementActions(statement).includes(denied),`probe must not ${denied}`);
+  // The unrelated failure-bucket write/list guards are still account-scoped.
+  const failureWrite=workerStatements.find(statement=>statementActions(statement).includes('s3:PutObject')
+    &&statementResources(statement).includes(bucketObjectArn(failuresId!,'/*')));
+  assert.ok(failureWrite,'failure bucket write stays');
+  assert.deepEqual(failureWrite!.Condition,{StringEquals:{'s3:ResourceAccount':'864946423771'}});
+  const failureList=workerStatements.find(statement=>statementActions(statement).includes('s3:ListBucket')
+    &&statementResources(statement).includes(bucketArn(failuresId!)));
+  assert.ok(failureList,'failure bucket list stays');
+  assert.deepEqual(failureList!.Condition,{StringEquals:{'s3:ResourceAccount':'864946423771'}});
+});
+
 const PILOT_OWNER='993a958c-1051-70fe-41b4-f5c997da1652';
 // The one reviewed six-note pilot: five synthetic notes plus the one exact reviewed existing note.
 const REVIEWED_EXISTING_NOTE='note-1791284611425000-3';

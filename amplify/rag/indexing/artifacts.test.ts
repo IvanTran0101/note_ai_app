@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  DeleteObjectCommand, GetObjectCommand, PutObjectCommand,
+  DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import type { Chunk } from '../types';
 import { IndexFailure, type Manifest, type Snapshot } from './types';
@@ -17,9 +17,11 @@ import { checksum, encodeSnapshot, policyIdentity, validateSnapshot } from './sn
 import { EMBEDDING_DIMENSIONS } from '../retrieval';
 import type { AwsJson } from './aws_http';
 import {
-  QUERY_TOP_K, createArtifacts, type ArtifactsConfig, type S3Command, type S3Port,
-  type S3SendOptions,
+  CHECKPOINT_PREFIX, QUERY_TOP_K, createArtifacts, type ArtifactsConfig, type S3Command,
+  type S3Port, type S3SendOptions,
 } from './artifacts';
+import { encodeCheckpoint, validateCheckpoint } from './checkpoint';
+import type { Checkpoint, CheckpointEntry } from './checkpoint';
 
 const OWNER = 'u1';
 const VERSION = 'lease-1';
@@ -76,12 +78,15 @@ const notFound = (): Error => {
 
 const s3Fake = (): Readonly<{ objects: Map<string, string>; sent: Sent[]; port: S3Port }> => {
   const objects = new Map<string, string>();
+  const mtimes = new Map<string, number>();
   const sent: Sent[] = [];
   const port: S3Port = {
     async send(command, options) {
       sent.push({ command, options });
       if (command instanceof PutObjectCommand) {
-        objects.set(command.input.Key as string, String(command.input.Body));
+        const key = command.input.Key as string;
+        objects.set(key, String(command.input.Body));
+        mtimes.set(key, mtimes.size + 1);
         return {};
       }
       if (command instanceof GetObjectCommand) {
@@ -92,6 +97,14 @@ const s3Fake = (): Readonly<{ objects: Map<string, string>; sent: Sent[]; port: 
       if (command instanceof DeleteObjectCommand) {
         objects.delete(command.input.Key as string);
         return {};
+      }
+      if (command instanceof ListObjectsV2Command) {
+        const prefix = command.input.Prefix as string;
+        return {
+          Contents: [...objects.keys()]
+            .filter((key) => key.startsWith(prefix))
+            .map((key) => ({ Key: key, LastModified: new Date(mtimes.get(key) ?? 0) })),
+        };
       }
       throw new Error('unexpected S3 command');
     },
@@ -780,4 +793,155 @@ test('query pagination keeps filters and rejects a repeated cursor', async () =>
   const repeated=createArtifacts({region:REGION,snapshotBucket:BUCKET,vectorIndexArn:INDEX_ARN},
     {request:async()=>({vectors:[],nextToken:'same'})});
   await assert.rejects(repeated.query(VECTOR,OWNER,VERSION,null,SIGNAL));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Durable checkpoint ports (Patch 5B).
+// ---------------------------------------------------------------------------------------------
+
+const cpEntry = (seed: string): CheckpointEntry =>
+  Object.freeze({ embeddingDigest: sha256(`digest-${seed}`), vectorKey: sha256(`key-${seed}`) });
+
+const checkpointOf = (over: Partial<Checkpoint> = {}): Checkpoint => validateCheckpoint({
+  schemaVersion: 1, ownerId: OWNER, policyIdentity: policyIdentity(), consentGeneration: 1,
+  leaseToken: VERSION, createdAt: 1_000, entries: [cpEntry('1')], ...over,
+});
+
+const CHECKPOINT_KEY = `${CHECKPOINT_PREFIX}${sha256(OWNER)}/${VERSION}.json`;
+
+test('putCheckpoint writes the lease-scoped owner-hashed key with canonical JSON and bucket SSE', async () => {
+  const { artifacts, sent, objects } = build();
+  const value = checkpointOf({ entries: [cpEntry('1'), cpEntry('2')] });
+  await artifacts.putCheckpoint!(value, SIGNAL);
+
+  assert.ok(!CHECKPOINT_KEY.includes(OWNER), 'owner id is hashed out of the key space');
+  assert.equal(objects.get(CHECKPOINT_KEY), encodeCheckpoint(value));
+  assert.equal(sent.length, 1);
+  const command = sent[0].command;
+  assert.ok(command instanceof PutObjectCommand);
+  assert.equal(command.input.Key, CHECKPOINT_KEY);
+  assert.equal(command.input.ContentType, 'application/json');
+  assert.equal(command.input.ServerSideEncryption, undefined);
+  assert.deepEqual(sent[0].options, { abortSignal: SIGNAL });
+
+  // Path safety: a lease token that is not a safe key segment never reaches S3, and an invalid
+  // checkpoint is rejected before any write.
+  sent.length = 0;
+  assert.equal(
+    (await failureOf(() => artifacts.putCheckpoint!(checkpointOf({ leaseToken: '../escape' }), SIGNAL))).code,
+    'INDEX_NOT_READY');
+  assert.equal(
+    (await failureOf(() =>
+      artifacts.putCheckpoint!({ ...checkpointOf(), extra: 1 } as unknown as Checkpoint, SIGNAL))).code,
+    'INDEX_NOT_READY');
+  assert.equal(
+    (await failureOf(() =>
+      artifacts.putCheckpoint!({ ...checkpointOf(), ownerId: ' ' }, SIGNAL))).code,
+    'INDEX_NOT_READY');
+  assert.equal(sent.length, 0, 'invalid inputs never reach S3');
+});
+
+test('listCheckpoints lists only the owner prefix, newest-first, and skips corrupt objects', async () => {
+  const { artifacts, objects, sent } = build();
+  const older = checkpointOf({ leaseToken: 'lease-1', createdAt: 1_000 });
+  const newer = checkpointOf({ leaseToken: 'lease-2', createdAt: 2_000, entries: [cpEntry('2'), cpEntry('3')] });
+  await artifacts.putCheckpoint!(older, SIGNAL);
+  await artifacts.putCheckpoint!(newer, SIGNAL);
+  // A corrupt object under the same prefix, and a valid checkpoint under another owner's hash.
+  objects.set(`${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-3.json`, 'not-json');
+  objects.set(`${CHECKPOINT_PREFIX}${sha256('u2')}/lease-9.json`,
+    encodeCheckpoint(checkpointOf({ ownerId: 'u2' })));
+  sent.length = 0;
+
+  const listed = await artifacts.listCheckpoints!(OWNER, SIGNAL);
+  assert.deepEqual(listed, [newer, older]);
+  const list = sent[0].command;
+  assert.ok(list instanceof ListObjectsV2Command);
+  assert.equal(list.input.Prefix, `${CHECKPOINT_PREFIX}${sha256(OWNER)}/`);
+  // Two owner objects read (the corrupt one is fetched then skipped), the foreign one never.
+  assert.deepEqual(
+    sent.filter((entry) => entry.command instanceof GetObjectCommand)
+      .map((entry) => (entry.command as GetObjectCommand).input.Key),
+    [`${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-1.json`, `${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-2.json`,
+      `${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-3.json`],
+  );
+  assert.equal(
+    (await failureOf(() => artifacts.listCheckpoints!('owner\u0000', SIGNAL))).code, 'INVALID_INPUT');
+});
+
+test('deleteCheckpoints deletes exactly the listed tokens and nothing else', async () => {
+  const { artifacts, objects, sent } = build();
+  await artifacts.putCheckpoint!(checkpointOf({ leaseToken: 'lease-1' }), SIGNAL);
+  await artifacts.putCheckpoint!(checkpointOf({ leaseToken: 'lease-2' }), SIGNAL);
+  sent.length = 0;
+
+  await artifacts.deleteCheckpoints!(OWNER, SIGNAL, 'lease-1');
+  assert.equal(objects.has(`${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-1.json`), false);
+  assert.equal(objects.has(`${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-2.json`), true,
+    'an unlisted lease checkpoint is never touched');
+  const removes = sent.filter((entry) => entry.command instanceof DeleteObjectCommand);
+  assert.equal(removes.length, 1);
+  assert.equal((removes[0].command as DeleteObjectCommand).input.Key,
+    `${CHECKPOINT_PREFIX}${sha256(OWNER)}/lease-1.json`);
+
+  sent.length = 0;
+  assert.equal(
+    (await failureOf(() => artifacts.deleteCheckpoints!(OWNER, SIGNAL, '../escape'))).code,
+    'INDEX_NOT_READY');
+  assert.equal(
+    (await failureOf(() => artifacts.deleteCheckpoints!('owner\u0000', SIGNAL, 'lease-2'))).code,
+    'INVALID_INPUT');
+  assert.equal(sent.length, 0, 'invalid tokens and owners delete nothing');
+  await artifacts.deleteCheckpoints!(OWNER, SIGNAL);
+  assert.equal(sent.length, 0, 'no tokens means no calls');
+});
+
+test('stageVector reuses the exact putVectors entry shape, whitelist and float32 narrowing', async () => {
+  const { artifacts, vectors } = build();
+  const imprecise = jsonVector();
+  imprecise[5] = 0.1;
+  await artifacts.stageVector!({
+    key: sha256('final-key'),
+    vector: imprecise,
+    metadata: {
+      ownerId: OWNER, manifestVersion: 'lease-7', noteId: 'n1', revision: 3, chunkId: 'body-0',
+    },
+  }, SIGNAL);
+
+  assert.equal(vectors.calls.length, 1, 'one PutVectors call for one staged vector');
+  assert.equal(vectors.calls[0].path, '/PutVectors');
+  assert.deepEqual(Object.keys(vectors.calls[0].body).sort(), ['indexArn', 'vectors']);
+  const entries = entriesOf(vectors.calls[0]);
+  assert.equal(entries.length, 1);
+  const entry = entries[0];
+  assert.deepEqual(Object.keys(entry).sort(), ['data', 'key', 'metadata']);
+  assert.equal(entry['key'], sha256('final-key'));
+  assert.deepEqual(entry['metadata'], {
+    ownerId: OWNER, manifestVersion: 'lease-7', noteId: 'n1', revision: 3, chunkId: 'body-0',
+  });
+  const data = entry['data'] as { float32: readonly number[] };
+  assert.equal(data.float32.length, EMBEDDING_DIMENSIONS);
+  assert.equal(data.float32[5], Math.fround(0.1));
+  assert.notEqual(data.float32[5], 0.1);
+
+  const good = { key: sha256('k'), vector: VECTOR, metadata: {
+    ownerId: OWNER, manifestVersion: VERSION, noteId: 'n1', revision: 1, chunkId: 'body-0',
+  } };
+  const bad: readonly (readonly [string, unknown])[] = [
+    ['non-hash key', { ...good, key: 'plain-key' }],
+    ['metadata extra key', { ...good, metadata: { ...good.metadata, text: TEXT_SENTINEL } }],
+    ['metadata missing key', { ...good, metadata: { ownerId: OWNER, manifestVersion: VERSION, noteId: 'n1', revision: 1 } }],
+    ['unsafe manifest version', { ...good, metadata: { ...good.metadata, manifestVersion: '../escape' } }],
+    ['zero revision', { ...good, metadata: { ...good.metadata, revision: 0 } }],
+    ['foreign owner', { ...good, metadata: { ...good.metadata, ownerId: 'u\u0000' } }],
+    ['zero vector', { ...good, vector: new Array<number>(EMBEDDING_DIMENSIONS).fill(0) }],
+    ['wrong dimensions', { ...good, vector: [1, 2, 3] }],
+  ];
+  for (const [label, value] of bad) {
+    const before: number = vectors.calls.length;
+    const error = await failureOf(() =>
+      artifacts.stageVector!(value as Parameters<NonNullable<typeof artifacts.stageVector>>[0], SIGNAL));
+    assert.deepEqual([error.code, error.retryable], ['INVALID_INPUT', false], label);
+    assert.equal(vectors.calls.length, before, label);
+  }
 });

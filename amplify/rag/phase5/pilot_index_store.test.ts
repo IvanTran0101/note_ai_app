@@ -12,9 +12,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONSENT_VERSION } from '../contract';
+import { markersOf, sameMarkers } from '../indexing/jobs';
 import { embeddingInputDigest } from '../indexing/snapshot';
 import { IndexFailure } from '../indexing/types';
-import type { IndexNote, IndexState, IndexStore, JobStatus, Lease, Manifest } from '../indexing/types';
+import type {
+  FreshnessMarkers, IndexNote, IndexState, IndexStore, JobStatus, Lease, Manifest,
+} from '../indexing/types';
 import { RagFailure } from '../types';
 import { RUNTIME_CASE_HASH, RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
@@ -75,26 +78,38 @@ const manifest = (status: Manifest['status']): Manifest => Object.freeze({
 
 type Calls = Readonly<{
   load: string[];
+  loadMarkers: string[];
   acquire: Array<{ state: IndexState; requested: string; nowMs: number }>;
   publish: Array<{ state: IndexState; lease: Lease; manifest: Manifest; nowMs: number }>;
   finish: Array<{ ownerId: string; lease: Lease; status: JobStatus; code: string; nowMs: number }>;
   reserveEmbedding: number;
 }>;
 
-const fakeStore = (loadImpl: (ownerId: string, call: number) => IndexState | Promise<IndexState>) => {
+const fakeStore = (
+  loadImpl: (ownerId: string, call: number) => IndexState | Promise<IndexState>,
+  markersImpl?: (ownerId: string) => FreshnessMarkers,
+) => {
   const calls: {
     load: string[];
+    loadMarkers: string[];
     acquire: Array<{ state: IndexState; requested: string; nowMs: number }>;
     publish: Array<{ state: IndexState; lease: Lease; manifest: Manifest; nowMs: number }>;
     finish: Array<{ ownerId: string; lease: Lease; status: JobStatus; code: string; nowMs: number }>;
     reserveEmbedding: number;
-  } = { load: [], acquire: [], publish: [], finish: [], reserveEmbedding: 0 };
+  } = { load: [], loadMarkers: [], acquire: [], publish: [], finish: [], reserveEmbedding: 0 };
   const store: IndexStore = {
     async load(ownerId) {
       const call = calls.load.length;
       calls.load.push(ownerId);
       return loadImpl(ownerId, call);
     },
+    // Present only when the test injects it: absent means the decorator keeps the full path.
+    ...(markersImpl === undefined ? {} : {
+      async loadMarkers(ownerId: string): Promise<FreshnessMarkers> {
+        calls.loadMarkers.push(ownerId);
+        return markersImpl(ownerId);
+      },
+    }),
     async acquire(state_, requested, nowMs) {
       calls.acquire.push({ state: state_, requested, nowMs });
       return LEASE;
@@ -118,9 +133,10 @@ const setup = (
   reads: readonly Row[],
   loadImpl: (ownerId: string, call: number) => IndexState | Promise<IndexState>,
   budgetImpl?: () => Promise<void>,
+  markersImpl?: (ownerId: string) => FreshnessMarkers,
 ) => {
   const captured = parseRuntimeConfig(capturedRaw);
-  const { store, calls } = fakeStore(loadImpl);
+  const { store, calls } = fakeStore(loadImpl, markersImpl);
   const budgetCalls: number[] = [];
   const budget = {
     async acquireEmbedding(): Promise<void> {
@@ -446,4 +462,91 @@ test('construction validates the store, budget, reader and the captured config',
     () => createPilotIndexStore({ store, budget, readConfig, config: rawConfig({ generation: 0 }) as never }),
     isFailure('LIVE_POLICY_NOT_CONFIGURED', false),
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// Light loadMarkers forwarding and the light reserveEmbedding path (Patch 5A)
+// ---------------------------------------------------------------------------------------------
+
+test('loadMarkers is forwarded under the config and membership fence when the inner store has it', async () => {
+  const target = state();
+  const h = setup(rawConfig(), [rawConfig()], () => target, undefined, () => markersOf(target));
+  const forward = h.guard.loadMarkers;
+  assert.ok(forward !== undefined, 'the decorator forwards the inner marker read');
+  assert.ok(sameMarkers(await forward(ACTOR, signal()), markersOf(target)));
+  assert.deepEqual(h.calls.loadMarkers, [ACTOR]);
+  assert.equal(h.calls.load.length, 0, 'the forwarded read never loads the body');
+
+  await assert.rejects(forward(OTHER, signal()), isFailure('LIVE_POLICY_NOT_CONFIGURED', false));
+  assert.equal(h.calls.loadMarkers.includes(OTHER), false, 'membership fences the marker read');
+
+  const drifted = setup(rawConfig(), [rawConfig({ generation: 2 })], () => target, undefined,
+    () => markersOf(target));
+  const driftedForward = drifted.guard.loadMarkers;
+  assert.ok(driftedForward !== undefined);
+  await assert.rejects(driftedForward(ACTOR, signal()), isFailure('SOURCE_CHANGED', true));
+  assert.deepEqual(drifted.calls.loadMarkers, [], 'a moved config refuses before the inner read');
+
+  const bare = setup(rawConfig(), [rawConfig()], () => target);
+  assert.equal(bare.guard.loadMarkers, undefined,
+    'absent on the inner store means absent on the decorator');
+});
+
+test('the light reserveEmbedding admits from markers alone: no body load, one atomic debit', async () => {
+  const target = state();
+  const h = setup(rawConfig(), [rawConfig()], () => {
+    throw new Error('the canonical body must never load on the light path');
+  }, undefined, () => markersOf(target));
+  await h.guard.reserveEmbedding(ACTOR, signal());
+  assert.equal(h.budgetCalls.length, 1);
+  assert.deepEqual(h.calls.loadMarkers, [ACTOR]);
+  assert.equal(h.calls.load.length, 0);
+  assert.equal(h.calls.reserveEmbedding, 0, 'the legacy global counter is never used');
+});
+
+test('the light reserveEmbedding refuses disabled policy, withdrawn consent and non-members from markers only', async () => {
+  // The canonical body would still authorize; the marker consent is the only permit on the paid
+  // path, so the refusal proves the decision came from the marker read.
+  const withdrawn = setup(rawConfig(), [rawConfig()], () => {
+    throw new Error('the canonical body must never load on the light path');
+  }, undefined, () => markersOf(state({ consent: consent(false, 2) })));
+  await assert.rejects(
+    withdrawn.guard.reserveEmbedding(ACTOR, signal()),
+    isFailure('LIVE_POLICY_NOT_CONFIGURED', false),
+  );
+  assert.equal(withdrawn.budgetCalls.length, 0);
+  assert.deepEqual(withdrawn.calls.loadMarkers, [ACTOR]);
+  assert.equal(withdrawn.calls.load.length, 0);
+
+  const disabled = setup(
+    rawConfig({ policy: policyRaw(false) }),
+    [rawConfig({ policy: policyRaw(false) })],
+    () => state(),
+    undefined,
+    () => markersOf(state()),
+  );
+  await assert.rejects(
+    disabled.guard.reserveEmbedding(ACTOR, signal()),
+    isFailure('LIVE_POLICY_NOT_CONFIGURED', false),
+  );
+  assert.equal(disabled.budgetCalls.length, 0);
+
+  const nonMember = setup(rawConfig(), [rawConfig()], () => state(), undefined, () => markersOf(state()));
+  await assert.rejects(
+    nonMember.guard.reserveEmbedding(OTHER, signal()),
+    isFailure('LIVE_POLICY_NOT_CONFIGURED', false),
+  );
+  assert.deepEqual(nonMember.calls.loadMarkers, [], 'membership is checked before the marker read');
+  assert.equal(nonMember.budgetCalls.length, 0);
+  assert.equal(nonMember.calls.load.length, 0);
+});
+
+test('reserveEmbedding keeps the full authorize path when the inner store lacks loadMarkers', async () => {
+  const target = state();
+  const h = setup(rawConfig(), [rawConfig()], () => target);
+  assert.equal(h.guard.loadMarkers, undefined);
+  await h.guard.reserveEmbedding(ACTOR, signal());
+  assert.equal(h.budgetCalls.length, 1);
+  assert.deepEqual(h.calls.load, [ACTOR], 'without the marker read the full authorize load runs');
+  assert.equal(h.calls.loadMarkers.length, 0);
 });

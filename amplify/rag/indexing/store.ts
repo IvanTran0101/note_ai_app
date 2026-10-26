@@ -10,6 +10,8 @@
  *  - a torn snapshot fails closed: META (`lastSequence`) and `RAG#CONSENT` are read around the
  *    paginated load and a moved epoch/generation is `SOURCE_CHANGED` (retryable). Any incoherent
  *    note/protection pair, invalid stored manifest or malformed row is `INVALID_STATE` (terminal).
+ *    `loadMarkers` applies the same fence to a projected, title/content-free read for mid-flight
+ *    revalidation; it is equally read-only.
  *  - the manifest, lease, retirement record and budget counter live in the separate RAG state
  *    table. The notes table only ever receives reads and the publish transaction's
  *    `ConditionCheck`s; `load` performs no write at all.
@@ -38,7 +40,8 @@ import { SHA256_HEX, validateManifest } from './snapshot';
 import { failureForStatus, isAwsRegion } from './aws_http';
 import { IndexFailure, LEASE_MS, SMOKE_EMBED_LIMIT } from './types';
 import type {
-  Consent, IndexNote, IndexState, IndexStore, JobStatus, Lease, Manifest,
+  Consent, FreshnessMarkers, IndexNote, IndexState, IndexStore, JobStatus, Lease, Manifest,
+  NoteMarker, ProtectionMarker,
 } from './types';
 
 export const MANIFEST_SORT_KEY = 'RAG#MANIFEST';
@@ -227,8 +230,15 @@ export function createIndexStore(config: IndexStoreConfig, options?: IndexStoreO
     return Object.freeze({ accepted, version, generation });
   };
 
-  /** One prefix, strongly consistent, fully paginated; a repeated cursor is corruption. */
-  const queryRows = async (ownerKey: string, prefix: string, signal: AbortSignal): Promise<Row[]> => {
+  /**
+   * One prefix, strongly consistent, fully paginated; a repeated cursor is corruption. The
+   * optional projection narrows the fetched attributes (the marker reads) without changing the
+   * pagination, the bounds or the consistency of the full load.
+   */
+  const queryRows = async (
+    ownerKey: string, prefix: string, signal: AbortSignal,
+    projection?: Readonly<{ expression: string; names: Record<string, string> }>,
+  ): Promise<Row[]> => {
     const rows: Row[] = [];
     let cursor: Row | undefined;
     let sent: string | null = null;
@@ -239,6 +249,10 @@ export function createIndexStore(config: IndexStoreConfig, options?: IndexStoreO
         ConsistentRead: true,
         KeyConditionExpression: 'ownerId = :owner AND begins_with(noteId, :prefix)',
         ExpressionAttributeValues: { ':owner': ownerKey, ':prefix': prefix },
+        ...(projection === undefined ? {} : {
+          ProjectionExpression: projection.expression,
+          ExpressionAttributeNames: projection.names,
+        }),
         ...(cursor === undefined ? {} : { ExclusiveStartKey: cursor }),
       }), signal);
       const items = output['Items'];
@@ -332,6 +346,113 @@ export function createIndexStore(config: IndexStoreConfig, options?: IndexStoreO
       consent: consentBefore,
       notes: Object.freeze(notes),
       manifest,
+    });
+  };
+
+  // Marker projections: only the fingerprint-relevant fields cross the wire (aliases dodge the
+  // reserved-word space); the key attributes ownerId/noteId are always safe bare, like `load`'s
+  // own key condition.
+  const NOTE_MARKER_PROJECTION = Object.freeze({
+    expression: 'ownerId, noteId, #revision, #deletedAt, #contentAvailable, #canonical',
+    names: Object.freeze({
+      '#revision': 'revision', '#deletedAt': 'deletedAt',
+      '#contentAvailable': 'contentAvailable', '#canonical': 'canonicalOwnerId',
+    }),
+  });
+  const PROTECTION_MARKER_PROJECTION = Object.freeze({
+    expression: 'ownerId, noteId, #canonical, #target, #enabled, #revision',
+    names: Object.freeze({
+      '#canonical': 'canonicalOwnerId', '#target': 'targetNoteId',
+      '#enabled': 'enabled', '#revision': 'revision',
+    }),
+  });
+
+  /**
+   * Light freshness read for mid-flight revalidation: the same torn-read fence as `load` (META
+   * and consent read around the paginated marker queries; a moved epoch/generation is
+   * SOURCE_CHANGED) and the same fail-closed row validation for the fields it fetches — a marker
+   * read is never looser than `load` on those fields. Only the marker attributes are fetched: no
+   * title/content ever crosses the wire, no manifest is read. Full codec validation (title,
+   * content, snapshot identity) stays in `load`, which still guards job start and publish.
+   *
+   * Derived booleans mirror `load` exactly: `deleted` is `snapshot.deletedAt !== null` (undefined
+   * and null both mean live), and `available` is constant true because `toNoteSnapshot` hardcodes
+   * `contentAvailable: true` for every row it accepts — the canonical row writer
+   * (`snapshotAttributes`) never stores the attribute at all. The projection still fetches the
+   * attribute so a codec that ever honors a stored value must move both readers in lockstep; the
+   * marker-equivalence tests enforce that.
+   *
+   * Foreign projections are skipped exactly like `load`, and protection rows are validated with
+   * the same owner/sortKey shape fence (minus the verifier rules the projection does not fetch)
+   * but emitted only for noteIds present in the note marker set: orphan rows are invisible in
+   * `IndexState` and contribute no document in `load`, so `markersOf(load(...))` and
+   * `loadMarkers(...)` compare the same NOTE-merged view.
+   */
+  const loadMarkers = async (ownerId: string, signal: AbortSignal): Promise<FreshnessMarkers> => {
+    const owner = requireOwner(ownerId);
+    const deadline = requireSignal(signal);
+    const ownerKey = ownerKeyOf(owner);
+    const epochBefore = epochOf(await getItem(notesTable, keyOf(ownerKey, META_SORT_KEY), deadline));
+    const consentBefore = consentOf(await getItem(notesTable, keyOf(ownerKey, CONSENT_SORT_KEY), deadline), owner);
+    const noteRows = await queryRows(ownerKey, NOTE_KEY_PREFIX, deadline, NOTE_MARKER_PROJECTION);
+    const protectionRows = await queryRows(ownerKey, PROTECTION_KEY_PREFIX, deadline, PROTECTION_MARKER_PROJECTION);
+    const epochAfter = epochOf(await getItem(notesTable, keyOf(ownerKey, META_SORT_KEY), deadline));
+    const consentAfter = consentOf(await getItem(notesTable, keyOf(ownerKey, CONSENT_SORT_KEY), deadline), owner);
+    if (epochAfter !== epochBefore || consentAfter.accepted !== consentBefore.accepted ||
+        consentAfter.version !== consentBefore.version || consentAfter.generation !== consentBefore.generation) {
+      throw new IndexFailure('SOURCE_CHANGED', true);
+    }
+
+    const byId = (left: { noteId: string }, right: { noteId: string }): number =>
+      (left.noteId < right.noteId ? -1 : left.noteId > right.noteId ? 1 : 0);
+    const notes: NoteMarker[] = [];
+    const seenNotes = new Set<string>();
+    for (const row of noteRows) {
+      if (row['ownerId'] !== ownerKey) invalidState();
+      const sortKey = row['noteId'];
+      if (typeof sortKey !== 'string' || !sortKey.startsWith(NOTE_KEY_PREFIX)) invalidState();
+      const noteId = sortKey.slice(NOTE_KEY_PREFIX.length);
+      if (!isValidIdentifier(noteId) || seenNotes.has(noteId)) invalidState();
+      seenNotes.add(noteId);
+      if (isForeignProjection(row, owner)) continue;
+      // The codec's own floors: a safe integer revision >= 1 and a null/string deletedAt.
+      const revision = row['revision'];
+      if (!isSafeInteger(revision) || revision < 1) invalidState();
+      const deletedAt = row['deletedAt'];
+      if (deletedAt !== undefined && deletedAt !== null && typeof deletedAt !== 'string') invalidState();
+      notes.push(Object.freeze({
+        noteId,
+        revision,
+        deleted: deletedAt !== undefined && deletedAt !== null,
+        available: true,
+      }));
+    }
+    notes.sort(byId);
+
+    const canonicalIds = new Set(notes.map((note) => note.noteId));
+    const protections: ProtectionMarker[] = [];
+    const seenProtections = new Set<string>();
+    for (const row of protectionRows) {
+      if (row['ownerId'] !== ownerKey) invalidState();
+      const sortKey = row['noteId'];
+      if (typeof sortKey !== 'string' || !sortKey.startsWith(PROTECTION_KEY_PREFIX)) invalidState();
+      const noteId = sortKey.slice(PROTECTION_KEY_PREFIX.length);
+      if (!isValidIdentifier(noteId) || seenProtections.has(noteId)) invalidState();
+      seenProtections.add(noteId);
+      // A protection row can never be a shared projection, and must name its own note.
+      if (row['canonicalOwnerId'] !== owner || row['targetNoteId'] !== noteId) invalidState();
+      const enabled = row['enabled'];
+      const revision = row['revision'];
+      if (typeof enabled !== 'boolean' || !isSafeInteger(revision) || revision < 0) invalidState();
+      if (canonicalIds.has(noteId)) protections.push(Object.freeze({ noteId, enabled, revision }));
+    }
+    protections.sort(byId);
+    return Object.freeze({
+      ownerId: owner,
+      accountEpoch: epochBefore,
+      consent: consentBefore,
+      notes: Object.freeze(notes),
+      protections: Object.freeze(protections),
     });
   };
 
@@ -524,5 +645,5 @@ export function createIndexStore(config: IndexStoreConfig, options?: IndexStoreO
     }
   };
 
-  return Object.freeze({ load, acquire, publish, finish, reserveEmbedding });
+  return Object.freeze({ load, loadMarkers, acquire, publish, finish, reserveEmbedding });
 }

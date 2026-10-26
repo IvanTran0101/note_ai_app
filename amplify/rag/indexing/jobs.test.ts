@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { CONSENT_VERSION } from '../contract';
 import { JOB_POLICY_VERSION, IndexFailure } from './types';
 import type { IndexNote, IndexState, Job } from './types';
-import { classifyRecord, fingerprint, jobsFromStream, parseJob } from './jobs';
+import { classifyRecord, fingerprint, jobsFromStream, markersOf, parseJob, sameMarkers } from './jobs';
 
 const av = (value: string) => ({ S: value });
 const num = (value: number) => ({ N: String(value) });
@@ -220,4 +220,48 @@ test('fingerprint fails closed on foreign or incoherent canonical state', () => 
     assert.throws(() => fingerprint(value as IndexState), (error: unknown) =>
       error instanceof IndexFailure && error.code === 'INVALID_STATE' && error.retryable === false);
   }
+});
+
+test('every fingerprint-relevant canonical change is marker-visible (equivalence canary)', () => {
+  // The scripted canonical writers from the marker invariant: each step changes exactly one
+  // fingerprint input, and every fingerprint input must move a freshness marker with it.
+  const steps: readonly Readonly<{ name: string; before: IndexState; after: IndexState }>[] = [
+    {
+      name: 'note revision bump',
+      before: state(),
+      after: state({ notes: [note({ revision: 2 })] }),
+    },
+    {
+      name: 'note delete',
+      before: state(),
+      after: state({ notes: [note({ deleted: true })] }),
+    },
+    {
+      name: 'protection enable',
+      before: state(),
+      after: state({ notes: [note({ protected: true, protectionRevision: 1 })] }),
+    },
+    {
+      name: 'protection disable',
+      before: state({ notes: [note({ protected: true, protectionRevision: 1 })] }),
+      after: state({ notes: [note({ protected: false, protectionRevision: 2 })] }),
+    },
+    {
+      name: 'consent generation bump',
+      before: state(),
+      after: state({ consent: { accepted: true, version: CONSENT_VERSION, generation: 3 } }),
+    },
+    {
+      name: 'account epoch bump',
+      before: state(),
+      after: state({ accountEpoch: 2 }),
+    },
+  ];
+  for (const step of steps) {
+    assert.equal(sameMarkers(markersOf(step.before), markersOf(step.after)), false, step.name);
+    assert.notEqual(fingerprint(step.after), fingerprint(step.before), step.name);
+  }
+  // The unchanged account is marker-stable, and a text-only rewrite shows up through revision.
+  assert.equal(sameMarkers(markersOf(state()), markersOf(state())), true);
+  assert.equal(fingerprint(state()), fingerprint(state()));
 });

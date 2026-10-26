@@ -5,14 +5,27 @@
  * a lease taken by canonical fingerprint, and reconciles the *latest* full account: every
  * eligible (own, synced, unprotected, live, available) note is chunked with the injected
  * counter, reused vectors are copied from the previous snapshot under new immutable keys, and
- * only genuinely new embedding inputs are paid for. Before every paid embedding call and
- * before the publish transaction the worker re-reads the store and compares the fingerprint:
- * any consent, epoch, protection or text change aborts with SUPERSEDED and publishes nothing.
+ * only genuinely new embedding inputs are paid for. Before every paid embedding call the worker
+ * revalidates the source — via the light marker read (`loadMarkers`: epoch, consent, note
+ * revisions/deletes/availability, protections) when the store exposes it, else the exact legacy
+ * full re-read — and before the publish transaction it always re-reads the store and compares
+ * the fingerprint: any consent, epoch, protection or text change aborts with SUPERSEDED and
+ * publishes nothing.
  *
  * Failure taxonomy: ports raise `IndexFailure`; retryable failures and an expired deadline are
  * rethrown so the stream replays the batch, terminal failures end as `FAILED(code)`. A failed
  * publish leaves staged artifacts in place and flags them for backfill — it never deletes a
  * prefix that could belong to an active lease.
+ *
+ * Patch 5B durable checkpoints: with the four optional checkpoint ports present, every paid
+ * vector is staged under its final key and durably recorded per chunk, a replayed attempt
+ * merges still-pending digests across the binding-matching checkpoints (see checkpoint.ts), and
+ * the run stops cleanly while time remains for another chunk. A successful publish deletes NO
+ * checkpoints: a delete on the publish path would race an expired lease's late record(), which
+ * could resurrect a stale checkpoint after the cleanup — progress is instead made obsolete by
+ * the next run's binding match (only still-pending digests are ever resumed) and by recovery
+ * reaping stale checkpoints (recovery.ts). A port without the methods keeps the exact legacy
+ * behavior.
  */
 import { CONSENT_VERSION } from '../contract';
 import {
@@ -23,14 +36,15 @@ import { validateVector } from '../retrieval';
 import { isEligibleNote } from '../authority';
 import { IndexFailure, WORKER_MS } from './types';
 import type {
-  Document, IndexDeps, IndexState, Job, JobResult, JobStatus, Lease, Manifest, Snapshot,
+  Artifacts, Document, IndexDeps, IndexState, Job, JobResult, JobStatus, Lease, Manifest, Snapshot,
 } from './types';
 import type { Chunk } from '../types';
-import { bindIndexState, fingerprint, parseJob } from './jobs';
+import { bindIndexState, fingerprint, markersOf, parseJob, sameMarkers } from './jobs';
 import {
-  SNAPSHOT_SCHEMA_VERSION, checksum, embeddingInputDigest, policyIdentity, sha256Hex,
+  SNAPSHOT_SCHEMA_VERSION, checksum, embeddingInputDigest, policyIdentity,
   validateSnapshot,
 } from './snapshot';
+import { createCheckpointWriter, resumeFromCheckpoint, vectorKeyFor } from './checkpoint';
 import { RagFailure } from '../types';
 
 /**
@@ -57,12 +71,37 @@ type Run = Readonly<{
   now: () => number;
   signal: AbortSignal;
   check: () => void;
+  /** True budget left until this run's internal deadline; drives the checkpoint stop margin. */
+  remaining: () => number;
   job: Job;
   bound: IndexState;
   fp: string;
   lease: Lease;
   progress: Progress;
 }>;
+
+/**
+ * Patch 5B gate: all four optional checkpoint ports at once, or null. Any absent method (a
+ * legacy fake, a partially capable port) means the exact legacy worker path — no resume, no
+ * staging, no checkpoint writes, no stop-margin early exit. Optionality is the fallback.
+ * The methods are re-bound to the port object: like the optional `loadMarkers` call above, a
+ * port implementation owns its state through `this`, and a detached method would lose it.
+ */
+const checkpointPorts = (artifacts: Artifacts) => {
+  const { stageVector, listCheckpoints, putCheckpoint, deleteCheckpoints } = artifacts;
+  if (
+    stageVector === undefined || listCheckpoints === undefined ||
+    putCheckpoint === undefined || deleteCheckpoints === undefined
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    stageVector: stageVector.bind(artifacts),
+    listCheckpoints: listCheckpoints.bind(artifacts),
+    putCheckpoint: putCheckpoint.bind(artifacts),
+    deleteCheckpoints: deleteCheckpoints.bind(artifacts),
+  });
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -135,7 +174,10 @@ const requireStoredVector = (vector: unknown): readonly number[] => {
   return vector;
 };
 
-/** Re-read the store and demand the exact bound fingerprint (epoch and consent generation included). */
+/**
+ * Full re-read demanding the exact bound fingerprint (epoch and consent generation included);
+ * the publish boundary always runs this, never the light marker path alone.
+ */
 const reread = async (run: Run): Promise<void> => {
   run.check();
   const latest = await guard(
@@ -144,6 +186,24 @@ const reread = async (run: Run): Promise<void> => {
     run.check,
   );
   if (fingerprint(latest) !== run.fp) throw new Superseded('SOURCE_CHANGED');
+};
+
+/**
+ * Mid-flight revalidation: with a marker-capable store, compare freshness markers (the
+ * transactional marker set that covers every fingerprint input) instead of re-reading and
+ * re-hashing the whole account; a store without `loadMarkers` keeps the exact legacy full
+ * re-read. The full `reread` still guards the publish boundary.
+ */
+const revalidateLight = async (run: Run): Promise<void> => {
+  const { deps, job, bound, signal, check } = run;
+  const loadMarkers = deps.store.loadMarkers;
+  if (loadMarkers === undefined) {
+    await reread(run);
+    return;
+  }
+  check();
+  const markers = await guard(loadMarkers.call(deps.store, job.ownerId, signal), signal, check);
+  if (!sameMarkers(markers, markersOf(bound))) throw new Superseded('SOURCE_CHANGED');
 };
 
 /** Vector-float reuse from the previous published snapshot: same policy, title, text digest. */
@@ -197,25 +257,67 @@ const embedMissing = async (
   reused: ReadonlyMap<string, readonly number[]>,
 ): Promise<ReadonlyMap<string, readonly number[]>> => {
   const { deps, signal, check } = run;
-  const samples = new Map<string, string>();
+  const samples = new Map<string, Readonly<{ text: string; source: Chunk }>>();
   for (const chunk of chunks) {
     const digest = embeddingInputDigest(chunk.title, chunk.text);
-    if (!reused.has(digest) && !samples.has(digest)) samples.set(digest, embeddingText(chunk));
+    if (!reused.has(digest) && !samples.has(digest)) {
+      samples.set(digest, { text: embeddingText(chunk), source: chunk });
+    }
   }
-  const pending = [...samples.entries()].map(([digest, text]) => ({ digest, text }));
   const embedded = new Map<string, readonly number[]>();
+  const ports = checkpointPorts(deps.artifacts);
+  const policyId = policyIdentity();
+  const writer = ports === null ? null : createCheckpointWriter(
+    ports.stageVector, ports.putCheckpoint, run.bound.ownerId, policyId,
+    run.bound.consent.generation, run.lease.token, run.now, signal,
+  );
+  if (ports !== null && samples.size > 0) {
+    // Resume across the binding-matching checkpoints (newest-first merge). Resumed digests never
+    // reserve or dispatch again. Any failure to read or validate a checkpoint only means
+    // "rebuild": it is logged and ignored, never a job failure.
+    try {
+      const resumed = await resumeFromCheckpoint(
+        { listCheckpoints: ports.listCheckpoints, getVectors: deps.artifacts.getVectors.bind(deps.artifacts) },
+        run.bound.ownerId, policyId, run.bound.consent.generation, new Set(samples.keys()), signal,
+      );
+      if (resumed !== null) {
+        for (const [digest, vector] of resumed.vectors) embedded.set(digest, vector);
+        writer?.adopt(resumed.entries);
+        logEvent(deps, {
+          event: 'index.checkpoint.resumed', ownerId: run.bound.ownerId,
+          entries: resumed.entries.length,
+        });
+      }
+    } catch {
+      embedded.clear();
+      logEvent(deps, { event: 'index.checkpoint.resume.skipped', ownerId: run.bound.ownerId });
+    }
+  }
+  const pending = [...samples.entries()]
+    .filter(([digest]) => !embedded.has(digest))
+    .map(([digest, sample]) => ({ digest, text: sample.text }));
+  let longestChunkMs = 0;
   for (let offset = 0; offset < pending.length; offset += EMBED_BATCH_LIMIT) {
     const batch = pending.slice(offset, offset + EMBED_BATCH_LIMIT);
+    // Deadline-aware stop: with checkpoint ports the run stops while it still has time for one
+    // more observed chunk plus the release path — the checkpoint is current, so the bounded
+    // stream replay resumes exactly where this attempt stopped. Without the ports there is no
+    // resume, so only the hard `check()` deadline applies (exact legacy behavior).
+    if (ports !== null && run.remaining() < Math.max(15_000, longestChunkMs + 10_000)) {
+      throw new IndexFailure('TIMEOUT', true);
+    }
     for (const entry of batch) preflight(deps, entry.text);
+    const chunkStart = run.now();
     check();
-    await reread(run);
+    await revalidateLight(run);
     // Budget is reserved before every paid call; the store decides the shared allowance.
     await guard(deps.store.reserveEmbedding(run.bound.ownerId, signal), signal, check);
-    // The reservation is async: re-read the canonical state once more before the paid embed so a
-    // consent/epoch/protection/text change that landed during the reservation cannot be embedded.
-    await reread(run);
+    // The reservation is async: revalidate once more before the paid embed so a consent/epoch/
+    // protection/text change that landed during the reservation cannot be embedded. The light
+    // marker path serves this check; the fallback re-reads the full fingerprint.
+    await revalidateLight(run);
     const produced = await guard(
-      deps.embedding.embed(batch.map((entry) => entry.text), 'search_document', signal, () => reread(run)),
+      deps.embedding.embed(batch.map((entry) => entry.text), 'search_document', signal, () => revalidateLight(run)),
       signal,
       check,
     );
@@ -223,8 +325,18 @@ const embedMissing = async (
       throw new IndexFailure('INVALID_PROVIDER_OUTPUT', false);
     }
     for (let index = 0; index < batch.length; index += 1) {
-      embedded.set(batch[index].digest, requireProducedVector(produced[index]));
+      const digest = batch[index].digest;
+      const vector = requireProducedVector(produced[index]);
+      embedded.set(digest, vector);
+      const source = samples.get(digest)?.source;
+      if (source === undefined) throw new IndexFailure('INVALID_STATE', false);
+      // Stage under the FINAL publish key, then durably record every completed digest: the
+      // vector becomes resumable the moment both writes land (see checkpoint.ts for the
+      // documented re-bill window).
+      if (writer !== null) await guard(writer.record(digest, vector, source), signal, check);
     }
+    const chunkMs = run.now() - chunkStart;
+    if (chunkMs > longestChunkMs) longestChunkMs = chunkMs;
   }
   return embedded;
 };
@@ -251,8 +363,10 @@ const buildCorpus = async (
     const digest = embeddingInputDigest(chunk.title, chunk.text);
     const vector = reused.get(digest) ?? embedded.get(digest);
     if (vector === undefined) throw new IndexFailure('INVALID_STATE', false);
-    const vectorKey = sha256Hex(
-      JSON.stringify([bound.ownerId, chunk.noteId, chunk.revision, chunk.chunkId, version, policyId]),
+    // The same shared formula the checkpoint staging uses, so a staged vector is always
+    // fetchable under exactly the key the published snapshot names.
+    const vectorKey = vectorKeyFor(
+      bound.ownerId, chunk.noteId, chunk.revision, chunk.chunkId, version, policyId,
     );
     if (vectors.has(vectorKey)) throw new IndexFailure('INVALID_STATE', false);
     vectors.set(vectorKey, vector);
@@ -358,6 +472,10 @@ const stageAndPublish = async (run: Run): Promise<JobResult> => {
   const status: JobStatus = consentOk ? 'SUCCEEDED' : 'BLOCKED';
   const code = consentOk ? 'READY' : 'CONSENT_REQUIRED';
   await guard(deps.store.finish(job.ownerId, lease, status, code, now(), signal), signal, check);
+  // The publish path deletes NO checkpoints: a delete here would race an expired lease's late
+  // record(), which could resurrect a stale checkpoint after this cleanup. Stale progress is
+  // inert — the next run resumes only still-pending digests under an exactly matching binding —
+  // and recovery owns the reaping (checkpoint.ts sweepStaleCheckpoints / recovery.ts).
   logEvent(deps, {
     event: 'index.published', ownerId: job.ownerId, status, version,
     documents: snapshot.documents.length,
@@ -429,7 +547,7 @@ const runJob = async (deps: IndexDeps, now: () => number, value: unknown, remain
       return { status: 'SUPERSEDED', code: done ? 'ALREADY_DONE' : 'LEASE_BUSY' };
     }
     return await stageAndPublish({
-      deps, now, signal, check, job, bound, fp, lease, progress,
+      deps, now, signal, check, remaining: () => end - now(), job, bound, fp, lease, progress,
     });
   } catch (error) {
     return await settleFailure(deps, now, signal, job, lease, progress, error);

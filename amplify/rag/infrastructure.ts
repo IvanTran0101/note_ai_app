@@ -269,9 +269,13 @@ export function createRagInfrastructure(scope:Stack,notes:Table,pilot?:RagPilotS
     conditions:{'ForAllValues:StringEquals':{'dynamodb:LeadingKeys':['BUDGET#SMOKE']},Null:{'dynamodb:LeadingKeys':'false'}}}));
   worker.addToRolePolicy(new PolicyStatement({actions:['dynamodb:ConditionCheckItem'],resources:[notes.tableArn]}));
   worker.addToRolePolicy(new PolicyStatement({actions:['dynamodb:PutItem','dynamodb:UpdateItem','dynamodb:DeleteItem'],resources:[state.tableArn]}));
-  worker.addToRolePolicy(new PolicyStatement({actions:['s3:PutObject','s3:DeleteObject'],resources:[snapshots.arnForObjects('rag/snapshots/*')]}));
+  // Checkpoint resume/record is worker-only: the probe stays a read-only snapshot consumer.
+  worker.addToRolePolicy(new PolicyStatement({actions:['s3:GetObject'],
+    resources:[snapshots.arnForObjects('rag/checkpoints/*')]}));
+  worker.addToRolePolicy(new PolicyStatement({actions:['s3:PutObject','s3:DeleteObject'],
+    resources:[snapshots.arnForObjects('rag/snapshots/*'),snapshots.arnForObjects('rag/checkpoints/*')]}));
   worker.addToRolePolicy(new PolicyStatement({actions:['s3:ListBucket'],resources:[snapshots.bucketArn],
-    conditions:{StringLike:{'s3:prefix':['rag/snapshots/*']}}}));
+    conditions:{StringLike:{'s3:prefix':['rag/snapshots/*','rag/checkpoints/*']}}}));
   worker.addToRolePolicy(new PolicyStatement({actions:['s3vectors:PutVectors','s3vectors:DeleteVectors'],resources:[activeIndex.attrIndexArn]}));
   const streamGrant = notes.grantStreamRead(worker);
   worker.addToRolePolicy(new PolicyStatement({actions:['s3:PutObject'],resources:[failures.arnForObjects('*')],

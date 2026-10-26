@@ -15,7 +15,7 @@ import {
   GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { CONSENT_VERSION } from '../contract';
-import { fingerprint } from './jobs';
+import { fingerprint, markersOf, sameMarkers } from './jobs';
 import { sha256Hex } from './snapshot';
 import { IndexFailure, LEASE_MS, SMOKE_EMBED_LIMIT } from './types';
 import type { Consent, IndexState, Manifest } from './types';
@@ -178,6 +178,8 @@ class FakeDynamo implements StorePort {
   readonly state = new Map<string, Row>();
   readonly calls: Call[] = [];
   pageSize = Number.POSITIVE_INFINITY;
+  /** When set, Query answers honor ProjectionExpression like real DynamoDB (marker reads). */
+  applyProjection = false;
   cursorMode: 'normal' | 'repeat' | 'runaway' = 'normal';
   failNext: (() => unknown) | null = null;
   beforeQuery: (() => void) | null = null;
@@ -237,8 +239,22 @@ class FakeDynamo implements StorePort {
       const limit = Number.isFinite(this.pageSize) ? this.pageSize : rows.length - start;
       const page = rows.slice(start, start + limit);
       const last = page[page.length - 1];
+      // A projected query returns only the listed attributes; an unlisted attribute is absent,
+      // exactly like DynamoDB, so a marker read cannot lean on fields it never fetched.
+      const project = (item: Row): Row => {
+        const expression = command.input.ProjectionExpression;
+        if (expression === undefined || !this.applyProjection) return clone(item);
+        const names = command.input.ExpressionAttributeNames ?? {};
+        const wanted = expression.split(',').map((token) => token.trim())
+          .map((token) => (token.startsWith('#') ? names[token] ?? token : token));
+        const projected: Row = {};
+        for (const attribute of wanted) {
+          if (Object.hasOwn(item, attribute)) projected[attribute] = clone(item[attribute]);
+        }
+        return projected;
+      };
       return {
-        Items: page.map(clone),
+        Items: page.map(project),
         ...(start + page.length < rows.length && last !== undefined
           ? { LastEvaluatedKey: { ownerId: last['ownerId'], noteId: last['noteId'] } }
           : {}),
@@ -367,6 +383,12 @@ const expectLoadFailure = async (
 const callsOf = (fake: FakeDynamo, name: string): Call[] =>
   fake.calls.filter((call) => call.name === name);
 
+/** Narrows the optional interface member: the production store always exposes the light read. */
+const markersReaderOf = (store: ReturnType<typeof createIndexStore>) => {
+  assert.ok(store.loadMarkers !== undefined, 'the production store exposes loadMarkers');
+  return store.loadMarkers;
+};
+
 // ---------------------------------------------------------------------------------------------
 // Construction and load
 // ---------------------------------------------------------------------------------------------
@@ -493,6 +515,91 @@ test('load reports SOURCE_CHANGED when the epoch or the consent moves under it',
   };
   await assert.rejects(consent.store.load(OWNER, consent.signal),
     (error) => expectFailure(error, 'SOURCE_CHANGED', true));
+});
+
+// ---------------------------------------------------------------------------------------------
+// loadMarkers: the light mid-flight freshness read (Patch 5A)
+// ---------------------------------------------------------------------------------------------
+
+test('loadMarkers returns exactly the markers of a full load over identical tables', async () => {
+  const { fake, store, signal } = makeStore([
+    metaRow(9), consentRow(true, 2),
+    // A legacy NOTE row: the canonical writer never stores `contentAvailable`, so the attribute
+    // is absent and both readers must derive `available: true` from the codec default.
+    noteRow('a'),
+    noteRow('b', { revision: 2, deletedAt: '2026-10-12T01:00:00.000Z' }),
+    noteRow('c', { protected: true, protectionRevision: 1 }),
+    protectionRow('c', { enabled: true, revision: 1, verifier: 'opaque-hash' }),
+    noteRow('d', { canonicalOwnerId: 'someone-else', title: 'not canonical' }),
+    // A PROTECTION row whose NOTE row was hard-deleted: an orphan on the store side too.
+    protectionRow('orphan', { enabled: true, revision: 1, verifier: 'opaque-hash' }),
+  ]);
+  // Make the fake honor the marker projections, so loadMarkers truly sees projected rows only.
+  fake.applyProjection = true;
+  const state = await store.load(OWNER, signal);
+  const beforeMarkerRead = fake.calls.length;
+  const markers = await markersReaderOf(store)(OWNER, signal);
+
+  assert.ok(sameMarkers(markers, markersOf(state)), 'loadMarkers equals markersOf(load(...))');
+  assert.deepEqual(markers.notes, [
+    { noteId: 'a', revision: 1, deleted: false, available: true },
+    { noteId: 'b', revision: 2, deleted: true, available: true },
+    { noteId: 'c', revision: 1, deleted: false, available: true },
+  ]);
+  // The foreign projection and the orphan PROTECTION row are invisible on both sides.
+  assert.deepEqual(markers.protections, [{ noteId: 'c', enabled: true, revision: 1 }]);
+  assert.equal(markers.ownerId, OWNER);
+  assert.equal(markers.accountEpoch, 9);
+  assert.deepEqual(markers.consent, { accepted: true, version: CONSENT_VERSION, generation: 2 });
+
+  // The marker queries fetch only marker fields: no title or content ever crosses the wire.
+  const markerCalls = fake.calls.slice(beforeMarkerRead);
+  assert.ok(markerCalls.every((call) => call.name === 'GetCommand' || call.name === 'QueryCommand'),
+    'loadMarkers is read-only');
+  const markerQueries = markerCalls.filter((call) => call.name === 'QueryCommand');
+  assert.equal(markerQueries.length, 2);
+  for (const call of markerQueries) {
+    const expression = call.input.ProjectionExpression as string;
+    assert.equal(typeof expression, 'string');
+    const names = call.input.ExpressionAttributeNames ?? {};
+    const resolved = expression.split(',').map((token: string) => token.trim())
+      .map((token: string) => (token.startsWith('#') ? names[token] ?? token : token));
+    assert.equal(resolved.includes('title'), false);
+    assert.equal(resolved.includes('content'), false);
+    assert.equal(call.input.ConsistentRead, true);
+  }
+});
+
+test('loadMarkers reports SOURCE_CHANGED when the epoch or the consent moves under it', async () => {
+  const epoch = makeStore([metaRow(1), noteRow('a')]);
+  epoch.fake.beforeQuery = () => {
+    (epoch.fake.row('notes', META_KEY) as Row)['lastSequence'] = 2;
+  };
+  await assert.rejects(markersReaderOf(epoch.store)(OWNER, epoch.signal),
+    (error) => expectFailure(error, 'SOURCE_CHANGED', true));
+
+  const consent = makeStore([consentRow(true, 1), noteRow('a')]);
+  consent.fake.beforeQuery = () => {
+    (consent.fake.row('notes', CONSENT_KEY) as Row)['generation'] = 2;
+  };
+  await assert.rejects(markersReaderOf(consent.store)(OWNER, consent.signal),
+    (error) => expectFailure(error, 'SOURCE_CHANGED', true));
+});
+
+test('loadMarkers fails closed on a malformed projected row', async () => {
+  const malformed: readonly Row[] = [
+    noteRow('a', { revision: 0 }),
+    noteRow('a', { revision: 2.5 }),
+    noteRow('a', { deletedAt: 7 }),
+    protectionRow('a', { enabled: 'yes' }),
+    protectionRow('a', { revision: -1 }),
+    protectionRow('a', { canonicalOwnerId: 'other' }),
+  ];
+  for (const row of malformed) {
+    const fixture = makeStore([row]);
+    await assert.rejects(markersReaderOf(fixture.store)(OWNER, fixture.signal),
+      (error) => expectFailure(error, 'INVALID_STATE', false));
+  }
 });
 
 test('load maps transport failures to a typed retryable-only taxonomy', async () => {
