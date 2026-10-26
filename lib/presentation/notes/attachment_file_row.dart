@@ -92,7 +92,7 @@ final class _AttachmentFileRowState extends State<AttachmentFileRow> {
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: Row(
                   children: [
-                    Icon(_fileIcon, size: 22, color: colors.onSurfaceVariant),
+                    Icon(_fileIcon, size: 18, color: colors.onSurfaceVariant),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

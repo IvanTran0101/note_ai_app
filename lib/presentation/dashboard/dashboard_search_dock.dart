@@ -34,14 +34,16 @@ final class DashboardSearchDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = NoteFlowWorkspaceTokens.of(context);
+    final double viewportWidth = MediaQuery.sizeOf(context).width;
+    final double horizontalInset = viewportWidth < 360 ? 8 : 12;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: horizontalInset, vertical: 4),
         child: Row(
           children: [
             Expanded(child: _field(context, tokens)),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             IconButton.outlined(
               key: closeKey,
               tooltip: copy.closeSearch,
@@ -52,6 +54,7 @@ final class DashboardSearchDock extends StatelessWidget {
                     : tokens.pageSurface,
                 foregroundColor: tokens.textPrimary,
                 side: BorderSide(color: tokens.divider),
+                shape: const CircleBorder(),
                 minimumSize: const Size(48, 48),
               ),
               icon: const Icon(Icons.close, size: 24),

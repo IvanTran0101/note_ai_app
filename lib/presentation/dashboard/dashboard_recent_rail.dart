@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_dto.dart';
@@ -5,6 +7,12 @@ import '../notes/note_security_localizations.dart';
 import '../notes/notes_theme_tokens.dart';
 import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
+
+const double _compactTitleFontSize = 14;
+const double _wideTitleFontSize = 16;
+const double _titleLineHeight = 1.3;
+const double _titleTopAfterDivider = 19;
+const double _titleBottomInset = 8;
 
 /// The existing recent-note projection, presented as compact page cards.
 final class DashboardRecentRail extends StatelessWidget {
@@ -28,8 +36,7 @@ final class DashboardRecentRail extends StatelessWidget {
     if (notes.isEmpty) return const SizedBox.shrink();
     final compact = NoteFlowLayout.isCompact(context);
     final tokens = NoteFlowWorkspaceTokens.of(context);
-    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-    final height = compact ? 132 + ((scale - 1).clamp(0.0, 1.0) * 32) : 160.0;
+    final height = _recentCardHeight(context, compact);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -68,6 +75,17 @@ final class DashboardRecentRail extends StatelessWidget {
   }
 }
 
+double _recentCardHeight(BuildContext context, bool compact) {
+  final textScaler = MediaQuery.textScalerOf(context);
+  final fontSize = compact ? _compactTitleFontSize : _wideTitleFontSize;
+  final lines = compact ? 2 : 1;
+  final titleHeight = textScaler.scale(fontSize) * _titleLineHeight * lines;
+  final requiredHeight =
+      2 * (titleHeight + _titleTopAfterDivider + _titleBottomInset);
+  final minimumHeight = compact ? 132.0 : 160.0;
+  return math.max(minimumHeight, requiredHeight).toDouble();
+}
+
 final class _RecentCard extends StatelessWidget {
   const _RecentCard({
     required this.note,
@@ -87,6 +105,22 @@ final class _RecentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = NoteFlowWorkspaceTokens.of(context);
+    final nativeDarkCard =
+        compact && Theme.of(context).brightness == Brightness.dark;
+    final cardSurface = compact
+        ? tokens.compactHomeSurface
+        : tokens.pageSurface;
+    final coverSurface = nativeDarkCard
+        ? const Color(0xFF333333)
+        : tokens.subtleSurface;
+    final titleFontSize = compact ? _compactTitleFontSize : _wideTitleFontSize;
+    final titleStyle =
+        (Theme.of(context).textTheme.titleSmall ?? const TextStyle()).copyWith(
+          color: tokens.textPrimary,
+          fontSize: titleFontSize,
+          height: _titleLineHeight,
+          fontWeight: FontWeight.w600,
+        );
     final title = !readable
         ? NoteSecurityCopy(context).protectedNote
         : note.title.trim().isEmpty
@@ -97,7 +131,7 @@ final class _RecentCard extends StatelessWidget {
       child: Card(
         margin: EdgeInsets.zero,
         elevation: 0,
-        color: tokens.pageSurface,
+        color: cardSurface,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
@@ -112,8 +146,8 @@ final class _RecentCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: ColoredBox(color: tokens.subtleSurface)),
-                  Expanded(child: ColoredBox(color: tokens.pageSurface)),
+                  Expanded(child: ColoredBox(color: coverSurface)),
+                  Expanded(child: ColoredBox(color: cardSurface)),
                 ],
               ),
               Positioned(
@@ -130,15 +164,13 @@ final class _RecentCard extends StatelessWidget {
               Positioned(
                 left: 12,
                 right: 12,
-                top: height / 2 + 19,
+                top: height / 2 + _titleTopAfterDivider,
+                bottom: _titleBottomInset,
                 child: Text(
                   title,
                   maxLines: compact ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    height: 1.3,
-                    fontWeight: compact ? FontWeight.w500 : FontWeight.w600,
-                  ),
+                  style: titleStyle,
                 ),
               ),
             ],

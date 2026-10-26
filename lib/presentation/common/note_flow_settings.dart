@@ -51,71 +51,75 @@ final class NoteFlowSettingsSurface extends StatelessWidget {
         MediaQuery.sizeOf(context).width >= 900;
     return Material(
       color: tokens.pageSurface,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: NoteFlowLayout.isCompact(context)
-              ? MainAxisSize.max
-              : MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                wideWeb ? 60 : 24,
-                wideWeb ? 28 : 16,
-                wideWeb ? 64 : 12,
-                12,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: wideWeb ? 26 : 20,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
-                        ),
-                        if (subtitle case final value?) ...[
-                          const SizedBox(height: 4),
+      child: Theme(
+        data: Theme.of(context)
+            .copyWith(dividerTheme: DividerThemeData(color: tokens.divider)),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: NoteFlowLayout.isCompact(context)
+                ? MainAxisSize.max
+                : MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  wideWeb ? 60 : 24,
+                  wideWeb ? 28 : 16,
+                  wideWeb ? 64 : 12,
+                  12,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            value,
+                            title,
                             style: TextStyle(
-                              fontSize: wideWeb ? 16 : 14,
-                              color: tokens.textSecondary,
+                              fontSize: wideWeb ? 26 : 20,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
                             ),
                           ),
+                          if (subtitle case final value?) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              value,
+                              style: TextStyle(
+                                fontSize: wideWeb ? 16 : 14,
+                                color: tokens.textSecondary,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: MaterialLocalizations.of(context)
-                        .closeButtonTooltip,
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, size: 20),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: tokens.divider),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: wideWeb
-                    ? const EdgeInsets.fromLTRB(60, 20, 64, 24)
-                    : const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
+                    IconButton(
+                      tooltip: MaterialLocalizations.of(context)
+                          .closeButtonTooltip,
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, size: 20),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              Divider(height: 1, color: tokens.divider),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: wideWeb
+                      ? const EdgeInsets.fromLTRB(60, 20, 64, 24)
+                      : const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: children,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -141,14 +145,18 @@ final class _CompactSettingsSurface extends StatelessWidget {
       color: Theme.of(context).brightness == Brightness.light
           ? const Color(0xFFF9F8F7)
           : tokens.sidebarSurface,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(context, tokens),
-            Divider(height: 1, color: tokens.divider),
-            Expanded(child: _body(tokens)),
-          ],
+      child: Theme(
+        data: Theme.of(context)
+            .copyWith(dividerTheme: DividerThemeData(color: tokens.divider)),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(context, tokens),
+              Divider(height: 1, color: tokens.divider),
+              Expanded(child: _body(tokens)),
+            ],
+          ),
         ),
       ),
     );
@@ -156,28 +164,31 @@ final class _CompactSettingsSurface extends StatelessWidget {
 
   Widget _header(BuildContext context, NoteFlowUiTokens tokens) {
     final vi = Localizations.localeOf(context).languageCode == 'vi';
-    return SizedBox(
-      height: 48,
-      child: Stack(
-        alignment: Alignment.center,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Row(
         children: [
-          Text(
-            vi ? 'Cài đặt' : 'Settings',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+          IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back_ios_new, size: 24),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
+              child: Text(
+                vi ? 'Cài đặt' : 'Settings',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
             ),
           ),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: IconButton(
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back_ios_new, size: 24),
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            ),
-          ),
+          const SizedBox(width: 48),
         ],
       ),
     );

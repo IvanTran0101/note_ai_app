@@ -93,6 +93,15 @@ final class DashboardNoteCard extends StatelessWidget {
         ? tokens.textSecondary
         : tokens.textMuted;
     final bool listLayout = layout == DashboardNoteCardLayout.list;
+    final double cardRadius = !listLayout
+        ? NoteFlowRadius.card
+        : mobileSearch
+        ? 0
+        : compactHomeList
+        ? 6
+        : dense
+        ? 10
+        : NoteFlowRadius.row;
 
     return Semantics(
       key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
@@ -116,22 +125,20 @@ final class DashboardNoteCard extends StatelessWidget {
             ? tokens.selectedSurface
             : (listLayout ? Colors.transparent : tokens.subtleSurface),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(
-            listLayout
-                ? mobileSearch || compactHomeList
-                      ? 0
-                      : dense
-                      ? 10
-                      : NoteFlowRadius.row
-                : NoteFlowRadius.card,
-          ),
+          borderRadius: BorderRadius.circular(cardRadius),
           side: listLayout
               ? BorderSide.none
               : BorderSide(color: tokens.divider),
         ),
         child: InkWell(
           onTap: () => onTap(note),
+          borderRadius: compactHomeList
+              ? BorderRadius.circular(cardRadius)
+              : null,
           hoverColor: tokens.subtleSurface,
+          focusColor: compactHomeList
+              ? tokens.focusRing.withValues(alpha: 0.12)
+              : null,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: layout == DashboardNoteCardLayout.grid
@@ -285,14 +292,18 @@ final class DashboardNoteCard extends StatelessWidget {
               note.isProtected
                   ? Icons.lock_outline
                   : Icons.description_outlined,
-              size: dense
+              size: dense || compactHomeList
                   ? 16
-                  : mobileSearch || compactHomeList
+                  : mobileSearch
                   ? 18
                   : 20,
-              color: selected ? foreground : tokens.textMuted,
+              color: compactHomeList
+                  ? tokens.textMuted.withValues(alpha: 0.72)
+                  : selected
+                  ? foreground
+                  : tokens.textMuted,
             ),
-            SizedBox(width: iconGap),
+            SizedBox(width: compactHomeList ? NoteFlowSpacing.sm : iconGap),
             Expanded(
               child: _buildListText(
                 context,
@@ -340,10 +351,11 @@ final class DashboardNoteCard extends StatelessWidget {
                 ? 13.3
                 : mobileSearch
                 ? 16
-                // Calibrated from the shared title's actual native ink bounds.
                 : NoteFlowLayout.isNativePhone(context)
+                // Keep the native title's measured ink size; compact Web follows
+                // the quieter Home-list hierarchy in the mapped reference.
                 ? 15.5
-                : 18,
+                : 16,
             height: 1.2,
             fontWeight: searchQueryResult ? FontWeight.w500 : FontWeight.w400,
             color: foreground,

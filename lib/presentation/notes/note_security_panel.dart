@@ -32,6 +32,8 @@ final class NoteSecurityPanel extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final copy = NoteSecurityCopy(context);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final accessLost = locked && !note.isProtected && note.share != null;
     final actions = <(NoteSecurityAction, bool)>[
       if (localFirst && pendingProtection && note.share == null)
@@ -90,12 +92,24 @@ final class NoteSecurityPanel extends StatelessWidget {
     Widget button(NoteSecurityAction action, {bool enabled = true}) =>
         TextButton(
           key: ValueKey('note-security-${action.name}'),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
           onPressed: busy || !enabled ? null : () => onAction(action),
           child: Text(copy.label(action)),
         );
     return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: colors.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -119,24 +133,56 @@ final class NoteSecurityPanel extends StatelessWidget {
                         : accessLost
                         ? copy.accessUnavailable
                         : copy.label(NoteSecurityAction.enable),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
             if (locked)
-              Text(
-                note.isProtected
-                    ? copy.locked
-                    : accessLost
-                    ? copy.accessUnavailableHint
-                    : copy.unavailable,
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  note.isProtected
+                      ? copy.locked
+                      : accessLost
+                      ? copy.accessUnavailableHint
+                      : copy.unavailable,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: accessLost ? colors.error : colors.onSurfaceVariant,
+                  ),
+                ),
               ),
             if (retained)
-              Text(accessLost ? copy.accessRetained : copy.retained),
-            if (pendingProtection) Text(copy.pendingProtection),
-            if (busy) const LinearProgressIndicator(),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  accessLost ? copy.accessRetained : copy.retained,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            if (pendingProtection)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  copy.pendingProtection,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            if (busy)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
+              runSpacing: 4,
               children: [
                 for (final (action, enabled) in actions)
                   button(action, enabled: enabled),

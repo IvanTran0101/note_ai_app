@@ -15,7 +15,7 @@ part 'basic_block_menu_choices.dart';
 
 final class BasicBlockMenu extends StatefulWidget {
   static const double desktopPopupWidth = 324;
-  static const double desktopPopupHeight = 267;
+  static const double desktopPopupHeight = 290;
 
   static bool isCompactDesktop(BuildContext context) =>
       kIsWeb && !NoteFlowLayout.isCompact(context);
@@ -61,7 +61,10 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
       .toList(growable: false);
   double get rowHeight {
     final textHeight = MediaQuery.textScalerOf(context).scale(14);
-    return math.max(_desktopCompact ? 33 : 48, textHeight + 19);
+    final lines = _desktopCompact ? 1 : 2;
+    return math
+        .max(_desktopCompact ? 33.0 : 48.0, textHeight * lines + 12.0)
+        .toDouble();
   }
 
   @override
@@ -88,23 +91,51 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scroll.hasClients) return;
       final grid = widget.sheet && !kIsWeb;
-      final selectedIsMedia =
-          controller.selected >= _basicChoices.length &&
-          _mediaChoices.isNotEmpty;
-      if (grid && selectedIsMedia) {
-        scroll.jumpTo(scroll.position.maxScrollExtent);
+      if (controller.selected < 0 ||
+          controller.selected >= controller.choices.length) {
         return;
       }
-      final extent = grid
-          ? BasicBlockGrid.rowHeightFor(context) + 4
-          : rowHeight;
-      final selectedRow =
-          controller.selected +
-          (!grid && _showMediaHeader && selectedIsMedia ? 1 : 0);
-      final row = grid
-          ? selectedRow ~/ BasicBlockGrid.columnsFor(context)
-          : selectedRow;
-      final start = row * extent;
+      final choice = controller.choices[controller.selected];
+      late final double start;
+      late final double extent;
+      if (grid) {
+        final columns = BasicBlockGrid.columnsFor(context);
+        final gridRowHeight = BasicBlockGrid.rowHeightFor(context);
+        final basicIndex = _basicChoices.indexOf(choice);
+        if (basicIndex >= 0) {
+          final row = basicIndex ~/ columns;
+          start =
+              BasicBlockGrid.topPadding +
+              row.toDouble() * (gridRowHeight + BasicBlockGrid.rowSpacing);
+          extent = gridRowHeight;
+        } else {
+          final mediaIndex = _mediaChoices.indexOf(choice);
+          if (mediaIndex < 0) return;
+          final gridRows = (_basicChoices.length / columns).ceil();
+          final rowGaps = gridRows > 1
+              ? (gridRows - 1).toDouble() * BasicBlockGrid.rowSpacing
+              : 0.0;
+          final gridHeight = _basicChoices.isEmpty
+              ? 0.0
+              : BasicBlockGrid.topPadding +
+                    gridRows.toDouble() * gridRowHeight +
+                    rowGaps +
+                    BasicBlockGrid.bottomPadding;
+          start =
+              gridHeight +
+              (_showMediaHeader ? rowHeight : 0.0) +
+              mediaIndex.toDouble() * rowHeight;
+          extent = rowHeight;
+        }
+      } else {
+        final selectedRow =
+            controller.selected +
+            (_showMediaHeader && choice.kind == DocumentBlockKind.attachment
+                ? 1
+                : 0);
+        start = selectedRow.toDouble() * rowHeight;
+        extent = rowHeight;
+      }
       final end = start + extent;
       final viewport = scroll.position.viewportDimension;
       final target = start < scroll.offset
@@ -125,136 +156,168 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final vi = Localizations.localeOf(context).languageCode == 'vi';
-    final desktop = _desktopCompact;
-    final colors = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final nativeGrid = widget.sheet && !kIsWeb;
-    final surface = nativeGrid
-        ? (dark ? const Color(0xFF202020) : const Color(0xFFF9F8F7))
-        : desktop && dark
-        ? const Color(0xFF252525)
-        : colors.surface;
-    final popupSize = widget.sheet
-        ? Size(
-            double.infinity,
-            math.min(
-              math.max(MediaQuery.sizeOf(context).height * .34, 240),
-              320,
-            ),
-          )
-        : BasicBlockMenu.popupSizeFor(context);
-    return Material(
-      elevation: widget.sheet ? 0 : 8,
-      clipBehavior: Clip.antiAlias,
-      color: surface,
-      shape: widget.sheet
-          ? const RoundedRectangleBorder()
-          : _desktopCompact
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: colors.outlineVariant.withValues(alpha: 0.55),
-              ),
-            )
-          : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: SizedBox.fromSize(
-        size: popupSize,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(vi: vi, desktop: desktop, colors: colors),
-            Expanded(
-              child: controller.choices.isEmpty
-                  ? Center(
-                      child: Text(
-                        vi ? 'Không tìm thấy khối' : 'No matching block',
-                      ),
-                    )
-                  : nativeGrid
-                  ? _nativeChoices(vi: vi)
-                  : ListView.builder(
-                      controller: scroll,
-                      itemExtent: rowHeight,
-                      padding: EdgeInsets.zero,
-                      itemCount: _displayChoiceCount,
-                      itemBuilder: (context, index) {
-                        final basicCount = _basicChoices.length;
-                        if (_showMediaHeader && index == basicCount) {
-                          return _mediaSectionHeader(vi: vi, desktop: desktop);
-                        }
-                        final choiceIndex =
-                            _showMediaHeader && index > basicCount
-                            ? index - 1
-                            : index;
-                        final choice = controller.choices[choiceIndex];
-                        return desktop
-                            ? _desktopChoiceRow(
-                                choice,
-                                vi,
-                                colors,
-                                selected: choiceIndex == controller.selected,
-                              )
-                            : _nativeChoiceRow(
-                                choice,
-                                vi,
-                                selected: choiceIndex == controller.selected,
-                              );
-                      },
-                    ),
-            ),
-            if (desktop) _footer(vi: vi, colors: colors),
-          ],
-        ),
-      ),
-    );
+  double _sheetHeight(BuildContext context, BoxConstraints constraints) {
+    final media = MediaQuery.of(context);
+    final preferred = math
+        .min(math.max(media.size.height * .34, 240.0), 320.0)
+        .toDouble();
+    final available =
+        (constraints.hasBoundedHeight
+                ? constraints.maxHeight
+                : math.max(
+                    0.0,
+                    media.size.height -
+                        media.padding.vertical -
+                        media.viewInsets.vertical -
+                        48,
+                  ))
+            .toDouble();
+    return math.min(preferred, available).toDouble();
   }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final vi = Localizations.localeOf(context).languageCode == 'vi';
+      final desktop = _desktopCompact;
+      final colors = Theme.of(context).colorScheme;
+      final dark = Theme.of(context).brightness == Brightness.dark;
+      final nativeGrid = widget.sheet && !kIsWeb;
+      final surface = nativeGrid
+          ? (dark ? const Color(0xFF202020) : const Color(0xFFF9F8F7))
+          : desktop && dark
+          ? const Color(0xFF252525)
+          : colors.surface;
+      final popupSize = widget.sheet
+          ? Size(double.infinity, _sheetHeight(context, constraints))
+          : BasicBlockMenu.popupSizeFor(context);
+      return Material(
+        elevation: widget.sheet ? 0 : 8,
+        clipBehavior: Clip.antiAlias,
+        color: surface,
+        shape: widget.sheet
+            ? const RoundedRectangleBorder()
+            : _desktopCompact
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.55),
+                ),
+              )
+            : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: SizedBox.fromSize(
+          size: popupSize,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(
+                vi: vi,
+                desktop: desktop,
+                colors: colors,
+                availableHeight: popupSize.height,
+              ),
+              Expanded(
+                child: controller.choices.isEmpty
+                    ? Center(
+                        child: Text(
+                          vi ? 'Không tìm thấy khối' : 'No matching block',
+                        ),
+                      )
+                    : nativeGrid
+                    ? _nativeChoices(vi: vi)
+                    : ListView.builder(
+                        controller: scroll,
+                        itemExtent: rowHeight,
+                        padding: EdgeInsets.zero,
+                        itemCount: _displayChoiceCount,
+                        itemBuilder: (context, index) {
+                          final basicCount = _basicChoices.length;
+                          if (_showMediaHeader && index == basicCount) {
+                            return _mediaSectionHeader(
+                              vi: vi,
+                              desktop: desktop,
+                            );
+                          }
+                          final choiceIndex =
+                              _showMediaHeader && index > basicCount
+                              ? index - 1
+                              : index;
+                          final choice = controller.choices[choiceIndex];
+                          return desktop
+                              ? _desktopChoiceRow(
+                                  choice,
+                                  vi,
+                                  colors,
+                                  selected: choiceIndex == controller.selected,
+                                )
+                              : _nativeChoiceRow(
+                                  choice,
+                                  vi,
+                                  selected: choiceIndex == controller.selected,
+                                );
+                        },
+                      ),
+              ),
+              if (desktop) _footer(vi: vi, colors: colors),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 
   Widget _header({
     required bool vi,
     required bool desktop,
     required ColorScheme colors,
-  }) => Padding(
-    padding: desktop
-        ? const EdgeInsets.symmetric(horizontal: 12)
-        : const EdgeInsets.fromLTRB(16, 0, 8, 0),
-    child: SizedBox(
-      height: desktop
-          ? 32
-          : widget.sheet
-          ? math.max(48, MediaQuery.textScalerOf(context).scale(14) + 14)
-          : null,
-      child: Row(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(top: widget.sheet && !kIsWeb ? 14 : 0),
-              child: Text(
-                controller.query.isNotEmpty
-                    ? (vi ? 'Kết quả lọc' : 'Filtered results')
-                    : (vi ? 'Khối cơ bản' : 'Basic blocks'),
-                style: desktop
-                    ? TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      )
-                    : TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+    required double availableHeight,
+  }) {
+    final sheetHeaderHeight = math
+        .max(48.0, MediaQuery.textScalerOf(context).scale(14) + 14)
+        .toDouble();
+    if (widget.sheet && availableHeight < sheetHeaderHeight) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: desktop
+          ? const EdgeInsets.symmetric(horizontal: 12)
+          : const EdgeInsets.fromLTRB(16, 0, 8, 0),
+      child: SizedBox(
+        height: desktop
+            ? 32
+            : widget.sheet
+            ? sheetHeaderHeight
+            : null,
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: widget.sheet && !kIsWeb ? 14 : 0),
+                child: Text(
+                  controller.query.isNotEmpty
+                      ? (vi ? 'Kết quả lọc' : 'Filtered results')
+                      : (vi ? 'Khối cơ bản' : 'Basic blocks'),
+                  style: desktop
+                      ? TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        )
+                      : TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+                ),
               ),
             ),
-          ),
-          if (!desktop && !widget.toolbarOwnsClose)
-            IconButton(
-              tooltip: vi ? 'Đóng menu khối' : 'Close block menu',
-              onPressed: _close,
-              icon: const Icon(Icons.close, size: 18),
-            ),
-        ],
+            if (!desktop && !widget.toolbarOwnsClose)
+              IconButton(
+                tooltip: vi ? 'Đóng menu khối' : 'Close block menu',
+                onPressed: _close,
+                icon: const Icon(Icons.close, size: 18),
+              ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   int get _displayChoiceCount =>
       controller.choices.length + (_showMediaHeader ? 1 : 0);

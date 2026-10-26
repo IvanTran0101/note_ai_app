@@ -1,5 +1,23 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI43 twenty-agent review — 26–27 October 2026
+
+Actually used20 gpt-6-luna/max workers with exclusive file ownership, documented
+in ui43/OWNERSHIP.md.17 delivered runtime UI edits,2 verified correct existing
+renderer/grouping behavior,1 audited safe-area/accessibility. All20 delivered
+owned reports/tests; root reviewed source and fixed remaining issues after some
+repair turns reached usage limits. No overlapping builds/ADB/browser/Git owners.
+
+Root implemented shell targets/IME handoff, Notes clipping and Settings scroll
+repairs, constrained selection label, bounded desktop Share and finite chooser
+height; actual Chrome revealed both intrinsic-layout failures before publication.
+Root controlled direct Notion Web/native comparison, analysis, VM/Chrome checks,
+artifact hashing and runtime verification. Final53: VM92 plus4 chooser retest
+(3 overlapping), Chrome24 unique pass, analyzer61 clean, Web59.8s/APK31.1s and
+exact bundle/device identity. Full20-row delivery table and closure receipt:
+UI43_REVIEW.md. This technical milestone does not establish either >=95% visual
+gate. Continue direct paired UI work; no whole-M09 or live-AWS claim.
+
 ## UI42 bounded fixes — 24 October 2026
 
 Two actual Luna Max workers: toggle42 owned container/nested/shortcuts and tests;

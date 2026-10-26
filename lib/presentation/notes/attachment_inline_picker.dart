@@ -123,30 +123,45 @@ extension _AttachmentInlinePicker on _AttachmentEditorPanelState {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                  child: Text(
-                    'Upload',
-                    style: Theme.of(sheetContext).textTheme.titleMedium,
-                  ),
-                ),
-                for (final option in _attachmentPickerOptions)
-                  ListTile(
-                    minTileHeight: 48,
-                    leading: Icon(option.icon),
-                    title: Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            child: LayoutBuilder(
+              builder: (sheetContext, constraints) {
+                final media = MediaQuery.of(sheetContext);
+                final availableHeight = constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : (media.size.height -
+                              media.viewInsets.bottom -
+                              media.padding.top -
+                              media.padding.bottom)
+                          .clamp(0.0, double.infinity)
+                          .toDouble();
+                return ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: availableHeight),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                          child: Text(
+                            'Upload',
+                            style: Theme.of(sheetContext).textTheme.titleMedium,
+                          ),
+                        ),
+                        for (final option in _attachmentPickerOptions)
+                          ListTile(
+                            minTileHeight: 48,
+                            leading: Icon(option.icon),
+                            title: Text(option.label),
+                            onTap: () =>
+                                Navigator.pop(sheetContext, option.source),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
-                    onTap: () => Navigator.pop(sheetContext, option.source),
                   ),
-                const SizedBox(height: 8),
-              ],
+                );
+              },
             ),
           ),
         ),

@@ -204,13 +204,37 @@ final class _ProfileBody extends StatelessWidget {
   Widget _avatarSection(BuildContext context, {required UserProfile? profile}) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final bool hasAvatar = profile?.avatarReference != null;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _AvatarPreview(bytes: snapshot.avatarBytes, copy: copy),
-        const SizedBox(width: NoteFlowSpacing.lg),
-        Expanded(child: _avatarActions(context, tokens, hasAvatar, profile)),
-      ],
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Widget preview = _AvatarPreview(
+          bytes: snapshot.avatarBytes,
+          copy: copy,
+        );
+        final Widget actions = _avatarActions(
+          context,
+          tokens,
+          hasAvatar,
+          profile,
+        );
+        if (constraints.maxWidth < NoteFlowLayout.compactBreakpoint) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              preview,
+              const SizedBox(height: NoteFlowSpacing.lg),
+              actions,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            preview,
+            const SizedBox(width: NoteFlowSpacing.lg),
+            Expanded(child: actions),
+          ],
+        );
+      },
     );
   }
 
@@ -300,24 +324,58 @@ final class _StatusRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final Color color = error ? tokens.error : tokens.textSecondary;
+    final double bodyFontSize =
+        Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14;
+    final bool useStackedAction =
+        MediaQuery.textScalerOf(context).scale(bodyFontSize) > bodyFontSize;
     return Semantics(
       liveRegion: true,
       container: true,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: NoteFlowSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: color),
-            ),
-          ),
-          if (actionLabel != null)
-            TextButton(onPressed: onAction, child: Text(actionLabel!)),
-        ],
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Widget status = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: NoteFlowSpacing.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: color),
+                ),
+              ),
+            ],
+          );
+          if (actionLabel == null) {
+            return status;
+          }
+          final Widget action = TextButton(
+            onPressed: onAction,
+            child: Text(actionLabel!),
+          );
+          final bool compact =
+              constraints.maxWidth < NoteFlowLayout.compactBreakpoint;
+          if (compact || useStackedAction) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                status,
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: action,
+                ),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(child: status),
+              action,
+            ],
+          );
+        },
       ),
     );
   }

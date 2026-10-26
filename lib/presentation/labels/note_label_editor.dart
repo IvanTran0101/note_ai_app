@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import '../../application/notes/note_dto.dart';
 import 'label_action_fence.dart';
 import 'label_catalog_scope.dart';
-import 'label_manager_dialog.dart';
 import 'label_copy.dart';
+import 'label_dialog_layout.dart';
+import 'label_manager_dialog.dart';
 import 'note_label_chips.dart';
 
 final class NoteLabelEditor extends StatefulWidget {
@@ -68,6 +69,11 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
   ) {
     if (!fence.visible(context) || !_valid(fence, captured)) {
       return AlertDialog(
+        scrollable: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         content: Text(copy.error),
         actions: [
           TextButton(
@@ -86,15 +92,22 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
         .toSet();
     final obsolete = captured.labelIds.where((id) => !activeIds.contains(id));
     return AlertDialog(
+      scrollable: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
       title: Text(
         copy.organize,
         style: Theme.of(context).textTheme.titleMedium,
       ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       content: SizedBox(
         width: 400,
-        height: MediaQuery.sizeOf(context).height * .4,
+        height: labelChooserBodyHeight(context, rows.length + obsolete.length),
         child: ListView(
+          padding: EdgeInsets.zero,
           children: [
             if (rows.isEmpty && obsolete.isEmpty)
               Center(child: Text(copy.empty)),

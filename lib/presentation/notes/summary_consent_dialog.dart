@@ -73,6 +73,10 @@ Widget _buildSummaryConsentDialog(BuildContext dialogContext) {
       NoteFlowSpacing.lg,
       NoteFlowSpacing.lg,
     ),
+    actionsAlignment: MainAxisAlignment.end,
+    actionsOverflowAlignment: OverflowBarAlignment.end,
+    actionsOverflowDirection: VerticalDirection.down,
+    actionsOverflowButtonSpacing: NoteFlowSpacing.xs,
     titleTextStyle: textTheme.titleMedium?.copyWith(
       color: tokens.textPrimary,
       fontWeight: FontWeight.w600,
@@ -119,7 +123,7 @@ final class _SummaryConsentContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(copy.summaryCloudDisclosure),
-          const SizedBox(height: NoteFlowSpacing.lg),
+          Divider(height: NoteFlowSpacing.lg, color: tokens.divider),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -140,8 +144,9 @@ final class _SummaryConsentContent extends StatelessWidget {
                     const SizedBox(height: NoteFlowSpacing.xs),
                     Text(
                       copy.summaryCloudSessionDescription,
-                      style: textTheme.bodySmall?.copyWith(
+                      style: textTheme.bodyMedium?.copyWith(
                         color: tokens.textSecondary,
+                        height: 1.4,
                       ),
                     ),
                   ],

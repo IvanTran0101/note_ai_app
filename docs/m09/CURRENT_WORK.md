@@ -1,5 +1,86 @@
 # M09 current work
 
+## UI43 latest checkpoint53 — 27 October 2026
+
+All20 actual Luna Max deliveries are reviewed;17 runtime patches,2 verification
+scopes and1 safe-area audit. Lead repaired integration/test defects and actual
+Chrome Share/chooser intrinsic assertions. UI43_REVIEW.md is the consolidated
+handoff/test ledger. Final53 source1076/cc0fc644...fc4a has drift[]. Web59.8s,
+APK31.1s; Chrome JS0f452f7f...6e196 and installedAPK9c0854c4...ecddf match.
+Chrome actual chooser2 checkboxes+Cancel and Share+Close: zero console errors.
+Settled native53 IME screenshot (suffix -ime-settled) confirms production rail
+above Gboard and no shell nav underneath; the first -ime capture was transitional.
+VM92pass/3skip plus final chooser4pass (3 overlap,93 unique); Chrome24 unique
+passes after5/5 targeted repair; strict61-path analysis clean. Broader Presentation
+has7 unchanged infos; this isn't global analysis/full functional acceptance.
+
+Next UI work: direct native selected-text/palette comparison and complete paired
+visual-state matrix; keep both>=95% gates UNVERIFIED. iOS actual evidence and
+first-focus/fast-typing acceptance remain open. No new capabilities. Preserve
+UI41/42 contracts and local-first. Final53 is current, earlier51/52 history below
+is superseded. Notion evidence/publication receipts will be recorded here.
+Runtime: local Chrome8776 serves53, fixture8796/8797/8798; Android5554 installed53.
+Notion5556 has been restarted for further direct native inspection. Root owns
+all delivered files and shared resources; no need to respawn completed workers.
+Graph still Transport closed; exact source fallback. _agent_ops absent.
+
+## ACTIVE UI43 — 20 Luna Max continuation (26 October 2026)
+
+User explicitly resumed broader M09 UI/UX, requests at least20 Luna Max, no
+overlapping source ownership; lead also implements and is final reviewer.
+Baseline24000ff/final-tuankiet, tracked tree clean; preserve2 untracked personal
+paths. Graph recovered: generation24Oct15:27:12Z;44 candidates metadata_changed,
+no recorded gaps, exact reads required. Ownership/contract: ui43/OWNERSHIP.md.
+Workers start source/ref audits, then apply evidence-backed UI edits after current
+Notion inspection. Root owns workspace shell/safe-area/shared integration and
+all browser/ADB/tests/build/Notion/Git. No workers run shared Flutter processes.
+Both95% gates remain UNVERIFIED. Record actual dispatch count, current evidence,
+reviewed deliveries and remaining gaps here; don't conflate tests with similarity.
+
+UI43 progress:20 actual gpt-6-luna/max workers delivered19 independent UI scopes
+and1 safe-area audit. Lead inspected current Notion Web document/selection/slash/
+sidebar/Share and real native Home/note/Search/avatar/Settings, recorded in
+ui43/LIVE_REFERENCE.md. Source review preserves existing callbacks and UI41/42.
+Lead rejected unsupported showMenu(useSafeArea) and duplicate label-height logic;
+workers corrected SDK usage/shared helper. First focused run19pass/1skip/24fail:
+many new harness/API errors plus a confirmed scaled Settings-sheet overflow and
+shell bottom navigation behind IME. Lead fixes Settings whole-sheet scrolling,
+editor IME chrome handoff,48dp nav targets and scrollable editor value dialog.
+Worker repair turns hit usage limits; lead takes over remaining repairs. Current
+root rerun output/m09/ui43-widget-tests2.log; no PASS or95% claim, not pushed yet.
+_agent_ops absent. New ui43 markdown directory is ignored by /docs/m09/*; stage
+reviewed docs explicitly with -f, never runtime/images/personal untracked paths.
+
+27Oct continuation: UI43_REVIEW.md records all20 deliveries and root review.
+Focused VM52pass/2skip; broader79pass/2skip/1old-hit-target assertion now corrected.
+Chrome22pass/2skip/2fail repaired (toolbar fallbackfont width; platform semantics).
+Strict61-path analysis clean. Build51 succeeded/no source drift; actual Chrome/
+native51 smoked. Actual Share Web revealed intrinsic-layout crash; root split
+bounded desktop Dialog into share_management_desktop.dart and added full-dialog
+M06-fixture regression (normal/error). Final source needs52 build/QA;51 no longer
+proves final source. Root also content-sizes chooser and adjusts native dark
+recents cover/lower surface from direct ref. Current pending logs:
+ui43-chrome-retest.log, ui43-share-regression.log. Old shell test now checks both
+48dp target and40dp paint; run final VM+UI41/42 regressions together after pending
+hook completes. One native LLM hook can take minutes; never overlap cl/link builds.
+Android5554 font_scale1, accelerometer_rotation1/user_rotation0, threebutton restored.
+Source uncommitted, not pushed. UI visual gates remain UNVERIFIED; no global PASS.
+
+Latest root review:52 built Web100.8s/APK45.4s;1076paths source955f6af...
+drift[]. Chrome JSf29faf4...52a35e and installedAPK8e237046...413420 match52.
+VM92pass/3skip (UI43+shell+UI41 inline/menu+UI42 gutter/toggle), Share dialog
+normal/error regression2pass; Chrome retest5/5 fixes both previous failures.
+Actual52 Share renders compact popup/no recipients and can close; body loaded
+after pendingSync transitional hint. Chooser shrinkWrap refinement introduced
+new Chrome RenderShrinkWrappingViewport intrinsic assertion; lead caught it,
+replaced with finite content-count height while keeping lazy ListView, and added
+desktop chooser regression. Final source now53, building ui43-build53.log;
+chooser53-test and analysis53 logs are current. Never publish52 as final.
+Actual52 native IME rail rechecked with installed hash. Android settings restored:
+font_scale1, accelerometer_rotation1, user_rotation0, threebutton. Current Chrome
+frame has failed52 chooser; reload final53 after static server switch. Root owns
+all pending work. Keep all UI95% gates unchecked.
+
 ## UI42 COMPLETE FOR THE THREE ITEMS — publish then STOP (24 October 2026)
 
 Publication verified: source/test/docs checkpoint842e814933d28894515742af3f0affc55bff185e

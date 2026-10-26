@@ -14,6 +14,11 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
               choices: basics,
               controller: null,
               shrinkWrap: true,
+              selectedChoice:
+                  controller.selected >= 0 &&
+                      controller.selected < controller.choices.length
+                  ? controller.choices[controller.selected]
+                  : null,
               labelFor: (choice) => _label(choice, vi),
               iconFor: _icon,
               onChoose: _choose,
@@ -36,16 +41,26 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
   Widget _mediaSectionHeader({required bool vi, required bool desktop}) =>
       SizedBox(
         height: rowHeight,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: desktop ? 12 : 16),
-            child: Text(
-              vi ? 'Phương tiện' : 'Media',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: desktop ? 12 : 13,
-                fontWeight: FontWeight.w500,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant
+                    .withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: desktop ? 12 : 16),
+              child: Text(
+                vi ? 'Phương tiện' : 'Media',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: desktop ? 12 : 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -92,61 +107,72 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
     final media = choice.kind == DocumentBlockKind.attachment;
     final neutral = colors.onSurface.withValues(alpha: 0.075);
     return Material(
-      color: selected ? neutral : Colors.transparent,
+      color: Colors.transparent,
       child: InkWell(
         onTap: () => _choose(choice),
+        borderRadius: BorderRadius.circular(6),
         hoverColor: neutral,
         splashColor: neutral,
-        child: SizedBox(
-          height: rowHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                ExcludeSemantics(
-                  child: SizedBox(
-                    width: 20,
-                    child: !media && (choice.level != null || choiceIndex == 0)
-                        ? FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              choice.level == null
-                                  ? 'T'
-                                  : 'H${_headingSubscripts[choice.level!]}',
-                              maxLines: 1,
-                              softWrap: false,
-                              style: TextStyle(
-                                fontSize: choice.level == null ? 16 : 14,
-                                height: 1,
-                                fontFamily: choice.level == null
-                                    ? 'serif'
-                                    : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: selected ? neutral : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: SizedBox(
+              height: rowHeight - 4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    ExcludeSemantics(
+                      child: SizedBox(
+                        width: 20,
+                        child:
+                            !media && (choice.level != null || choiceIndex == 0)
+                            ? FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  choice.level == null
+                                      ? 'T'
+                                      : 'H${_headingSubscripts[choice.level!]}',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: choice.level == null ? 16 : 14,
+                                    height: 1,
+                                    fontFamily: choice.level == null
+                                        ? 'serif'
+                                        : null,
+                                    color: selected
+                                        ? colors.onSurface
+                                        : colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                _icon(choice),
+                                size: 16,
                                 color: selected
                                     ? colors.onSurface
                                     : colors.onSurfaceVariant,
                               ),
-                            ),
-                          )
-                        : Icon(
-                            _icon(choice),
-                            size: 16,
-                            color: selected
-                                ? colors.onSurface
-                                : colors.onSurfaceVariant,
-                          ),
-                  ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _label(choice, vi),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.onSurface, fontSize: 14),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _label(choice, vi),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.onSurface, fontSize: 14),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

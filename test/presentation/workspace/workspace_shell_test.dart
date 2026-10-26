@@ -279,7 +279,9 @@ void main() {
     expect(tester.getTopLeft(avatar).dx, closeTo(21, 0.1));
     expect(tester.getSize(avatar), const Size(38, 38));
     expect(tester.getTopLeft(homePill).dx, closeTo(68, 0.1));
-    expect(tester.getSize(homePill), Size(kIsWeb ? 64 : 75, 40));
+    expect(tester.getSize(homePill), Size(kIsWeb ? 64 : 75, 48));
+    final paint = find.descendant(of: homePill, matching: find.byType(Ink));
+    expect(tester.getSize(paint), Size(kIsWeb ? 64 : 75, 40));
   });
 
   testWidgets('medium width shows a labelled NavigationRail', (

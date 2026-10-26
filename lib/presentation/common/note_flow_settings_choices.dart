@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
@@ -43,10 +41,17 @@ final class NoteFlowNativeSettingsChoice<T> extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: double.infinity),
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0x40000000),
-      builder: (BuildContext _) => _NoteFlowSettingsChoiceSheet<T>(
-        label: label,
-        initialValue: initialValue,
-        items: items,
+      builder: (BuildContext sheetContext) => AnimatedPadding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        duration: kThemeAnimationDuration,
+        curve: Curves.easeOut,
+        child: _NoteFlowSettingsChoiceSheet<T>(
+          label: label,
+          initialValue: initialValue,
+          items: items,
+        ),
       ),
     );
 
@@ -130,12 +135,12 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: SafeArea(
             top: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _header(context, tokens, isVietnamese),
-                Expanded(
-                  child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _header(context, tokens, isVietnamese),
+                  Padding(
                     padding: const EdgeInsetsDirectional.fromSTEB(
                       16,
                       8,
@@ -144,8 +149,8 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
                     ),
                     child: _choiceGroup(context, tokens),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -158,6 +163,7 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
     NoteFlowUiTokens tokens,
     bool isVietnamese,
   ) {
+    final doneLabel = isVietnamese ? 'Xong' : 'Done';
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 5, 16, 8),
       child: Column(
@@ -171,22 +177,16 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          SizedBox(
-            height: math.max(
-              48,
-              MediaQuery.textScalerOf(context).scale(16) * 1.4 + 8,
-            ),
-            child: Stack(
-              alignment: Alignment.center,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Align(
-                  alignment: Alignment.topCenter,
+                Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(76, 3, 76, 0),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
                     child: Text(
                       label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
@@ -196,21 +196,18 @@ final class _NoteFlowSettingsChoiceSheet<T> extends StatelessWidget {
                     ),
                   ),
                 ),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: tokens.link,
-                      minimumSize: const Size(48, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: tokens.link,
+                    minimumSize: const Size(48, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
                     ),
-                    child: Text(isVietnamese ? 'Xong' : 'Done'),
                   ),
+                  child: Text(doneLabel),
                 ),
               ],
             ),

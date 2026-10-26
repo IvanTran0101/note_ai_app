@@ -301,6 +301,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
         final bool compactBottomBarVisible =
             compact &&
             !_compactSearchActive &&
+            !(compactEditor && MediaQuery.viewInsetsOf(context).bottom > 0) &&
             (widget.onOpenSearch != null ||
                 widget.onCreateNote != null ||
                 widget.onOpenRag != null);
@@ -598,6 +599,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
               if (canSearch)
                 Tooltip(
                   message: copy.search,
+                  excludeFromSemantics: true,
                   child: Material(
                     color: tokens.pageSurface,
                     shape: CircleBorder(
@@ -609,7 +611,11 @@ class WorkspaceShellState extends State<WorkspaceShell>
                       onTap: widget.onOpenSearch,
                       child: SizedBox.square(
                         dimension: 48,
-                        child: Icon(Icons.search, color: tokens.textSecondary),
+                        child: Icon(
+                          Icons.search,
+                          color: tokens.textSecondary,
+                          semanticLabel: copy.search,
+                        ),
                       ),
                     ),
                   ),
@@ -639,6 +645,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
               if (canCreate)
                 Tooltip(
                   message: copy.newNote,
+                  excludeFromSemantics: true,
                   child: Material(
                     color: tokens.pageSurface,
                     shape: CircleBorder(
@@ -653,6 +660,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
                         child: Icon(
                           Icons.edit_outlined,
                           color: tokens.textPrimary,
+                          semanticLabel: copy.newNote,
                         ),
                       ),
                     ),
@@ -736,22 +744,38 @@ class WorkspaceShellState extends State<WorkspaceShell>
       message: tooltip,
       child: SizedBox(
         width: NoteFlowLayout.isNativePhone(context) ? 75 : 64,
-        height: 40,
+        // Keep the reference's compact 40px pill inside a full native touch
+        // target. The transparent margin belongs to this action, not its peer.
+        height: 48,
         child: Material(
-          color: selected ? tokens.selectedSurface : tokens.subtleSurface,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             key: key,
             borderRadius: BorderRadius.circular(18),
             onTap: onPressed,
-            child: Center(
-              child: AnimatedSwitcher(
-                duration: NoteFlowMotion.duration(context, NoteFlowMotion.fast),
-                child: Icon(
-                  selected ? activeIcon : icon,
-                  key: ValueKey<bool>(selected),
-                  size: selected ? 22 : 20,
-                  color: tokens.textPrimary,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: selected
+                      ? tokens.selectedSurface
+                      : tokens.subtleSurface,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: NoteFlowMotion.duration(
+                      context,
+                      NoteFlowMotion.fast,
+                    ),
+                    child: Icon(
+                      selected ? activeIcon : icon,
+                      key: ValueKey<bool>(selected),
+                      size: selected ? 22 : 20,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
                 ),
               ),
             ),

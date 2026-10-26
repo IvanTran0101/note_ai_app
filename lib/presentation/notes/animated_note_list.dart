@@ -129,7 +129,8 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
               '${outgoing ? 'outgoing-' : ''}note-${note.reference}',
             ),
             selected: selected,
-            selectedTileColor: tokens.textPrimary.withValues(alpha: .07),
+            selectedTileColor: tokens.selectedSurface,
+            hoverColor: tokens.subtleSurface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(NoteFlowRadius.row),
             ),

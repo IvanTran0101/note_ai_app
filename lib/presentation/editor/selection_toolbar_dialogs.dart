@@ -140,7 +140,7 @@ extension _SelectionToolbarDialogs on SelectionToolbar {
                     size: 16,
                   ),
                   const SizedBox(width: 12),
-                  Text(editorText(context, color.name)),
+                  Flexible(child: Text(editorText(context, color.name))),
                 ],
               ),
             ),

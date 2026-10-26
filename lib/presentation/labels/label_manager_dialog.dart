@@ -1,13 +1,13 @@
-import 'label_action_fence.dart';
-
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 
 import '../../application/labels/label_application.dart';
 import '../../application/labels/local_label_state.dart';
 import '../../application/sync/note_sync_status.dart';
+import 'label_action_fence.dart';
 import 'label_catalog_scope.dart';
 import 'label_copy.dart';
+import 'label_dialog_layout.dart';
 
 Future<void> showLabelManager(BuildContext context) =>
     showDialog<void>(context: context, builder: (_) => const _LabelManager());
@@ -71,11 +71,17 @@ final class _LabelManagerState extends State<_LabelManager> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
         title: Text(
           copy.confirmDelete,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         content: Builder(
           builder: (c) => Text(fence.visible(c) ? label.name : copy.error),
         ),
@@ -103,6 +109,11 @@ final class _LabelManagerState extends State<_LabelManager> {
     final copy = LabelCopy(context), scope = LabelCatalogScope.maybeOf(context);
     if (_fence?.visible(context) != true) {
       return AlertDialog(
+        scrollable: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         content: Text(copy.error),
         actions: [
           TextButton(
@@ -121,18 +132,30 @@ final class _LabelManagerState extends State<_LabelManager> {
             )
             .toList() ??
         [];
+    final bodyHeight = labelDialogBodyHeight(context, .5, minimum: 192);
     return AlertDialog(
+      scrollable: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
       title: Text(copy.manage, style: Theme.of(context).textTheme.titleMedium),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       content: SizedBox(
         width: 420,
-        height: MediaQuery.sizeOf(context).height * .5,
+        height: bodyHeight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (scope?.status == LabelCatalogStatus.loading)
               const LinearProgressIndicator(),
-            if (scope?.status == LabelCatalogStatus.error) Text(copy.error),
+            if (scope?.status == LabelCatalogStatus.error)
+              Text(
+                copy.error,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.error),
+              ),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -161,6 +184,7 @@ final class _LabelManagerState extends State<_LabelManager> {
               child: rows.isEmpty
                   ? Center(child: Text(copy.empty))
                   : ListView(
+                      padding: EdgeInsets.zero,
                       children: [for (final label in rows) _row(label, copy)],
                     ),
             ),
@@ -183,10 +207,13 @@ final class _LabelManagerState extends State<_LabelManager> {
         Row(
           children: [
             Expanded(
-              child: Text(
-                label.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Tooltip(
+                message: label.name,
+                child: Text(
+                  label.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             IconButton(
@@ -205,7 +232,7 @@ final class _LabelManagerState extends State<_LabelManager> {
             ),
           ],
         ),
-        const Divider(height: 1),
+        Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
         if (label.status == NoteSyncStatus.conflict)
           Wrap(
             children: [
@@ -248,6 +275,11 @@ Future<String?> _nameDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => !fence.visible(context)
           ? AlertDialog(
+              scrollable: true,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
+              contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               content: Text(copy.error),
               actions: [
                 TextButton(
@@ -257,13 +289,19 @@ Future<String?> _nameDialog(
               ],
             )
           : AlertDialog(
+              scrollable: true,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
               title: Text(
                 initial == null ? copy.add : copy.rename,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               content: TextField(
                 controller: controller,
                 autofocus: true,

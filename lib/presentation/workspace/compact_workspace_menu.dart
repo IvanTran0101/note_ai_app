@@ -58,21 +58,34 @@ Future<T?> showCompactWorkspaceMenu<T>({
       .min(maximumMenuWidth, availableWidth)
       .toDouble();
 
+  if (menuWidth <= 0) {
+    return Future<T?>.value();
+  }
+
+  final double safeLeft = safePadding.left + viewportGutter;
+  final double safeRight =
+      overlaySize.width - safePadding.right - viewportGutter;
   final Offset localAnchor = overlayBox.globalToLocal(
-    Offset(globalAnchor.left + 4, globalAnchor.bottom - 4),
+    Offset(globalAnchor.left, globalAnchor.bottom),
   );
+  final double anchorX = localAnchor.dx.clamp(safeLeft, safeRight).toDouble();
   final double safeBottomInset = math
       .max(safePadding.bottom, mediaQuery.viewInsets.bottom)
       .toDouble();
-  final double safeBottom = overlaySize.height - safeBottomInset;
-  final double menuTop = math
-      .max(localAnchor.dy, safePadding.top + viewportGutter)
+  final double safeTop = safePadding.top + viewportGutter;
+  final double safeBottom = math
+      .max(safeTop, overlaySize.height - safeBottomInset - viewportGutter)
       .toDouble();
+  final double anchorY = localAnchor.dy.clamp(safeTop, safeBottom).toDouble();
+  final double availableAbove = math.max(0, anchorY - safeTop).toDouble();
+  final double availableBelow = math.max(0, safeBottom - anchorY).toDouble();
+  // showMenu chooses the side with more room. Give it the matching safe
+  // height so a bottom-anchored avatar can open upward instead of clipping.
   final double availableHeight = math
-      .max(0, safeBottom - menuTop - viewportGutter)
+      .max(availableAbove, availableBelow)
       .toDouble();
 
-  if (menuWidth <= 0 || availableHeight <= 0) {
+  if (availableHeight <= 0) {
     return Future<T?>.value();
   }
 
@@ -80,17 +93,16 @@ Future<T?> showCompactWorkspaceMenu<T>({
   final List<PopupMenuEntry<T>> entries = <PopupMenuEntry<T>>[];
   for (final CompactWorkspaceMenuItem<T> item in items) {
     if (item.dividerBefore && entries.isNotEmpty) {
-      entries.add(const PopupMenuDivider(height: 1));
+      entries.add(const PopupMenuDivider(height: 8));
     }
 
     final TextStyle labelStyle =
         (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
           color: theme.colorScheme.onSurface,
-          fontSize: 16,
-          letterSpacing: 0,
           fontWeight: item.selected ? FontWeight.w600 : FontWeight.normal,
         );
     Widget content = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Icon(
           item.icon,
@@ -100,7 +112,7 @@ Future<T?> showCompactWorkspaceMenu<T>({
               : theme.colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: 12),
-        Expanded(child: Text(item.label, style: labelStyle)),
+        Expanded(child: Text(item.label, style: labelStyle, softWrap: true)),
       ],
     );
     if (item.aliasKey != null) {
@@ -121,7 +133,7 @@ Future<T?> showCompactWorkspaceMenu<T>({
     );
   }
 
-  final Rect anchorPoint = Rect.fromLTWH(localAnchor.dx, localAnchor.dy, 0, 0);
+  final Rect anchorPoint = Rect.fromLTWH(anchorX, anchorY, 0, 0);
   return showMenu<T>(
     context: context,
     position: RelativeRect.fromRect(anchorPoint, Offset.zero & overlaySize),
@@ -141,6 +153,7 @@ Future<T?> showCompactWorkspaceMenu<T>({
     menuPadding: EdgeInsets.zero,
     semanticLabel: semanticLabel,
     useRootNavigator: true,
+    requestFocus: true,
   );
 }
 

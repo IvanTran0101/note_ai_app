@@ -29,6 +29,28 @@ final class ShareManagementSurface extends StatelessWidget {
     final safeTop = view.viewPadding.top / view.devicePixelRatio;
     final topGap = (64 - safeTop).clamp(0, 64).toDouble();
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final largeText = MediaQuery.textScalerOf(context).scale(18) > 28;
+    final titleLabel = Text(
+      title,
+      maxLines: largeText ? 3 : 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: tokens.textPrimary,
+      ),
+    );
+    final closeButton = TextButton(
+      onPressed: onClose,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontSize: 18),
+      ),
+      child: Text(closeLabel),
+    );
     return Dialog(
       alignment: Alignment.bottomCenter,
       // The route already consumes the actual top safe area. A fixed40dp gap
@@ -39,7 +61,6 @@ final class ShareManagementSurface extends StatelessWidget {
       elevation: 0,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final largeText = MediaQuery.textScalerOf(context).scale(18) > 28;
           return SizedBox(
             width: constraints.maxWidth,
             height: constraints.maxHeight,
@@ -72,54 +93,43 @@ final class ShareManagementSurface extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          SizedBox(
-                            height: largeText ? 64 : 48,
-                            child: Stack(
-                              alignment: Alignment.center,
+                          if (largeText)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Positioned.fill(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 72,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        title,
-                                        maxLines: largeText ? 2 : 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: tokens.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: AlignmentDirectional.centerEnd,
-                                  child: TextButton(
-                                    onPressed: onClose,
-                                    style: TextButton.styleFrom(
-                                      minimumSize: const Size(48, 48),
-                                      padding: EdgeInsets.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      textStyle: const TextStyle(fontSize: 18),
-                                    ),
-                                    child: Text(closeLabel),
-                                  ),
-                                ),
+                                Expanded(child: titleLabel),
+                                closeButton,
                               ],
+                            )
+                          else
+                            SizedBox(
+                              height: 48,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Positioned.fill(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 72,
+                                      ),
+                                      child: Center(child: titleLabel),
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: AlignmentDirectional.centerEnd,
+                                    child: closeButton,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
                     Divider(height: 1, color: tokens.divider),
                     Expanded(
                       child: SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                         child: content,
                       ),
@@ -175,9 +185,9 @@ final class ShareInviteField extends StatelessWidget {
             ? Icon(Icons.search, size: 20, color: tokens.textMuted)
             : null,
         prefixIconConstraints: compact
-            ? const BoxConstraints(minWidth: 36, minHeight: 36)
+            ? const BoxConstraints(minWidth: 48, minHeight: 48)
             : null,
-        constraints: BoxConstraints(minHeight: compact ? 36 : 34),
+        constraints: BoxConstraints(minHeight: compact ? 48 : 34),
         filled: true,
         fillColor: compact && Theme.of(context).brightness == Brightness.light
             ? const Color(0xFFECEAE8)
@@ -187,7 +197,7 @@ final class ShareInviteField extends StatelessWidget {
         border: border,
         enabledBorder: border,
         focusedBorder: border.copyWith(
-          borderSide: BorderSide(color: tokens.textSecondary),
+          borderSide: BorderSide(color: tokens.focusRing),
         ),
       ),
     );
@@ -217,23 +227,35 @@ final class ShareRecipientRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = NoteFlowUiTokens.of(context);
-    final identity = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          share.recipientId,
-          maxLines: compact ? 1 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        Text(
-          '${copy.status(share)} · ${share.updatedAt.toLocal().toIso8601String().split('.').first}',
-          maxLines: compact ? 1 : null,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12, color: tokens.textSecondary),
-        ),
-      ],
+    final updatedAt = share.updatedAt
+        .toLocal()
+        .toIso8601String()
+        .split('.')
+        .first;
+    final identity = Tooltip(
+      message: share.recipientId,
+      excludeFromSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            share.recipientId,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: copy.status(share)),
+                TextSpan(text: ' · $updatedAt'),
+              ],
+            ),
+            style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+          ),
+        ],
+      ),
     );
     final actions = share.isActive
         ? compact
@@ -261,24 +283,67 @@ final class ShareRecipientRow extends StatelessWidget {
                     ),
                   ],
                 )
-              : Wrap(
-                  spacing: 8,
-                  children: [
-                    TextButton(
-                      onPressed: enabled ? onChangeRole : null,
-                      child: Text(
-                        copy.role(
-                          share.role == NoteRole.viewer
-                              ? NoteRole.editor
-                              : NoteRole.viewer,
-                        ),
-                      ),
+              : PopupMenuButton<_PermissionAction>(
+                  key: const ValueKey('share-recipient-permission'),
+                  enabled: enabled,
+                  tooltip: copy.role(share.role),
+                  padding: EdgeInsets.zero,
+                  onSelected: (action) {
+                    switch (action) {
+                      case _PermissionAction.viewer:
+                        if (share.role != NoteRole.viewer) onChangeRole();
+                        break;
+                      case _PermissionAction.editor:
+                        if (share.role != NoteRole.editor) onChangeRole();
+                        break;
+                      case _PermissionAction.revoke:
+                        onRevoke();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: _PermissionAction.viewer,
+                      enabled: share.role != NoteRole.viewer,
+                      child: Text(copy.role(NoteRole.viewer)),
                     ),
-                    TextButton(
-                      onPressed: enabled ? onRevoke : null,
+                    PopupMenuItem(
+                      value: _PermissionAction.editor,
+                      enabled: share.role != NoteRole.editor,
+                      child: Text(copy.role(NoteRole.editor)),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: _PermissionAction.revoke,
                       child: Text(copy.revoke),
                     ),
                   ],
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            copy.role(share.role),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: tokens.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.expand_more,
+                            size: 18,
+                            color: tokens.textMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 )
         : TextButton(
             onPressed: enabled ? onReactivate : null,
@@ -310,3 +375,5 @@ final class ShareRecipientRow extends StatelessWidget {
 }
 
 enum _RecipientAction { changeRole, revoke }
+
+enum _PermissionAction { viewer, editor, revoke }

@@ -1,5 +1,27 @@
 # MUST REMEMBER
 
+## ACTIVE UI43 — user resumed with at least20 Luna Max (26 October 2026)
+
+Latest user overrides prior UI42 pause and six-agent limit: continue M09 UI/UX
+with at least20 Luna Max, disjoint file ownership and lead implementing/reviewing.
+Read docs/m09/ui43/OWNERSHIP.md and CURRENT_WORK.md. Existing-features-only,
+local-first, actual Notion Web/Android, platform safe zones and separate >=95%
+gates still apply. Root owns shared config/tokens/integration/browser/build/Git;
+workers may edit only allocated files and their uniquely named tests/reports.
+No global functional signoff before paired visual gates. Never invent a %.
+
+Continuation state (27Oct):20 actual workers have delivered and lead reviewed
+their disjoint patches/tests. Read UI43_REVIEW.md and CURRENT_WORK.md. Final UI43
+source/artifacts are53 (1076 paths, cc0fc644...fc4a), not51/52. Lead repaired Share
+and chooser intrinsic-layout failures and verified both on exact53 Chrome with
+zero console errors. Android installed53 hash matches; settled IME capture shows
+the editor rail above Gboard and shell navigation hidden. VM92 + chooser4 retest
+(3 overlap), Chrome24 unique after repairs, strict61-path analysis and Web/APK
+builds pass. These establish the UI43 technical checkpoint, NOT >=95% similarity.
+Both visual gates remain UNVERIFIED; continue direct paired UI comparison before
+broad functional acceptance. Native selected-text/palette, full visual-state
+matrix, broader first-focus/typing and actual iOS evidence are still open.
+
 ## UI42 COMPLETE — publish then STOP (24 October 2026)
 
 Only the three requested fixes are complete on50: first-line contextual +

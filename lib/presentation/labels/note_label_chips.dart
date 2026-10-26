@@ -28,59 +28,76 @@ final class NoteLabelChips extends StatelessWidget {
       actor: scope.actor,
       readable: readable,
     );
-    final children = <Widget>[];
-    if (showCaption) {
-      final colors = Theme.of(context).colorScheme;
-      children.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.label_outline, size: 15, color: colors.onSurfaceVariant),
-            const SizedBox(width: 5),
-            Text(
-              LabelCopy(context).labels,
-              style: Theme.of(context).textTheme.bodySmall
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final requestedLabelWidth = (availableWidth * .55)
+            .clamp(120.0, 240.0)
+            .toDouble();
+        final safeLabelWidth = availableWidth > 12 ? availableWidth - 12 : 0.0;
+        final maxChipWidth = requestedLabelWidth < safeLabelWidth
+            ? requestedLabelWidth
+            : safeLabelWidth;
+        final children = <Widget>[];
+        if (showCaption) {
+          final colors = Theme.of(context).colorScheme;
+          children.add(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.label_outline,
+                  size: 15,
+                  color: colors.onSurfaceVariant,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  LabelCopy(context).labels,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ],
+            ),
+          );
+        }
+        final colors = Theme.of(context).colorScheme;
+        for (final label in labels) {
+          children.add(
+            Chip(
+              key: ValueKey(('note-label', note.identity, label.id)),
+              label: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxChipWidth),
+                child: Text(
+                  label.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              labelStyle: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: colors.onSurfaceVariant),
+              backgroundColor: colors.surfaceContainerHighest,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 5),
+              padding: EdgeInsets.zero,
             ),
-          ],
-        ),
-      );
-    }
-    final colors = Theme.of(context).colorScheme;
-    final maxChipWidth = (MediaQuery.sizeOf(context).width * .55)
-        .clamp(120.0, 240.0)
-        .toDouble();
-    for (final label in labels) {
-      children.add(
-        Chip(
-          key: ValueKey(('note-label', note.identity, label.id)),
-          label: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxChipWidth),
-            child: Text(
-              label.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          labelStyle: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: colors.onSurfaceVariant),
-          backgroundColor: colors.surfaceContainerHighest,
-          side: BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 5),
-          padding: EdgeInsets.zero,
-        ),
-      );
-    }
-    if (trailing != null) children.add(trailing!);
-    if (children.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 6,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: children,
+          );
+        }
+        if (trailing != null) children.add(trailing!);
+        if (children.isEmpty) return const SizedBox.shrink();
+        return Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: children,
+        );
+      },
     );
   }
 }

@@ -165,6 +165,7 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
     TextEditingController controller,
     String label, {
     bool confirm = false,
+    String? helperText,
   }) {
     final copy = NoteSecurityCopy(context);
     return Padding(
@@ -176,20 +177,82 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
         maxLength: 512,
         enableSuggestions: false,
         autocorrect: false,
-        decoration: InputDecoration(
-          labelText: label,
-          counterText: '',
-          filled: true,
-          fillColor: NoteFlowUiTokens.of(context).subtleSurface,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: NoteFlowUiTokens.of(context).divider),
-          ),
-        ),
+        decoration: _fieldDecoration(label, helperText: helperText),
         validator: (v) => confirm
             ? (v == _password.text ? null : copy.mismatch)
             : (v != null && v.length >= 8 ? null : copy.minimum),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(String label, {String? helperText}) {
+    final tokens = NoteFlowUiTokens.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(8);
+    OutlineInputBorder outline(Color color, {double width = 1}) =>
+        OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: color, width: width),
+        );
+
+    return InputDecoration(
+      labelText: label,
+      helperText: helperText,
+      helperMaxLines: 2,
+      errorMaxLines: 3,
+      counterText: '',
+      filled: true,
+      fillColor: tokens.subtleSurface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      border: outline(tokens.divider),
+      enabledBorder: outline(tokens.divider),
+      focusedBorder: outline(scheme.primary, width: 1.5),
+      errorBorder: outline(scheme.error),
+      focusedErrorBorder: outline(scheme.error, width: 1.5),
+    );
+  }
+
+  Widget _supportingText(String text) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: NoteFlowUiTokens.of(context).textSecondary),
+    ),
+  );
+
+  Widget _failureRow(NoteSecurityCopy copy, NoteSecurityFailureCode code) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                Icons.error_outline,
+                size: 18,
+                color: scheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                copy.failure(code),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -198,11 +261,20 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
   Widget build(BuildContext context) {
     final copy = NoteSecurityCopy(context);
     final tokens = NoteFlowUiTokens.of(context);
+    final narrow = MediaQuery.of(context).size.width < 360;
     return PopScope(
       canPop: !_busy,
       child: AlertDialog(
         scrollable: true,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: narrow ? 8 : 16,
+          vertical: 12,
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        buttonPadding: EdgeInsets.zero,
+        actionsOverflowButtonSpacing: 8,
         backgroundColor: tokens.elevatedSurface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -216,98 +288,108 @@ final class _SecurityDialogState extends State<_SecurityDialog> {
             Expanded(
               child: Text(
                 copy.label(widget.action),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontSize: 20, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: SingleChildScrollView(
-            child: Form(
-              key: _form,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.service.localFirst) Text(copy.localFirstHint),
-                  if (_recovery) ...[
-                    Text(copy.recoveryHint),
-                    TextFormField(
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.service.localFirst)
+                  _supportingText(copy.localFirstHint),
+                if (_recovery) ...[
+                  _supportingText(copy.recoveryHint),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: TextFormField(
                       controller: _otp,
                       enabled: !_busy,
                       maxLength: 6,
                       keyboardType: TextInputType.number,
                       enableSuggestions: false,
                       autocorrect: false,
-                      decoration: InputDecoration(labelText: copy.otp),
+                      decoration: _fieldDecoration(copy.otp),
                       validator: (v) =>
                           v != null && RegExp(r'^\d{6}$').hasMatch(v)
                           ? null
                           : copy.otp,
                     ),
-                    TextButton(
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
                       onPressed: _busy ? null : _requestCode,
                       child: Text(copy.resend),
                     ),
-                  ],
-                  if (widget.action == NoteSecurityAction.change ||
-                      widget.action == NoteSecurityAction.disable ||
-                      widget.action == NoteSecurityAction.syncProtection)
-                    _passwordField(
-                      _current,
-                      widget.action == NoteSecurityAction.syncProtection
-                          ? copy.cloudPassword
-                          : copy.current,
-                    ),
-                  if (widget.action != NoteSecurityAction.disable &&
-                      widget.action != NoteSecurityAction.syncProtection)
-                    _passwordField(
-                      _password,
-                      _newPassword ? copy.next : copy.password,
-                    ),
-                  if (_newPassword)
-                    _passwordField(_confirmation, copy.confirm, confirm: true),
-                  if (widget.action == NoteSecurityAction.unlock) ...[
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(copy.offline),
-                      value: _offline,
-                      onChanged: _busy || !widget.serverAvailable
-                          ? null
-                          : (v) => setState(() => _offline = v ?? false),
-                    ),
-                    Text(copy.offlineHint),
-                  ],
-                  if (_failure case final code?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        copy.failure(code),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  if (_busy)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: LinearProgressIndicator(),
-                    ),
+                  ),
                 ],
-              ),
+                if (widget.action == NoteSecurityAction.change ||
+                    widget.action == NoteSecurityAction.disable ||
+                    widget.action == NoteSecurityAction.syncProtection)
+                  _passwordField(
+                    _current,
+                    widget.action == NoteSecurityAction.syncProtection
+                        ? copy.cloudPassword
+                        : copy.current,
+                  ),
+                if (widget.action != NoteSecurityAction.disable &&
+                    widget.action != NoteSecurityAction.syncProtection)
+                  _passwordField(
+                    _password,
+                    _newPassword ? copy.next : copy.password,
+                    helperText: _newPassword ? copy.minimum : null,
+                  ),
+                if (_newPassword)
+                  _passwordField(_confirmation, copy.confirm, confirm: true),
+                if (widget.action == NoteSecurityAction.unlock) ...[
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(copy.offline),
+                    value: _offline,
+                    onChanged: _busy || !widget.serverAvailable
+                        ? null
+                        : (v) => setState(() => _offline = v ?? false),
+                  ),
+                  _supportingText(copy.offlineHint),
+                ],
+                if (_failure case final code?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: _failureRow(copy, code),
+                  ),
+                if (_busy)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: LinearProgressIndicator(),
+                  ),
+              ],
             ),
           ),
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
             onPressed: _busy ? null : () => Navigator.of(context).pop(false),
             child: Text(copy.cancel),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
             onPressed: _busy || (_recovery && _challenge == null)
                 ? null
                 : _submit,

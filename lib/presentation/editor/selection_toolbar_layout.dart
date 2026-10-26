@@ -59,6 +59,7 @@ final class SelectionToolbarLayout extends StatelessWidget {
       assert(rows.length == 3, 'Desktop selection toolbar needs three rows.');
       return Material(
         color: surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 8,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(

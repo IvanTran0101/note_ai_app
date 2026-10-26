@@ -11,6 +11,8 @@ import 'sharing_localizations.dart';
 import 'share_management_surface.dart';
 import 'notes_theme_tokens.dart';
 
+part 'share_management_desktop.dart';
+
 /// ACL administration is online and confirmed. No optimistic recipient access.
 final class ShareManagementDialog extends StatefulWidget {
   const ShareManagementDialog({
@@ -155,14 +157,17 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
         Divider(height: 1, color: tokens.divider),
         const SizedBox(height: 8),
         if (_busy) ...[const LinearProgressIndicator(), Text(copy.loading)],
-        if (_error != null) ...[
-          Text(copy.failure(_error!), key: const ValueKey('share-error')),
-          if (compact)
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: _retryButton(copy),
-            ),
-        ],
+        if (_error != null)
+          ShareErrorNotice(
+            message: copy.failure(_error!),
+            tokens: tokens,
+            action: compact
+                ? Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: _retryButton(copy),
+                  )
+                : null,
+          ),
         if (_shares.isEmpty && !_busy) Text(copy.noRecipients),
         ..._shares.map(
           (share) => ShareRecipientRow(
@@ -200,52 +205,7 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
         tokens: tokens,
       );
     }
-    return AlertDialog(
-      alignment: Alignment.topRight,
-      insetPadding: EdgeInsets.fromLTRB(24, 44, webPanel ? 100 : 20, 24),
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF252525)
-          : tokens.elevatedSurface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: tokens.divider),
-      ),
-      titlePadding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      contentPadding: EdgeInsets.symmetric(horizontal: webPanel ? 16 : 20),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      title: Row(
-        children: [
-          Icon(
-            Icons.people_outline,
-            size: webPanel ? 18 : 20,
-            color: tokens.textSecondary,
-          ),
-          SizedBox(width: webPanel ? 8 : 10),
-          Expanded(
-            child: Text(
-              copy.manage,
-              style: TextStyle(
-                fontSize: webPanel ? 16 : 18,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: webPanel ? 424 : 440,
-        child: SingleChildScrollView(child: body),
-      ),
-      actions: [
-        if (_error != null) _retryButton(copy),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(copy.close),
-        ),
-      ],
-    );
+    return _desktopDialog(copy, tokens, webPanel: webPanel, body: body);
   }
 
   Widget _retryButton(SharingCopy copy) => TextButton(
@@ -265,43 +225,44 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
     final submit = FilledButton(
       key: const ValueKey('share-recipient-submit'),
       onPressed: _busy || _retry != null ? null : _create,
-      style: webPanel
-          ? FilledButton.styleFrom(
-              minimumSize: const Size(0, 34),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              textStyle: const TextStyle(fontSize: 14),
-              visualDensity: VisualDensity.compact,
-            )
-          : null,
+      style: FilledButton.styleFrom(
+        minimumSize: webPanel ? const Size(64, 32) : const Size(48, 48),
+        padding: EdgeInsets.symmetric(horizontal: webPanel ? 12 : 16),
+        textStyle: const TextStyle(fontSize: 14),
+        visualDensity: webPanel
+            ? VisualDensity.compact
+            : VisualDensity.standard,
+        tapTargetSize: webPanel
+            ? MaterialTapTargetSize.shrinkWrap
+            : MaterialTapTargetSize.padded,
+      ),
       child: Text(copy.share),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow =
-            constraints.maxWidth < 400 ||
-            MediaQuery.textScalerOf(context).scale(14) > 19;
-        if (narrow) {
-          return Column(
-            children: [
-              email,
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: role),
-                  submit,
-                ],
-              ),
-            ],
-          );
-        }
-        return Row(
+        final scaledFont = MediaQuery.textScalerOf(context).scale(14);
+        final needsVerticalControls =
+            constraints.maxWidth < 280 || scaledFont > 28;
+        final inviteRow = Row(
           children: [
             Expanded(child: email),
-            const SizedBox(width: 12),
-            role,
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             submit,
           ],
+        );
+        final roleRow = Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: role,
+        );
+        if (needsVerticalControls) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [email, const SizedBox(height: 8), role, submit],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [inviteRow, const SizedBox(height: 4), roleRow],
         );
       },
     );
@@ -341,4 +302,56 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
     _email.dispose();
     super.dispose();
   }
+}
+
+final class ShareErrorNotice extends StatelessWidget {
+  const ShareErrorNotice({
+    super.key,
+    required this.message,
+    required this.tokens,
+    this.action,
+  });
+
+  final String message;
+  final NoteFlowUiTokens tokens;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: tokens.error.withAlpha(16),
+      border: Border.all(color: tokens.error.withAlpha(96)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(Icons.error_outline, size: 18, color: tokens.error),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    message,
+                    key: const ValueKey('share-error'),
+                    style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          ?action,
+        ],
+      ),
+    ),
+  );
 }

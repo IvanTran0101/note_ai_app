@@ -67,43 +67,24 @@ final class LabelFilterBar extends StatelessWidget {
     }
     final List<Widget> chips = [
       for (final choice in choices.entries)
-        FilterChip(
-          key: ValueKey(('label-filter', choice.key)),
-          label: Text(choice.value),
-          labelStyle: TextStyle(fontSize: 12, color: tokens.textSecondary),
-          labelPadding: EdgeInsets.symmetric(horizontal: dense ? 4 : 8),
-          padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
-          visualDensity: dense && !singleLine
-              ? VisualDensity.compact
-              : VisualDensity.standard,
-          materialTapTargetSize: dense && !singleLine
-              ? MaterialTapTargetSize.shrinkWrap
-              : MaterialTapTargetSize.padded,
-          backgroundColor: Colors.transparent,
-          selectedColor: tokens.textPrimary.withValues(alpha: .07),
-          side: BorderSide(color: tokens.divider),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          selected: selected.contains(choice.key),
-          onSelected: (value) {
-            final next = Set<LabelSelection>.of(selected);
-            value ? next.add(choice.key) : next.remove(choice.key);
-            onChanged(next);
-          },
+        _labelFilterChip(
+          context,
+          choice: choice,
+          selected: selected,
+          onChanged: onChanged,
+          tokens: tokens,
+          dense: dense,
         ),
     ];
     final Widget clearButton = TextButton(
       onPressed: () => onChanged({}),
       style: TextButton.styleFrom(
-        minimumSize: Size(48, dense && !singleLine ? 32 : 48),
-        visualDensity: dense && !singleLine
-            ? VisualDensity.compact
-            : VisualDensity.standard,
-        tapTargetSize: dense && !singleLine
-            ? MaterialTapTargetSize.shrinkWrap
-            : MaterialTapTargetSize.padded,
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
         foregroundColor: tokens.textSecondary,
-        textStyle: Theme.of(context).textTheme.labelLarge
-            ?.copyWith(fontSize: 12, fontWeight: FontWeight.w400),
+        textStyle: Theme.of(context).textTheme.labelMedium
+            ?.copyWith(fontWeight: FontWeight.w400),
       ),
       child: Text(copy.clear),
     );
@@ -114,16 +95,12 @@ final class LabelFilterBar extends StatelessWidget {
       style: TextButton.styleFrom(
         foregroundColor: tokens.textSecondary,
         iconSize: dense ? 16 : 18,
-        minimumSize: Size(48, dense && !singleLine ? 32 : 48),
+        minimumSize: const Size(48, 48),
         padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 12),
-        visualDensity: dense && !singleLine
-            ? VisualDensity.compact
-            : VisualDensity.standard,
-        tapTargetSize: dense && !singleLine
-            ? MaterialTapTargetSize.shrinkWrap
-            : MaterialTapTargetSize.padded,
-        textStyle: Theme.of(context).textTheme.labelLarge
-            ?.copyWith(fontSize: 12, fontWeight: FontWeight.w400),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
+        textStyle: Theme.of(context).textTheme.labelMedium
+            ?.copyWith(fontWeight: FontWeight.w400),
       ),
     );
     final Widget filterLabel = singleLine || dense
@@ -144,7 +121,10 @@ final class LabelFilterBar extends StatelessWidget {
           )
         : Text(
             copy.filter,
-            style: TextStyle(fontSize: 12, color: tokens.textMuted),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: tokens.textMuted,
+              fontWeight: FontWeight.w400,
+            ),
           );
     final Widget controls = Wrap(
       spacing: 6,
@@ -185,4 +165,42 @@ final class LabelFilterBar extends StatelessWidget {
           : controls,
     );
   }
+}
+
+Widget _labelFilterChip(
+  BuildContext context, {
+  required MapEntry<LabelSelection, String> choice,
+  required Set<LabelSelection> selected,
+  required ValueChanged<Set<LabelSelection>> onChanged,
+  required NoteFlowUiTokens tokens,
+  required bool dense,
+}) {
+  final isSelected = selected.contains(choice.key);
+  return FilterChip(
+    key: ValueKey(('label-filter', choice.key)),
+    label: Text(choice.value),
+    labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: isSelected ? tokens.textPrimary : tokens.textSecondary,
+      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+    ),
+    labelPadding: EdgeInsets.symmetric(horizontal: dense ? 4 : 8),
+    padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
+    visualDensity: VisualDensity.standard,
+    materialTapTargetSize: MaterialTapTargetSize.padded,
+    backgroundColor: Colors.transparent,
+    selectedColor: tokens.textPrimary.withValues(alpha: .12),
+    checkmarkColor: tokens.textPrimary,
+    side: BorderSide(
+      color: isSelected
+          ? tokens.textPrimary.withValues(alpha: .36)
+          : tokens.divider,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    selected: isSelected,
+    onSelected: (value) {
+      final next = Set<LabelSelection>.of(selected);
+      value ? next.add(choice.key) : next.remove(choice.key);
+      onChanged(next);
+    },
+  );
 }

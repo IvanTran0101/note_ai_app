@@ -23,12 +23,15 @@ final class _WebEditorControlsState extends State<WebEditorControls> {
     listenable: widget.focusNode,
     builder: (context, _) {
       final compact = MediaQuery.sizeOf(context).width < 720;
+      final scaledText = MediaQuery.textScalerOf(context).scale(14) > 14;
+      final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
       final visible =
           compact ||
           _hovered ||
           _controlFocused ||
           widget.focusNode.hasFocus ||
-          MediaQuery.accessibleNavigationOf(context);
+          accessibleNavigation ||
+          scaledText;
       return MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),

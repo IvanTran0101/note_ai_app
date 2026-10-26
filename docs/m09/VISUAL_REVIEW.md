@@ -1,5 +1,22 @@
 # M09 — UI similarity review (%)
 
+## ACTIVE UI43 — twenty-agent review (26–27 October 2026)
+
+User resumed broader UI/UX with20 Luna Max. Seventeen runtime patches, two
+verification-only UI scopes and one safe-area audit were reviewed by lead.
+Current actual Notion Web/native observations and full handoff table live in
+UI43_REVIEW.md and ui43/LIVE_REFERENCE.md. Lead also fixes48dp navigation targets,
+IME handoff, Settings overflow, note-row clipping, desktop Share intrinsic-layout
+assertion, format-label fallback-font overflow and label chooser whitespace.
+Final53:1076 runtime paths/fingerprintcc0fc644...fc4a, drift[]; Web59.8s/APK31.1s.
+Exact Chrome bundle and installedAPK hashes match. VM92/3skip plus chooser4pass
+(3 overlap); Chrome24 unique pass/2skip after repaired cases; strict61-path
+analysis clean. Actual53 chooser/Share operate with zero Chrome console errors;
+settled native53 production rail stays above Gboard with shell nav hidden.
+Actual51 native3-button/gesture/landscape and Settings200% inspected, separately
+versioned; no real iOS run. See UI43_REVIEW.md for receipts and initial failures.
+Both full-platform >=95% gates remain UNVERIFIED. No global M09 acceptance.
+
 ## UI42 — bounded gutter, toggle and File removal (24 October 2026)
 
 PASS only for the3 requested items on final50. Public first-line geometry aligns

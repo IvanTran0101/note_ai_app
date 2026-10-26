@@ -49,15 +49,24 @@ final class _EditorControlsState extends State<EditorControls> {
         : _selection();
   }
 
-  Widget _button(String label, IconData icon, VoidCallback action) => Listener(
-    onPointerDown: (_) => _pointer = _selection(),
-    child: EditorIconButton(
-      label: editorText(context, label),
-      icon: Icon(icon, size: 20),
-      onPressed: action,
-      compact: kIsWeb && MediaQuery.sizeOf(context).width >= 720,
-    ),
-  );
+  Widget _button(String label, IconData icon, VoidCallback action) {
+    final scale = MediaQuery.textScalerOf(context).scale(14);
+    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
+    final compact =
+        kIsWeb &&
+        MediaQuery.sizeOf(context).width >= 720 &&
+        scale <= 14 &&
+        !accessibleNavigation;
+    return Listener(
+      onPointerDown: (_) => _pointer = _selection(),
+      child: EditorIconButton(
+        label: editorText(context, label),
+        icon: Icon(icon, size: 20),
+        onPressed: action,
+        compact: compact,
+      ),
+    );
+  }
 
   void _blocks() {
     final snapshot = _takeSelection();

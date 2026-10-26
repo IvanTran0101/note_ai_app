@@ -14,22 +14,32 @@ final class AttachmentDocumentControls extends StatelessWidget {
   final ValueChanged<int> onPage;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      IconButton(
-        tooltip: 'Previous PDF page',
-        onPressed: !busy && page > 1 ? () => onPage(page - 1) : null,
-        icon: const Icon(Icons.chevron_left),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      physics: constraints.hasBoundedHeight
+          ? const ClampingScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          IconButton(
+            tooltip: 'Previous PDF page',
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            onPressed: !busy && page > 1 ? () => onPage(page - 1) : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(pages == 0 ? 'Loading PDF…' : 'Page $page / $pages'),
+          IconButton(
+            tooltip: 'Next PDF page',
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            onPressed: !busy && pages > 0 && page < pages
+                ? () => onPage(page + 1)
+                : null,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
       ),
-      Text(pages == 0 ? 'Loading PDF…' : 'Page $page / $pages'),
-      IconButton(
-        tooltip: 'Next PDF page',
-        onPressed: !busy && pages > 0 && page < pages
-            ? () => onPage(page + 1)
-            : null,
-        icon: const Icon(Icons.chevron_right),
-      ),
-    ],
+    ),
   );
 }

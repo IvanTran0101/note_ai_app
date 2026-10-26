@@ -6,11 +6,16 @@ import 'basic_block_commands.dart';
 
 /// Native touch presentation of the existing Basic block choices.
 final class BasicBlockGrid extends StatelessWidget {
+  static const double topPadding = 4;
+  static const double bottomPadding = 16;
+  static const double rowSpacing = 4;
+
   const BasicBlockGrid({
     super.key,
     required this.choices,
     required this.controller,
     this.shrinkWrap = false,
+    this.selectedChoice,
     required this.labelFor,
     required this.iconFor,
     required this.onChoose,
@@ -18,6 +23,7 @@ final class BasicBlockGrid extends StatelessWidget {
   final List<BasicBlockChoice> choices;
   final ScrollController? controller;
   final bool shrinkWrap;
+  final BasicBlockChoice? selectedChoice;
   final String Function(BasicBlockChoice) labelFor;
   final IconData Function(BasicBlockChoice) iconFor;
   final ValueChanged<BasicBlockChoice> onChoose;
@@ -28,19 +34,20 @@ final class BasicBlockGrid extends StatelessWidget {
       ? 1
       : 2;
 
-  static double rowHeightFor(BuildContext context) =>
-      math.max(48, MediaQuery.textScalerOf(context).scale(14) * 2.4 + 12);
+  static double rowHeightFor(BuildContext context) => math
+      .max(48.0, MediaQuery.textScalerOf(context).scale(14) * 2.4 + 12.0)
+      .toDouble();
 
   @override
   Widget build(BuildContext context) => GridView.builder(
     controller: controller,
     shrinkWrap: shrinkWrap,
     physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
-    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+    padding: const EdgeInsets.fromLTRB(16, topPadding, 16, bottomPadding),
     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: columnsFor(context),
       mainAxisExtent: rowHeightFor(context),
-      mainAxisSpacing: 4,
+      mainAxisSpacing: rowSpacing,
       crossAxisSpacing: 10,
     ),
     itemCount: choices.length,
@@ -49,16 +56,20 @@ final class BasicBlockGrid extends StatelessWidget {
 
   Widget _tile(BuildContext context, BasicBlockChoice choice) {
     final colors = Theme.of(context).colorScheme;
+    final selected = choice == selectedChoice;
+    final highlight = colors.onSurface.withValues(alpha: 0.075);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => onChoose(choice),
         borderRadius: BorderRadius.circular(6),
+        hoverColor: highlight,
+        splashColor: highlight,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Ink(
             decoration: BoxDecoration(
-              color: colors.surface,
+              color: selected ? highlight : colors.surface,
               borderRadius: BorderRadius.circular(6),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

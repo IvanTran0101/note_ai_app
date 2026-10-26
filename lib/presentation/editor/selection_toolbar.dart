@@ -245,15 +245,17 @@ final class SelectionToolbar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (desktop) ...[
-            const Icon(Icons.text_fields, size: 16),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            editorText(context, label),
-            style: desktop ? const TextStyle(fontSize: 14) : null,
-          ),
-          if (desktop) const Spacer(),
+          if (desktop)
+            Expanded(
+              child: Text(
+                editorText(context, label),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            )
+          else
+            Text(editorText(context, label)),
           Icon(desktop ? Icons.chevron_right : Icons.expand_more, size: 18),
         ],
       ),
