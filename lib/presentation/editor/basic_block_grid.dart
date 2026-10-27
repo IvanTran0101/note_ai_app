@@ -56,6 +56,9 @@ final class BasicBlockGrid extends StatelessWidget {
 
   Widget _tile(BuildContext context, BasicBlockChoice choice) {
     final colors = Theme.of(context).colorScheme;
+    final foreground = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFAAAAAA)
+        : const Color(0xFF686867);
     final selected = choice == selectedChoice;
     final highlight = colors.onSurface.withValues(alpha: 0.075);
     return Material(
@@ -69,7 +72,7 @@ final class BasicBlockGrid extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Ink(
             decoration: BoxDecoration(
-              color: selected ? highlight : colors.surface,
+              color: selected ? highlight : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -81,7 +84,7 @@ final class BasicBlockGrid extends StatelessWidget {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: _glyph(choice, colors),
+                      child: _glyph(choice, foreground),
                     ),
                   ),
                 ),
@@ -91,10 +94,7 @@ final class BasicBlockGrid extends StatelessWidget {
                     labelFor(choice),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colors.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 14, color: foreground),
                   ),
                 ),
               ],
@@ -105,7 +105,7 @@ final class BasicBlockGrid extends StatelessWidget {
     );
   }
 
-  Widget _glyph(BasicBlockChoice choice, ColorScheme colors) {
+  Widget _glyph(BasicBlockChoice choice, Color foreground) {
     if (choice.level != null || choice == basicBlockChoices.first) {
       return Text(
         choice.level == null ? 'T' : 'H${_headingSubscripts[choice.level!]}',
@@ -113,11 +113,11 @@ final class BasicBlockGrid extends StatelessWidget {
           fontSize: 22,
           fontFamily: 'serif',
           fontWeight: FontWeight.w400,
-          color: colors.onSurfaceVariant.withValues(alpha: .75),
+          color: foreground,
         ),
       );
     }
-    final color = colors.onSurfaceVariant.withValues(alpha: .75);
+    final color = foreground;
     if (choice.alias == 'toggle collapse') {
       return CustomPaint(
         size: const Size(24, 24),

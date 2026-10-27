@@ -1,6 +1,6 @@
 # UI43 — current direct reference and permitted adaptations
 
-26 October 2026. Lead opened the real authenticated Notion Web synthetic note at `https://app.notion.com/p/3fdf9c7a1aa081e4abc9c8066d02a314`. This is current UI observation, not a similarity score. Android inspection is in progress and will be appended. Supporting checked-in refs are mapped in **docs/m09/REF_MAPPING.md** (not inside ui43).
+26–27 October 2026. Lead opened the real authenticated Notion Web synthetic note at `https://app.notion.com/p/3fdf9c7a1aa081e4abc9c8066d02a314`. This is current UI observation, not a similarity score. Native observations are appended below. Supporting checked-in refs are mapped in **docs/m09/REF_MAPPING.md** (not inside ui43).
 
 ## Web observed now
 
@@ -38,3 +38,39 @@ These observations supplement the initial release and remain visual implementati
 - Native avatar menu was opened and visually inspected: dark elevated popup below avatar, about288dp wide, icon/label rows about48dp and a quiet divider after its first workspace-switch action. That action is not a NoteFlow feature and must not be added.
 - Native Settings was opened and settled: centered semibold Settings header/back at left, quiet divider; bold section headings,16ish setting labels with14ish multiline muted descriptions, controls at right and separators between rows, content above3-button navigation. Source captures ui43-notion-native-avatar and ui43-notion-native-settings-ready.
 - Web slash was opened in the synthetic note and visually inspected: about324wide/290high popup,33ish rows, muted12px Basic blocks caption,14px label and small glyph, neutral rounded selected fill, Media separator and Close menu/esc footer. Type to search is inline after the slash. Extra Suggested/Page/Link to page/database/media entries in Notion remain excluded from NoteFlow's approved13 Basic+File boundary.
+
+## Native completion of reference inspection27Oct — UI44
+
+Actual Notion native reopened on5556, same1080x2400/420dpi/dark/3-button mode.
+Settled screenshots were opened visually, because XML bounds can describe a
+WebView layout before its IME transition. One temporary keyboard tap changed
+synthetic 'first' to 'firsts'; restored through the visible Gboard 'first'
+suggestion, and the final XML/screenshot confirms Local first comparison again.
+No account information or invitation is copied into repository/evidence pages.
+
+- Selection: long press the paragraph in edit mode selects a word with two
+handles and an OS Cut/Copy/Select all floating menu. A single horizontally
+scrolling formatting rail replaces normal controls immediately above Gboard.
+Common B/I/U/strike/color controls are in that rail. Notion-only AI/comment/emoji
+actions stay excluded; NoteFlow's approved size and style controls stay. Its48dp
+targets are an intentional accessibility adaptation. Current NoteFlow53 selected
+rail was captured too; native OS clipboard-popup theme differs and remains a
+visual gap, not proof of >=95% parity.
+- Plus: replaces Gboard with a flat two-column Basic blocks palette, warm-dark
+#202020, no dark card behind each unselected choice. Basic caption is muted,
+icon/label neutral gray. At this device the panel starts near y1517 above
+3-button navigation y2274 (~288dp); row starts separated about138px (~52.6dp).
+NoteFlow53 starts y1458 (~311dp panel) and draws dark per-choice tiles. UI44
+removes those tiles and reduces the native panel cap while preserving safe
+scroll/IME/text-scale bounds and selected keyboard feedback. Page/Link to page
+in Notion are excluded, so Callout shifts into the fifth row by design.
+- Share: native sheet below status area with centered semibold title, blue
+Done on the right, rounded invite field, separated member/access sections.
+Notion Publish/general-access/share-link actions are outside NoteFlow scope;
+the current invite/Viewer/Editor/revoke state must remain. No invitation sent.
+The private account/avatar screenshot stays ignored locally, never uploaded.
+
+Current raw capture labels: ui43-notion-native-selected-body,
+ui43-notion-native-rail-normal, ui43-notion-native-palette,
+ui43-app-native-selected/palette and ui44-notion-native-share-current. UI43
+technical53 checks are complete; UI44 palette54 build/runtime is pending.

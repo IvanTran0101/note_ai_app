@@ -158,8 +158,14 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
 
   double _sheetHeight(BuildContext context, BoxConstraints constraints) {
     final media = MediaQuery.of(context);
+    // Native Notion replaces the keyboard with a compact two-column palette.
+    // Keep the existing safe-height bound for rotation, IME and enlarged text.
+    final native = !kIsWeb;
     final preferred = math
-        .min(math.max(media.size.height * .34, 240.0), 320.0)
+        .min(
+          math.max(media.size.height * (native ? .315 : .34), 240.0),
+          native ? 288.0 : 320.0,
+        )
         .toDouble();
     final available =
         (constraints.hasBoundedHeight
@@ -303,7 +309,14 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         )
-                      : TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+                      : TextStyle(
+                          fontSize: 14,
+                          color: widget.sheet && !kIsWeb
+                              ? Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFF999999)
+                                    : const Color(0xFF686867)
+                              : colors.onSurfaceVariant,
+                        ),
                 ),
               ),
             ),
@@ -376,35 +389,3 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     }
   }
 }
-
-const _vietnameseLabels = [
-  'Văn bản',
-  'Tiêu đề 1',
-  'Tiêu đề 2',
-  'Tiêu đề 3',
-  'Tiêu đề 4',
-  'Danh sách dấu đầu dòng',
-  'Danh sách đánh số',
-  'Việc cần làm',
-  'Danh sách thu gọn',
-  'Chú thích',
-  'Trích dẫn',
-  'Bảng',
-  'Đường phân cách',
-];
-const _headingSubscripts = ['', '₁', '₂', '₃', '₄'];
-const _icons = [
-  Icons.notes,
-  Icons.title,
-  Icons.title,
-  Icons.title,
-  Icons.title,
-  Icons.format_list_bulleted,
-  Icons.format_list_numbered,
-  Icons.check_box_outlined,
-  Icons.arrow_right,
-  Icons.lightbulb_outline,
-  Icons.format_quote,
-  Icons.table_chart_outlined,
-  Icons.horizontal_rule,
-];

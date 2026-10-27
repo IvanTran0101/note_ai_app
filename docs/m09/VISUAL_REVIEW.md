@@ -1,5 +1,17 @@
 # M09 — UI similarity review (%)
 
+## UI44 native palette/capsule refinement —27 October2026
+
+Lead directly compared real Notion native selection/+ and current NoteFlow53,
+then repaired dark per-choice tiles, over-tall palette and dark clipboard pill.
+Actual55 palette top1518 vs ref1517px, Text ink anchor within3px horizontally/
+2px vertically in the measured ROI; selected keyboard fill and48dp controls are
+explicit adaptations. Final File row target now48dp instead of~44 from compact
+density.15 scoped cases pass with2 repeated final target cases; strict5 clean,
+Web61.5s/APK31s and exact Chrome/device hashes verified. Actual55 captures and
+remaining limits: UI44_NATIVE_PALETTE.md. This component evidence establishes
+no platform percentage. Both>=95% visual gates remain UNVERIFIED.
+
 ## ACTIVE UI43 — twenty-agent review (26–27 October 2026)
 
 User resumed broader UI/UX with20 Luna Max. Seventeen runtime patches, two

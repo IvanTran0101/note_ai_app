@@ -1,5 +1,57 @@
 # M09 current work
 
+## Latest verified runtime55 —27 October2026
+
+UI44 flat native palette/light clipboard capsule and48dp final File row are
+verified. Final55 source1076/ae3a621f...7e4da drift[], Web61.5s/APK31s, Chrome
+JS8f47ff33...d3e86e and installedAPK0500a120...a3b41 match.15 distinct scoped
+cases pass; last2 palette cases rerun with compact-theme/48dp assertion pass;
+strict5-path analysis clean. Actual55 File semantics[0,2148][1080,2274] is48dp
+above3-button nav. Palette/selected-text inspected; Chrome chooser/Share zero
+console errors. UI44_NATIVE_PALETTE.md contains full identities and comparison.
+
+Notion progress/board must retain old images and both95% gates unchecked.
+Next: finish paired visual-state matrix (light/dark/empty/error/resize/focus,
+remaining dialogs and native safe-area cases), refine any remaining visible
+differences; broad typing/function acceptance remains deferred. Actual iOS is
+unverified. UI43 agent task list is complete; root now owns all files and no
+child is running. Do not respawn merely to repeat20 count. No new features.
+Runtime: Chrome8776 server6024 serves55; fixture22556 keeps8796/8797/8798;
+Android5554 installed55 with original font1/auto-rotation1/user_rotation0.
+Notion5556 closed, stay-awake restored1, data retained. Publication pending.
+
+Noon27Oct continuity check: source55 fingerprint still matches with drift[].
+The QA processes did not survive the interruption (ADB lists no devices and
+Node browser session is fresh); runtime observations above are the verified
+early27Oct captures/receipts, not a claim that apps are currently open. Restart
+the managed Chrome/static server and preserved AVDs for the next visual loop.
+Notion55 screenshots were re-uploaded because unattached uploads had expired;
+existing attached ref/history images are preserved. Do not reuse expired IDs.
+
+## Active UI44 — native palette comparison (27 October 2026)
+
+After publishing UI43, lead opened actual Notion native selection and+palette
+and compared installed53. Ref ui43-notion-native-selected-body/palette; app
+ui43-app-native-selected/palette. Actual selection rail is single-row above IME;
+NoteFlow keeps its approved formatting subset/size and48dp targets. Actual grid
+is flat on #202020;53 has unwanted dark tiles per row and is~22.5dp taller on
+this1080x2400/420dpi phone. Lead owns basic_block_grid/menu/choices for a bounded
+UI-only repair: transparent unselected rows, muted ref hierarchy and~288dp panel
+with existing short-screen/IME bounds. Preserve13 Basic+File, callbacks/scroll.
+The paired selected-word screenshots also confirm the Android system clipboard
+capsule stays light on Notion's dark document. Root includes only that visual
+repair in native_android_clipboard_menu.dart; action guards/callbacks/layout stay.
+Native clipboard suites must pass before54 packaging. Basic-menu label/icon
+constants moved into its existing choice-rendering part so menu stays<400lines.
+54 passed15 scoped cases/analyzer4 and built Web72.1s/APK33.4s; real54 palette
+matches ref panel top within1px and Text ink within3px horizontally/2px vertically.
+Actual scroll-to-bottom found File's compact ListTile only~44dp despite the48dp
+target contract. Lead fixes explicit minimum48/standard tile density and adds
+an assertion under the real compact theme. Final source now55; do not publish54
+as the final repair. Recheck tests/build/runtime identity and File hit rectangle.
+No further agents needed; existing20 deliveries remain reviewed. Technical53
+stays published while54 source checks/build/runtime are pending.95% unchecked.
+
 ## UI43 latest checkpoint53 — 27 October 2026
 
 All20 actual Luna Max deliveries are reviewed;17 runtime patches,2 verification
@@ -23,6 +75,13 @@ Runtime: local Chrome8776 serves53, fixture8796/8797/8798; Android5554 installed
 Notion5556 has been restarted for further direct native inspection. Root owns
 all delivered files and shared resources; no need to respawn completed workers.
 Graph still Transport closed; exact source fallback. _agent_ops absent.
+
+Publication:0910db2f2e337ba6af73bb337592b37606d18e2c pushed final-tuankiet,
+local/remote SHA match and divergence0/0.88 explicit source/test/docs paths only;
+unrelated .playwright-cli/ and final_project.md remain untracked. Notion progress
+updated and comparison board fetched with42 images (all39 prior retained+3 new),
+only UI43 technical checkpoint checked; Web/Android95% unchecked. This is a
+milestone during active UI work, not a pause or overall completion.
 
 ## ACTIVE UI43 — 20 Luna Max continuation (26 October 2026)
 

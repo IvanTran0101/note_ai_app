@@ -85,14 +85,11 @@ final class _ClipboardMenuPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
 
     return Material(
       key: const ValueKey('native-android-clipboard-menu'),
-      // Android's directly inspected selection capsule is a muted neutral gray.
-      color: theme.brightness == Brightness.light
-          ? const Color(0xFFE5E4EA)
-          : const Color(0xFF3A3A3A),
+      // The inspected Android system capsule stays light on a dark document.
+      color: const Color(0xFFE5E4EA),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       clipBehavior: Clip.antiAlias,
@@ -108,7 +105,7 @@ final class _ClipboardMenuPill extends StatelessWidget {
               for (final item in buttonItems)
                 TextButton(
                   style: TextButton.styleFrom(
-                    foregroundColor: colors.onSurface,
+                    foregroundColor: const Color(0xFF292929),
                     minimumSize: const Size(48, 48),
                     visualDensity: VisualDensity.standard,
                     padding: const EdgeInsets.symmetric(

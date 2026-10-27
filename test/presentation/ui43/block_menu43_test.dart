@@ -20,6 +20,7 @@ void main() {
 
   Widget sheetApp(SlashCommandController controller, {double textScale = 1}) =>
       MaterialApp(
+        theme: ThemeData(visualDensity: VisualDensity.compact),
         home: Builder(
           builder: (context) {
             final media = MediaQuery.of(context);
@@ -145,6 +146,8 @@ void main() {
 
     final file = find.text('File');
     expect(file, findsOneWidget);
+    final fileTarget = find.ancestor(of: file, matching: find.byType(ListTile));
+    expect(tester.getSize(fileTarget).height, greaterThanOrEqualTo(48));
     final fileBounds = tester.getRect(file);
     final viewportBounds = tester.getRect(
       find.byType(SingleChildScrollView).first,

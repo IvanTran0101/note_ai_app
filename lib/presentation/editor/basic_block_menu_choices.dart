@@ -86,6 +86,8 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
   }) {
     return ListTile(
       dense: true,
+      minTileHeight: 48,
+      visualDensity: VisualDensity.standard,
       selected: selected,
       title: Text(
         _label(choice, vi),
@@ -180,3 +182,35 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
     );
   }
 }
+
+const _vietnameseLabels = [
+  'Văn bản',
+  'Tiêu đề 1',
+  'Tiêu đề 2',
+  'Tiêu đề 3',
+  'Tiêu đề 4',
+  'Danh sách dấu đầu dòng',
+  'Danh sách đánh số',
+  'Việc cần làm',
+  'Danh sách thu gọn',
+  'Chú thích',
+  'Trích dẫn',
+  'Bảng',
+  'Đường phân cách',
+];
+const _headingSubscripts = ['', '₁', '₂', '₃', '₄'];
+const _icons = [
+  Icons.notes,
+  Icons.title,
+  Icons.title,
+  Icons.title,
+  Icons.title,
+  Icons.format_list_bulleted,
+  Icons.format_list_numbered,
+  Icons.check_box_outlined,
+  Icons.arrow_right,
+  Icons.lightbulb_outline,
+  Icons.format_quote,
+  Icons.table_chart_outlined,
+  Icons.horizontal_rule,
+];
