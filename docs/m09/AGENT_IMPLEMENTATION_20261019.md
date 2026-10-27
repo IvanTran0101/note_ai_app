@@ -1,5 +1,13 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI46 lead continuation —27 October2026
+
+Lead owns only native header inset and its geometry suite, after20 reviewed
+UI43 workers. VM6/Chrome6/analyzer2, final57 builds/identities and native portrait/
+landscape/gesture measurements verified. Existing Windows test-tool separator
+repair reused; runtime splash recovery is disclosed, not called fixed. See
+UI46_NATIVE_HEADER.md. No overall95% or broad functional acceptance.
+
 ## UI45 lead continuation —27 October2026 noon
 
 No new agents beyond20 real UI43 deliveries. Lead refined touch-open native

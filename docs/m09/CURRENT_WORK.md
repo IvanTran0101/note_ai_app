@@ -1,5 +1,54 @@
 # M09 current work
 
+## Active UI46 — native header inset, Web column verified (27Oct)
+
+Final57 verified: source1076/677bd684581e65429b64666cc10bad63aa4298ebbb06ca017379bd74f163da09,
+drift[]; Web69.9s/APK36.6s. Exact Chrome21,440,553bytes/eeb43102...04378b and
+installedAPKf7d23f9e...589a34 match. VM6/6, Chrome6/6, strict analyzer2 clean.
+See UI46_NATIVE_HEADER.md. Actual Back[26,181][152,307], More[928,181][1054,307]
+centers within1.5/2px horizontally,1px vertically of ref after dev strip. Actual
+landscape2400x1080 and portrait gesture verified; nav3-button/rotation1,0 restored.
+Notion board/progress updated with57, all prior images retained.
+
+Current runtime: static PID34152 serves57/8776; fixture17140 still local8796/7/8,
+AVDs5554/5556 retained/running. Post-install splash/null-root recurred; rotation
+refresh with a settled intermediate frame restores UI. Do not label this a
+cold-start PASS or claim its cause resolved. No app data/startup code changes.
+Native capture_ui46 helper dumps XML before PNG; still require expected labels
+and settled frame, not just successful command. Old failed/transitional captures
+remain ignored for audit. Temporary VM forward removed inUI45.
+
+Actual Notion Web Settings Light/Dark/Search inspected27Oct; app56 Settings and
+57 editor/Share/chooser/Search Dark viewed, zero console errors. Both Web themes
+restored Light. Found older complete synthetic fixture in the second same-title
+Search result (paragraph/H1-H3/list/task/quote/file); noon duplicate remains
+partial paragraph/H1/H2. Use existing complete fixture for next comparison.
+Legacy file position/blank-line differences must be disclosed, not hidden.
+
+Next UI47: finish responsive/state matrix, starting with Search popup placement
+at additional real Notion viewports. Search600px width matches;1280x720 ref top
+64.8px (~9vh), app product top60px. Verify a second viewport before changing.
+Recents currently inherits existing pinned-first sort; no code changed. Keep
+query/sort/projections; actual last-opened tracking would require a feature
+proposal/approval. Both95% gates remain UNVERIFIED; no broad acceptance yet.
+
+UI45 published b3ae6bdd2053849afb16adfedda1143cc7c430d9, remote verified0/0;
+9 explicit files. Notion progress publication updated. Actual stable matched
+Web fixture shows title ink x416/y187 with20px LOCAL DEV strip vs ref x416/y167:
+the document column/title already align. Earlier short-title x453 was from a
+transition/state mismatch, not adequate evidence for changing layout. Extra body
+offset is the approved label row. No document column source edits.
+
+Confirmed native header gap: app56 Back target[0,181][126,307], More[954,181]
+[1080,307]; actual Notion Back[42,144][139,241], Actions[939,144][1039,241].
+At420dpi,10dp symmetric content inset puts app centers within~1.25px of ref,
+while keeping48dp targets. Root owns common/note_flow_page_header.dart and a
+dedicated UI46 geometry test; desktop/compact Web unchanged. Wrapping threshold
+must use available width after inset; SafeArea still owns physical cutouts.
+Graph Tier2 generation06:13:11Z, header incoming1 production callerSurface+
+tests, header/inset/surface current source read after metadata_changed coverage.
+Continue native paired states after review; global95% gates remain UNVERIFIED.
+
 ## Active UI45 — touch/keyboard palette state and paired matrix (27Oct noon)
 
 UI44 published87b1916bea71d912f6163dad539cacb3ea28373f, local/remote0/0.
@@ -38,14 +87,14 @@ Original auto-rotation1/user_rotation0 restored; no startup code/data edits.
 Temporary VM forward19356 removed. First post-action screenshots were transitional;
 use -settled capture. Notion5556 stay-awake original3 retained.
 
-New synthetic visual fixture is partial (paragraph/H1 only); input automation
+New noon synthetic visual fixture is partial (paragraph/H1/H2); input automation
 lost focus after Enter. Do not count it as complete matched fixture or typing
 acceptance, do not change clipboard/import contracts merely to seed it.
 
-Next: actual Notion Web1280x720 expanded sidebar has title box x407.4/y156/w720,
-body x413.4/y226/w708; UI43 app short-title ink x453.5 currently. Investigate
-content-column/typography layout through graph before editing; approved label
-row is intentional extra content and must remain. Complete paired states.
+Earlier investigation, resolved by the stable fixture comparison above:
+actual Notion Web1280x720 expanded sidebar has title box x407.4/y156/w720,
+body x413.4/y226/w708. Earlier x453.5 short-title frame was not comparable;
+no column change justified. Approved label row remains. Complete paired states.
 
 ## Latest verified runtime55 —27 October2026
 

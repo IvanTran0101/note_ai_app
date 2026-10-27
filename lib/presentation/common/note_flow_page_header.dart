@@ -86,20 +86,27 @@ final class NoteFlowPageHeader extends StatelessWidget {
       context,
       availableWidth: constraints.maxWidth,
     );
-    final wrapActions = constraints.maxWidth < 360 && actions.length > 2;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(minHeight: compact ? 48 : 44),
-          child: _row(context, compact: compact, inlineActions: !wrapActions),
-        ),
-        if (wrapActions)
-          Align(
-            alignment: Alignment.centerRight,
-            child: Wrap(alignment: WrapAlignment.end, children: actions),
+    // Match the native page controls' inset without shrinking their48dp targets.
+    // SafeArea already owns physical display cutouts; Web keeps its shell inset.
+    final sideInset = NoteFlowLayout.isNativePhone(context) ? 10.0 : 0.0;
+    final wrapActions =
+        constraints.maxWidth - sideInset * 2 < 360 && actions.length > 2;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: sideInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: compact ? 48 : 44),
+            child: _row(context, compact: compact, inlineActions: !wrapActions),
           ),
-      ],
+          if (wrapActions)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(alignment: WrapAlignment.end, children: actions),
+            ),
+        ],
+      ),
     );
   }
 

@@ -2,6 +2,23 @@
 
 ## Active noon27Oct — UI45 continuation after published UI44
 
+UI45 published b3ae6bd (remote SHA verified0/0). UI46 final57 verified: root owns
+native page-header10dp side inset and targeted geometry/accessibility checks.
+Actual Notion centers Back/More near90/989px; app56 near63/1017px at420dpi.
+Keep48dp targets and system SafeArea; desktop/compact Web retain their geometry.
+57 actual Back/More centers are within1.5/2px horizontally of ref; portrait3-button,
+landscape and gesture inspected, original3-button/rotation1,0/font1 restored.
+VM6/Chrome6 pass, analyzer2 clean, Web69.9s/APK36.6s; exact bundle/device identity
+and drift[] verified. UI46_NATIVE_HEADER.md records proof and recurring post-
+install splash/null-root recovery (no cold-start PASS). Notion board/progress
+updated. Continue responsive Search/state matrix before broad acceptance.
+Settled matched Web fixture confirms column/title already align (earlier x453
+was a transition/state mismatch); do not change the document column. Labels
+remain below title. No new features, broad acceptance or95% claim.
+The older full synthetic fixture is available in Search's second same-title
+result. Use it; the noon-created duplicate is partial, not the complete fixture.
+Both Web themes were restored to original Light after direct Dark comparison.
+
 UI43 twenty-agent review and UI44 native repair are published0910db2/87b1916.
 Final55 passed scoped checks; Notion board46 images preserves prior history.
 UI45 final56 verified: touch-open has no initial Text fill; keyboard feedback

@@ -4,6 +4,20 @@
 
 ## Web observed now
 
+UI46 noon27Oct: Preferences Light/Dark directly inspected. Theme selector28px,
+title26px/helper16px, label14px/helper13px; app keeps its smaller capability set.
+Real Notion Search1280x720 Dark: dialog600x639.2 atx340/y64.8, input16px/24px at
+x390/y76.8. Query is synthetic M09 UI reference. Existing app Search same600px
+width/product top60px, own keyword/label/sort projection preserved. Both Web
+themes restored Light. Complete existing fixture was found via second same-title
+app Search row; noon duplicate remains partial. No similarity percentage.
+
+Native UI46: actual Notion Back center90.5/Actions989 vs app57 Back89/More991px;
+app vertical center244 minus52.5dev=191.5 vs ref192.5.10dp inset now keeps48dp
+targets. Actual3-button/landscape/gesture inspected; original nav/rotation restored.
+Post-install splash required rotation refresh again, cause unresolved. This
+component proof does not establish whole-native95% or cold-start acceptance.
+
 Noon27Oct refreshed actual Web with sidebar expanded1280x720, scrollTop0:
 title contenteditable box x407.4/y156/w720/h48,40px/48line-height/700; paragraph
 x413.4/y226/w708/h28,16px/24line-height; H1 x413.4/y290,30px/39line-height/600.

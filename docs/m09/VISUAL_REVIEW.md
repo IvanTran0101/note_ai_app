@@ -1,5 +1,15 @@
 # M09 — UI similarity review (%)
 
+## UI46 native header —27 October2026
+
+Final57 adds native10dp side inset inside SafeArea, retaining48dp targets and
+unchanged Web geometry. Actual portrait centers within1.5/2px horizontally/1px
+vertically of Notion after subtracting dev strip. Landscape and gesture verified,
+original nav/rotation restored. VM6/Chrome6 pass, analyzer2 clean, Web69.9s/APK36.6s,
+exact source/Chrome/device identity verified. UI46_NATIVE_HEADER.md records
+measurements and repeated post-install splash recovery; no cold-start PASS.
+Both95% gates remain UNVERIFIED. Continue responsive/paired-state matrix.
+
 ## UI45 touch palette —27 October2026
 
 Final56 removes initial native Text selection fill, preserves keyboard highlight
