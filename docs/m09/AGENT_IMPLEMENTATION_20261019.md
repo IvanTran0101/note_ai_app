@@ -1,5 +1,17 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI47 lead continuation and isolated UI48 draft —28 October2026
+
+Root implements/reviews Search geometry and modal/dock ownership repairs, tests,
+build58, exact Chrome/APK identity, actual5 viewport/IME inspection, Notion and
+publication. UI47_SEARCH_RESPONSIVE.md contains proof/limits. Twenty real UI43
+deliveries remain reviewed. One additional actual Luna Max empty_search48_draft
+owned only three ignored output artifacts; no production/runtime overlap.
+Root reviewed refinements, identified a semantics-test API correction and the
+stable-header requirement before integration. Draft tests unrun, no blind PASS.
+Thus21 actual workers across the task, one additional in this continuation.
+Both95% gates remain open; continue UI48 after UI47 publication.
+
 ## UI46 lead continuation —27 October2026
 
 Lead owns only native header inset and its geometry suite, after20 reviewed

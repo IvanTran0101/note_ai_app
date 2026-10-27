@@ -1,5 +1,16 @@
 # M09 — UI similarity review (%)
 
+## UI47 responsive Search —28 October2026
+
+Settled direct Notion top9vh/width600/full-width narrow/cap700/bottom16 now maps
+to58. Five actual Chrome viewports retain one field/query, Close/Escape after
+animation, zero console errors. Duplicate dock/modal field-suppression repaired.
+Six distinct scoped VM/Chrome cases, strict5 clean, Web95.9s/APK76.8s, exact
+source/bundle/device identities and drift[] verified. Native phone Search/IME
+retained; first null-root then wake/settled Home, no startup-fix claim. See
+UI47_SEARCH_RESPONSIVE.md. Paired crops on Notion keep the top-left empty-state
+gap visible: UI48 is next. Both95% gates remain UNVERIFIED.
+
 ## UI46 native header —27 October2026
 
 Final57 adds native10dp side inset inside SafeArea, retaining48dp targets and

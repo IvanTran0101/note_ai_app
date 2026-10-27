@@ -1,5 +1,50 @@
 # M09 current work
 
+## Current28Oct — UI47 verified58; publish, then UI48 empty state
+
+UI47 source/runtime verified; UI47_SEARCH_RESPONSIVE.md is the proof ledger.
+Five geometry cases plus integrated query/resize/close checked on VM/Chrome;
+final integration1/1 on each after two production dock guards. Six distinct
+cases, not rerun sums. Strict5 final paths clean. Real Notion reference has
+top9vh, width600/full-width below600, height700 cap, bottom16. Five settled
+viewports measured; transient retained height excluded. Viewport reset Light.
+
+Root extracted DashboardSearchDialog and keeps Web popup composition on narrow
+resize. Real duplicate outside dock and native modal field suppression fixed;
+one field/no dock/query preserved/close once asserted across platforms. Query,
+sort, labels, permissions, callbacks and data stay with the existing page.
+
+Final58 Web95.9s/APK76.8s, source1077/0f2808092ccd4a87ede8be359b7c50e16ee08e06757fc8b1be12daa95405136a,
+drift[]. Chrome21,441,884bytes/218c7909...63fa7f2 and installedAPK285ba9c2...423545
+match. Actual Chrome5 viewport resizes preserve one field/query; Escape/Close
+work after route animation, zero console errors. ui47-web58-runtime.json.
+Native58 Home/Search after wake/settle, Close1381-1507 above keyboard1518;
+initial null-root retained as a limit, no cold-start/cause-fixed claim. No data
+cleared/rotation needed this run. Nav3-button/rotation1,0/font1 unchanged.
+
+Runtime: fixture24788 local8796/7/8; static4420 serves58 on8776; AVD5554/5556
+retained. Python capture helper requires -X utf8, fresh XML before PNG and
+expected labels. First server reload before bind failed; HTTP200 verified then
+retry matched bundle. Keep runtime/logs/credentials out of Git. Preserve the
+unrelated .playwright-cli/ and final_project.md untracked files.
+
+Notion progress/board updated with measurements and paired popup crops, preserving
+previous48 images (now50). Both>=95% gates UNVERIFIED; no broad acceptance.
+Publish explicit UI47 source/test/docs paths to final-tuankiet, recheck remote.
+Then integrate UI48: actual Notion empty centered, app58 still top-left. One
+additional Luna Max completed ONLY output/m09/ui48_draft48 artifacts, no runtime
+edits. Twenty earlier UI43 workers remain reviewed:21 actual across this task.
+
+Root reviewed refined draft: remaining-space sliver/always-scrollable approach
+is useful. Fix its test SemanticsNode.hasAction API to getSemanticsData().hasAction
+when integrating. Tests unrun; no worker PASS accepted blindly. Keep header's
+TextField element stable as query transitions between results and empty; a
+conditional replacement of the whole scroll tree risks focus/IME loss. Integrate
+as one finite Web popup scroll layout for both states, not nested unbounded in
+ListView. Native empty layout unchanged; Clear search existing48dp action only.
+No Deleted pages/AI/recency feature. Root owns lib/test/docs/build/runtime/Git;
+no active child writes. Continue full UI matrix; actual iOS still unverified.
+
 ## Active UI46 — native header inset, Web column verified (27Oct)
 
 Final57 verified: source1076/677bd684581e65429b64666cc10bad63aa4298ebbb06ca017379bd74f163da09,

@@ -1,5 +1,23 @@
 # UI43 — current direct reference and permitted adaptations
 
+## UI47 live Search —28 October2026
+
+Authenticated Notion Web1280x720 left340/top64.8/600x639.2;1280x900 left340/top81/
+600x700;1480x1000 left440/top90/600x700;500x900 left0/top81/500x700;1280x540
+left340/top48.6/600x475.4. Settled CSS confirms700 cap, not earlier transitional
+retained640. Original1280x720/Light restored. Synthetic qxzvbnmptkswj gave true
+No results; earlier zzui47... fuzzy-matched real results and was not empty proof.
+Popup safe crops attached on comparison board. Existing app empty action stays
+Clear search; Deleted pages/AI are outside capabilities.
+
+App58 real5 viewport resize follows route9vh excluding20px dev strip, retains
+one field/query and dismisses by Escape/Close after animation. The empty group
+is still top-left, next UI48 gap; geometry match is not a platform percentage.
+Android58 Search Close1381-1507 above keyboard1518, original3-button/rotation1,0/
+font1 retained. First null-root after install recovered after wake/settle without
+rotation; do not claim startup fixed. Notion native Search/IME observed directly
+today. Actual iOS and global95% matrix still unverified.
+
 26–27 October 2026. Lead opened the real authenticated Notion Web synthetic note at `https://app.notion.com/p/3fdf9c7a1aa081e4abc9c8066d02a314`. This is current UI observation, not a similarity score. Native observations are appended below. Supporting checked-in refs are mapped in **docs/m09/REF_MAPPING.md** (not inside ui43).
 
 ## Web observed now

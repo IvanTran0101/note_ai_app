@@ -913,10 +913,9 @@ void main() {
         find.byKey(DashboardPage.desktopSearchSurfaceKey),
       );
       expect(desktopSearchRect.width, closeTo(600, 1));
-      expect(desktopSearchRect.height, closeTo(704, 1));
-      // The approved reference alignment uses a20px upward offset at this
-      // The compact desktop search is anchored60px below the viewport top.
-      expect(desktopSearchRect.top, closeTo(60, 1));
+      expect(desktopSearchRect.height, closeTo(kIsWeb ? 700 : 704, 1));
+      // Web follows the measured 9vh anchor; native dialog geometry stays.
+      expect(desktopSearchRect.top, closeTo(kIsWeb ? 81 : 60, 1));
       expect(
         find.descendant(
           of: desktopSearchOverlay,
@@ -965,17 +964,11 @@ void main() {
           matching: find.byType(DashboardNoteCard),
         );
         expect(
-          find.descendant(
-            of: queryCard,
-            matching: find.text('Alpha'),
-          ),
+          find.descendant(of: queryCard, matching: find.text('Alpha')),
           findsOneWidget,
         );
         expect(
-          find.descendant(
-            of: queryCard,
-            matching: find.text('Alpha body'),
-          ),
+          find.descendant(of: queryCard, matching: find.text('Alpha body')),
           findsOneWidget,
         );
       } else {
@@ -995,6 +988,25 @@ void main() {
         find.byKey(DashboardPage.layoutToggleKey).hitTestable(),
         findsNothing,
       );
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      final narrowSurface = tester.getRect(
+        find.byKey(DashboardPage.desktopSearchSurfaceKey),
+      );
+      expect(narrowSurface.left, closeTo(kIsWeb ? 0 : 24, 1));
+      expect(narrowSurface.width, closeTo(kIsWeb ? 500 : 452, 1));
+      if (kIsWeb) expect(find.text('Search'), findsNothing);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        'Alpha',
+      );
+      expect(tester.takeException(), isNull);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('dashboard-search-close')),

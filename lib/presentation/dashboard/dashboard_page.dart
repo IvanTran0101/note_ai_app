@@ -16,6 +16,7 @@ import 'dashboard_content.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_localizations.dart';
 import 'dashboard_search_dock.dart';
+import 'dashboard_search_dialog.dart';
 import 'dashboard_state.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
@@ -357,51 +358,18 @@ final class DashboardPageState extends State<DashboardPage> {
       barrierColor: const Color(0x26000000),
       builder: (BuildContext _) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) {
-          final Size viewport = MediaQuery.sizeOf(context);
-          final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(
-            context,
-          );
-          final double dialogWidth = (viewport.width - 2 * NoteFlowSpacing.xl)
-              .clamp(0.0, 600.0)
-              .toDouble();
-          final double dialogHeight = (viewport.height - 80)
-              .clamp(0.0, 704.0)
-              .toDouble();
-          return Dialog(
+          return DashboardSearchDialog(
             key: DashboardPage.desktopSearchOverlayKey,
-            alignment: Alignment.topCenter,
-            insetPadding: const EdgeInsets.fromLTRB(
-              NoteFlowSpacing.xl,
-              60,
-              NoteFlowSpacing.xl,
-              20,
-            ),
-            constraints: BoxConstraints(maxWidth: 600, maxHeight: dialogHeight),
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF202020)
-                : tokens.elevatedSurface,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: tokens.divider),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: SizedBox(
-              key: DashboardPage.desktopSearchSurfaceKey,
-              width: dialogWidth,
-              height: dialogHeight,
-              child: LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) =>
-                    _buildBody(
-                      context,
-                      constraints,
-                      DashboardCopy.of(context),
-                      searchOpenOverride: true,
-                      searchOverlay: true,
-                      dialogSetState: setDialogState,
-                    ),
-              ),
-            ),
+            surfaceKey: DashboardPage.desktopSearchSurfaceKey,
+            builder: (BuildContext context, BoxConstraints constraints) =>
+                _buildBody(
+                  context,
+                  constraints,
+                  DashboardCopy.of(context),
+                  searchOpenOverride: true,
+                  searchOverlay: true,
+                  dialogSetState: setDialogState,
+                ),
           );
         },
       ),
@@ -465,7 +433,11 @@ final class DashboardPageState extends State<DashboardPage> {
       backgroundColor: compact && (!_searchOpen || !kIsWeb)
           ? NoteFlowWorkspaceTokens.of(context).compactHomeSurface
           : colors.surface,
-      bottomNavigationBar: compact && widget.embeddedInWorkspace && _searchOpen
+      bottomNavigationBar:
+          compact &&
+              widget.embeddedInWorkspace &&
+              _searchOpen &&
+              !_desktopSearchDialogOpen
           ? _buildCompactSearchDock(context, copy)
           : null,
       appBar: compact && widget.embeddedInWorkspace
@@ -598,7 +570,8 @@ final class DashboardPageState extends State<DashboardPage> {
       onRetry: reload,
       onRefresh: reload,
       embeddedInWorkspace: widget.embeddedInWorkspace,
-      dockCompactSearch: compact && widget.embeddedInWorkspace,
+      dockCompactSearch:
+          !searchOverlay && compact && widget.embeddedInWorkspace,
       searchOverlay: searchOverlay,
     );
   }

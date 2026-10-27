@@ -1,5 +1,25 @@
 # MUST REMEMBER
 
+## Active28Oct — verified UI47, next UI48 before broad acceptance
+
+Read docs/m09/CURRENT_WORK.md and UI47_SEARCH_RESPONSIVE.md. Final58 verified:
+source1077/0f280809...05136a drift[], Web95.9s/APK76.8s; Chrome218c7909...63fa7f2
+and installedAPK285ba9c2...423545 match. Six distinct targeted cases on VM/Chrome,
+strict5 clean, real resize5 viewports/one field/query retained/Close/Escape. UI47
+fixes duplicate dock and modal's stale compact dock flag; native phone dock stays.
+Actual Notion settled Search: top9vh/width600/full-width under600/cap700/bottom16.
+Native58 Search controls above IME; initial null-root recovered after wake/settle,
+no startup-cause-fixed/cold-start acceptance claim. No data cleared. Notion board
+has paired popup crops, progress updated. Publish UI47 explicit paths then UI48.
+
+Next: center Web empty Search as actual Notion. One additional Luna Max drafted
+only ignored output/m09/ui48_draft48;20 UI43 deliveries already reviewed,21 actual
+across this task. Root must fix the draft semantics test API and test it. Keep
+the search header/field element stable across empty/result transitions; use a
+single bounded Web scroll layout. Preserve native empty/dock and existing Clear
+search, no Deleted pages/AI or new feature. Both Web/Android>=95% UNVERIFIED;
+continue UI, do not switch to broad functional acceptance. No invented score.
+
 ## Active noon27Oct — UI45 continuation after published UI44
 
 UI45 published b3ae6bd (remote SHA verified0/0). UI46 final57 verified: root owns

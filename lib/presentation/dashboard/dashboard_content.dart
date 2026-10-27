@@ -79,6 +79,11 @@ final class DashboardContent extends StatelessWidget {
   bool _readable(NoteDto n) =>
       readable?.call(n) ?? (!n.isProtected && n.contentAvailable);
 
+  // A Web popup keeps its search composition when the host window narrows.
+  // Native search still uses the existing compact dock.
+  bool _compactLayout(BuildContext context) =>
+      NoteFlowLayout.isCompact(context) && !(kIsWeb && searchOverlay);
+
   List<NoteDto> get visibleNotes {
     return sortNotes(
       queryNotes(
@@ -114,7 +119,7 @@ final class DashboardContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<NoteDto> filteredNotes = _filtered(context);
     final double viewportWidth = MediaQuery.sizeOf(context).width;
-    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool compact = _compactLayout(context);
     final bool showingDesktopSearchHistory =
         searchOpen && searchOverlay && !compact && searchText.trim().isEmpty;
     return RefreshIndicator(
@@ -723,7 +728,7 @@ final class DashboardContent extends StatelessWidget {
     List<NoteDto> items,
     double viewportWidth,
   ) {
-    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool compact = _compactLayout(context);
     final bool compactHomeList =
         compact &&
         !searchOpen &&
