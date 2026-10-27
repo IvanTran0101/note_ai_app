@@ -1,5 +1,52 @@
 # M09 current work
 
+## Active UI45 — touch/keyboard palette state and paired matrix (27Oct noon)
+
+UI44 published87b1916bea71d912f6163dad539cacb3ea28373f, local/remote0/0.
+Notion board now46 images, all44 prior retained+2 final55 app screenshots;
+progress9 images/child preserved. Both95% gates unchecked. Restarted preserved
+AVDs (app5554/ref5556); new IAB tab opened actual synthetic Notion Web (logged-in
+and current document visible). No additional workers: all20 UI43 scopes handed off.
+
+UI45 final56:2 palette cases pass and strict analyzer3 source/test paths clean.
+Web91s/APK69.8s, source1076/b6bc5708...43dd8 drift[]; received Chrome21,440,443
+bytes/24718e23...00bd1 and installedAPK20109305...afe40 match. Settled native
+palette has no initial Text fill; Chrome chooser2checkboxes/Cancel, Share/Close,
+contextual+/13Basic+File/Escape zero console errors. UI45_TOUCH_PALETTE.md owns
+the evidence/limitations. Notion progress/board updated, prior images retained.
+
+Lead owned UI45: basic_block_menu.dart/choices + existing block_menu43_test only
+for a confirmed remaining visual discrepancy: native touch-open initially paints
+Text selected; actual Notion palette starts entirely flat. Keep highlight after
+keyboard navigation, no public controller/API/storage changes. Then continue
+paired light/dark/menu/dialog/resize states. Do not add features or start broad
+functional acceptance.56 is the current installed/Web artifact.
+
+Graph recovered Tier2 generation27Oct05:13:09Z;7 candidate paths checked, no
+recorded gap but metadata_changed. Exact source fallback performed. Controller
+class/full source and menu state/snippets confirm selected=0 is shared menu
+navigation, not a committed block action. Positive move symbol found by graph;
+exact inbound trace returned0 but editor_shortcuts.dart:46 source confirms its
+arrow-key caller. No negative/exhaustive claim. Coverage for3 changed paths was
+rechecked, metadata_changed/no recorded gap; exact current source read.
+
+Current noon runtime: Python static PID22000 serves56 on8776; fixture parent
+17140 serves local8796/8797/8798, not AWS. AVD5554/5556 are running, preserved
+userdata. ADB daemon hang recovered with official restart; NoteFlow white splash
+was stale despite a built/rasterized frame, visible after rotation refresh.
+Original auto-rotation1/user_rotation0 restored; no startup code/data edits.
+Temporary VM forward19356 removed. First post-action screenshots were transitional;
+use -settled capture. Notion5556 stay-awake original3 retained.
+
+New synthetic visual fixture is partial (paragraph/H1 only); input automation
+lost focus after Enter. Do not count it as complete matched fixture or typing
+acceptance, do not change clipboard/import contracts merely to seed it.
+
+Next: actual Notion Web1280x720 expanded sidebar has title box x407.4/y156/w720,
+body x413.4/y226/w708; UI43 app short-title ink x453.5 currently. Investigate
+content-column/typography layout through graph before editing; approved label
+row is intentional extra content and must remain. Complete paired states.
+
 ## Latest verified runtime55 —27 October2026
 
 UI44 flat native palette/light clipboard capsule and48dp final File row are

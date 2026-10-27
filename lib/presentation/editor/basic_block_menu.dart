@@ -51,6 +51,7 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
   SlashCommandController get controller => widget.controller;
   int _selected = 0;
   String _query = '';
+  bool _nativeSelectionVisible = false;
   bool get _desktopCompact =>
       BasicBlockMenu.isCompactDesktop(context) && !widget.sheet;
   List<BasicBlockChoice> get _basicChoices => controller.choices
@@ -79,11 +80,15 @@ final class _BasicBlockMenuState extends State<BasicBlockMenu> {
     if (oldWidget.controller != controller) {
       oldWidget.controller.removeListener(_refresh);
       controller.addListener(_refresh);
+      _nativeSelectionVisible = false;
+      _selected = controller.selected;
+      _query = controller.query;
     }
   }
 
   void _refresh() {
     if (!mounted) return;
+    _nativeSelectionVisible |= controller.selected != _selected;
     setState(() {});
     if (_selected == controller.selected && _query == controller.query) return;
     _selected = controller.selected;

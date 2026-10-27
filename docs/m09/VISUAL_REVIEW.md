@@ -1,5 +1,14 @@
 # M09 — UI similarity review (%)
 
+## UI45 touch palette —27 October2026
+
+Final56 removes initial native Text selection fill, preserves keyboard highlight
+and scroll.2 scoped tests/analyzer3 clean, Web91s/APK69.8s, source1076/b6bc5708
+drift[]. Actual Chrome bundle and installedAPK match; chooser/Share/+ operate
+without console errors, settled native touch palette visually verified against
+Notion. See UI45_TOUCH_PALETTE.md. Both platform95% gates stay UNVERIFIED;
+continue column/spacing and complete paired-state matrix before broad acceptance.
+
 ## UI44 native palette/capsule refinement —27 October2026
 
 Lead directly compared real Notion native selection/+ and current NoteFlow53,

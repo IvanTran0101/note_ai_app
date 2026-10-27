@@ -4,6 +4,14 @@
 
 ## Web observed now
 
+Noon27Oct refreshed actual Web with sidebar expanded1280x720, scrollTop0:
+title contenteditable box x407.4/y156/w720/h48,40px/48line-height/700; paragraph
+x413.4/y226/w708/h28,16px/24line-height; H1 x413.4/y290,30px/39line-height/600.
+Title ink is inset within the box. The prior collapsed-sidebar x280 observation
+below belongs to that earlier state. Native current touch-open + palette is
+entirely unselected;56 now removes initial Text fill while keyboard feedback
+remains. Ref/current app56 settled captures are attached on the board. No score.
+
 - 1280x720 viewport, paper-white document, quiet 44px top breadcrumb/actions strip. Sidebar starts collapsed; no large floating status card in the content.
 - Content left approximately280, title top160, width about720. Large bold title around40px, normal body16px. Heading1/2/3 visibly30/24/20; dark neutral text, muted secondary metadata. The synthetic note contains an empty block between H1/H2; do not copy its accidental blank line as universal heading spacing.
 - File is a plain inline row: small file glyph, filename16px, lighter smaller `67 B` on the same line. No decorative card. Lists/tasks/quote align to the document column; quote has a thin dark leading rule. Keep established UI42 gutter/toggle/removal contracts.

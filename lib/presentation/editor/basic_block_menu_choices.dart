@@ -15,7 +15,8 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
               controller: null,
               shrinkWrap: true,
               selectedChoice:
-                  controller.selected >= 0 &&
+                  _nativeSelectionVisible &&
+                      controller.selected >= 0 &&
                       controller.selected < controller.choices.length
                   ? controller.choices[controller.selected]
                   : null,
@@ -30,6 +31,7 @@ extension _BasicBlockChoiceRows on _BasicBlockMenuState {
                 choice,
                 vi,
                 selected:
+                    _nativeSelectionVisible &&
                     controller.choices.indexOf(choice) == controller.selected,
               ),
           ],

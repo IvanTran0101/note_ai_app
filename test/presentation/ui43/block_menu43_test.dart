@@ -71,6 +71,13 @@ void main() {
       expect(BasicBlockMenu.desktopPopupHeight, 290);
       await tester.pumpWidget(sheetApp(controller, textScale: 2));
       expect(tester.takeException(), isNull);
+      final initialTextInk = tester.widget<Ink>(
+        find.ancestor(of: find.text('Text'), matching: find.byType(Ink)).first,
+      );
+      expect(
+        (initialTextInk.decoration! as BoxDecoration).color,
+        Colors.transparent,
+      );
       expect(basicBlockChoices, hasLength(13));
       expect(controller.choices.map((choice) => choice.label), [
         ...basicBlockChoices.map((choice) => choice.label),

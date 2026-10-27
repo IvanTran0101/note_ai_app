@@ -1,5 +1,16 @@
 # MUST REMEMBER
 
+## Active noon27Oct — UI45 continuation after published UI44
+
+UI43 twenty-agent review and UI44 native repair are published0910db2/87b1916.
+Final55 passed scoped checks; Notion board46 images preserves prior history.
+UI45 final56 verified: touch-open has no initial Text fill; keyboard feedback
+remains.2 targeted cases/analyzer3 pass, Web91s/APK69.8s, source1076/b6bc5708
+drift[]; actual Chrome and installedAPK hashes match. Notion board/progress
+updated; see UI45_TOUCH_PALETTE.md. Continue paired Web column/header spacing
+and remaining light/dark/dialog/resize states. Root owns integration/review.
+No new capability; both>=95% platform gates stay UNVERIFIED. Read CURRENT_WORK.
+
 ## ACTIVE UI43 — user resumed with at least20 Luna Max (26 October 2026)
 
 Latest continuation27Oct: UI43 technical53 published0910db2, M09 still active.
