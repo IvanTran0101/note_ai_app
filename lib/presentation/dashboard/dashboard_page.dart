@@ -505,8 +505,11 @@ final class DashboardPageState extends State<DashboardPage> {
   }) {
     final bool searchOpen = searchOpenOverride ?? _searchOpen;
     final String searchText = searchTextOverride ?? _searchText;
-    final bool compact =
-        constraints.maxWidth < NoteFlowLayout.compactBreakpoint;
+    // Match the scaffold's phone classification when a phone rotates.
+    final bool compact = NoteFlowLayout.isCompact(
+      context,
+      availableWidth: constraints.maxWidth,
+    );
     if (_isLoading && _notes.isEmpty && !searchOpen) {
       return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
     }

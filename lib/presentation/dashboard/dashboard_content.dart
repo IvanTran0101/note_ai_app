@@ -12,6 +12,7 @@ import '../notes/notes_theme_tokens.dart';
 import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
+import 'dashboard_native_search_empty.dart';
 import 'dashboard_recent_rail.dart';
 import 'dashboard_search_sections.dart';
 import 'dashboard_search_viewport.dart';
@@ -121,6 +122,8 @@ final class DashboardContent extends StatelessWidget {
     final List<NoteDto> filteredNotes = _filtered(context);
     final double viewportWidth = MediaQuery.sizeOf(context).width;
     final bool compact = _compactLayout(context);
+    final bool nativeSearch =
+        !kIsWeb && compact && searchOpen && !searchOverlay;
     final bool showingDesktopSearchHistory =
         searchOpen && searchOverlay && !compact && searchText.trim().isEmpty;
     if (kIsWeb && searchOpen && searchOverlay) {
@@ -139,6 +142,8 @@ final class DashboardContent extends StatelessWidget {
               constraints: BoxConstraints(
                 maxWidth: searchOverlay
                     ? 600
+                    : nativeSearch
+                    ? double.infinity
                     : compact
                     ? NoteFlowLayout.compactPageFrameMaxWidthFor(context)
                     : NoteFlowLayout.dashboardContentMaxWidth,
@@ -159,7 +164,9 @@ final class DashboardContent extends StatelessWidget {
                       : searchOverlay
                       ? NoteFlowSpacing.sm
                       : NoteFlowLayout.dashboardTopPadding,
-                  compact
+                  nativeSearch
+                      ? NoteFlowLayout.compactPageLeadingInsetFor(context)
+                      : compact
                       ? NoteFlowSpacing.lg
                       : searchOverlay
                       ? NoteFlowSpacing.md
@@ -304,10 +311,16 @@ final class DashboardContent extends StatelessWidget {
                           : NoteFlowSpacing.xl,
                     ),
                     if (filteredNotes.isEmpty && searchText.trim().isNotEmpty)
-                      DashboardFilteredEmptyView(
-                        copy: copy,
-                        onClear: onClearSearch,
-                      )
+                      nativeSearch
+                          ? DashboardNativeSearchEmpty(
+                              key: const ValueKey('dashboard-filtered-empty'),
+                              copy: copy,
+                              onClear: onClearSearch,
+                            )
+                          : DashboardFilteredEmptyView(
+                              copy: copy,
+                              onClear: onClearSearch,
+                            )
                     else ...<Widget>[
                       _buildNoteCollection(
                         context,

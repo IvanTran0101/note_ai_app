@@ -1,6 +1,30 @@
 # MUST REMEMBER
 
-## Active late28Oct — UI48 final60 verified, next UI49 native Search
+## Current29Oct — UI49 final62 verified; continue UI50
+
+Final62 fixes native Search landscape duplicate fields and centers native empty
+in the full available width. VM final3/3 after proper new-test IME cleanup, strict7
+clean; earlier scoped VM10/Chrome11 and page Chrome2 pass at recorded timings.
+Web93.6s/APK50.6s, source1079/d6dd1ad1...bdaea drift[], exact Chrome6553392b...0574
+and installedAPK18275d24...93e56 match. Actual portrait/landscape IME, scroll/tap
+Clear48dp and200% text checked; original font1/auto rotation1,user0/nav0 restored.
+Notion reference app ANR after portrait rotation; reopened without data deletion.
+Green window outline recurred then absent after settled Home/resume: cause unknown.
+Read UI49_NATIVE_SEARCH.md. UI50 next: initial narrow WEB Search must use existing
+safe-width modal like actual Notion, not full-page dock. Native phone keeps dock.
+No new features; both>=95% gates UNVERIFIED, no broad acceptance yet.
+
+## Active29Oct — UI49 landscape repair, UI48 published2084f14
+
+Do not publish61. Actual native landscape exposed duplicate Search fields and
+clipped Clear from _buildBody width-only compact flag. Corrected red test proves
+two fields; root aligned it to NoteFlowLayout.isCompact(...availableWidth...),
+green/analysis/final62 runtime still pending. Keep60dp empty spacing (real Notion
+landscape confirms same header shift), let parent scroll above IME. Original
+both AVD rotation auto1/user0, app font1/nav3 must be restored after checks.
+
+UI48 published2084f14 (10 explicit files, local/remote0/0). Root now integrates
+UI49 native empty + compact Clear target/icon; drafts reviewed, tests still required.
 
 Read docs/m09/CURRENT_WORK.md and UI48_SEARCH_EMPTY.md. UI47 published39768ae;
 UI48 final60 source1078/30e8797a...64bf20 drift[], Web61.1s/APK29.3s, exact

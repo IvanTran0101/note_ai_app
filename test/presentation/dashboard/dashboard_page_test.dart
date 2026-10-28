@@ -4,7 +4,8 @@ import 'package:note_ai_app/application/note_intelligence/summary_consent_app_se
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride, kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/labels/label_application.dart';
@@ -860,12 +861,143 @@ void main() {
       expect(find.text('Alpha'), findsWidgets);
       expect(find.byKey(DashboardPage.searchDockSortKey), findsOneWidget);
 
+      final editableBeforeEmpty = tester.element(find.byType(EditableText));
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsOneWidget,
+      );
+      if (!kIsWeb) {
+        expect(
+          find.byKey(const ValueKey('dashboard-native-search-empty')),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          find.byKey(const ValueKey('dashboard-native-search-empty')),
+          findsNothing,
+        );
+      }
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+      final clearField = find.byKey(
+        const ValueKey('dashboard-clear-search-field'),
+      );
+      expect(tester.getSize(clearField).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(clearField).height, greaterThanOrEqualTo(48));
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(find.byKey(DashboardPage.searchDockKey), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsNothing,
+      );
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+
       await tester.tap(find.byKey(DashboardPage.searchDockCloseKey));
       await tester.pumpAndSettle();
       expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
       expect(searchVisibilityChanges, <bool>[true, false]);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('native phone keeps one docked Search field in landscape', (
+      WidgetTester tester,
+    ) async {
+      final previousPlatform = debugDefaultTargetPlatformOverride;
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        final notes = [_buildNote(id: 'a', title: 'Alpha')];
+        await _pumpDashboard(
+          tester,
+          dashboardController: DashboardController(
+            query: _FakeDashboardQuery(_overview(notes: notes)),
+          ),
+          notesController: _FakeNotesController(notes: notes),
+          embeddedInWorkspace: true,
+          size: const Size(390, 844),
+        );
+        await tester.pumpAndSettle();
+        tester
+            .state<DashboardPageState>(find.byType(DashboardPage))
+            .openSearch();
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(DashboardPage.searchFieldKey),
+          'qxzvbnmptkswj',
+        );
+        await tester.pumpAndSettle();
+
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.viewInsets = const FakeViewPadding(bottom: 160);
+        await tester.pumpAndSettle();
+        expect(find.byKey(DashboardPage.searchDockKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('dashboard-search-close')),
+          findsNothing,
+        );
+        expect(
+          tester
+              .getRect(
+                find.byKey(const ValueKey('dashboard-native-search-empty')),
+              )
+              .center
+              .dx,
+          closeTo(422, 1),
+        );
+        expect(
+          tester
+              .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+              .controller!
+              .text,
+          'qxzvbnmptkswj',
+        );
+        final clear = find.byKey(
+          const ValueKey('dashboard-clear-search-action'),
+        );
+        await tester.ensureVisible(clear);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(clear).height, greaterThanOrEqualTo(48));
+        await tester.tap(clear);
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+              .controller!
+              .text,
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        try {
+          await tester.pumpWidget(const SizedBox.shrink());
+        } finally {
+          tester.view.resetViewInsets();
+          debugDefaultTargetPlatformOverride = previousPlatform;
+        }
+      }
+    }, skip: kIsWeb);
 
     testWidgets('workspace desktop Search opens a dismissible overlay', (
       WidgetTester tester,

@@ -1,6 +1,114 @@
 # M09 current work
 
-## Current late28Oct — verified UI48 final60; publish, then UI49
+## Current29Oct — UI49 final62 verified, publish then UI50
+
+Final accepted VM3/3 and strict7 clean. Build62 Web93.6s/APK50.6s source1079/
+d6dd1ad16590572c87d51d687e442a49ca61ad50c60c5440923a13c7bd7bdaea drift[].
+Chrome bundle6553392b...0574/21,462,326 bytes matches; installed/pulledAPK
+18275d24...93e56 matches. Actual native landscape one field/dock; body Clear
+after scrolling[1065,120][1337,246]=48dp and tap empties query/results return.
+Portrait body Clear center540/48dp; real200% target48dp still visible, dock above
+IME. Restored app font1/auto rotation1,user0/nav0 and Notion auto1/user0. Green
+outline recurred on62, absent after settled Home/resume; no cause/fix claim.
+Notion ANR after portrait rotation, Wait failed, restarted reference app/data kept.
+Final report UI49_NATIVE_SEARCH.md owns details. Web62 narrow body40/fullpage gap
+confirmed; continue UI50 existing modal on initial narrow Web. Both95% still open.
+Static62 PID28324, fixture27424. ADB connected; no workers writing. Root owns
+page + dedicated UI50 Web tests, shared files remain single-writer. Publish49
+explicit paths first; preserve unrelated .playwright-cli/ and final_project.md.
+
+## Current29Oct — UI49 landscape repair before publication
+
+Final page VM accepted3/3 in ui49-page-final-vm62-accepted.log, including native
+one-field/center422/query/scroll-Clear and desktop704 height after the new test
+properly resets IME state.62 snapshot/build now runs sequential Web/APK; freeze
+runtime source until drift verification. Still need actual exact62 checks.
+
+Native Search frame now fills available width with balanced gutters; this centers
+empty/results across a landscape phone instead of stranding them in the old396dp
+frame. Generic/Web/Home frames unchanged. Native landscape regression additionally
+asserts center.x422 for844px view, passed. Final page VM initial2/3: desktop dialog
+height660 vs704 was new test's leaked IME160, not product geometry. Root adds
+in-body unmount/resetViewInsets/platform restoration; rerun3 in
+ui49-page-final-vm62-accepted.log pending. Keep the704 expectation. Strict final3
+paths clean before cleanup-only fix. Chrome page continuity2/2 passed after helper
+repair; native frame condition is !kIsWeb, exactWeb62 smoke still required.
+
+UI50 next ref confirmed: real Notion Web opened Search from initial390x900 as
+modal, not full-page dock. Outer390.4x700 at0,81, inner600px grid is clipped/
+offset -50.4 in current ref; preserve safe actual-width layout rather than copy
+clipping. Crop ui50-notion-web390-initial-search.png. IAB recreated tab1 via browser2,
+authenticated; handle ref50/browser50/viewport50, popup closed and viewport reset,
+marked handoff. No UI50 source yet; first publish repaired UI49.
+
+Corrected red regression now failed on two Search fields as expected, in
+ui49-landscape-red61-corrected.log. First attempt only failed to compile because
+the foundation import showed kIsWeb alone; root extended it, analyzer clean, then
+the actual red proof ran. Root has now changed _buildBody's compact calculation
+to NoteFlowLayout.isCompact(context, availableWidth: constraints.maxWidth), same
+phone/landscape rule as Scaffold/Content. Native green run ui49-landscape-green62.log
+and strict page/test analysis pending. Only this helper alignment changes behavior;
+query/controllers/callbacks remain. Need current-page continuity and final62 build/
+actual landscape before publishing.61 stays superseded. Do not reduce60dp empty
+padding: real Notion landscape no-IME No pages found548-601 (portrait613-666),
+same65px header shift as app; with IME its message is below fold as expected.
+Natural parent scroll must reach Clear; the regression tests that after rotation.
+
+UI48 published2084f14f49d79020e76dd19f4419e11d53942e0c,10 explicit files,
+SHA local/remote equal0/0. UI49 now active. Root owns new dashboard_native_search_empty.dart,
+DashboardContent branch, DashboardSearchDock visual control, two uniquely named
+UI49 test files and existing compact integration. One writer, no active children.
+Existing21 workers are historical deliveries, no new spawn in late resume.
+
+DO NOT publish61: actual native landscape stable rotation1 has duplicate fields/
+header-close plus dock-close and a clipped Clear37px. Scaffold/Content use
+NoteFlowLayout.isCompact(native phone shortestSide) while _buildBody uses only
+constraints.width<600, so dockCompactSearch false on a rotated phone. Root added
+Android-override regression 'native phone keeps one docked Search field in landscape'
+(844x390 + IME160), red run ui49-landscape-red61.log pending. Then change _buildBody
+to NoteFlowLayout.isCompact(context, availableWidth: constraints.maxWidth), verify
+fix/continuity, build62. New test is native-only/Chrome skip disclosed. kIsWeb path
+unchanged. Graph transport closed during new queries; exact fallback source
+notes_theme_tokens.dart71-213 and page497-522 read, no exhaustive graph claim.
+
+Native61 portrait has centered empty, body Clear[389,729][661,855]=48dp and dock
+Clear/Close126px=48dp. Glyph ink app(366,679)-(684,714), minus52.5dev vs ref
+(392,622)-(690,663): baseline within~5px, horizontal center525 vs541 due existing
+reading frame. Don't call this exact/global95%.200% actual UI visible, no filtered
+RenderFlex errors. Green whole-window outline persisted after typing, remained
+on raw screencap, then disappeared after Home/resume and did not recur after
+Clear/retype. System magnification inactive1x, no media projection/debug-layout
+flags; no source/default-focus workaround applied or cause-fixed claim. Android
+View focus API consulted only as hypothesis (official docs), not proven cause.
+
+Current device font1, rotation locked1 for landscape; original rotation auto1/user0
+must be restored after repair checks. wm user-rotation lock1 gives stable landscape;
+initial settings put1 had returned0 (transitional capture was not accepted).
+
+UI49 current: source integrated, strict6 clean(ui49-analysis61.log). VM10/10
+ui49-search-vm61.log: final UI48 compact3 + native empty3 (Vietnamese200%) + dock3
++ existing compact integrated empty/Clear/query/close1. Final-source UI48 compact
+VM proof now available; no repeated tests counted as new cases. Chrome continuity
+driver was accidentally invoked with --help, which it ignores and runs tests;
+it overwrote the old ignored ui48-search-chrome60.log. Preserve that new run as
+ui49-ui48-continuity-chrome61.log when complete, do not recreate historical stdout.
+UI48 published report/build/runtime receipts remain. UI49-specific7 driver is
+output/m09/run_ui49_chrome.py, run sequentially afterward, before build61.
+
+Native Notion cold CE user unlocked by same-call verified keypad/submission;
+long swipe starts above lock icon (y1800->450/1000ms), avoids timeout between
+calls. Earlier keypad assertions aborted before credential entry; activity error
+while RUNNING_LOCKED did not mean package absent. No credential stored. Live Home/
+Search reopened; ref empty capture next. Both95% gates still UNVERIFIED.
+
+UI49 Chrome specific7/7 passed plus4 continuity (11 unique Chrome total, not14),
+new log ui49-search-chrome61.log. Final Web guard test reanalysis clean. Earlier
+continuity stdout saved under ui49-ui48-continuity-chrome61.log; source60 original
+stdout was not recreated. Notion fresh23h query typed one character at a time to
+avoid dropped input; full qxzvbnmptkswj matches both apps' synthetic state. Notion
+0.6.4222 empty still[388,613][693,666], native field1381-1507. Build61 running:
+1079/2d720019...be6d23, Web91.4s done, APK pending; no lib mutation while building.
+App60 actual before screenshot ui49-native60-empty-before keeps left state.
 
 Read UI48_SEARCH_EMPTY.md. UI47 published39768ae8951244f301e3b21f05a1f89a125f13ac,
 11 paths/SHA local-remote0/0. UI48 now final60:1078 runtime paths/source

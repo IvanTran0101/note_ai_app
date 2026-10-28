@@ -1,5 +1,18 @@
 # UI43 — current direct reference and permitted adaptations
 
+## UI49/50 direct Search references —29 October2026
+
+Actual Notion0.6.4222 Android portrait no-match613-666, landscape548-601. Keep
+60dp reference spacing; scroll to content with landscape IME. App62 balances
+native gutters/one field, portrait Clear center540px/48dp; layout/callback scoped
+checks recorded in UI49_NATIVE_SEARCH.md. Notion ANR on rotating back; reopened
+without data deletion. Original font/rotation/nav restored, no global95% claim.
+
+Actual Notion Web Search opened from initial390x900 is still a modal at0,81,
+390.4x700; its inner600px grid clips. UI50 should reuse our safe available-width
+modal, avoid copying clipping, preserve native dock/callback/query/guards. Safe
+synthetic crop ui50-notion-web390-initial-search.png; Light/default viewport reset.
+
 ## UI48 true no-result state —28 October2026
 
 Notion actual Web Light1280x900: popup600x700 at340,81, header92, content566.2,

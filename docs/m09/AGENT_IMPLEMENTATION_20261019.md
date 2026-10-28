@@ -1,5 +1,14 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI49 final lead review —29 October2026
+
+Root integrated the isolated Luna Max drafts, preserved one writer, corrected
+native landscape helper/frame and added real red/green regression. Final VM3/3,
+strict7 clean, build62/exact Chrome+APK identities and actual portrait/landscape/
+IME/Clear200% checked. UI49_NATIVE_SEARCH.md records earlier suite timings and
+runtime limitations.21 actual workers across task, no new late-resume spawns.
+Root owns UI50 compact Web Search next; both visual95% gates remain unverified.
+
 ## UI48 lead verification and UI49 draft review —28 October2026
 
 Root adapted the isolated additional Luna Max draft, corrected semantics API/

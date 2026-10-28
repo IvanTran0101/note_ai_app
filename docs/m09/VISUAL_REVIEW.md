@@ -1,5 +1,19 @@
 # M09 — UI similarity review (%)
 
+## UI49 native Search —29 October2026
+
+Final62 centers native no-match and uses existing Clear48dp, native round-X.
+Actual landscape caught duplicate fields from divergent compact classification;
+root aligned helper, added red/green regression and balanced native frame gutters.
+Final VM3/3/strict7 clean, Web/APK drift[] and Chrome/device hashes match. Actual
+landscape IME one field, reachable/tapped body Clear48dp; portrait centered540px,
+font200% target visible. Font/rotation/nav restored. Earlier11 Chrome distinct
+cases plus page2 at their recorded source timing; no invented final all-suite.
+See UI49_NATIVE_SEARCH.md. Initial narrow Web still full-page/body Clear40;
+UI50 must use the existing safe modal per actual Notion390px. Notion reference
+ANR after rotation/restart and recurring temporary green outline are disclosed.
+Both95% gates UNVERIFIED; no broad functional acceptance or percentage assigned.
+
 ## UI48 Web empty state —28 October2026
 
 Final60 centers existing message/Clear in remaining Search space and keeps the

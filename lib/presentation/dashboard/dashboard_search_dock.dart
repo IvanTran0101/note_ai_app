@@ -20,6 +20,7 @@ final class DashboardSearchDock extends StatelessWidget {
     required this.sortKey,
     required this.closeKey,
   });
+
   final DashboardCopy copy;
   final TextEditingController controller;
   final DashboardSort sort;
@@ -91,8 +92,13 @@ final class DashboardSearchDock extends StatelessWidget {
               IconButton(
                 key: const ValueKey<String>('dashboard-clear-search-field'),
                 tooltip: copy.clearSearch,
-                icon: const Icon(Icons.clear),
                 onPressed: onClear,
+                // Keep the real tap target at 48dp under compact themes.
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                visualDensity: VisualDensity.standard,
+                icon: NoteFlowLayout.isNativePhone(context)
+                    ? Icon(Icons.cancel, size: 20, color: tokens.textMuted)
+                    : const Icon(Icons.clear),
               ),
             _sortButton(tokens),
           ],
