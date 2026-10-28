@@ -1,5 +1,17 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI48 lead verification and UI49 draft review —28 October2026
+
+Root adapted the isolated additional Luna Max draft, corrected semantics API/
+cleanup, kept header element/focus stable and found/fixed actual compact target
+40->48px that default-theme tests missed. Chrome60 compact4/4, final strict2,
+exact built/Chrome/device identities, real responsive/Light-Dark inspection,
+Notion evidence and publication owned by root. UI48_SEARCH_EMPTY.md records VM
+timing/limits. Same worker later delivered isolated UI49 empty+dock drafts;
+root read them, tests still unrun, no production overlap.20 UI43 workers plus
+that1 reused worker=21 actual across task, no newly spawned worker in late resume.
+All draft/runtime claims are separated; global gates remain open.
+
 ## UI47 lead continuation and isolated UI48 draft —28 October2026
 
 Root implements/reviews Search geometry and modal/dock ownership repairs, tests,

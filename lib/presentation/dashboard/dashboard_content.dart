@@ -14,6 +14,7 @@ import 'dashboard_localizations.dart';
 import 'dashboard_note_card.dart';
 import 'dashboard_recent_rail.dart';
 import 'dashboard_search_sections.dart';
+import 'dashboard_search_viewport.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
 
@@ -122,6 +123,9 @@ final class DashboardContent extends StatelessWidget {
     final bool compact = _compactLayout(context);
     final bool showingDesktopSearchHistory =
         searchOpen && searchOverlay && !compact && searchText.trim().isEmpty;
+    if (kIsWeb && searchOpen && searchOverlay) {
+      return _buildWebSearch(context, filteredNotes, viewportWidth);
+    }
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -167,31 +171,7 @@ final class DashboardContent extends StatelessWidget {
                   children: <Widget>[
                     if (searchOpen) ...<Widget>[
                       if (searchOverlay && !compact)
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _buildSearchField(
-                                context,
-                                desktopOverlay: true,
-                              ),
-                            ),
-                            if (onCloseSearch != null)
-                              IconButton(
-                                key: const ValueKey<String>(
-                                  'dashboard-search-close',
-                                ),
-                                tooltip: copy.closeSearch,
-                                onPressed: onCloseSearch,
-                                constraints: const BoxConstraints(
-                                  minWidth: 40,
-                                  minHeight: 40,
-                                ),
-                                padding: EdgeInsets.zero,
-                                iconSize: 20,
-                                icon: const Icon(Icons.close),
-                              ),
-                          ],
-                        )
+                        _buildOverlaySearchFieldRow(context)
                       else
                         _buildSearchHeading(
                           context,
@@ -226,27 +206,7 @@ final class DashboardContent extends StatelessWidget {
                         singleLine: compact,
                       ),
                     if (searchOverlay && !compact)
-                      Padding(
-                        padding: EdgeInsets.zero,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: onLabelsChanged == null
-                                  ? const SizedBox.shrink()
-                                  : LabelFilterBar(
-                                      notes: notes,
-                                      selected: selectedLabels,
-                                      onChanged: onLabelsChanged!,
-                                      readable: _readable,
-                                      dense: true,
-                                    ),
-                            ),
-                            const SizedBox(width: 12),
-                            _buildSortControl(context, iconsOnly: false),
-                          ],
-                        ),
-                      ),
+                      _buildOverlaySearchFilters(context),
                     if ((!compact || !embeddedInWorkspace) && !searchOpen)
                       _buildHeader(context),
                     if (searchOpen && dockCompactSearch) ...<Widget>[
@@ -361,6 +321,97 @@ final class DashboardContent extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOverlaySearchFieldRow(BuildContext context) => Row(
+    children: <Widget>[
+      Expanded(child: _buildSearchField(context, desktopOverlay: true)),
+      if (onCloseSearch != null)
+        IconButton(
+          key: const ValueKey<String>('dashboard-search-close'),
+          tooltip: copy.closeSearch,
+          onPressed: onCloseSearch,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          padding: EdgeInsets.zero,
+          iconSize: 20,
+          icon: const Icon(Icons.close),
+        ),
+    ],
+  );
+
+  Widget _buildOverlaySearchFilters(BuildContext context) => Padding(
+    padding: EdgeInsets.zero,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: onLabelsChanged == null
+              ? const SizedBox.shrink()
+              : LabelFilterBar(
+                  notes: notes,
+                  selected: selectedLabels,
+                  onChanged: onLabelsChanged!,
+                  readable: _readable,
+                  dense: true,
+                ),
+        ),
+        const SizedBox(width: 12),
+        _buildSortControl(context, iconsOnly: false),
+      ],
+    ),
+  );
+
+  Widget _buildWebSearch(
+    BuildContext context,
+    List<NoteDto> filteredNotes,
+    double viewportWidth,
+  ) {
+    final empty = filteredNotes.isEmpty && searchText.trim().isNotEmpty;
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: DashboardSearchViewport(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildOverlaySearchFieldRow(context),
+              _buildOverlaySearchFilters(context),
+              if (hasError) ...[
+                const SizedBox(height: NoteFlowSpacing.lg),
+                DashboardInlineError(copy: copy, onRetry: onRetry),
+              ],
+            ],
+          ),
+        ),
+        centerBody: empty,
+        body: Padding(
+          padding: EdgeInsets.fromLTRB(empty ? 16 : 12, 0, 16, empty ? 0 : 16),
+          child: empty
+              ? DashboardSearchEmptyState(copy: copy, onClear: onClearSearch)
+              : _buildNoteCollection(context, filteredNotes, viewportWidth),
+        ),
+        footer: _buildSearchFooter(context),
+      ),
+    );
+  }
+
+  Widget _buildSearchFooter(BuildContext context) {
+    final tokens = NoteFlowWorkspaceTokens.of(context);
+    return Container(
+      key: const ValueKey('dashboard-search-footer'),
+      constraints: const BoxConstraints(minHeight: 42),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.divider)),
+      ),
+      child: Text(
+        'Esc · ${copy.closeSearch}',
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(fontSize: 11, color: tokens.textMuted),
       ),
     );
   }

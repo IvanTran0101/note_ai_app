@@ -989,6 +989,60 @@ void main() {
         findsNothing,
       );
 
+      final editableBeforeEmpty = tester.element(find.byType(EditableText));
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsOneWidget,
+      );
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      if (kIsWeb) {
+        final emptyBounds = tester.getRect(
+          find.byKey(const ValueKey('dashboard-filtered-empty')),
+        );
+        expect(emptyBounds.center.dx, closeTo(desktopSearchRect.center.dx, 1));
+        expect(emptyBounds.center.dy, greaterThan(desktopSearchRect.center.dy));
+        expect(
+          find.byKey(const ValueKey('dashboard-search-footer')),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+
       tester.view.physicalSize = const Size(500, 900);
       await tester.pumpAndSettle();
       final narrowSurface = tester.getRect(

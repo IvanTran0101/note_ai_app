@@ -1,5 +1,17 @@
 # M09 — UI similarity review (%)
 
+## UI48 Web empty state —28 October2026
+
+Final60 centers existing message/Clear in remaining Search space and keeps the
+header mounted. Actual59 exposed40px compact-theme target; fixed in60 and Chrome
+compact4/4/final strict2 pass, body target104.56x48px verified. Source1078/30e8797a
+drift[], Web61.1s/APK29.3s, exact Chrome/APK identities. Real sequential typing,
+clear/narrow/short/normal/Escape/Light-Dark inspected; Light restored, no console
+errors. Native60 Home/Search/IME unchanged; no startup fix claim. See
+UI48_SEARCH_EMPTY.md for before-density VM timing/failures/limits. Notion paired
+ref/Light/Dark crops attached, all previous images retained. UI49 native no-match
+still left-aligned/too high and clear glyph differs. Both95% gates UNVERIFIED.
+
 ## UI47 responsive Search —28 October2026
 
 Settled direct Notion top9vh/width600/full-width narrow/cap700/bottom16 now maps

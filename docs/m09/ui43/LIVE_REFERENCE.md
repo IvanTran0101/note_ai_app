@@ -1,5 +1,21 @@
 # UI43 — current direct reference and permitted adaptations
 
+## UI48 true no-result state —28 October2026
+
+Notion actual Web Light1280x900: popup600x700 at340,81, header92, content566.2,
+footer41.8. No results14px/20/w500; centered support group. Safe popup crop saved,
+original viewport/theme restored. App60 centers existing message/Clear; footer
+only hints existing Escape. Actual body Clear48 under compact density (59 was40),
+full sequential query/clear/resize/Light-Dark/Escape verified, Light restored.
+Different deleted-pages/AI capabilities remain absent. No platform percentage.
+
+Fresh native Notion Search/IME: No pages found[388,613][693,666], support679-729;
+app58 left empty/Clear603-729 too high after52.5dev-strip subtraction. Native
+reference clear icon is a small filled-circle X, app standalone X. UI49 drafts
+prepare these existing controls only; root review/integration/actual capture
+still needed. Native60 Search Close1381-1507 above keyboard1518; nav3/rotation1,0/
+font1 retained after retained-data install. Actual iOS still unverified.
+
 ## UI47 live Search —28 October2026
 
 Authenticated Notion Web1280x720 left340/top64.8/600x639.2;1280x900 left340/top81/

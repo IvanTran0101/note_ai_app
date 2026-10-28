@@ -1,24 +1,27 @@
 # MUST REMEMBER
 
-## Active28Oct — verified UI47, next UI48 before broad acceptance
+## Active late28Oct — UI48 final60 verified, next UI49 native Search
 
-Read docs/m09/CURRENT_WORK.md and UI47_SEARCH_RESPONSIVE.md. Final58 verified:
-source1077/0f280809...05136a drift[], Web95.9s/APK76.8s; Chrome218c7909...63fa7f2
-and installedAPK285ba9c2...423545 match. Six distinct targeted cases on VM/Chrome,
-strict5 clean, real resize5 viewports/one field/query retained/Close/Escape. UI47
-fixes duplicate dock and modal's stale compact dock flag; native phone dock stays.
-Actual Notion settled Search: top9vh/width600/full-width under600/cap700/bottom16.
-Native58 Search controls above IME; initial null-root recovered after wake/settle,
-no startup-cause-fixed/cold-start acceptance claim. No data cleared. Notion board
-has paired popup crops, progress updated. Publish UI47 explicit paths then UI48.
+Read docs/m09/CURRENT_WORK.md and UI48_SEARCH_EMPTY.md. UI47 published39768ae;
+UI48 final60 source1078/30e8797a...64bf20 drift[], Web61.1s/APK29.3s, exact
+Chrome2fdd3af3...cd486 and installedAPKeb01daa3...8806c8 verified after runtime
+restart. Chrome compact4/4/final analyzer2 clean (prior4-path pass). VM4 precede
+last Web-only density fix, don't claim a fresh final compact-source VM pass.
+Actual59 target was40 despite min48;60 fixes density, actual body Clear48 now.
+Typing/clear/narrow/short/normal/Light-Dark/Escape checked, Light restored. Stable
+header/one field and same existing callbacks/data/permissions. Notion paired
+crops updated; publish explicit UI48 paths then integrate UI49. Preserve unrelated
+files and AVD/profile data. No new feature or broad functional acceptance.
 
-Next: center Web empty Search as actual Notion. One additional Luna Max drafted
-only ignored output/m09/ui48_draft48;20 UI43 deliveries already reviewed,21 actual
-across this task. Root must fix the draft semantics test API and test it. Keep
-the search header/field element stable across empty/result transitions; use a
-single bounded Web scroll layout. Preserve native empty/dock and existing Clear
-search, no Deleted pages/AI or new feature. Both Web/Android>=95% UNVERIFIED;
-continue UI, do not switch to broad functional acceptance. No invented score.
+UI49 reviewed drafts ONLY in output/m09/ui49_draft49 + ui49_dock_draft. Root must
+integrate native compact Search empty centered/60dp reference padding/14-20-w500/
+Clear48 and filled-circle clear icon; keep callback/keys/guards/scroll/SafeArea,
+generic/Web/desktop empty unchanged. Verify compact Web48 target/narrow text width
+for shared dock control; new native icon stays native-only. Worker tests unrun,
+root adjusts kIsWeb expectations and Vietnamese200% case, includes final UI48
+widget cases in next VM batch.20 prior reviewed workers +1 reused Luna Max=21
+actual across task; no active child writes. Both>=95% gates UNVERIFIED. Continue
+UI/matched states; actual iOS unverified, no fabricated similarity score.
 
 ## Active noon27Oct — UI45 continuation after published UI44
 

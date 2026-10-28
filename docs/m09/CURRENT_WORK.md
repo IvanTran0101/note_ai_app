@@ -1,49 +1,64 @@
 # M09 current work
 
-## Current28Oct — UI47 verified58; publish, then UI48 empty state
+## Current late28Oct — verified UI48 final60; publish, then UI49
 
-UI47 source/runtime verified; UI47_SEARCH_RESPONSIVE.md is the proof ledger.
-Five geometry cases plus integrated query/resize/close checked on VM/Chrome;
-final integration1/1 on each after two production dock guards. Six distinct
-cases, not rerun sums. Strict5 final paths clean. Real Notion reference has
-top9vh, width600/full-width below600, height700 cap, bottom16. Five settled
-viewports measured; transient retained height excluded. Viewport reset Light.
+Read UI48_SEARCH_EMPTY.md. UI47 published39768ae8951244f301e3b21f05a1f89a125f13ac,
+11 paths/SHA local-remote0/0. UI48 now final60:1078 runtime paths/source
+30e8797affa0594f994481f081ae5b0dd5b8d0368e8652a01babe22e5264bf20, drift[] rechecked
+after runtime restart. Web61.1s/APK29.3s. Exact Chrome21,462,217bytes/
+2fdd3af3...cd486 and installedAPKeb01daa3...8806c8 match. Publish explicit UI48
+source/test/docs paths now, preserve unrelated .playwright-cli/ and final_project.md.
 
-Root extracted DashboardSearchDialog and keeps Web popup composition on narrow
-resize. Real duplicate outside dock and native modal field suppression fixed;
-one field/no dock/query preserved/close once asserted across platforms. Query,
-sort, labels, permissions, callbacks and data stay with the existing page.
+Root adapted Luna Max draft into one bounded Web Search viewport with stable
+header through result/empty transitions, centered existing message/Clear action,
+and min42px footer exposing existing Escape dismissal. Same callbacks/query/
+labels/sort/access/error/retry/refresh/data; native legacy empty unchanged.
+Live Notion header92/content566.2/footer41.8 at600x700, No results14/20/w500.
+Original IAB1280x720/Light restored. No unsupported Deleted pages/AI/new-tab feature.
 
-Final58 Web95.9s/APK76.8s, source1077/0f2808092ccd4a87ede8be359b7c50e16ee08e06757fc8b1be12daa95405136a,
-drift[]. Chrome21,441,884bytes/218c7909...63fa7f2 and installedAPK285ba9c2...423545
-match. Actual Chrome5 viewport resizes preserve one field/query; Escape/Close
-work after route animation, zero console errors. ui47-web58-runtime.json.
-Native58 Home/Search after wake/settle, Close1381-1507 above keyboard1518;
-initial null-root retained as a limit, no cold-start/cause-fixed claim. No data
-cleared/rotation needed this run. Nav3-button/rotation1,0/font1 unchanged.
+Final Chrome60 compact-theme4/4 pass; final strict2 files clean, prior4-file pass.
+VM4 distinct cases passed before last Web-only density repair (not fresh final
+compact-source VM proof). Initial semantics cleanup/addTearDown failure fixed
+in-body try/finally; draft SemanticsNode API corrected. Actual59 exposed40px
+target despite min48; it is superseded/unpublished. Explicit button standard
+density plus compact-theme tests repaired it. Actual60 body Clear104.56x48px;
+field-suffix desktop Clear remains40px. Sequential typing retained full query,
+Clear empties it; narrow/short/normal resize retains one field/query, Escape
+closes. Light/Dark inspected, Light restored; zero console errors. Native60
+Home/Search, Close1381-1507 above keyboard1518, nav3-button/rotation1,0/font1 kept.
+Do not call the older splash cause fixed or claim live AWS/profile acceptance.
 
-Runtime: fixture24788 local8796/7/8; static4420 serves58 on8776; AVD5554/5556
-retained. Python capture helper requires -X utf8, fresh XML before PNG and
-expected labels. First server reload before bind failed; HTTP200 verified then
-retry matched bundle. Keep runtime/logs/credentials out of Git. Preserve the
-unrelated .playwright-cli/ and final_project.md untracked files.
+Old processes all ended by late28Oct; restarted fixture27424(local8796/7/8),
+static7032 serves60/8776, AVD launcher25676/4892 now5554/5556. Both bootcomplete,
+no snapshots loaded/saved, data retained. Owned installed Chrome fresh existing
+owner profile and Node handles restored. Credentials kept out of repo/logs.
+Notion progress/board updated; final3 crops bring prior50 images to53, preserve
+all history. Both Web/Android>=95% remain UNVERIFIED; no broad acceptance.
 
-Notion progress/board updated with measurements and paired popup crops, preserving
-previous48 images (now50). Both>=95% gates UNVERIFIED; no broad acceptance.
-Publish explicit UI47 source/test/docs paths to final-tuankiet, recheck remote.
-Then integrate UI48: actual Notion empty centered, app58 still top-left. One
-additional Luna Max completed ONLY output/m09/ui48_draft48 artifacts, no runtime
-edits. Twenty earlier UI43 workers remain reviewed:21 actual across this task.
+Next UI49 native compact Search no-match + Clear affordance. One actual extra
+Luna Max completed UI48 and reused UI49 empty/dock draft folders under output;
+20 earlier UI43 deliveries reviewed,21 actual across task; none active now.
+Root read all UI49 artifacts and native ref/app58 screenshots. Graph Tier2 ready
+generation2026-10-27T21:08:32Z. StateViews516-565 and Dock9-134 full snippets plus
+direct source fallback after metadata_changed coverage; both-direction depth1
+complete: each0out/2in (production caller + ui43/search_entry43 test). No exhaustive
+graph completeness claim. Root owns all production/test/docs/runtime/Git/Notion.
 
-Root reviewed refined draft: remaining-space sliver/always-scrollable approach
-is useful. Fix its test SemanticsNode.hasAction API to getSemanticsData().hasAction
-when integrating. Tests unrun; no worker PASS accepted blindly. Keep header's
-TextField element stable as query transitions between results and empty; a
-conditional replacement of the whole scroll tree risks focus/IME loss. Integrate
-as one finite Web popup scroll layout for both states, not nested unbounded in
-ListView. Native empty layout unchanged; Clear search existing48dp action only.
-No Deleted pages/AI/recency feature. Root owns lib/test/docs/build/runtime/Git;
-no active child writes. Continue full UI matrix; actual iOS still unverified.
+Integrate ONLY after UI48 publication: new dashboard_native_search_empty.dart
+(natural height, no scroll owner,60dp reference top, centered14/20/w500 localized
+message + existing Clear48). Wire only !kIsWeb compact searchOpen !searchOverlay;
+keep common dashboard-filtered-empty wrapper key, generic/Web/desktop old empty.
+Test compact density and Vietnamese200% short parent scroll. Dock draft keeps
+keys/callbacks/state/sort/SafeArea, native cancel20 muted vs existing Web clear;
+48dp clear control shared in compact dock. Review possible8px text-width change
+on compact Web, actual narrow view before acceptance. Worker tests unrun; native
+icon expectations must account for kIsWeb when Chrome-running them. Add final
+UI48 compact widget cases to next VM batch, disclose prior timing. After UI49,
+prefer a persistent Flutter dev run/hot reload for visual iteration, snapshot
+build/test once per coherent reviewed milestone; no skipped verification.
+Native Notion currently cold-boot locked: unlock from fresh keypad with user-
+authorized credential without storing it, then re-open Search. Actual iOS/global
+paired-state matrix still open. Continue UI, never invent a95% percentage.
 
 ## Active UI46 — native header inset, Web column verified (27Oct)
 
