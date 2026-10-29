@@ -1,5 +1,24 @@
 # M09 — UI similarity review (%)
 
+## UI51 Settings —29 October2026
+
+Direct Notion Preferences1280/1920 Light/Dark now maps to Web90vw/cap1512,
+sidebar240/content800, measured type/spacing and scoped colors. Existing actions
+only. Final68 Chrome8/8 and strict6 clean, prior67 VM11/1Webskip preserved with
+timing; Web/APK drift[] and actual Chrome/installed-pulled APK hashes match.
+Actual initial390->wide frame, VI700, short scrolling, compact48px verified;
+Theme/Language restoredSystem. Native account targets44->48dp,200%/landscape/
+gesture safe bounds verified and original font/rotation/nav restored. Source-only
+Luna Max review found narrow-first route defect; root reproduced, red/green fixed
+and reviewer confirmed. UI51_SETTINGS.md records exact checks and limits.
+
+Two Chrome console errors from local fixture QA-origin CORS; Native launch had
+SystemUIANR/nullroot before relaunch/settling, SDK silently forced2560MB RAM.
+Neither API/profile/cloud nor startup root cause accepted. Paired Web images
+published on existing board. UI52 Share header next using direct456px ref and
+isolated proposal, root owns production. Both95% remain UNVERIFIED; no broad
+functional acceptance or invented percentage.
+
 ## UI50 initial compact Web Search —29 October2026
 
 Final63 opens the existing safe-width modal from390px, matching real Notion's

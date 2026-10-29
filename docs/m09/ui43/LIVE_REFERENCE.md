@@ -1,5 +1,20 @@
 # UI43 — current direct reference and permitted adaptations
 
+## UI51 Preferences / UI52 Share —29 October2026
+
+Direct Notion Web1280x920 frame1152x820/64,50/sidebar240, title26/32 and section/
+label/helper16/14/13. At1920 maxframe1512/content800 centered. Light/Dark sampled
+surface/primary/helper/divider/selected colors scoped to Web Settings; safe crop
+omits account sidebar. Actual native68 existing compact header preserved, account
+rows now48dp;200%/landscape/gesture bounds and restored settings recorded in
+UI51_SETTINGS.md, not a whole-platform score. Ref tab closed after measurements
+to release RAM; no Notion preference or access changes retained.
+
+Actual Share Web1280x720 frame456px/y44/radius12; safe top98px crop contains only
+header and blank invite input, no account data. Input24px is inner measurement;
+outer border looks34px, must verify ancestor before any density change. UI52
+proposal is isolated in ignored output; do not add Publish/help/public sharing.
+
 ## UI49/50 direct Search references —29 October2026
 
 Actual Notion0.6.4222 Android portrait no-match613-666, landscape548-601. Keep

@@ -1,5 +1,22 @@
 # MUST REMEMBER
 
+## Active29Oct — UI51 verified68; publish then CONTINUE UI52 Share
+
+Read docs/m09/UI51_SETTINGS.md and CURRENT_WORK.md. Settings scoped UI checked:
+Chrome8/8, strict6 clean, prior67 VM11/1Webskip before Web-only68 delta. Source1082/
+6dbd5caa...b9bf4 drift[], exact Chrome4935ad38...b4f38 and installed/pulled APK
+c62f6d47...ffdfe match. Actual Web narrow-first resize/LightDark/VI700/shortscroll/
+48px and native48dp/200%/landscape/gesture safe bounds checked. System Web prefs,
+native font1/auto1,user0/nav0 restored, Dark/System retained; AVD closed/data kept.
+Notion board64 images. Both95% gates UNVERIFIED; no broad functional acceptance.
+Native startupSystemUIANR/nullroot before relaunch/settling remains unfixed;
+SDK37.2 auto2560MB overrides lower RAM flags. QA-origin CORS/profile service limits
+explicit, no API/cloud PASS. One additional LunaMax reviewer found/resolved Web
+resize bug; same worker drafted ignored UI52 proposal.22 workers since UI43.
+Next UI52: desktop Web Share header with existing copy.share/456px/y44 reference,
+no Publish/help/public-sharing feature. Root owns source, old servers untouched.
+Preserve unrelated .playwright-cli/ and final_project.md. No new worktrees.
+
 ## Current29Oct — UI50 verified63, next Settings UI51
 
 Read UI50_COMPACT_WEB_SEARCH.md. Initial narrow Web Search now uses the existing

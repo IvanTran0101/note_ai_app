@@ -1,5 +1,61 @@
 # M09 current work
 
+## UI51 verified68 — publish then CONTINUE UI52 Share
+
+UI51_SETTINGS.md is the checkpoint receipt. Current source remains frozen68;
+last published1534891 until explicit UI51 push. All current edits owned by root.
+Five production Settings/main paths + one test + six docs =12 intended paths.
+Preserve unrelated .playwright-cli/ and final_project.md; never stage output.
+
+- Final Chrome8/8 and strict6 clean. Prior VM67 accepted11/1Webskip predates only
+  the Web-specific dispatch fix and new Web-only regression; don't call it VM68.
+- Build68 source1082, fingerprint
+  6dbd5caa726603359cf4004e94922d42f972774abb20dde02fa79bcb656b9bf4, drift[].
+  Web129.8s/APK112.2s; existing Kotlin plugin warning remains. Actual Chrome
+  21,473,527bytes/4935ad38ee00fed4e4f2799a11908d17f7085e54fba3e3b652c8ccd24d7b4f38
+  and installed/pulled174,208,004byte APK
+  c62f6d47ca3f5f595cbd704628dac371749747ae9dbe690428fc92d7534ffdfe match.
+- Actual Chrome initial390->1280 visual frame correct, title364,106;1920 title672.
+  Dialog semantics wrapper spans viewport, so use screenshot/anchors for pixels.
+  Close/account compact48px; Light/Dark1280/1920,VI700,shortscroll and Close checked.
+  Theme/Language restoredSystem; page exceptions0,2console errors from fixture
+  CORS QA8783 (OPTIONS403; default allows8776), no API/permission success claimed.
+- Native68 actual Profile/Change password/Logout and Close126px=48dp at420dpi;
+ 200% rows152-153px/footer2211 before navbar2274; landscape right2227 before2274,
+  bottom1017 within1080; gesture footer1942 before2316. Profile view/back only:
+  service unconfigured, no account mutation. Restoredfont1/auto1,user0/nav0 and
+  preserved Dark/System/data. Settled Home verified, AVD gracefully closed.
+- Initial SystemUIANR/nullroot/launch timeout before relaunch+settling unresolved.
+  SDK37.2 actually raises1024/1536 flags to2560MB; softwareGPU attempted without
+  wiping data. No startup-cause fix, unrelated-process kill or system memory edit.
+- Board64 images (58+4Web+2native); both Settings matrix rows updated, scoped ticks
+  only. Progress has final68 evidence. Both platform95% gates UNVERIFIED, no broad
+  acceptance. Notion ref tab closed after safe crops to free RAM; prefs untouched.
+- Additional actual LunaMax reviewer1 found narrow-first defect. Root reproduced
+  on Chrome67 (title352,56/fullframe), added real red case, fixed all-Web dispatch,
+  green8 and reviewer confirmed. Root final read/preservation checks complete.
+  Callback source exact-match, compact header token-identical; body48dp intentional.
+  Same worker wrote only ignored output/m09/ui52-share-header-proposal.md later;
+  root read it, no production UI52 edits.22 workers since20-worker UI43 sequence.
+- Candidates64-67 superseded; report keeps source/runtime timing. Do not publish
+  candidate67 as final or claim its built-not-installed APK as actual68 evidence.
+
+Next: finish explicit UI51 commit/push, verify remoteSHA0/0, update progress link,
+then implement UI52 desktopWEB Share header using existing copy.share and ref456/
+y44/r12. Inspect output/m09/ui52-notion-web-share-header.png;24px input measurement
+is inner, outer appears34px. Don't shrink until DOM ancestor measurement verified.
+Native/compact, role/guard/session/request/callback order retained. No Publish,
+help/public-link/permissions addition. Follow source/test validation appropriate
+to UI delta; whole95% similarity requires paired matrix, not test counts.
+
+Runtime: C:/Users/meow/flutter; SDK D:/tools/AndroidSdk; Java17 EclipseAdoptium.
+Owned static servers8776,8780,8781,8782,8783 left untouched (blocked StopProcess
+server replacement must not be retried). Final68 server8783 PID31516, candidate67
+8782 PID3840. Fixture8796/7/8 active, but Web QA ports not allowed by default.
+No Chrome QA context open. Graph generation27Oct21:08:32Z stale; all used Settings/
+Share paths coveragechecked then current source read. _agent_ops/session tools
+absent; don't fabricate them. See closure table in UI51_SETTINGS.md.
+
 ## Current29Oct — UI50 verified63; publish then UI51 Settings
 
 UI50 Chrome2/2, VM3/3 and strict2 pass. Final63 Web56.5s/APK28.7s, source1079/

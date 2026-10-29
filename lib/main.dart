@@ -1380,12 +1380,56 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           builder: (BuildContext context, StateSetter setSheetState) {
             final NotesCopy copy = NotesCopy.of(context);
             final AuthCopy authCopy = AuthCopy.of(context);
+            final bool webPreferences =
+                kIsWeb && !NoteFlowLayout.isCompact(context);
+            final bool vi =
+                Localizations.localeOf(context).languageCode == 'vi';
             return NoteFlowSettingsSurface(
-              title: copy.appearanceAndLanguage,
+              title: webPreferences
+                  ? (vi ? 'Tùy chọn' : 'Preferences')
+                  : copy.appearanceAndLanguage,
               subtitle: Localizations.localeOf(context).languageCode == 'vi'
                   ? 'Chọn giao diện và ngôn ngữ cho ứng dụng.'
                   : 'Choose how the app looks and which language it uses.',
+              accountActions: <Widget>[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_outline, size: 20),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'vi'
+                        ? 'Hồ sơ'
+                        : 'Profile',
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.go(AppRoutes.profile);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.lock_outline, size: 20),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  title: Text(authCopy.changePassword),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.go(AppRoutes.changePassword);
+                  },
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.logout, size: 20),
+                  title: Text(authCopy.logout),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_logout());
+                  },
+                ),
+              ],
               children: <Widget>[
+                if (webPreferences)
+                  NoteFlowSettingsSectionTitle(vi ? 'Giao diện' : 'Appearance'),
                 NoteFlowSettingsChoice<ThemeMode>(
                   key: ValueKey<ThemeMode>(selectedTheme),
                   initialValue: selectedTheme,
@@ -1463,7 +1507,11 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                const Divider(height: 1),
+                if (webPreferences) ...[
+                  const SizedBox(height: 24),
+                  NoteFlowSettingsSectionTitle(vi ? 'Ngôn ngữ' : 'Language'),
+                ] else
+                  const Divider(height: 1),
                 NoteFlowSettingsChoice<_NoteFlowLanguageChoice>(
                   key: ValueKey<_NoteFlowLanguageChoice>(selectedLanguage),
                   initialValue: selectedLanguage,
@@ -1494,7 +1542,16 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                     setState(() => _languageChoice = value);
                   },
                 ),
-                const Divider(height: 32),
+                if (webPreferences &&
+                    (_summaryConsentService.requiresCloudConsent ||
+                        ragService != null)) ...[
+                  const SizedBox(height: 24),
+                  NoteFlowSettingsSectionTitle(
+                    vi ? 'Tính năng AI' : 'AI features',
+                  ),
+                  const SizedBox(height: 16),
+                ] else
+                  const Divider(height: 32),
                 if (_summaryConsentService.requiresCloudConsent) ...<Widget>[
                   SummaryCloudSettingsTile(service: _summaryConsentService),
                   const SizedBox(height: 24),
@@ -1506,40 +1563,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 24),
                 ],
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.person_outline, size: 20),
-                  trailing: const Icon(Icons.chevron_right, size: 18),
-                  title: Text(
-                    Localizations.localeOf(context).languageCode == 'vi'
-                        ? 'Hồ sơ'
-                        : 'Profile',
-                  ),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    context.go(AppRoutes.profile);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.lock_outline, size: 20),
-                  trailing: const Icon(Icons.chevron_right, size: 18),
-                  title: Text(authCopy.changePassword),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    context.go(AppRoutes.changePassword);
-                  },
-                ),
-                const Divider(height: 24),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.logout, size: 20),
-                  title: Text(authCopy.logout),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_logout());
-                  },
-                ),
               ],
             );
           },

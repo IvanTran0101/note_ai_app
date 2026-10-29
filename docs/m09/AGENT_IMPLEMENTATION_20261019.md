@@ -1,5 +1,20 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI51 independent review —29 October2026
+
+One additional actual Luna Max reviewed only the five Settings presentation
+sources, main.dart Settings composition and new regression test. No child writes,
+runtime, tests, Git or Notion operations. It found narrow-first Web Settings stayed
+fullscreen when widened. Lead reproduced on actual Chrome67, added a genuinely
+failing regression, routed all Web launches through the responsive helper and ran
+Chrome8/8 green. The same reviewer re-read the two final changes and confirmed
+the finding resolved with no new source issue; it did not claim to run tests.
+
+Twenty UI43 workers plus one reused UI48/49 worker and this additional reviewer
+make22 actual workers in that continuing sequence. Lead owns all current edits,
+integration, real-device/browser checks and publication. Final68 runtime evidence
+is still pending; both whole-platform95% gates remain UNVERIFIED.
+
 ## UI49 final lead review —29 October2026
 
 Root integrated the isolated Luna Max drafts, preserved one writer, corrected

@@ -3,27 +3,37 @@ import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
 import 'note_flow_settings_choices.dart';
+import 'note_flow_compact_settings_surface.dart';
+import 'note_flow_web_settings.dart';
+import 'note_flow_settings_account_actions.dart';
+
+export 'note_flow_web_settings.dart' show NoteFlowSettingsSectionTitle;
 
 /// Existing settings share a quiet, sectioned surface on both form factors.
 Future<void> showNoteFlowSettings({
   required BuildContext context,
   required WidgetBuilder builder,
-}) => NoteFlowLayout.isCompact(context)
-    ? showDialog<void>(
-        context: context,
-        useSafeArea: false,
-        builder: (context) => Dialog.fullscreen(child: builder(context)),
-      )
-    : showDialog<void>(
-        context: context,
-        builder: (context) => Dialog(
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
-            child: builder(context),
+}) {
+  if (kIsWeb) {
+    return showNoteFlowWebSettings(context: context, builder: builder);
+  }
+  return NoteFlowLayout.isCompact(context)
+      ? showDialog<void>(
+          context: context,
+          useSafeArea: false,
+          builder: (context) => Dialog.fullscreen(child: builder(context)),
+        )
+      : showDialog<void>(
+          context: context,
+          builder: (context) => Dialog(
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
+              child: builder(context),
+            ),
           ),
-        ),
-      );
+        );
+}
 
 final class NoteFlowSettingsSurface extends StatelessWidget {
   const NoteFlowSettingsSurface({
@@ -31,17 +41,28 @@ final class NoteFlowSettingsSurface extends StatelessWidget {
     required this.title,
     required this.children,
     this.subtitle,
+    this.accountActions = const [],
   });
   final String title;
   final String? subtitle;
   final List<Widget> children;
+  final List<Widget> accountActions;
 
   @override
   Widget build(BuildContext context) {
     if (NoteFlowLayout.isCompact(context)) {
-      return _CompactSettingsSurface(
+      return NoteFlowCompactSettingsSurface(
         title: title,
         subtitle: subtitle,
+        accountActions: accountActions,
+        children: children,
+      );
+    }
+    if (kIsWeb) {
+      return NoteFlowWebSettingsSurface(
+        title: title,
+        subtitle: subtitle,
+        accountActions: accountActions,
         children: children,
       );
     }
@@ -114,7 +135,11 @@ final class NoteFlowSettingsSurface extends StatelessWidget {
                       : const EdgeInsets.fromLTRB(24, 8, 24, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: children,
+                    children: [
+                      ...children,
+                      if (accountActions.isNotEmpty)
+                        NoteFlowSettingsAccountActions(actions: accountActions),
+                    ],
                   ),
                 ),
               ),
@@ -124,101 +149,6 @@ final class NoteFlowSettingsSurface extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Full-page compact presentation of the same settings and callbacks.
-final class _CompactSettingsSurface extends StatelessWidget {
-  const _CompactSettingsSurface({
-    required this.title,
-    required this.subtitle,
-    required this.children,
-  });
-
-  final String title;
-  final String? subtitle;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = NoteFlowUiTokens.of(context);
-    return Material(
-      color: Theme.of(context).brightness == Brightness.light
-          ? const Color(0xFFF9F8F7)
-          : tokens.sidebarSurface,
-      child: Theme(
-        data: Theme.of(context)
-            .copyWith(dividerTheme: DividerThemeData(color: tokens.divider)),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _header(context, tokens),
-              Divider(height: 1, color: tokens.divider),
-              Expanded(child: _body(tokens)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _header(BuildContext context, NoteFlowUiTokens tokens) {
-    final vi = Localizations.localeOf(context).languageCode == 'vi';
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.arrow_back_ios_new, size: 24),
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
-              child: Text(
-                vi ? 'Cài đặt' : 'Settings',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 48),
-        ],
-      ),
-    );
-  }
-
-  Widget _body(NoteFlowUiTokens tokens) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        if (subtitle case final value?) ...[
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(fontSize: 14, color: tokens.textSecondary),
-          ),
-        ],
-        const SizedBox(height: 16),
-        ...children,
-      ],
-    ),
-  );
 }
 
 /// Changes only the layout of the existing, keyboard-accessible dropdown.
@@ -241,7 +171,9 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = NoteFlowUiTokens.of(context);
     final compact = NoteFlowLayout.isCompact(context);
-    final wideWeb = !compact && MediaQuery.sizeOf(context).width >= 900;
+    final wideWeb =
+        !compact && (kIsWeb || MediaQuery.sizeOf(context).width >= 900);
+    final webPreferences = kIsWeb && wideWeb;
     final outlined = wideWeb || compact;
     final Widget control;
     if (!kIsWeb && compact) {
@@ -266,7 +198,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
         style: TextStyle(
           fontSize: outlined ? 14 : 15,
           fontWeight: compact ? FontWeight.w600 : FontWeight.w400,
-          color: tokens.textSecondary,
+          color: webPreferences ? tokens.textPrimary : tokens.textSecondary,
         ),
         dropdownColor: tokens.pageSurface,
         decoration: InputDecoration(
@@ -305,7 +237,13 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
     }
     return MergeSemantics(
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: wideWeb ? 10 : 16),
+        padding: EdgeInsets.symmetric(
+          vertical: webPreferences
+              ? 16
+              : wideWeb
+              ? 10
+              : 16,
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final title = Column(
@@ -316,6 +254,7 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: wideWeb ? 14 : 16,
+                    height: webPreferences ? 20 / 14 : null,
                     fontWeight: compact && !kIsWeb
                         ? FontWeight.w400
                         : compact
@@ -325,11 +264,12 @@ final class NoteFlowSettingsChoice<T> extends StatelessWidget {
                   ),
                 ),
                 if (helperText case final helper?) ...[
-                  const SizedBox(height: 2),
+                  SizedBox(height: webPreferences ? 4 : 2),
                   Text(
                     helper,
                     style: TextStyle(
                       fontSize: wideWeb ? 13 : 14,
+                      height: webPreferences ? 18 / 13 : null,
                       color: tokens.textMuted,
                     ),
                   ),
