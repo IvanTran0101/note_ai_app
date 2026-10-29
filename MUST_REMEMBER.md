@@ -1,5 +1,19 @@
 # MUST REMEMBER
 
+## Current29Oct — UI50 verified63, next Settings UI51
+
+Read UI50_COMPACT_WEB_SEARCH.md. Initial narrow Web Search now uses the existing
+modal, like actual Notion390px; native phones keep dock. Chrome2/VM3/strict2 pass,
+build63 source1079/f2ba7acb...5f19c drift[], Web56.5s/APK28.7s. Exact actualChrome
+fdf8c5d1...994f9/21,462,180bytes; APK63 built907b17dd...62430, not installed.
+Actual narrow/wide/short/query/Clear48/Escape/barrier/reopen/Light-Dark checked;
+Light restored. Both QA emulators gracefully closed/data kept after RAM~200MB
+and Notion ANR, recovered~6GB. Reopen one at a time after builds. UI49 published
+53ed20ec353f26bfab8ad169ec71cc8413548710. Both95% UNVERIFIED; no broad acceptance.
+UI51 next: existing Settings presentation against actual Preferences measurements
+and safe cropped ref, no fake/new capabilities. IAB control became unavailable
+after resume; earlier ref captured, no Notion preference changed. Root owns source.
+
 ## Current29Oct — UI49 final62 verified; continue UI50
 
 Final62 fixes native Search landscape duplicate fields and centers native empty

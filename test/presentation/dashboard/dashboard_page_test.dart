@@ -919,7 +919,92 @@ void main() {
       expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
       expect(searchVisibilityChanges, <bool>[true, false]);
       expect(tester.takeException(), isNull);
-    });
+    }, skip: kIsWeb);
+
+    testWidgets('Web Search opened narrow uses one responsive modal', (
+      WidgetTester tester,
+    ) async {
+      final changes = <bool>[];
+      final notes = [_buildNote(id: 'a', title: 'Alpha')];
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(
+          query: _FakeDashboardQuery(_overview(notes: notes)),
+        ),
+        notesController: _FakeNotesController(notes: notes),
+        embeddedInWorkspace: true,
+        size: const Size(390, 844),
+        onSearchVisibilityChanged: changes.add,
+      );
+      await tester.pumpAndSettle();
+      final state = tester.state<DashboardPageState>(
+        find.byType(DashboardPage),
+      );
+      state.openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      final fieldElement = tester.element(find.byType(EditableText));
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsWidgets);
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+
+      for (final size in [
+        const Size(390, 844),
+        const Size(1280, 900),
+        const Size(390, 420),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        final frame = tester.getRect(
+          find.byKey(DashboardPage.desktopSearchSurfaceKey),
+        );
+        expect(frame.width, closeTo(size.width.clamp(0, 600), 1));
+        expect(frame.top, closeTo(size.height * .09, 1));
+        expect(frame.bottom, lessThanOrEqualTo(size.height - 16));
+        expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+        expect(tester.element(find.byType(EditableText)), same(fieldElement));
+        expect(
+          tester
+              .widget<EditableText>(find.byType(EditableText))
+              .controller
+              .text,
+          'qxzvbnmptkswj',
+        );
+        final clear = find.byKey(
+          const ValueKey('dashboard-clear-search-action'),
+        );
+        expect(tester.getSize(clear).height, greaterThanOrEqualTo(48));
+        expect(tester.getRect(clear).bottom, lessThan(frame.bottom));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        isEmpty,
+      );
+      await tester.tap(find.byKey(const ValueKey('dashboard-search-close')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.searchFieldKey), findsNothing);
+      state.openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsOneWidget);
+      await tester.tapAt(const Offset(12, 8));
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsNothing);
+      expect(changes, [true, false, true, false]);
+      expect(tester.takeException(), isNull);
+    }, skip: !kIsWeb);
 
     testWidgets('native phone keeps one docked Search field in landscape', (
       WidgetTester tester,

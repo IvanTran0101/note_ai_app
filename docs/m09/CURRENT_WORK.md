@@ -1,5 +1,49 @@
 # M09 current work
 
+## Current29Oct — UI50 verified63; publish then UI51 Settings
+
+UI50 Chrome2/2, VM3/3 and strict2 pass. Final63 Web56.5s/APK28.7s, source1079/
+f2ba7acb...5f19c drift[], exactChrome fdf8c5d1...994f9/21,462,180bytes. Actual
+initial390, resize1280/short390, query/Clear48/Escape/Close/barrier/reopen and
+Light/Dark inspected, Light restored. APK63 artifact907b17dd...62430 built but
+not installed; native62 actual belongs to UI49. See UI50_COMPACT_WEB_SEARCH.md.
+Static63 PID23872, fixture27424, both QA AVDs gracefully closed/data kept after
+RAM~200MB/Notion ANR. Reopen one at a time after builds. New Node runtime handles
+uiFs/uiCrypto/uiRequire/uiPw/uiContext/uiPage/uiErrors, default timeout5s. Prior
+kernel timed out on getByText Dark (menu uses aria menuitem), reset owned Chrome;
+retained profile reopened/Light confirmed, then observed menuitem roles worked.
+IAB browser2/tab1 still inventoried but browser.user unavailable; getTab failed,
+troubleshooting read. Earlier Preferences crop/measurements valid; couldn't confirm
+reference tab close/viewport reset, no Notion preference changed. UI51 source not
+started. Root owns main.dart/common settings sections/surface, unique UI51 artifacts.
+Publish UI50 explicit6 paths first. Both95% gates UNVERIFIED; no broad acceptance.
+
+## Current29Oct — UI49 published53ed20e; UI50 active
+
+UI50 Chrome red failed at absent overlay as intended; one presentation condition
+now selects the existing modal for all embedded Web widths. Chrome final2/2
+(new narrow open/resize/query/Clear/close/reopen/barrier + desktop continuity),
+strict2 clean, VM native/compact/desktop3/3. Old dock case is native-only; explicit
+Web replacement retains its behavior checks. Build63 sequential Web/APK running,
+freeze runtime source until drift verification. Both QA AVDs gracefully closed
+without wipe due host free RAM~200MB/Notion ANRs; free RAM recovered~6GB. Notion
+was rebooted first and remains locked on cold startup; no credential entered.
+Preserve data; schedule emulator one at a time after Web build. Static62 PID28324.
+Next Settings ref: real Notion Web1280x920 Preferences panel[304,50,912,820],
+header26/32/w600 at364,86, subtitle16/24 at126; Appearance section194, Theme
+label14/20/w500 y246.8/helper13/18 y270.8. Existing app has no fake sidebar;
+adapt existing Appearance/Language/AI/account controls only. No UI51 source yet.
+
+13 explicit paths published to final-tuankiet, remote/local equal0/0. Root owns
+dashboard_page.dart and dashboard_page_test.dart for UI50 only: use existing
+safe modal for embedded Web Search opened narrow. Native dock stays. Direct
+Notion390x900 modal confirmed twice, crop recorded. Add real Chrome integration
+case for initial narrow, query/results/empty/Clear/resize/close, retain native
+dock test as native-only with replacement Web coverage, do not weaken it.
+Graph transport closed (index/query/coverage attempts), exact page/content/dialog
+source fallback read. No config/dependency/new capability. Source62 remains
+immutable build snapshot; next runtime63. Both>=95% gates still UNVERIFIED.
+
 ## Current29Oct — UI49 final62 verified, publish then UI50
 
 Final accepted VM3/3 and strict7 clean. Build62 Web93.6s/APK50.6s source1079/

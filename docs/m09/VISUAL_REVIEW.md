@@ -1,5 +1,15 @@
 # M09 — UI similarity review (%)
 
+## UI50 initial compact Web Search —29 October2026
+
+Final63 opens the existing safe-width modal from390px, matching real Notion's
+modal UX without copying its clipped600px inner grid. Chrome2/VM native continuity3/
+strict2 pass; Web/APK builds/drift[]/exact Chrome bundle verified. Actual390/wide/
+short, Clear48/query/resize/dismissal/reopen and Light/Dark inspected, Light restored.
+UI50_COMPACT_WEB_SEARCH.md records timings, APK63 built-not-installed boundary,
+resource scheduling and browser recovery. Next Settings based on real Preferences
+measurements. No new capability or whole-platform percentage; both95% gates open.
+
 ## UI49 native Search —29 October2026
 
 Final62 centers native no-match and uses existing Clear48dp, native round-X.

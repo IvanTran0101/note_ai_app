@@ -319,8 +319,11 @@ final class DashboardPageState extends State<DashboardPage> {
     if (_searchOpen) {
       return;
     }
+    // Web keeps its modal Search UX even when opened from a narrow window.
+    // Native phones retain the bottom-docked Search presentation.
     final bool showDesktopDialog =
-        widget.embeddedInWorkspace && !NoteFlowLayout.isCompact(context);
+        widget.embeddedInWorkspace &&
+        (kIsWeb || !NoteFlowLayout.isCompact(context));
     setState(() {
       _searchOpen = true;
       _desktopSearchDialogOpen = showDesktopDialog;
