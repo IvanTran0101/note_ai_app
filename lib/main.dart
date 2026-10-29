@@ -960,49 +960,32 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   }
 
   Widget _buildWorkspace(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        EmailVerificationBanner(controller: widget.authController),
-        Expanded(
-          child: WorkspaceShell(
-            key: _workspaceShellKey,
-            accountName: widget.currentUserSession.identity?.email
-                .split('@')
-                .first,
-            onDestinationChanged: (WorkspaceDestination destination) {
-              if (destination != WorkspaceDestination.dashboard) {
-                _dashboardPageKey.currentState?.closeSearch();
-              }
-              _reloadWorkspaceDestination(destination);
-            },
-            onOpenSearch: () {
-              _workspaceShellKey.currentState?.showDestination(
-                WorkspaceDestination.dashboard,
-              );
-              _dashboardPageKey.currentState?.openSearch();
-            },
-            onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
-            onOpenSettings: () => _showAppearanceSettings(context),
-            onOpenDiagnostics: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => LocalLlmDebugPage(
-                    summarize: _summarize,
-                    loadModelReadiness: _loadModelReadiness,
-                    provisioningReader: _modelProvisioningStatus,
-                    onProvisioningCancel: _cancelModelProvisioning,
-                  ),
-                ),
-              );
-            },
-            dashboard: DashboardPage(
-              key: _dashboardPageKey,
-              embeddedInWorkspace: true,
-              dashboardController: _dashboardController,
-              notesController: _notesController,
-              onOpenNote: (NoteDto note) =>
-                  _openNoteInWorkspace(context, note: note),
-              onCreateNote: () => _openNoteInWorkspace(context),
+    return SafeArea(
+      left: false,
+      right: false,
+      bottom: false,
+      child: Column(
+        children: <Widget>[
+          EmailVerificationBanner(controller: widget.authController),
+          Expanded(
+            child: WorkspaceShell(
+              key: _workspaceShellKey,
+              accountName: widget.currentUserSession.identity?.email
+                  .split('@')
+                  .first,
+              onDestinationChanged: (WorkspaceDestination destination) {
+                if (destination != WorkspaceDestination.dashboard) {
+                  _dashboardPageKey.currentState?.closeSearch();
+                }
+                _reloadWorkspaceDestination(destination);
+              },
+              onOpenSearch: () {
+                _workspaceShellKey.currentState?.showDestination(
+                  WorkspaceDestination.dashboard,
+                );
+                _dashboardPageKey.currentState?.openSearch();
+              },
+              onCreateNote: () => unawaited(_openNoteInWorkspace(context)),
               onOpenSettings: () => _showAppearanceSettings(context),
               onOpenDiagnostics: () {
                 Navigator.of(context).push(
@@ -1016,34 +999,58 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   ),
                 );
               },
-              onSearchVisibilityChanged: (bool active) {
-                _workspaceShellKey.currentState?.setCompactSearchActive(active);
-              },
-            ),
-            notes: NotesWorkspacePage(
-              key: _notesPageKey,
-              embeddedInWorkspace: true,
-              applicationService: _noteApplicationService,
-              provisioningReader: _modelProvisioningStatus,
-              onProvisioningCancel: _cancelModelProvisioning,
-              syncController: _syncPresentationControllerForCurrentAccount(),
-              onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => LocalLlmDebugPage(
-                      summarize: _summarize,
-                      loadModelReadiness: _loadModelReadiness,
-                      provisioningReader: _modelProvisioningStatus,
-                      onProvisioningCancel: _cancelModelProvisioning,
+              dashboard: DashboardPage(
+                key: _dashboardPageKey,
+                embeddedInWorkspace: true,
+                dashboardController: _dashboardController,
+                notesController: _notesController,
+                onOpenNote: (NoteDto note) =>
+                    _openNoteInWorkspace(context, note: note),
+                onCreateNote: () => _openNoteInWorkspace(context),
+                onOpenSettings: () => _showAppearanceSettings(context),
+                onOpenDiagnostics: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => LocalLlmDebugPage(
+                        summarize: _summarize,
+                        loadModelReadiness: _loadModelReadiness,
+                        provisioningReader: _modelProvisioningStatus,
+                        onProvisioningCancel: _cancelModelProvisioning,
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+                onSearchVisibilityChanged: (bool active) {
+                  _workspaceShellKey.currentState?.setCompactSearchActive(
+                    active,
+                  );
+                },
+              ),
+              notes: NotesWorkspacePage(
+                key: _notesPageKey,
+                embeddedInWorkspace: true,
+                applicationService: _noteApplicationService,
+                provisioningReader: _modelProvisioningStatus,
+                onProvisioningCancel: _cancelModelProvisioning,
+                syncController: _syncPresentationControllerForCurrentAccount(),
+                onOpenSettings: () => _showAppearanceSettings(context),
+                onOpenDiagnostics: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => LocalLlmDebugPage(
+                        summarize: _summarize,
+                        loadModelReadiness: _loadModelReadiness,
+                        provisioningReader: _modelProvisioningStatus,
+                        onProvisioningCancel: _cancelModelProvisioning,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
