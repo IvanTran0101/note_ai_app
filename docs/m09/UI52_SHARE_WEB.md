@@ -1,6 +1,6 @@
 # UI52 — Share popup on Web
 
-30 October2026. Web71 checked; native71 IME defect found. Target72 pending.
+30 October2026. Source72 scoped Web/native UI verified; whole M09 remains open.
 Whole M09 is PARTIAL; Web>=95% and Android>=95% similarity remain UNVERIFIED.
 
 ## Direct reference and corrections
@@ -148,12 +148,35 @@ on C while root continues independent Web work. The final72 APK is built but
 NOT installed; the last actual installed71 still has the documented IME defect.
 Do not check native completion or replace the actual71 failure with VM evidence.
 
+## Final72 installed evidence
+
+After free C was observed at7.76GB, the same emulator passed its normal disk
+check. No check bypass or system memory change. Installed/pulled72 matches the
+APK above. The first fresh hierarchy was null and rejected; wake/settling gave
+a fresh Home. At font200%, stable landscape and IME top520: input181,305-1943,457
+is fully visible (152px); Share1964,318-2222,444 and Close2003,155-2243,281 are
+126px=48dp. Scrolling dismisses the keyboard by the existing onDrag behavior;
+Viewer/Editor menu rows are each126px high and end at x2274/bottom908, inside
+the navigation safe region. No invitation was submitted. Normal portrait and
+gesture portrait+IME were inspected; dumpsys confirmed input view shown.
+Close remains126px. Original font1/auto1,user0/navigation0 were restored/re-read,
+the form cancelled, fresh retained-data Home captured and the AVD closed.
+
+A font/rotation transition reset user_rotation once; a premature tap caused
+only local empty-email validation. That state was cancelled, not counted as
+typed/invitation proof. Final captures use the subsequently stable landscape.
+The temporary outer green frame appeared again; its cause is not fixed. Safe
+before71/after72 app crops were added to the board, retaining68 images as70.
+The runtime receipt is output/m09/ui52-native72-runtime.json (ignored).
+Source checkpoint16864ba335c2b17ba5a18e6016a29972d971238e is pushed/remote-verified
+0/0; this evidence follow-up contains documentation only.
+
 ## Checkpoint result and closure receipt
 
-UI52 is PARTIAL: Web styling/UX and the native source regression are verified
-within their recorded scopes; installed72 Android retest remains pending.
-Whole M09 and both95% gates remain open. Source checkpoint publication may
-proceed with that boundary. No live provider/cloud or broad functional signoff.
+UI52 scoped UI checks passed with the evidence above. Whole M09 is PARTIAL and
+both95% gates remain open: component checks do not establish full similarity.
+No live provider/cloud or broad functional signoff. Continue the remaining
+editor/reference matrix, keeping the recorded fixture-content differences clear.
 
 | Record | Resolution |
 | --- | --- |

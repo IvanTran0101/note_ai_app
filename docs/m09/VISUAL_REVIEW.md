@@ -1,6 +1,16 @@
 # M09 — UI similarity review (%)
 
-## UI52 Share —30 October2026, PARTIAL native retest pending
+## UI52 Share —30 October2026, scoped72 checked; M09 PARTIAL
+
+Installed/pulled72 now matches456da989...161598/174,215,746bytes after C free
+space was observed7.76GB and the emulator's normal check passed. Actual stable
+landscape200%+IME input305-457 and Share318-444 are fully above keyboard520;
+Close155-281=48dp. Existing drag hides IME, roles48dp then reachable; portrait
+gesture+IME checked. Font1/auto1,user0/nav0 restored, form cancelled and AVD
+closed with retained Home. Initial null hierarchy, transition mistarget/local
+validation and temporary outer green frame are disclosed in UI52_SHARE_WEB.md.
+Board70 images include safe before71/after72; component verification is not
+the whole-platform95% gate. Earlier pending/disk status below is history.
 
 Direct Notion Web Share Light/Dark:456px popup/trigger anchor/y44, header40+.8,
 input32px/inner24, submit60x32. All Web widths now use a bounded popup rather

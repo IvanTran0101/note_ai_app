@@ -2,6 +2,14 @@
 
 ## UI52 root verification —30 October2026
 
+Final follow-up: root installed/pulled exact72, reproduced the original state
+on a settled emulator and verified full field/48dp Share/Close above IME. Existing
+drag/role access and gesture mode checked; original settings/data retained.
+Board now70 safe images. Initial disk denial cleared only after observed C free
+space7.76GB; no workaround or system memory setting. Source16864ba pushed0/0.
+Current device evidence supersedes the pending status in the work log below;
+whole-platform95% remains unverified. No new child this follow-up.
+
 No new child was spawned in this resume; live-agent inventory contains root only.
 The continuing sequence used22 actual workers historically, including the UI51
 reviewer reused for UI52 source review. Its later visual-gap audit failed on an

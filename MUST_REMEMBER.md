@@ -1,6 +1,6 @@
 # MUST REMEMBER
 
-UI52 source72: VM9 PASS incl real red/green native IME-clipping regression, strict8 clean; Web72 JS byte-identical to actual Chrome71 (6 tests), Web/APK72 built drift[]. Android72 NOT installed/retested: emulator FATAL insufficient disk, C2.04GB/D2.47GB, pagefile18242MB read-only observed. User asked asynchronously to free C; continue Web UI53 meanwhile. Original fonts/rotation/nav and Light prefs restored; data preserved. Both95% UNVERIFIED, no broad acceptance. Read CURRENT_WORK/UI52_SHARE_WEB.
+UI52 source16864ba pushed0/0; actual72 installed/pulled hash456da989...161598 matches. Stable landscape200%+IME field305-457/Share318-444 before keyboard520; Close48dp. Drag/role access and gesture+IME checked, originalfont1/auto1/user0/nav0 restored, AVDoff/dataretained. VM9/strict8, actualChrome71+sameJS72 verified; board70 images. Continue UI53 editor matrix; both95% UNVERIFIED, no broad acceptance. Read CURRENT_WORK/UI52_SHARE_WEB.
 
 ## Active29Oct — UI51 verified68; publish then CONTINUE UI52 Share
 

@@ -1,5 +1,24 @@
 # M09 current work
 
+## UI52 actual72 verified; docs follow-up then CONTINUE UI53
+
+Source16864ba335c2b17ba5a18e6016a29972d971238e pushedverified0/0. No app edits
+afterfrozen72. Cfreeobserved7.76GB so retriednormalAVDdiskcheckpassed, installed/
+pulled72 hash456da989...161598/174215746 matches. Initialnullrootrejected; fresh
+wake/settleHomevalid. Font/rotationtransition resetrotation0 once; prematuretap
+causedlocalemptyemailvalidationonly, cancelled/reopenedstablelandscapebeforeproof.
+Finaltypedfield[181,305,1943,457], Share[1964,318,2222,444], Close[2003,155,2243,281]
+keyboardtop520, font2/420dpi/2.625 =>Share+Close48dp. ExistingdragdismissesIME,
+roleViewer/Editor126px eachright2274/bottom908safe. Gesturenav2portrait+IMEchecked
+dumpsysInputShowntrue. Originalfont1/auto1,user0/nav0 re-read/restored; formcancelled,
+freshretainedHomecapture thenemuoff. Actual72receiptJSONsaved. No invitation.
+Temporarygreenouterframeobservedagain/causeunfixed. Board70imagesnowincl2safe
+before71/after72crops; Web71/72sameJS aa41cf1a...c5ae28. VM9/strict8noissues.
+UI52scopedUIverified, wholeM09PARTIAL/both95%UNVERIFIED. Need6docfollowuppush/Notion
+currentmatrixupdates thenWebUI53/NativeNotionpair. Diskblockresolvedforrun, no
+settingscleanup/deletebypass. NoChrome/AVDopen; IAB2tab1refLight/Shareclosedmarked.
+
+
 ## UI52 source72 ready to publish PARTIAL; continueWeb53 while disk pending
 
 Rednative71 bottom216>viewport198 reproduced; shortsurface<300dp removesextra

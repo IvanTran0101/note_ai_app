@@ -1,5 +1,14 @@
 # UI43 — current direct reference and permitted adaptations
 
+## UI52 constrained native sheet adaptation —30 October2026
+
+Actual72 landscape200%+IME now shows the whole152px field305-457 above keyboard520,
+with48dp Share/Close. Short-height chrome removes extra gap/handle while keeping
+scaled text, scroll and SafeArea. Existing drag dismisses IME; role menu48dp
+remains reachable. Gesture portrait+IME checked; original settings restored.
+This is an accessibility adaptation validated against the actual app failure,
+not a newly measured Notion-native Share pair or whole-platform percentage.
+
 ## UI51 Preferences / UI52 Share —29 October2026
 
 Direct Notion Web1280x920 frame1152x820/64,50/sidebar240, title26/32 and section/
