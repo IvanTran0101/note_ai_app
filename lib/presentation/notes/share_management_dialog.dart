@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_sharing_app_service.dart';
@@ -21,17 +22,21 @@ final class ShareManagementDialog extends StatefulWidget {
     required this.identity,
     required this.sessionEvents,
     required this.isCurrent,
+    this.webAnchorInset,
   });
   final NoteSharingAppService service;
   final NoteIdentity identity;
   final Stream<void> sessionEvents;
   final bool Function() isCurrent;
+  final double? webAnchorInset;
   @override
   State<ShareManagementDialog> createState() => _ShareManagementState();
 }
 
 final class _ShareManagementState extends State<ShareManagementDialog> {
   final _email = TextEditingController();
+  final _emailFocus = FocusNode();
+  bool _initialInviteFocusRequested = false;
   List<NoteShareGrant> _shares = const [];
   NoteRole _role = NoteRole.viewer;
   ShareCommand? _retry;
@@ -70,7 +75,10 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
         setState(() => _error = ShareFailureCode.unavailable);
       }
     } finally {
-      if (_live && request == _request) setState(() => _busy = false);
+      if (_live && request == _request) {
+        setState(() => _busy = false);
+        _requestInitialInviteFocus();
+      }
     }
   }
 
@@ -134,7 +142,9 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
     final copy = SharingCopy(context);
     final tokens = NoteFlowUiTokens.of(context);
     final compact = NoteFlowLayout.isCompact(context);
-    final webPanel = !compact && MediaQuery.sizeOf(context).width >= 900;
+    final nativeCompact = compact && !kIsWeb;
+    final webPanel =
+        kIsWeb || (!compact && MediaQuery.sizeOf(context).width >= 900);
     final body = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,7 +171,7 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
           ShareErrorNotice(
             message: copy.failure(_error!),
             tokens: tokens,
-            action: compact
+            action: nativeCompact
                 ? Align(
                     alignment: AlignmentDirectional.centerEnd,
                     child: _retryButton(copy),
@@ -196,7 +206,7 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
         ),
       ],
     );
-    if (compact) {
+    if (nativeCompact) {
       return ShareManagementSurface(
         title: copy.manage,
         closeLabel: copy.close,
@@ -217,19 +227,33 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
   );
 
   Widget _inviteForm(SharingCopy copy, NoteFlowUiTokens tokens) {
-    final email = _inviteEmail(copy, tokens);
-    final role = _inviteRole(copy);
     final webPanel =
-        !NoteFlowLayout.isCompact(context) &&
-        MediaQuery.sizeOf(context).width >= 900;
+        kIsWeb ||
+        (!NoteFlowLayout.isCompact(context) &&
+            MediaQuery.sizeOf(context).width >= 900);
+    final webPopup = kIsWeb;
+    final email = _inviteEmail(copy, tokens, webPopup: webPopup);
+    final role = _inviteRole(copy);
     final submit = FilledButton(
       key: const ValueKey('share-recipient-submit'),
       onPressed: _busy || _retry != null ? null : _create,
       style: FilledButton.styleFrom(
-        minimumSize: webPanel ? const Size(64, 32) : const Size(48, 48),
+        minimumSize: webPopup
+            ? const Size(60, 32)
+            : webPanel
+            ? const Size(64, 32)
+            : const Size(48, 48),
         padding: EdgeInsets.symmetric(horizontal: webPanel ? 12 : 16),
-        textStyle: const TextStyle(fontSize: 14),
-        visualDensity: webPanel
+        textStyle: TextStyle(
+          fontSize: 14,
+          fontWeight: webPopup ? FontWeight.w500 : null,
+        ),
+        backgroundColor: webPopup ? const Color(0xFF2783DE) : null,
+        foregroundColor: webPopup ? const Color(0xFFF3F9FD) : null,
+        shape: webPopup
+            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
+            : null,
+        visualDensity: webPanel && !webPopup
             ? VisualDensity.compact
             : VisualDensity.standard,
         tapTargetSize: webPanel
@@ -268,14 +292,19 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
     );
   }
 
-  Widget _inviteEmail(SharingCopy copy, NoteFlowUiTokens tokens) =>
-      ShareInviteField(
-        controller: _email,
-        enabled: !_busy && _retry == null,
-        label: copy.email,
-        compact: NoteFlowLayout.isCompact(context),
-        tokens: tokens,
-      );
+  Widget _inviteEmail(
+    SharingCopy copy,
+    NoteFlowUiTokens tokens, {
+    required bool webPopup,
+  }) => ShareInviteField(
+    controller: _email,
+    enabled: !_busy && _retry == null,
+    label: copy.email,
+    compact: NoteFlowLayout.isCompact(context),
+    webPopup: webPopup,
+    focusNode: _emailFocus,
+    tokens: tokens,
+  );
 
   Widget _inviteRole(SharingCopy copy) => DropdownButtonHideUnderline(
     child: DropdownButton<NoteRole>(
@@ -300,6 +329,7 @@ final class _ShareManagementState extends State<ShareManagementDialog> {
     _request++;
     unawaited(_subscription?.cancel());
     _email.dispose();
+    _emailFocus.dispose();
     super.dispose();
   }
 }

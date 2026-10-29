@@ -1,5 +1,29 @@
 # M09 — UI similarity review (%)
 
+## UI52 Share —30 October2026, PARTIAL native retest pending
+
+Direct Notion Web Share Light/Dark:456px popup/trigger anchor/y44, header40+.8,
+input32px/inner24, submit60x32. All Web widths now use a bounded popup rather
+than the native sheet; one accessible email label/focus survives typing, resize
+and local form role selection. No Publish/help/public access capability added.
+Root rejected70's actual28px border and fixed a single-line hint wrap found by
+the new painted-container assertion. Chrome71 six cases/strict7 pass; actual
+Chrome JSaa41cf1a...c5ae28/21,473,919bytes matches. Header Light/Dark,390 popup,
+48px narrow Close and short-window dismissal inspected; Light restored. Four
+safe reference/app headers retained64 prior board images as68.
+
+Installed71 hash matched and basic Share rendered, but landscape200%+IME cut the
+input to26px. Root added a red regression (bottom216>viewport198), shortened only
+the constrained native header/top gap, and ran VM72 all9/strict8 clean. Web72 JS
+is byte-identical to actual71; source1083/3cc43e74...897d51 drift[], Web60.1s/
+APK58.9s, APK456da989...161598 built. Actual Android72 is NOT installed/retested:
+emulator refuses startup due disk space (C2.04GB/D2.47GB; pagefile18242MB read-only
+observed). No system setting/cleanup workaround. User asked to free C; root
+continues Web. UI52_SHARE_WEB.md records exact evidence and scope boundaries.
+
+Both Web>=95% and Android>=95% remain UNVERIFIED. No broad acceptance. Original
+native font1/auto1,user0/nav0 and Light Web/reference preferences restored.
+
 ## UI51 Settings —29 October2026
 
 Direct Notion Preferences1280/1920 Light/Dark now maps to Web90vw/cap1512,

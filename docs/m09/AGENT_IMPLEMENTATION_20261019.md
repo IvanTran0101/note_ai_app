@@ -1,5 +1,25 @@
 # M09 — parallel implementation, 19 October 2026
 
+## UI52 root verification —30 October2026
+
+No new child was spawned in this resume; live-agent inventory contains root only.
+The continuing sequence used22 actual workers historically, including the UI51
+reviewer reused for UI52 source review. Its later visual-gap audit failed on an
+account usage limit; no deliverable or runtime check is attributed to that audit.
+
+Root measured real Notion Web Share, implemented/reviewed all five production
+paths plus two tests, and owns docs/runtime/Git/Notion. Source/callback review
+preserved load/apply/session/authorization guards and local form state. No
+overlapping writers, new dependencies/schema or permission behavior.
+Actual70 caught28px border; the new assertion found hint wrapping; root corrected
+both and verified Chrome71 six cases plus actual screenshots. Installed Android71
+then caught landscape200% IME clipping despite earlier layout tests. Root added
+a genuinely failing native test, shortened constrained sheet chrome, and ran
+VM72 all9 plus strict8 clean. Web72 executable is byte-identical to checked71.
+Actual Android72 is pending disk space, so source fix is not claimed device PASS.
+UI52_SHARE_WEB.md records builds, identities, failed candidates and final limits.
+Both95% gates remain open; root continues independent Web work while user frees C.
+
 ## UI51 independent review —29 October2026
 
 One additional actual Luna Max reviewed only the five Settings presentation

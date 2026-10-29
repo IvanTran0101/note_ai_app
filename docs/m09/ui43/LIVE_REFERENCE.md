@@ -12,8 +12,11 @@ to release RAM; no Notion preference or access changes retained.
 
 Actual Share Web1280x720 frame456px/y44/radius12; safe top98px crop contains only
 header and blank invite input, no account data. Input24px is inner measurement;
-outer border looks34px, must verify ancestor before any density change. UI52
-proposal is isolated in ignored output; do not add Publish/help/public sharing.
+outer container32px, verified by walking rendered ancestors30Oct: inner24 plus
+its wrapper padding, x16 within popup. Focus ring adds outside ink; do not count
+that as container height. All Web widths stay popup:700 width456,390 width366.4,
+y44. The right edge follows the actual Share trigger. UI52 proposal is isolated
+in ignored output; do not add Publish/help/public sharing.
 
 ## UI49/50 direct Search references —29 October2026
 

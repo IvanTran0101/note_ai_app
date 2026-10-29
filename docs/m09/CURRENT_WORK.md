@@ -1,9 +1,138 @@
 # M09 current work
 
+## UI52 source72 ready to publish PARTIAL; continueWeb53 while disk pending
+
+Rednative71 bottom216>viewport198 reproduced; shortsurface<300dp removesextra
+topgap/draghandle, headerClose48+scaledtitle andscrollbodypadding8. VM72 all9pass,
+strict8clean. Web60.1s/APK58.9s, source1083
+3cc43e74247262aafa2e4632c3794565d5d3b93e4797f07e2a9797f6d4897d51/drift[].
+72JSaa41cf1a...c5ae28 identical71 actualChrome/6tests; no newChrome72suiteclaimed.
+1472existingrootfilesstable. APK72 174215746bytes/456da989fc1d8d97cf1f41e976f694a0b4cc0793481e08aa1180fae18a161598.
+NOTinstalled72: emulatorstartupFATALhasSufficientDiskSpace, noAVDstarted. C2.04GB
+D2.47GB; readonlyCIMpagefileAllocated18242MB(Current2363/Peak4238). No systemmemory
+settingsmodified/cleanup/delete. Askeduserasyncfree5-8GB C, continueWebindependent.
+Lastactualdevice71hasknownclipping; doNOTticknativefixeduntil72installed/samecase
+retested. Font1/auto1,user0/nav0 restored/read beforegraceful71close; dataretained.
+Source72ownermetadata/API/sessionguardsreviewed. Candidate70/71failureskeptclear.
+Both95%UNVERIFIED, UI52PARTIALnativepending; pushcheckpointthenWebUI53directpair.
+Notionboard68safeimages, refandappLightrestored. Nochildrunning/newspawns this
+resume(22historicalworkers). Preserve unrelated .playwright-cli/final_project.md.
+
+
+## UI52 native72 next — actual71 landscape200% IME clipped
+
+71 Chrome6 PASS after hint singleline (first71 border52 failures were placeholder
+wrap in Ahem; singleline fixes real narrowhint risk). strict7 clean. Web57.9s,
+APK65.4s, source1083/91e6abca3ad5bcb6bd3271c89097e2e9f106a96b256a3109924f797dcc6aff9b
+drift[]. ActualChrome21,473,919bytes/aa41cf1a0b85e66d66ff7adaec0f0d92ba62a933207176e3e596ab505bc5ae28
+match. Realheadercrop shows32px border; LightDark/typing sequential/resize retaining
+value/short700x320Close36(mouse)/390Close48/focus+labelchecked. OriginalWebtheme was
+LIGHT (not historicalSystem); restoredLight/Systemlanguage. NotionThemeLightrestored
+Shareclosed/tab1IAB2handoff. Four safeheaderref/appimages onboard count68.
+APK71 installed/pulled f8bd35b9e89bea7a498fac28112ca591802915d104a561ed7081394d30b48dbd
+174,215,889bytes matches. NativebootsettledHome/ShareloadedNoRecipients; typedQA
+email(noinvite), font2 andlandscapenoIME okay. IMElandscapefont2 input494-520 only26px
+visible, Sharedbuttonclipped: DO NOTacceptnative71. Regressionnew
+test/presentation/ui43/ui52_share_short_sheet_test.dart VMredrunning9704; waitfor
+redbeforeproductionfix. Plannedshortavailableheight(<300) topGap0, compactheader
+withoutdraghandle andtopbodypadding8; keepClose48/titletextscaling/scroll/actions.
+No codefix yet; finaltarget72 thenVMgreen/builds/exactruntime/native retest.
+Actualfont1/auto1,user0/nav0 re-read restored; AVDOFFdataretained. NoChromeopen.
+NativefirstcapturefilewrittenbutconsoleprinterCP1252failedUnicode; latercaptures
+PYTHONIOENCODING=utf8. OnlyfreshXMLused. Rootallwrites; noagentsrunning,22historical.
+Both95%UNVERIFIED. UI52notpushed. Preserve unrelated andnewlistenerPIDs2572/36548.
+NextUI53: fullfixture is LAST of3 same-title Homebuttons, firstRecentonly2headings.
+Fullfixturescreenshot+currentNotionmetrics captured; reference includesblankH1-H2,
+appfullfixturedoesnot. Normalizecontent/approvedlabelrowandnotelevelfileadaptations
+beforecallingverticalgapsstylebugs. No dataseteditperformed.
+
+
+## UI52 target71 — actual70 border28 rejected
+
+Strict70 sevenpaths clean after braces fix; Web80.8s/source1083
+dfbb804b0ead0058d7fad27fa8e971143b5bcc2ab3984601ea44cb710827736e/drift[].
+ActualChrome70 c49d057422f245214f7bd97fb40eb34299554bad332643337bf3596f23effce0
+21,473,912bytes matches. Popup456/right1240 triggerRight1240/y44 product;700
+anchorRight660;390popup366/gutter12 and Close48px, focus+singlelabel before/after
+typing/clear/roleEditor->Viewer no submission checked. But paintedinputstill28
+not32; root rejects70, sets WebpaddingV6(input20+12) and adds direct
+InputDecorator.containerOf borderheight32 regression. Source71 frozen for Chrome6/
+strict7/Web71 sequential pipeline15499. No APK69/70. Parent old processes gone
+onresume: confirmed no listeners8776/8796/7/8; started NEW hidden serverPID2572
+same63root and fixture36548, not killed/replaced. All736 oldrootfiles hashstable
+afternewchild70. Firstgoto before listenerready gotconnectionrefused1; postready
+reload scope console0/page0, initialerror disclosedseparately. Data45notesretained.
+Chromecontextclosed; all AVDoff. Needactual71 thenAPK71/native/Notion/push.
+Both95% UNVERIFIED; no broadfunctionalacceptance. Usage-limitedchildnogapaudit.
+
+
+## Resume30Oct — target70 validation
+
+VM70 completed6/6 PASS; strict70 first found one braces-only lint at sharing154.
+Root fixed brackets without behavior change; strict7 rerun then Web70 sequential
+pipeline running31839. Chrome6/6 predates only this braces change. No APK70 yet.
+Fresh graph indexed29Oct13:06Z, sevenpaths metadata_changed/read exactsource;
+no exhaustive graph claim. UI53 visualgap review worker failedusage-limit, no
+deliverable claimed. Root continues actual Chrome70 then native; both95% open.
+Node Playwright restarted clean retainedprofile. No AVD running. Unrelatedfiles
+and oldstaticserver untouched; no policyblocked kill retry.
+
+## UI52 target70 — all Web popup + anchor + accessible hint/focus
+
+69 actual Chrome hashddebaf8f...f127b3eb/21,476,260 matches; no errors on8776,
+all368 priorrootfiles unchanged after addingchild69/basehref. Header/submit60x32
+matchesref, butactualinputvisible28 despitesemantic38 and Web390stillnative-style
+fullheightSheet.69 Web-only superseded, NO APK69 built/push. Ref Web700456px/y44,
+390366.4px/x11.6/y44 => allWebmustpopup; nativephonekeepssheet.
+Root70 updates sameUI5sources plus note_detail_sharing.dart: optionalanchorinset
+from Buildertrigger actualRenderBox relativeROOTNavigatorOverlay beforeawaitSave;
+all auth/save/session guards kept. SDKElement.findRenderObject walksDESCENDANTS,
+agent's temporaryancestor/rowclaim retracted afterSDKread (noGlobalKey added).
+Webpopup456 clamp12gutters/triggerRight, allWebtransparentbarrier/SafeArea; native
+route unchanged. WebinputcustomhintExcludedSemantics+outerpersistentlabel, resolves
+compactfalseforWeb, min32/std density/noLabelSlot; nativeAPI/defaultfalsepreserved.
+OneFocusNode owned/disposedShareState; requestonceafterinitialsuccessfulload, post
+frame checks_live BEFORE contextlookup, currentRoute and existinguserfocus before
+request. No focusrequest_apply/revoke. Header CSS14/16.8/w500 underline1.6 measured;
+refFocusinset1+outer1, newWebfocusborder2. Native legacyheader/tokenstate preserved.
+Chrome70 first2pass/4fail onlytestwronglyexpectedtextfieldhitboxexact32(actual48),
+corrected>=32 (visualbordercheckedlive separately). New6cases wide/largeIME/narrow x
+loaded/error; Chrome70-final running, NO source edits whilefinalrun/build afterward.
+Strict6/7paths thenWeb70(basehrefchild70, hashallpriorrootfiles), actual70wide/700/
+390/short/query/role/focus/clear/close+LightDark, then APK70/sourceproof/report/Notion/
+push. Rootownsallcode, sameoneadditionalLunaMaxreadonlyreview. Both95% gates open.
+UI51publishedfe670e5 verified0/0. CurrentnoAVD/Chrome open, refNotionIABtab2closedShare/
+Light/default1280x720 markedhandoff. Preserveunrelatedfilesandoldservers; no killretry.
+
+## Active UI52 — final69 Web header/input/submit, source frozen
+
+UI51 pushed fe670e5a410173f1f83fcf56e9f3721d0fa08a2b, SHA matches0/0. Root owns
+UI52 source, one reused Luna Max only reviews/read-only (old proposal output).
+Web desktop header40+.8/Share14w500, body top16/horizontal16, existing label never
+floats, input min32/std density/r6, submit60x32/std/refblue2783DE/fgF3F9FD. Actual
+baseline63 allowed-origin Chrome showed Submit24; no UI/service page errors.
+Native/compact defaults/legacyheader/role/callbacks preserved. Existing UI43 tests
+extended to4 (normal/200%+shortIME x loaded/error), target>=32 assertion, Chrome4
+PASS after densityfix. Then identical field extracted to share_invite_field.dart
+(re-export original API) to keepSurface under400; final strict5 running, then
+Web69 via output/m09/build_ui52_web69.py. No newfeatures; both95% remain open.
+Build69Web has basehref /ui52-final69/, copies into NEW child folder of existing
+63 staticroot at8776, hashes ALL originalrootfiles before/after; no serverstop,
+oldroot overwrite or fixtureallowlistchange. Verifyactualhash and localShare
+loaded/field/button/LightDark/responsive before APK69. APK69 notbuilt yet.
+Need final nativebranch proof/optional focusedVM ifconcern, report/images/Notion/
+explicitpush. Source freeze for Web69; ifstyledefect neednewcandidate, don'tmix.
+Read safe ref output/m09/ui52-notion-web-share-header.png and isolatedproposal;
+proposal's22pxbodypadding was INNERmisread:actualouter16,inputinner22,outer32/inner24.
+Ref popup x changed with Shareanchor (723.84 then355.04), width456/y44 stable;
+don'tclaimfixedright100universally. CurrentrefIABtab2, Shareclosed/Light/default
+1280x720, markedhandoff. All emulators/ownedChrome closed; rootSSRbaseline63same
+fields/callbacks, hashfdf8...994f9 and CORS0; fixtureallows8776 only bydefault.
+
 ## UI51 verified68 — publish then CONTINUE UI52 Share
 
 UI51_SETTINGS.md is the checkpoint receipt. Current source remains frozen68;
-last published1534891 until explicit UI51 push. All current edits owned by root.
+UI51 published fe670e5a410173f1f83fcf56e9f3721d0fa08a2b, remoteSHA matches0/0. Root owns UI52 next.
 Five production Settings/main paths + one test + six docs =12 intended paths.
 Preserve unrelated .playwright-cli/ and final_project.md; never stage output.
 

@@ -5,6 +5,8 @@ import '../../domain/notes/note_share_grant.dart';
 import 'sharing_localizations.dart';
 import 'notes_theme_tokens.dart';
 
+export 'share_invite_field.dart' show ShareInviteField;
+
 /// Compact presentation shell for the existing share-management controls.
 /// Permission state and all actions remain owned by ShareManagementDialog.
 final class ShareManagementSurface extends StatelessWidget {
@@ -27,7 +29,12 @@ final class ShareManagementSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final view = View.of(context);
     final safeTop = view.viewPadding.top / view.devicePixelRatio;
-    final topGap = (64 - safeTop).clamp(0, 64).toDouble();
+    // Keep room for the field and Close when a landscape IME shrinks the sheet.
+    final short =
+        MediaQuery.sizeOf(context).height -
+            NoteFlowLayout.keyboardInset(context) <
+        300;
+    final topGap = short ? 0.0 : (64 - safeTop).clamp(0, 64).toDouble();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final largeText = MediaQuery.textScalerOf(context).scale(18) > 28;
     final titleLabel = Text(
@@ -81,19 +88,26 @@ final class ShareManagementSurface extends StatelessWidget {
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        short ? 0 : 8,
+                        12,
+                        short ? 0 : 4,
+                      ),
                       child: Column(
                         children: [
-                          Container(
-                            width: 44,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: tokens.divider,
-                              borderRadius: BorderRadius.circular(99),
+                          if (!short) ...[
+                            Container(
+                              width: 44,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: tokens.divider,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          if (largeText)
+                            const SizedBox(height: 8),
+                          ],
+                          if (largeText || short)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
@@ -130,7 +144,12 @@ final class ShareManagementSurface extends StatelessWidget {
                       child: SingleChildScrollView(
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          short ? 8 : 16,
+                          20,
+                          20,
+                        ),
                         child: content,
                       ),
                     ),
@@ -140,65 +159,6 @@ final class ShareManagementSurface extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-final class ShareInviteField extends StatelessWidget {
-  const ShareInviteField({
-    super.key,
-    required this.controller,
-    required this.enabled,
-    required this.label,
-    required this.compact,
-    required this.tokens,
-  });
-
-  final TextEditingController controller;
-  final bool enabled;
-  final String label;
-  final bool compact;
-  final NoteFlowUiTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(compact ? 8 : 10),
-      borderSide: compact ? BorderSide.none : BorderSide(color: tokens.divider),
-    );
-    return TextField(
-      key: const ValueKey('share-recipient-email'),
-      controller: controller,
-      enabled: enabled,
-      keyboardType: TextInputType.emailAddress,
-      style: TextStyle(fontSize: compact ? 16 : 14),
-      decoration: InputDecoration(
-        labelText: compact ? null : label,
-        hintText: compact ? label : null,
-        labelStyle: const TextStyle(fontSize: 14),
-        hintStyle: TextStyle(
-          fontSize: compact ? 16 : 14,
-          color: tokens.textMuted,
-        ),
-        prefixIcon: compact
-            ? Icon(Icons.search, size: 20, color: tokens.textMuted)
-            : null,
-        prefixIconConstraints: compact
-            ? const BoxConstraints(minWidth: 48, minHeight: 48)
-            : null,
-        constraints: BoxConstraints(minHeight: compact ? 48 : 34),
-        filled: true,
-        fillColor: compact && Theme.of(context).brightness == Brightness.light
-            ? const Color(0xFFECEAE8)
-            : tokens.subtleSurface,
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: border,
-        enabledBorder: border,
-        focusedBorder: border.copyWith(
-          borderSide: BorderSide(color: tokens.focusRing),
-        ),
       ),
     );
   }
