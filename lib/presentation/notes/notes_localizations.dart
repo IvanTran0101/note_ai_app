@@ -130,6 +130,18 @@ final class NotesCopy {
   String get provisioningNoDetail => _isVietnamese
       ? 'Vui lòng thử lại hoặc mở Chẩn đoán.'
       : 'Please try again or open Diagnostics.';
+  String get provisioningAwaitingApproval => _isVietnamese
+      ? 'Đang chờ bạn phê duyệt — chưa sẵn sàng'
+      : 'Awaiting your approval — not ready';
+  String get provisioningAwaitingApprovalHint => _isVietnamese
+      ? 'Xác nhận trong hộp thoại để bắt đầu tải mô hình.'
+      : 'Confirm in the prompt to start downloading the model.';
+
+  String provisioningDeclaredSize(String size) {
+    return _isVietnamese
+        ? 'Dung lượng tải xuống: $size'
+        : 'Download size: $size';
+  }
 
   String provisioningPhase(ModelProvisioningPhase phase) {
     return switch (phase) {
@@ -144,6 +156,8 @@ final class NotesCopy {
         _isVietnamese
             ? 'Đang kiểm tra mô hình đã có…'
             : 'Checking for an existing model…',
+      ModelProvisioningPhase.awaitingDownloadApproval =>
+        provisioningAwaitingApproval,
       ModelProvisioningPhase.downloading =>
         _isVietnamese ? 'Đang tải mô hình…' : 'Downloading model…',
       ModelProvisioningPhase.verifying =>
@@ -151,7 +165,7 @@ final class NotesCopy {
       ModelProvisioningPhase.committing =>
         _isVietnamese ? 'Đang lưu mô hình…' : 'Saving model…',
       ModelProvisioningPhase.artifactReady =>
-        _isVietnamese ? 'Mô hình đã sẵn sàng…' : 'Model artifact ready…',
+        _isVietnamese ? 'Mô hình đã được xác minh' : 'Model verified',
       ModelProvisioningPhase.loadingRuntime =>
         _isVietnamese ? 'Đang khởi động AI cục bộ…' : 'Starting local AI…',
       ModelProvisioningPhase.ready =>

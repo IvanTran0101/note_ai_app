@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 
@@ -28,90 +29,92 @@ final class Sha256ModelIntegrityVerifier implements IModelIntegrityVerifier {
       'path': filePath,
     });
     try {
-      _validateDescriptor(model);
+      await Isolate.run(() async {
+        _validateDescriptor(model);
 
-      final FileSystemEntityType fileType;
-      try {
-        fileType = await FileSystemEntity.type(filePath, followLinks: false);
-      } on Object catch (error, stackTrace) {
-        Error.throwWithStackTrace(
-          ModelIntegrityException(
-            'could not inspect model file "$filePath": $error',
-          ),
-          stackTrace,
-        );
-      }
-
-      if (fileType == FileSystemEntityType.notFound) {
-        throw ModelIntegrityException('model file does not exist: $filePath');
-      }
-      if (fileType != FileSystemEntityType.file) {
-        throw ModelIntegrityException(
-          'model path is not a regular file: $filePath',
-        );
-      }
-
-      final File file = File(filePath);
-      final int actualSize;
-      try {
-        actualSize = await file.length();
-      } on Object catch (error, stackTrace) {
-        Error.throwWithStackTrace(
-          ModelIntegrityException(
-            'could not read model file size for "$filePath": $error',
-          ),
-          stackTrace,
-        );
-      }
-      if (actualSize != model.fileSizeBytes) {
-        throw ModelIntegrityException(
-          'model file size mismatch for "$filePath": expected '
-          '${model.fileSizeBytes} bytes, got $actualSize',
-        );
-      }
-
-      final _DigestCapture output = _DigestCapture();
-      final ByteConversionSink input = sha256.startChunkedConversion(output);
-      try {
-        // File.openRead delivers bounded chunks. The entire GGUF artifact is
-        // never materialized as one byte list in memory.
-        await for (final List<int> chunk in file.openRead()) {
-          input.add(chunk);
-        }
-        input.close();
-      } on Object catch (error, stackTrace) {
+        final FileSystemEntityType fileType;
         try {
-          input.close();
-        } on Object {
-          // Preserve the original file/hash error.
+          fileType = await FileSystemEntity.type(filePath, followLinks: false);
+        } on Object catch (error, stackTrace) {
+          Error.throwWithStackTrace(
+            ModelIntegrityException(
+              'could not inspect model file "$filePath": $error',
+            ),
+            stackTrace,
+          );
         }
-        Error.throwWithStackTrace(
-          ModelIntegrityException(
-            'could not calculate SHA-256 for "$filePath": $error',
-          ),
-          stackTrace,
-        );
-      }
 
-      final Digest? digest = output.value;
-      if (digest == null) {
-        throw ModelIntegrityException(
-          'SHA-256 calculation produced no digest for "$filePath"',
-        );
-      }
+        if (fileType == FileSystemEntityType.notFound) {
+          throw ModelIntegrityException('model file does not exist: $filePath');
+        }
+        if (fileType != FileSystemEntityType.file) {
+          throw ModelIntegrityException(
+            'model path is not a regular file: $filePath',
+          );
+        }
 
-      final String actualDigest = digest.toString().toLowerCase();
-      final String expectedDigest = model.sha256.trim().toLowerCase();
-      if (actualDigest != expectedDigest) {
-        throw ModelIntegrityException(
-          'SHA-256 mismatch for "$filePath": expected $expectedDigest, '
-          'got $actualDigest',
-        );
-      }
-      evidenceTrace('verify_success', <String, Object?>{
-        'model': model.id,
-        'bytes': actualSize,
-        'sha256': actualDigest,
+        final File file = File(filePath);
+        final int actualSize;
+        try {
+          actualSize = await file.length();
+        } on Object catch (error, stackTrace) {
+          Error.throwWithStackTrace(
+            ModelIntegrityException(
+              'could not read model file size for "$filePath": $error',
+            ),
+            stackTrace,
+          );
+        }
+        if (actualSize != model.fileSizeBytes) {
+          throw ModelIntegrityException(
+            'model file size mismatch for "$filePath": expected '
+            '${model.fileSizeBytes} bytes, got $actualSize',
+          );
+        }
+
+        final _DigestCapture output = _DigestCapture();
+        final ByteConversionSink input = sha256.startChunkedConversion(output);
+        try {
+          // File.openRead delivers bounded chunks. The entire GGUF artifact is
+          // never materialized as one byte list in memory.
+          await for (final List<int> chunk in file.openRead()) {
+            input.add(chunk);
+          }
+          input.close();
+        } on Object catch (error, stackTrace) {
+          try {
+            input.close();
+          } on Object {
+            // Preserve the original file/hash error.
+          }
+          Error.throwWithStackTrace(
+            ModelIntegrityException(
+              'could not calculate SHA-256 for "$filePath": $error',
+            ),
+            stackTrace,
+          );
+        }
+
+        final Digest? digest = output.value;
+        if (digest == null) {
+          throw ModelIntegrityException(
+            'SHA-256 calculation produced no digest for "$filePath"',
+          );
+        }
+
+        final String actualDigest = digest.toString().toLowerCase();
+        final String expectedDigest = model.sha256.trim().toLowerCase();
+        if (actualDigest != expectedDigest) {
+          throw ModelIntegrityException(
+            'SHA-256 mismatch for "$filePath": expected $expectedDigest, '
+            'got $actualDigest',
+          );
+        }
+        evidenceTrace('verify_success', <String, Object?>{
+          'model': model.id,
+          'bytes': actualSize,
+          'sha256': actualDigest,
+        });
       });
     } on Object catch (error) {
       evidenceTrace('verify_error', <String, Object?>{

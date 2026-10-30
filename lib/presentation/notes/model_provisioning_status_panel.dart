@@ -43,6 +43,8 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final bool failed = state.phase == ModelProvisioningPhase.failed;
     final bool cancelled = state.phase == ModelProvisioningPhase.cancelled;
+    final bool awaitingApproval =
+        state.phase == ModelProvisioningPhase.awaitingDownloadApproval;
     final String phaseLabel = copy.provisioningPhase(state.phase);
 
     return Semantics(
@@ -69,10 +71,11 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (!failed && !cancelled) ...<Widget>[
+              if (!failed && !cancelled && !awaitingApproval) ...<Widget>[
                 const SizedBox(height: 10),
                 _progressIndicator(state),
               ],
+              if (awaitingApproval) _awaitingApprovalContent(context, state),
               if (state.phase ==
                   ModelProvisioningPhase.downloading) ...<Widget>[
                 const SizedBox(height: 8),
@@ -107,6 +110,35 @@ final class ModelProvisioningStatusPanel extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _awaitingApprovalContent(
+    BuildContext context,
+    ModelProvisioningState state,
+  ) {
+    final NotesCopy copy = NotesCopy.of(context);
+    final ThemeData theme = Theme.of(context);
+    final int? totalBytes = state.totalBytes;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            copy.provisioningAwaitingApprovalHint,
+            key: const ValueKey<String>('model-provisioning-awaiting'),
+            style: theme.textTheme.bodySmall,
+          ),
+          if (totalBytes != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              copy.provisioningDeclaredSize(_formatBytes(totalBytes)),
+              key: const ValueKey<String>('model-provisioning-awaiting-size'),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -17,8 +17,9 @@ import 'model_provisioning_failure.dart';
 
 /// One observable step of the model-provisioning lifecycle.
 ///
-/// Phases run in lifecycle order; [failed] and [cancelled] are terminal
-/// non-success steps and [ready] is the terminal success step.
+/// Phases run in lifecycle order; [awaitingDownloadApproval] sits between
+/// [checkingExistingModel] and [downloading]; [failed] and [cancelled] are
+/// terminal non-success steps and [ready] is the terminal success step.
 enum ModelProvisioningPhase {
   /// No provisioning attempt has started.
   idle,
@@ -31,6 +32,16 @@ enum ModelProvisioningPhase {
 
   /// The selected model's artifact is being looked up on this device.
   checkingExistingModel,
+
+  /// The artifact is absent locally and the app is asking the user for
+  /// permission to download it.
+  ///
+  /// Carries the selected model identity and the declared artifact size in
+  /// [ModelProvisioningState.totalBytes] so a prompt can state what will be
+  /// downloaded. It is only published when a download-approval callback is
+  /// injected; without one, provisioning continues straight to [downloading]
+  /// (legacy behavior).
+  awaitingDownloadApproval,
 
   /// The artifact is being downloaded; byte progress applies here.
   downloading,

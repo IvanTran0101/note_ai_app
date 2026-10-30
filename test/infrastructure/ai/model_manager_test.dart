@@ -835,6 +835,246 @@ void main() {
         expect(prepared.path, '/models/${_model.fileName}');
       });
     });
+
+    group('download approval', () {
+      test('asks once before staging and downloads when accepted', () async {
+        final List<String> events = <String>[];
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _FakeStorage storage = _FakeStorage(events: events);
+        final _FakeDownloader downloader = _FakeDownloader(events: events);
+        final _RecordingApproval approval = _RecordingApproval(events: events);
+        final ModelManager manager = _manager(
+          events: events,
+          storage: storage,
+          downloader: downloader,
+          reporter: reporter,
+          requestDownloadApproval: approval.call,
+        );
+
+        final PreparedModel prepared = await manager.ensureModelReady();
+
+        expect(prepared.path, '/models/${_model.fileName}');
+        expect(approval.calls, 1);
+        expect(approval.models, <ModelDescriptor>[_model]);
+        expect(storage.stagingCreates, 1);
+        expect(downloader.downloads, 1);
+        expect(events, <String>[
+          'detect',
+          'select',
+          'find',
+          'approve',
+          'stage',
+          'download',
+          'verify',
+          'commit',
+        ]);
+
+        final ModelProvisioningState prompt = reporter.snapshots.firstWhere(
+          (ModelProvisioningState state) =>
+              state.phase == ModelProvisioningPhase.awaitingDownloadApproval,
+        );
+        expect(prompt.modelId, _model.id);
+        expect(prompt.modelName, _model.fileName);
+        expect(prompt.totalBytes, _model.fileSizeBytes);
+        expect(prompt.downloadedBytes, 0);
+        expect(prompt.failure, isNull);
+        expect(
+          reporter.snapshots.map((ModelProvisioningState state) => state.phase),
+          containsAllInOrder(<ModelProvisioningPhase>[
+            ModelProvisioningPhase.checkingExistingModel,
+            ModelProvisioningPhase.awaitingDownloadApproval,
+            ModelProvisioningPhase.downloading,
+          ]),
+        );
+      });
+
+      test('declining stops before staging and download', () async {
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _FakeStorage storage = _FakeStorage();
+        final _FakeDownloader downloader = _FakeDownloader();
+        final _FakeAiConfigurationStore configurationStore =
+            _FakeAiConfigurationStore();
+        final ModelManager manager = _manager(
+          storage: storage,
+          downloader: downloader,
+          reporter: reporter,
+          aiConfigurationStore: configurationStore,
+          requestDownloadApproval: _RecordingApproval(result: false).call,
+        );
+
+        await expectLater(
+          manager.ensureModelReady(),
+          throwsA(isA<ModelProvisioningCancelledException>()),
+        );
+
+        expect(storage.stagingCreates, isZero);
+        expect(storage.discards, isZero);
+        expect(storage.commits, isZero);
+        expect(downloader.downloads, isZero);
+        expect(reporter.snapshots.last.phase, ModelProvisioningPhase.cancelled);
+        expect(
+          reporter.snapshots.map((s) => s.phase),
+          isNot(contains(ModelProvisioningPhase.downloading)),
+        );
+        expect(
+          configurationStore.snapshots.last.status,
+          ModelReadinessStatus.cancelled,
+        );
+      });
+
+      test('never asks when the artifact already exists', () async {
+        final _RecordingReporter reporter = _RecordingReporter();
+        final _RecordingApproval approval = _RecordingApproval();
+        final ModelManager manager = _manager(
+          storage: _FakeStorage(existingPath: '/models/${_model.fileName}'),
+          reporter: reporter,
+          requestDownloadApproval: approval.call,
+        );
+
+        await manager.ensureModelReady();
+
+        expect(approval.calls, isZero);
+        expect(
+          reporter.snapshots.map((s) => s.phase),
+          isNot(contains(ModelProvisioningPhase.awaitingDownloadApproval)),
+        );
+        expect(
+          reporter.snapshots.last.phase,
+          ModelProvisioningPhase.artifactReady,
+        );
+      });
+
+      test(
+        'without a callback keeps legacy immediate-download behavior',
+        () async {
+          final _RecordingReporter reporter = _RecordingReporter();
+          final _FakeDownloader downloader = _FakeDownloader();
+          final ModelManager manager = _manager(
+            downloader: downloader,
+            reporter: reporter,
+          );
+
+          await manager.ensureModelReady();
+
+          expect(downloader.downloads, 1);
+          expect(
+            reporter.snapshots.map((s) => s.phase),
+            isNot(contains(ModelProvisioningPhase.awaitingDownloadApproval)),
+          );
+        },
+      );
+
+      test(
+        'cancelling while awaiting approval never stages or downloads',
+        () async {
+          final Completer<bool> gate = Completer<bool>();
+          final _RecordingApproval approval = _RecordingApproval(gate: gate);
+          final _FakeStorage storage = _FakeStorage();
+          final _FakeDownloader downloader = _FakeDownloader();
+          final _RecordingReporter reporter = _RecordingReporter();
+          final ModelManager manager = _manager(
+            storage: storage,
+            downloader: downloader,
+            reporter: reporter,
+            requestDownloadApproval: approval.call,
+          );
+
+          final Future<PreparedModel> pending = manager.ensureModelReady();
+          await approval.started.future;
+          expect(approval.calls, 1);
+          expect(manager.cancelProvisioning(), isTrue);
+
+          await expectLater(
+            pending,
+            throwsA(isA<ModelProvisioningCancelledException>()),
+          );
+
+          // A late approval must not resume provisioning.
+          gate.complete(true);
+          await Future<void>.delayed(Duration.zero);
+
+          expect(storage.stagingCreates, isZero);
+          expect(storage.discards, isZero);
+          expect(downloader.downloads, isZero);
+          expect(
+            reporter.snapshots.last.phase,
+            ModelProvisioningPhase.cancelled,
+          );
+        },
+      );
+
+      test(
+        'a late approval error after cancellation is handled, not unhandled',
+        () async {
+          final Completer<bool> gate = Completer<bool>();
+          final _RecordingApproval approval = _RecordingApproval(gate: gate);
+          final _FakeDownloader downloader = _FakeDownloader();
+          final ModelManager manager = _manager(
+            downloader: downloader,
+            requestDownloadApproval: approval.call,
+          );
+
+          final Future<PreparedModel> pending = manager.ensureModelReady();
+          await approval.started.future;
+          expect(manager.cancelProvisioning(), isTrue);
+          await expectLater(
+            pending,
+            throwsA(isA<ModelProvisioningCancelledException>()),
+          );
+
+          gate.completeError(StateError('late approval failure'));
+          await Future<void>.delayed(Duration.zero);
+
+          expect(downloader.downloads, isZero);
+        },
+      );
+
+      test(
+        'an approval callback error fails provisioning before staging',
+        () async {
+          final StateError expected = StateError('approval unavailable');
+          final _RecordingReporter reporter = _RecordingReporter();
+          final _FakeStorage storage = _FakeStorage();
+          final ModelManager manager = _manager(
+            storage: storage,
+            reporter: reporter,
+            requestDownloadApproval: _RecordingApproval(failure: expected).call,
+          );
+
+          await expectLater(
+            manager.ensureModelReady(),
+            throwsA(same(expected)),
+          );
+
+          expect(storage.stagingCreates, isZero);
+          expect(reporter.snapshots.last.phase, ModelProvisioningPhase.failed);
+        },
+      );
+
+      test('concurrent callers share exactly one approval request', () async {
+        final Completer<bool> gate = Completer<bool>();
+        final _RecordingApproval approval = _RecordingApproval(gate: gate);
+        final _FakeDownloader downloader = _FakeDownloader();
+        final ModelManager manager = _manager(
+          downloader: downloader,
+          requestDownloadApproval: approval.call,
+        );
+
+        final Future<PreparedModel> first = manager.ensureModelReady();
+        final Future<PreparedModel> second = manager.ensureModelReady();
+        expect(identical(first, second), isTrue);
+
+        await approval.started.future;
+        expect(approval.calls, 1);
+
+        gate.complete(true);
+        final List<PreparedModel> prepared = await Future.wait(
+          <Future<PreparedModel>>[first, second],
+        );
+        expect(prepared[0], prepared[1]);
+        expect(downloader.downloads, 1);
+      });
+    });
   });
 
   group('mapModelProvisioningFailure', () {
@@ -988,6 +1228,7 @@ ModelManager _manager({
   IHardwareDetectionService? hardware,
   AiConfigurationStore? aiConfigurationStore,
   IModelProvisioningReporter? reporter,
+  Future<bool> Function(ModelDescriptor)? requestDownloadApproval,
 }) {
   return ModelManager(
     hardwareDetectionService: hardware ?? _FakeHardware(events: events),
@@ -998,6 +1239,7 @@ ModelManager _manager({
     integrityVerifier: verifier ?? _FakeVerifier(events: events),
     aiConfigurationStore: aiConfigurationStore,
     modelProvisioningReporter: reporter,
+    requestDownloadApproval: requestDownloadApproval,
   );
 }
 
@@ -1211,6 +1453,42 @@ final class _CancellationAwareDownloader implements IModelDownloader {
       ),
       _blocker.future,
     ]);
+  }
+}
+
+/// Records download-approval requests and can hold a decision open.
+final class _RecordingApproval {
+  _RecordingApproval({
+    this.events,
+    this.result = true,
+    this.gate,
+    this.failure,
+  });
+
+  final List<String>? events;
+  final bool result;
+  final Completer<bool>? gate;
+  final Object? failure;
+  final Completer<void> started = Completer<void>();
+  final List<ModelDescriptor> models = <ModelDescriptor>[];
+  int calls = 0;
+
+  Future<bool> call(ModelDescriptor model) async {
+    events?.add('approve');
+    calls++;
+    models.add(model);
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    final Object? error = failure;
+    if (error != null) {
+      throw error;
+    }
+    final Completer<bool>? waitFor = gate;
+    if (waitFor != null) {
+      return waitFor.future;
+    }
+    return result;
   }
 }
 

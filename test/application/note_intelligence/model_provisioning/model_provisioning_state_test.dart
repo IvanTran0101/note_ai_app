@@ -18,6 +18,7 @@ void main() {
         ModelProvisioningPhase.detectingDevice,
         ModelProvisioningPhase.selectingModel,
         ModelProvisioningPhase.checkingExistingModel,
+        ModelProvisioningPhase.awaitingDownloadApproval,
         ModelProvisioningPhase.downloading,
         ModelProvisioningPhase.verifying,
         ModelProvisioningPhase.committing,

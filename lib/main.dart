@@ -14,6 +14,7 @@ import 'application/auth/current_user_session.dart';
 import 'application/sync/local_sync_store.dart';
 import 'application/sync/sync_conflict_resolver.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
+import 'application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/notes/note_application.dart';
@@ -47,6 +48,8 @@ import 'presentation/auth/controllers/auth_controller.dart';
 import 'presentation/dashboard/dashboard_controller.dart';
 import 'presentation/dashboard/dashboard_localizations.dart';
 import 'presentation/dashboard/dashboard_page.dart';
+import 'presentation/notes/model_download_confirmation.dart';
+import 'presentation/notes/model_preparation_banner.dart';
 import 'presentation/notes/note_detail_localizations.dart';
 import 'presentation/notes/note_detail_page.dart';
 import 'presentation/notes/note_detail_route_result.dart';
@@ -410,8 +413,13 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     integrityVerifier: createModelIntegrityVerifier(),
     aiConfigurationStore: _aiConfigurationStore,
     modelProvisioningReporter: _modelProvisioningStatus,
+    requestDownloadApproval: _requestModelDownloadApproval,
   );
   late final GoRouter _router;
+  late final Stream<bool> _showModelBanner = _modelProvisioningStatus
+      .watch()
+      .map((state) => ModelPreparationBanner.isVisible(state.phase))
+      .distinct();
   bool _disposed = false;
 
   @override
@@ -424,6 +432,27 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       workspaceBuilder: _buildWorkspace,
     );
     unawaited(_initializeAuth());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !kIsWeb) _prewarmLocalAi();
+    });
+  }
+
+  void _prewarmLocalAi() {
+    if (_disposed || kIsWeb) return;
+    unawaited(_ensureService().then<void>((_) {}, onError: (Object _) {}));
+  }
+
+  Future<bool> _requestModelDownloadApproval(ModelDescriptor model) async {
+    if (_disposed) return false;
+    final BuildContext? dialogContext =
+        _router.routerDelegate.navigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return false;
+    final bool approved = await confirmModelDownload(
+      dialogContext,
+      modelName: model.fileName,
+      sizeBytes: model.fileSizeBytes,
+    );
+    return approved && !_disposed;
   }
 
   Future<void> _initializeAuth() async {
@@ -575,7 +604,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           note: note,
           syncController: _syncPresentationControllerForCurrentAccount(),
           provisioningReader: _modelProvisioningStatus,
-          onProvisioningCancel: _cancelModelProvisioning,
           showAppBar: false,
         ),
       ),
@@ -683,7 +711,20 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       // Preserve the existing explicit-path/macOS/Web fallback. Automatic
       // provisioning is only enabled for mobile targets without an explicit
       // LOCAL_LLM_MODEL_PATH override.
-      modelPath = await _modelStorage.resolveModelPath();
+      try {
+        modelPath = await _modelStorage.resolveModelPath();
+      } on Object catch (error, stackTrace) {
+        if (!_disposed) {
+          _modelProvisioningStatus.publish(
+            ModelProvisioningState(
+              phase: ModelProvisioningPhase.failed,
+              failure: mapModelProvisioningFailure(error),
+              updatedAt: DateTime.now().toUtc(),
+            ),
+          );
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
       contextSize = _aiConfiguration.defaultContextSize;
       maxOutputTokens = _aiConfiguration.defaultMaxOutputTokens;
     }
@@ -955,6 +996,29 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+      builder: (BuildContext context, Widget? child) => StreamBuilder<bool>(
+        stream: _showModelBanner,
+        initialData: ModelPreparationBanner.isVisible(
+          _modelProvisioningStatus.current.phase,
+        ),
+        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) =>
+            SafeArea(
+              top: snapshot.data ?? false,
+              left: false,
+              right: false,
+              bottom: false,
+              child: Column(
+                children: <Widget>[
+                  ModelPreparationBanner(
+                    reader: _modelProvisioningStatus,
+                    onCancel: _cancelModelProvisioning,
+                    onRetry: _prewarmLocalAi,
+                  ),
+                  Expanded(child: child ?? const SizedBox.shrink()),
+                ],
+              ),
+            ),
+      ),
       routerConfig: _router,
     );
   }
@@ -1031,7 +1095,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                 embeddedInWorkspace: true,
                 applicationService: _noteApplicationService,
                 provisioningReader: _modelProvisioningStatus,
-                onProvisioningCancel: _cancelModelProvisioning,
                 syncController: _syncPresentationControllerForCurrentAccount(),
                 onOpenSettings: () => _showAppearanceSettings(context),
                 onOpenDiagnostics: () {
@@ -1057,6 +1120,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    _modelManager.cancelProvisioning();
     WidgetsBinding.instance.removeObserver(this);
     widget.authController.removeListener(_onAuthenticationChanged);
     _disposeSyncPresentationController();

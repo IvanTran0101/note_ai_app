@@ -33,7 +33,6 @@ final class NoteDetailPage extends StatefulWidget {
     required this.notesController,
     this.note,
     this.provisioningReader,
-    this.onProvisioningCancel,
     this.showAppBar = true,
     this.onEmbeddedExit,
     this.onDirtyChanged,
@@ -43,7 +42,6 @@ final class NoteDetailPage extends StatefulWidget {
   final NotesApplicationController notesController;
   final NoteDto? note;
   final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningCancel;
   final bool showAppBar;
   final ValueChanged<NoteDetailRouteResult>? onEmbeddedExit;
   final ValueChanged<bool>? onDirtyChanged;
@@ -89,6 +87,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
   bool _ignoreNextEditorFocusLoss = false;
   bool _conflictFlowActive = false;
   bool _resolvingConflict = false;
+  StreamSubscription<ModelProvisioningState>? _provisioningSubscription;
 
   @override
   void initState() {
@@ -103,11 +102,22 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
     _titleFocusNode.addListener(_titleFocusChanged);
     _contentFocusNode.addListener(_contentFocusChanged);
     widget.syncController?.addListener(_syncStateChanged);
+    _listenToProvisioning();
+  }
+
+  void _listenToProvisioning() {
+    _provisioningSubscription = widget.provisioningReader?.watch().listen((_) {
+      if (mounted && _summarizing) setState(() {});
+    });
   }
 
   @override
   void didUpdateWidget(covariant NoteDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.provisioningReader != widget.provisioningReader) {
+      unawaited(_provisioningSubscription?.cancel());
+      _listenToProvisioning();
+    }
     if (oldWidget.syncController != widget.syncController) {
       oldWidget.syncController?.removeListener(_syncStateChanged);
       widget.syncController?.addListener(_syncStateChanged);
@@ -722,9 +732,6 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       error: _error,
       statusMessage: _statusMessage,
       actionBusy: _actionBusy,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningRetry: _note == null ? null : _summarize,
-      onProvisioningCancel: widget.onProvisioningCancel,
       summary: _summary,
       summaryStale: _summaryStale,
       onCopySummary: _summary == null ? null : () => unawaited(_copySummary()),
@@ -747,7 +754,13 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
       summarizeLabel: copy.summarize,
       moreLabel: copy.more,
       savingLabel: copy.saving,
-      summarizingLabel: copy.summarizing,
+      summarizingLabel:
+          _summarizing &&
+              widget.provisioningReader != null &&
+              widget.provisioningReader!.current.phase !=
+                  ModelProvisioningPhase.ready
+          ? copy.preparingAi
+          : copy.summarizing,
     );
     final SyncConflict? conflict = _currentConflict;
     final SyncPresentationController? sync = widget.syncController;
@@ -791,6 +804,7 @@ final class _NoteDetailPageState extends State<NoteDetailPage> {
 
   @override
   void dispose() {
+    unawaited(_provisioningSubscription?.cancel());
     _autosaveTimer?.cancel();
     widget.syncController?.removeListener(_syncStateChanged);
     _titleController.removeListener(_editorChanged);

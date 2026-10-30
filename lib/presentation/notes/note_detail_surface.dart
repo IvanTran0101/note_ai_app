@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../common/note_flow_primitives.dart';
 import 'note_detail_action_bar.dart';
 import 'note_detail_editor_form.dart';
@@ -39,9 +38,6 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.error,
     required this.statusMessage,
     required this.actionBusy,
-    required this.provisioningReader,
-    required this.onProvisioningRetry,
-    required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
     this.onCopySummary,
@@ -82,9 +78,6 @@ final class NoteDetailSurface extends StatelessWidget {
   final String? error;
   final String? statusMessage;
   final bool actionBusy;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningRetry;
-  final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
   final VoidCallback? onCopySummary;
@@ -205,9 +198,6 @@ final class NoteDetailSurface extends StatelessWidget {
                   showSaveState: !showPageHeader,
                   actionBusy: actionBusy,
                   isSummarizing: isSummarizing,
-                  provisioningReader: provisioningReader,
-                  onProvisioningRetry: onProvisioningRetry,
-                  onProvisioningCancel: onProvisioningCancel,
                   summary: summary,
                   summaryStale: summaryStale,
                   onCopySummary: onCopySummary,

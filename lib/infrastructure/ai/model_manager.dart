@@ -7,8 +7,10 @@
 ///
 /// When an [IModelProvisioningReporter] is injected, the manager publishes the
 /// Application state snapshots it owns: `detectingDevice`, `selectingModel`,
-/// `checkingExistingModel`, `downloading` (with cumulative progress),
-/// `verifying`, `committing`, `artifactReady`, or `failed`. It never publishes
+/// `checkingExistingModel`, `awaitingDownloadApproval` (only when a
+/// [ModelManager.requestDownloadApproval] callback is injected and the artifact
+/// is absent), `downloading` (with cumulative progress), `verifying`,
+/// `committing`, `artifactReady`, or `failed`. It never publishes
 /// `loadingRuntime` or `ready` — those belong to the composition root around
 /// the native runtime start.
 library;
@@ -82,8 +84,11 @@ ModelProvisioningFailure mapModelProvisioningFailure(Object error) {
 /// The lifecycle is deliberately linear:
 ///
 /// ```text
-/// detect -> select -> locate -> stage -> download -> verify -> commit
+/// detect -> select -> locate -> approve? -> stage -> download -> verify -> commit
 /// ```
+///
+/// The optional approve step only exists when [ModelManager] is given a
+/// download-approval callback; it runs only for an absent artifact.
 ///
 /// A model already present locally skips staging and downloading, but is still
 /// integrity-verified before it is returned. A failed staging operation is
@@ -94,6 +99,12 @@ final class ModelManager implements IModelManager {
   /// [modelProvisioningReporter] is optional: when present the manager
   /// publishes the Application provisioning snapshots described in the library
   /// doc; reporting is advisory and never changes provisioning semantics.
+  ///
+  /// [requestDownloadApproval] is optional. When present it is awaited only
+  /// after the local artifact lookup returns null and before any staging file
+  /// is created: `true` continues the download, `false` raises
+  /// [ModelProvisioningCancelledException] without staging or downloading. When
+  /// absent, an absent artifact is downloaded immediately (legacy behavior).
   ModelManager({
     required IHardwareDetectionService hardwareDetectionService,
     required IModelSelectionPolicy modelSelectionPolicy,
@@ -103,6 +114,7 @@ final class ModelManager implements IModelManager {
     required IModelIntegrityVerifier integrityVerifier,
     AiConfigurationStore? aiConfigurationStore,
     IModelProvisioningReporter? modelProvisioningReporter,
+    Future<bool> Function(ModelDescriptor)? requestDownloadApproval,
   }) : this._(
          hardwareDetectionService,
          modelSelectionPolicy,
@@ -112,6 +124,7 @@ final class ModelManager implements IModelManager {
          integrityVerifier,
          aiConfigurationStore,
          modelProvisioningReporter,
+         requestDownloadApproval,
        );
 
   ModelManager._(
@@ -123,6 +136,7 @@ final class ModelManager implements IModelManager {
     this._integrityVerifier,
     this._aiConfigurationStore,
     this._modelProvisioningReporter,
+    this._requestDownloadApproval,
   );
 
   final IHardwareDetectionService _hardwareDetectionService;
@@ -133,6 +147,7 @@ final class ModelManager implements IModelManager {
   final IModelIntegrityVerifier _integrityVerifier;
   final AiConfigurationStore? _aiConfigurationStore;
   final IModelProvisioningReporter? _modelProvisioningReporter;
+  final Future<bool> Function(ModelDescriptor)? _requestDownloadApproval;
 
   /// The current provisioning operation, if one is already running.
   Future<PreparedModel>? _inFlight;
@@ -275,6 +290,11 @@ final class ModelManager implements IModelManager {
         );
       }
 
+      if (!await _awaitDownloadApproval(selectedModel, cancellation)) {
+        throw const ModelProvisioningCancelledException();
+      }
+      cancellation.throwIfCancelled();
+
       stagingFile = await _modelStorage.createStagingFile(selectedModel);
       cancellation.throwIfCancelled();
       await _downloadWithProgress(selectedModel, stagingFile, cancellation);
@@ -347,6 +367,43 @@ final class ModelManager implements IModelManager {
     }
   }
 
+  /// Asks the injected callback whether the absent [model] may be downloaded.
+  ///
+  /// Publishes [ModelProvisioningPhase.awaitingDownloadApproval] with the model
+  /// identity and declared artifact size, then races the callback against
+  /// [cancellation]. A `false` decision (or a cancellation) stops provisioning
+  /// before any staging file exists. When no callback is injected this returns
+  /// `true` without publishing a phase, preserving legacy behavior.
+  ///
+  /// [Future.any] observes every racer, so a callback that completes with an
+  /// error after cancellation has won is still handled and can never become an
+  /// unhandled asynchronous error.
+  Future<bool> _awaitDownloadApproval(
+    ModelDescriptor model,
+    ModelProvisioningCancellationToken cancellation,
+  ) async {
+    final Future<bool> Function(ModelDescriptor)? requestApproval =
+        _requestDownloadApproval;
+    if (requestApproval == null) {
+      return true;
+    }
+
+    _publishPhase(
+      ModelProvisioningPhase.awaitingDownloadApproval,
+      model: model,
+      totalBytes: model.fileSizeBytes,
+    );
+
+    // A null decision means the cancellation token completed first; the
+    // synchronous check below turns that into the typed cancellation error.
+    final bool? approved = await Future.any<bool?>(<Future<bool?>>[
+      Future<bool>.sync(() => requestApproval(model)),
+      cancellation.whenCancelled.then<bool?>((_) => null),
+    ]);
+    cancellation.throwIfCancelled();
+    return approved ?? false;
+  }
+
   /// Downloads [model] into [stagingFile], publishing the downloading phase
   /// and cumulative byte progress when a reporter is present.
   Future<void> _downloadWithProgress(
@@ -411,7 +468,9 @@ final class ModelManager implements IModelManager {
   /// Publishes one phase snapshot when a reporter is present.
   ///
   /// Byte progress defaults to zero with a null [totalBytes] (indeterminate)
-  /// for phases without byte semantics.
+  /// for phases without byte semantics. A phase may still know the declared
+  /// artifact size before downloading starts (e.g. approval), in which case
+  /// [totalBytes] is set while [downloadedBytes] remains zero.
   void _publishPhase(
     ModelProvisioningPhase phase, {
     ModelDescriptor? model,

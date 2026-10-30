@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
-import 'model_provisioning_status_panel.dart';
 import 'note_detail_localizations.dart';
 import 'note_detail_summary.dart';
 import 'notes_theme_tokens.dart';
@@ -29,9 +27,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.showSaveState = true,
     required this.actionBusy,
     this.isSummarizing = false,
-    required this.provisioningReader,
-    required this.onProvisioningRetry,
-    required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
     this.onCopySummary,
@@ -56,9 +51,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool showSaveState;
   final bool actionBusy;
   final bool isSummarizing;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningRetry;
-  final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
   final VoidCallback? onCopySummary;
@@ -286,12 +278,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         ],
-        if (provisioningReader != null)
-          ModelProvisioningStatusPanel(
-            reader: provisioningReader!,
-            onRetry: hasSavedNote ? onProvisioningRetry : null,
-            onCancel: onProvisioningCancel,
-          ),
       ],
     );
   }

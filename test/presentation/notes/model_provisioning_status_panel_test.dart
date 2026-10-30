@@ -215,4 +215,157 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'renders pending approval with declared size and no progress or actions',
+    (WidgetTester tester) async {
+      final ModelProvisioningStatusHolder holder =
+          ModelProvisioningStatusHolder(
+            initial: ModelProvisioningState(
+              phase: ModelProvisioningPhase.awaitingDownloadApproval,
+              modelId: 'gemma-3-1b-it',
+              modelName: 'gemma-3-1b-it-Q4_K_M.gguf',
+              totalBytes: 2 * 1024 * 1024 * 1024,
+              updatedAt: _updatedAt,
+            ),
+          );
+      addTearDown(holder.close);
+
+      await tester.pumpWidget(
+        _app(holder: holder, onRetry: () {}, onCancel: () {}),
+      );
+
+      expect(find.text('Awaiting your approval — not ready'), findsOneWidget);
+      expect(find.textContaining('gemma-3-1b-it-Q4_K_M.gguf'), findsOneWidget);
+      expect(find.text('Download size: 2.0 GB'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('model-provisioning-awaiting')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('model-provisioning-progress')),
+        findsNothing,
+      );
+      // The parent owns the approve/decline decision, so the panel offers
+      // neither a cancel action nor a download button.
+      expect(
+        find.byKey(const ValueKey<String>('model-provisioning-cancel')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('model-provisioning-retry')),
+        findsNothing,
+      );
+      expect(find.byType(OutlinedButton), findsNothing);
+    },
+  );
+
+  testWidgets('omits the declared size when pending approval has none', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.awaitingDownloadApproval,
+        modelName: 'gemma-3-1b-it-Q4_K_M.gguf',
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(
+      _app(holder: holder, onRetry: () {}, onCancel: () {}),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-awaiting')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-awaiting-size')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('localizes pending approval and declared size in Vietnamese', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.awaitingDownloadApproval,
+        modelName: 'gemma-3-1b-it-Q4_K_M.gguf',
+        totalBytes: 1536 * 1024 * 1024,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(_app(holder: holder, locale: const Locale('vi')));
+
+    expect(find.text('Đang chờ bạn phê duyệt — chưa sẵn sàng'), findsOneWidget);
+    expect(find.text('Dung lượng tải xuống: 1.5 GB'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-progress')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('labels artifactReady as verified rather than AI ready', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.artifactReady,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(_app(holder: holder));
+
+    expect(find.text('Model verified'), findsOneWidget);
+    expect(find.text('Local AI is ready'), findsNothing);
+  });
+
+  testWidgets('labels artifactReady as verified in Vietnamese', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.artifactReady,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(_app(holder: holder, locale: const Locale('vi')));
+
+    expect(find.text('Mô hình đã được xác minh'), findsOneWidget);
+    expect(find.text('AI cục bộ đã sẵn sàng'), findsNothing);
+  });
+
+  testWidgets('does not offer cancellation while the runtime is loading', (
+    WidgetTester tester,
+  ) async {
+    final ModelProvisioningStatusHolder holder = ModelProvisioningStatusHolder(
+      initial: ModelProvisioningState(
+        phase: ModelProvisioningPhase.loadingRuntime,
+        updatedAt: _updatedAt,
+      ),
+    );
+    addTearDown(holder.close);
+
+    await tester.pumpWidget(
+      _app(holder: holder, onRetry: () {}, onCancel: () {}),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-progress')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-cancel')),
+      findsNothing,
+    );
+    expect(find.byType(OutlinedButton), findsNothing);
+  });
 }

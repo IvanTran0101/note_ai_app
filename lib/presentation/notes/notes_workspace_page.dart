@@ -31,7 +31,6 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.provisioningReader,
-    this.onProvisioningCancel,
     this.syncController,
   }) : assert(
          applicationService != null || controller != null,
@@ -44,7 +43,6 @@ final class NotesWorkspacePage extends StatefulWidget {
   final VoidCallback? onOpenSettings;
   final VoidCallback? onOpenDiagnostics;
   final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningCancel;
   final SyncPresentationController? syncController;
 
   @override
@@ -398,7 +396,6 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       notesController: _application,
       note: note,
       provisioningReader: widget.provisioningReader,
-      onProvisioningCancel: widget.onProvisioningCancel,
       showAppBar: showAppBar,
       onEmbeddedExit: _handleDetailExit,
       onDirtyChanged: _handleDetailDirtyChanged,

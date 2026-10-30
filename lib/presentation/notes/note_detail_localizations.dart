@@ -30,6 +30,8 @@ final class NoteDetailCopy {
   String get saving => _isVietnamese ? 'Đang lưu…' : 'Saving…';
   String get summarize => _isVietnamese ? 'Tóm tắt' : 'Summarize';
   String get summarizing => _isVietnamese ? 'Đang tóm tắt…' : 'Summarizing…';
+  String get preparingAi =>
+      _isVietnamese ? 'Đang chuẩn bị AI…' : 'Preparing AI…';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get copySummary => _isVietnamese ? 'Sao chép' : 'Copy';
   String get regenerate => _isVietnamese ? 'Tạo lại' : 'Regenerate';

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
+import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
@@ -85,6 +89,52 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('shows preparation before generation while summary waits', (
+    tester,
+  ) async {
+    final controller = _FakeNotesController(notes: <NoteDto>[buildNote()]);
+    controller.summaryGate = Completer<String>();
+    final holder = ModelProvisioningStatusHolder();
+    addTearDown(holder.close);
+    holder.publish(
+      ModelProvisioningState(
+        phase: ModelProvisioningPhase.loadingRuntime,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteDetailPage(
+          notesController: controller,
+          note: controller.notes.single,
+          provisioningReader: holder,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('model-provisioning-status')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pump();
+    expect(find.text('Preparing AI…'), findsOneWidget);
+    expect(controller.summarizeCalls, 1);
+    holder.publish(
+      ModelProvisioningState(
+        phase: ModelProvisioningPhase.ready,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Summarizing…'), findsOneWidget);
+    controller.summaryGate!.complete('Summary result');
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.summaryKey), findsOneWidget);
   });
 
   testWidgets('shows a specific notice when note storage is unsupported', (
@@ -555,6 +605,7 @@ final class _FakeNotesController implements NotesApplicationController {
   int replaceContentCalls = 0;
   String? summarizedNoteId;
   int summarizeCalls = 0;
+  Completer<String>? summaryGate;
   int summarizeFailuresRemaining = 0;
   Object? createNoteError;
   int _nextId = 1;
@@ -612,6 +663,7 @@ final class _FakeNotesController implements NotesApplicationController {
     final NoteDto note = _find(noteId);
     summarizeCalls++;
     summarizedNoteId = noteId;
+    if (summaryGate != null) return summaryGate!.future;
     if (summarizeFailuresRemaining > 0) {
       summarizeFailuresRemaining--;
       throw StateError('summary unavailable');
