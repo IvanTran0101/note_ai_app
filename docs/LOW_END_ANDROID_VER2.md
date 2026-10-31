@@ -50,7 +50,8 @@ flutter test --reporter expanded
 This laptop used Flutter 3.47.3, Dart 3.13.3, Java 17,
 Android SDK platform 36, build-tools 36.0.0, and NDK 28.2.13676358.
 Record actual tool versions on the next host. The existing Amplify deployment
-configuration is retained; the commands below use the existing local-auth mode.
+configuration is retained. Use Cognito authentication for the normal APK so
+registration and login work; on-device AI does not require local-auth mode.
 
 Verification on this laptop: full static analysis passed; the direct production
 RAM-policy checks passed 8/8, including the measured vivo RAM snapshot and exact
@@ -69,15 +70,36 @@ authorization prompt. Verify that `adb devices -l` reports one authorized device
 Normal release build, with evidence instrumentation disabled by default:
 
 ```powershell
-flutter build apk --release --target-platform android-arm64 --dart-define=NOTEFLOW_AUTH_MODE=local
+flutter build apk --release --target-platform android-arm64 --dart-define=NOTEFLOW_AUTH_MODE=cognito
 adb -d install -r build/app/outputs/flutter-apk/app-release.apk
 adb -d shell am force-stop com.example.note_ai_app
 adb -d shell am start -W -n com.example.note_ai_app/.MainActivity
 ```
 
+Registration and login require internet access to the configured Cognito backend.
+`NOTEFLOW_AUTH_MODE=local` is only for account-free AI measurements: it starts a
+demo session without an authentication service, so registration and login cannot
+work after signing out. `adb install -r` preserves existing app data and models
+when both APKs use the same signing key. A different signing key prevents an
+update; removing the old app deletes its local notes and downloaded models.
+Back up needed data and obtain the owner's approval before removing it.
+
 The release dependency graph now includes the explicit Error Prone and JSR-305
 annotation classes required by R8. This addresses the observed missing-class
 release failure without globally suppressing R8 warnings.
+
+### Authentication verification, 29 October 2026
+
+An ARM64 release built from `d44770f9629c8bbc47fe988f43f638a91d6e9420`
+with `NOTEFLOW_AUTH_MODE=cognito` was installed and launched on the Xiaomi 13T
+(`23078PND5G`). The owner confirmed authentication works after installation.
+The previously installed APK used the local demo bootstrap, which cannot
+register or authenticate accounts.
+
+`dart analyze lib` passed and the Android release build passed. Existing
+authentication tests stopped before execution at the Windows native build-hook
+compiler-path quoting issue described above. AI inference and RAM-selection
+benchmarks were not rerun during this authentication check.
 
 ## Optional measurement build
 
