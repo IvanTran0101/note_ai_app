@@ -90,3 +90,5 @@ GoogleService-Info.plist
 /output/
 /plan.md
 /ui-audit-scorecard.md
+noteflow-system.architecture.json
+noteflow-system.visual-check.json
