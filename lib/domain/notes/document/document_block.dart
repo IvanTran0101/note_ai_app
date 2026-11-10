@@ -13,6 +13,7 @@ enum DocumentBlockKind {
   quote,
   table,
   divider,
+  attachment,
 }
 
 /// Immutable business block. Textual children retain structure when converting
@@ -30,6 +31,7 @@ final class DocumentBlock {
     Iterable<DocumentRow> rows = const [],
     bool headerRow = false,
     bool headerColumn = false,
+    String? attachmentId,
   }) {
     requireDocumentId(id);
     final block = DocumentBlock._(
@@ -44,6 +46,7 @@ final class DocumentBlock {
       List.unmodifiable(rows),
       headerRow,
       headerColumn,
+      attachmentId,
     );
     block._validate();
     return block;
@@ -60,6 +63,7 @@ final class DocumentBlock {
     this.rows,
     this.headerRow,
     this.headerColumn,
+    this.attachmentId,
   );
   final String id;
   final DocumentBlockKind kind;
@@ -71,6 +75,9 @@ final class DocumentBlock {
   final DocumentColor? tone;
   final List<DocumentRow> rows;
   final bool headerRow, headerColumn;
+
+  /// Canonical local attachment reference. Null represents an empty File block.
+  final String? attachmentId;
 
   void _validate() {
     if (kind == DocumentBlockKind.heading
@@ -95,8 +102,17 @@ final class DocumentBlock {
     } else if (rows.isNotEmpty || headerRow || headerColumn) {
       throw ArgumentError('Table attributes require a table.');
     }
+    if (kind == DocumentBlockKind.attachment) {
+      if (runs.isNotEmpty || children.isNotEmpty) {
+        throw ArgumentError('File blocks cannot contain text or children.');
+      }
+      if (attachmentId != null) requireDocumentId(attachmentId!);
+    } else if (attachmentId != null) {
+      throw ArgumentError('Attachment identity requires a File block.');
+    }
     if ((kind == DocumentBlockKind.table ||
-            kind == DocumentBlockKind.divider) &&
+            kind == DocumentBlockKind.divider ||
+            kind == DocumentBlockKind.attachment) &&
         (runs.isNotEmpty || children.isNotEmpty)) {
       throw ArgumentError(
         'Table/divider cannot contain block text or children.',
@@ -129,6 +145,7 @@ final class DocumentBlock {
       other is DocumentBlock &&
       other.id == id &&
       other.kind == kind &&
+      other.attachmentId == attachmentId &&
       other.level == level &&
       other.checked == checked &&
       other.icon == icon &&
@@ -142,6 +159,7 @@ final class DocumentBlock {
   int get hashCode => Object.hash(
     id,
     kind,
+    attachmentId,
     level,
     checked,
     icon,

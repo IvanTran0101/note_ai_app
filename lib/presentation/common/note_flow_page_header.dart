@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../notes/notes_theme_tokens.dart';
+import 'note_flow_header_inset.dart';
 
 /// Short fades for display state only; never wrap a live note editor here.
 final class NoteFlowStateTransition extends StatelessWidget {
@@ -45,6 +46,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
     this.backKey,
     this.actions = const <Widget>[],
     this.statusIndicator,
+    this.showDivider = true,
   });
 
   final String breadcrumb;
@@ -59,6 +61,7 @@ final class NoteFlowPageHeader extends StatelessWidget {
   final Key? backKey;
   final List<Widget> actions;
   final Widget? statusIndicator;
+  final bool showDivider;
 
   static const Key statusKey = ValueKey<String>('note-flow-page-status');
 
@@ -69,7 +72,9 @@ final class NoteFlowPageHeader extends StatelessWidget {
       color: tokens.pageSurface,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: tokens.divider)),
+          border: showDivider
+              ? Border(bottom: BorderSide(color: tokens.divider))
+              : null,
         ),
         child: SafeArea(bottom: false, child: LayoutBuilder(builder: _layout)),
       ),
@@ -81,20 +86,27 @@ final class NoteFlowPageHeader extends StatelessWidget {
       context,
       availableWidth: constraints.maxWidth,
     );
-    final wrapActions = constraints.maxWidth < 360 && actions.length > 2;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(minHeight: compact ? 56 : 44),
-          child: _row(context, compact: compact, inlineActions: !wrapActions),
-        ),
-        if (wrapActions)
-          Align(
-            alignment: Alignment.centerRight,
-            child: Wrap(alignment: WrapAlignment.end, children: actions),
+    // Match the native page controls' inset without shrinking their48dp targets.
+    // SafeArea already owns physical display cutouts; Web keeps its shell inset.
+    final sideInset = NoteFlowLayout.isNativePhone(context) ? 10.0 : 0.0;
+    final wrapActions =
+        constraints.maxWidth - sideInset * 2 < 360 && actions.length > 2;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: sideInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: compact ? 48 : 44),
+            child: _row(context, compact: compact, inlineActions: !wrapActions),
           ),
-      ],
+          if (wrapActions)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(alignment: WrapAlignment.end, children: actions),
+            ),
+        ],
+      ),
     );
   }
 
@@ -106,12 +118,16 @@ final class NoteFlowPageHeader extends StatelessWidget {
     final tokens = NoteFlowUiTokens.of(context);
     return Row(
       children: [
+        SizedBox(width: NoteFlowHeaderInset.of(context)),
         if (onBack != null)
           IconButton(
             key: backKey,
             tooltip: backTooltip,
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, size: 20),
+            icon: Icon(
+              compact ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back,
+              size: compact ? 22 : 20,
+            ),
             visualDensity: compact
                 ? VisualDensity.standard
                 : VisualDensity.compact,

@@ -3,9 +3,36 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
+import 'package:note_ai_app/presentation/workspace/workspace_ui_tokens.dart';
 
 void main() {
   for (final dark in [false, true]) {
+    test('workspace text and actions meet AA dark=$dark', () {
+      final tokens = dark
+          ? NoteFlowWorkspaceTokens.dark()
+          : NoteFlowWorkspaceTokens.light();
+      for (final surface in [
+        tokens.pageSurface,
+        tokens.sidebarSurface,
+        tokens.elevatedSurface,
+        tokens.subtleSurface,
+        tokens.selectedSurface,
+      ]) {
+        for (final ink in [
+          tokens.textPrimary,
+          tokens.textSecondary,
+          tokens.textMuted,
+          tokens.link,
+          tokens.error,
+        ]) {
+          expect(
+            _contrast(ink, surface),
+            greaterThanOrEqualTo(4.5),
+            reason: '$ink on $surface',
+          );
+        }
+      }
+    });
     test('shared UI text and action colors meet AA dark=$dark', () {
       final tokens = dark ? NoteFlowUiTokens.dark() : NoteFlowUiTokens.light();
       for (final surface in [

@@ -1,9 +1,16 @@
 part of 'attachment_application.dart';
 
 extension _AttachmentApplicationRemoval on AttachmentApplicationService {
-  Future<NoteDto> _removeCaptured(AttachmentBinding binding, String id) async {
+  Future<NoteDto> _removeCaptured(
+    AttachmentBinding binding,
+    String id, {
+    void Function(NoteDto)? onCommitted,
+  }) async {
     var note = await _fresh(binding);
     final entries = note.attachments.where((item) => item.id == id);
+    final referencedInDocument =
+        note.document?.referencesAttachment(id) ?? false;
+    final hasCanonicalReference = entries.isNotEmpty || referencedInDocument;
     if (entries.isNotEmpty && drafts is AttachmentRemovalCache) {
       final cache = drafts as AttachmentRemovalCache;
       // Persist the user's intent before the only Note writer. A crash here
@@ -13,7 +20,7 @@ extension _AttachmentApplicationRemoval on AttachmentApplicationService {
     }
     _cancelled.add(_attemptKey(binding, id));
     cancelMedia(binding.note.noteId, id);
-    if (entries.isNotEmpty) {
+    if (hasCanonicalReference) {
       note = await notes.updateById(
         noteId: binding.note.noteId,
         ownerId: binding.note.ownerId,
@@ -28,19 +35,35 @@ extension _AttachmentApplicationRemoval on AttachmentApplicationService {
           return fresh;
         },
       );
+      _requireOwner(binding);
+      onCommitted?.call(NoteDto.fromDomain(note));
     }
     _requireOwner(binding);
-    if (drafts case final AttachmentTransferCache cache) {
-      if (drafts is AttachmentRemovalCache &&
-          (await (drafts as AttachmentRemovalCache).removalIds(binding))
-              .contains(id)) {
-        // Local manifest committed; delete local bytes, retain a tiny durable
-        // server cancellation intent. Server refuses cancellation while linked.
-        await cache.queueCancellation(binding, id);
-      }
-    }
-    _requireOwner(binding);
+    // Keep the sync wake-up ahead of separate cache cleanup. A durable
+    // removal intent may still need syncing even when this call finds no Note
+    // reference left to change.
     requestSync?.call(binding.actorId);
+    try {
+      if (drafts case final AttachmentTransferCache cache) {
+        if (drafts is AttachmentRemovalCache &&
+            (await (drafts as AttachmentRemovalCache).removalIds(binding))
+                .contains(id)) {
+          // Local manifest committed; delete local bytes, retain a tiny durable
+          // server cancellation intent. Server refuses cancellation while linked.
+          await cache.queueCancellation(binding, id);
+        }
+      }
+    } on Object catch (failure) {
+      if (hasCanonicalReference) {
+        _requireOwner(binding);
+        throw AttachmentRemovalCleanupFailure(
+          NoteDto.fromDomain(note),
+          failure,
+        );
+      }
+      rethrow;
+    }
+    _requireOwner(binding);
     _drainCancellations(binding);
     return NoteDto.fromDomain(note);
   }

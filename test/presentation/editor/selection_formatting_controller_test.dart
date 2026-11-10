@@ -32,6 +32,23 @@ void main() {
     );
   }
 
+  test('combined inline marks and palette preserve Unicode through undo', () async {
+    const text = 'Local first tiếng Việt 😀';
+    final adapter = create(text: text);
+    final formatter = SelectionFormattingController(adapter);
+    select(adapter, 0, text.length);
+    for (final mark in ['bold', 'italic', 'underline', 'strikethrough', 'code']) {
+      expect(await formatter.toggle(adapter.capture()!, mark), true);
+      expect(adapter.plainText, text);
+    }
+    final marked = adapter.document;
+    expect(await formatter.color(adapter.capture()!, DocumentColor.blue), true);
+    expect(adapter.plainText, text);
+    adapter.editor.undoManager.undo();
+    expect(adapter.document, marked);
+    expect(adapter.plainText, text);
+  });
+
   test('open/selection does not inflate legacy; font size touches only selected text', () async {
     var edits = 0;
     final adapter = create(changed: () => edits++),

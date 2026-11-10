@@ -28,6 +28,7 @@ final class NoteDetailActionBar extends StatelessWidget {
     required this.summarizingLabel,
     this.summarizeTooltip,
     this.iconOnly = false,
+    this.showSummarizeAction = true,
   });
 
   final bool isSaving;
@@ -45,6 +46,7 @@ final class NoteDetailActionBar extends StatelessWidget {
   final String summarizingLabel;
   final String? summarizeTooltip;
   final bool iconOnly;
+  final bool showSummarizeAction;
 
   @override
   Widget build(BuildContext context) {
@@ -148,19 +150,20 @@ final class NoteDetailActionBar extends StatelessWidget {
                     )
                   : const Icon(Icons.save_outlined),
             ),
-          iconAction(
-            label: isSummarizing ? summarizingLabel : summarizeLabel,
-            key: const ValueKey<String>('note-detail-summarize'),
-            enabled: summarizeEnabled,
-            onPressed: onSummarize,
-            icon: isSummarizing
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_awesome_outlined),
-            tooltip: summarizeTooltip,
-          ),
+          if (showSummarizeAction)
+            iconAction(
+              label: isSummarizing ? summarizingLabel : summarizeLabel,
+              key: const ValueKey<String>('note-detail-summarize'),
+              enabled: summarizeEnabled,
+              onPressed: onSummarize,
+              icon: isSummarizing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome_outlined),
+              tooltip: summarizeTooltip,
+            ),
           if (hasMoreAction)
             iconAction(
               label: moreLabel,

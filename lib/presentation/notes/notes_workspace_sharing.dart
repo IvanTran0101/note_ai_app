@@ -32,21 +32,28 @@ extension _NotesWorkspaceSharing on NotesWorkspacePageState {
 
   Widget _sharingTabs() {
     final copy = SharingCopy(context);
+    final tokens = NoteFlowUiTokens.of(context);
+    Widget tab(String label, String key, bool shared) => ChoiceChip(
+      key: ValueKey(key),
+      label: Text(label),
+      labelStyle: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: tokens.textSecondary,
+      ),
+      shape: const StadiumBorder(),
+      side: BorderSide.none,
+      backgroundColor: Colors.transparent,
+      selectedColor: tokens.textPrimary.withValues(alpha: .07),
+      showCheckmark: false,
+      selected: _sharedOnly == shared,
+      onSelected: (_) => _chooseSharingTab(shared),
+    );
     return Wrap(
       spacing: 8,
       children: [
-        ChoiceChip(
-          key: const ValueKey('owned-notes-tab'),
-          label: Text(NotesCopy.of(context).notes),
-          selected: !_sharedOnly,
-          onSelected: (_) => _chooseSharingTab(false),
-        ),
-        ChoiceChip(
-          key: const ValueKey('shared-notes-tab'),
-          label: Text(copy.sharedWithMe),
-          selected: _sharedOnly,
-          onSelected: (_) => _chooseSharingTab(true),
-        ),
+        tab(NotesCopy.of(context).notes, 'owned-notes-tab', false),
+        tab(copy.sharedWithMe, 'shared-notes-tab', true),
       ],
     );
   }

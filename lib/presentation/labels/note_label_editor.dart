@@ -1,10 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_dto.dart';
 import 'label_action_fence.dart';
 import 'label_catalog_scope.dart';
-import 'label_manager_dialog.dart';
 import 'label_copy.dart';
+import 'label_dialog_layout.dart';
+import 'label_manager_dialog.dart';
 import 'note_label_chips.dart';
 
 final class NoteLabelEditor extends StatefulWidget {
@@ -67,6 +69,11 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
   ) {
     if (!fence.visible(context) || !_valid(fence, captured)) {
       return AlertDialog(
+        scrollable: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         content: Text(copy.error),
         actions: [
           TextButton(
@@ -85,11 +92,22 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
         .toSet();
     final obsolete = captured.labelIds.where((id) => !activeIds.contains(id));
     return AlertDialog(
-      title: Text(copy.organize),
+      scrollable: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        copy.organize,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       content: SizedBox(
         width: 400,
-        height: MediaQuery.sizeOf(context).height * .4,
+        height: labelChooserBodyHeight(context, rows.length + obsolete.length),
         child: ListView(
+          padding: EdgeInsets.zero,
           children: [
             if (rows.isEmpty && obsolete.isEmpty)
               Center(child: Text(copy.empty)),
@@ -97,6 +115,8 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
               CheckboxListTile(
                 title: Text(label.name),
                 value: captured.labelIds.contains(label.id),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                 onChanged: (_) => Navigator.pop(context, label.id),
               ),
             for (final id in obsolete)
@@ -105,6 +125,8 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
                   deletedIds.contains(id) ? copy.removed : copy.unavailable,
                 ),
                 value: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                 onChanged: (_) => Navigator.pop(context, id),
               ),
           ],
@@ -132,21 +154,49 @@ final class _NoteLabelEditorState extends State<NoteLabelEditor> {
       return const SizedBox.shrink();
     }
     final copy = LabelCopy(context);
+    final canEdit = widget.canManage && widget.note.ownerId == scope.actor;
+    final targetSize = kIsWeb && MediaQuery.sizeOf(context).width >= 720
+        ? 36.0
+        : 48.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        NoteLabelChips(note: widget.note, readable: widget.readable),
-        if (widget.canManage && widget.note.ownerId == scope.actor)
-          TextButton.icon(
-            onPressed: _busy ? null : _choose,
-            icon: const Icon(Icons.label_outline),
-            label: Text(copy.organize),
+        NoteLabelChips(
+          note: widget.note,
+          readable: widget.readable,
+          showCaption: true,
+          trailing: canEdit
+              ? TextButton.icon(
+                  onPressed: _busy ? null : _choose,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: Text(
+                    copy.organize,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant,
+                    minimumSize: Size(0, targetSize),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+              : null,
+        ),
+        if (_busy)
+          const Padding(
+            padding: EdgeInsets.only(top: 3),
+            child: SizedBox(height: 2, child: LinearProgressIndicator()),
           ),
-        if (_busy) const LinearProgressIndicator(),
         if (_error != null)
-          Text(
-            _error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              _error!,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
           ),
       ],
     );

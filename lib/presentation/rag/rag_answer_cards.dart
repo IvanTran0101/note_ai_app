@@ -7,9 +7,9 @@ import 'rag_copy.dart';
 
 /// The answered result of one question: untrusted answer text plus citations.
 ///
-/// The answer and every citation field are rendered as plain, selectable text.
-/// Nothing here is interpreted as markup, a URL, or a link, so answer/note text
-/// can never navigate or execute. A citation button reports the exact
+/// The answer is selectable and every citation field is plain text. Nothing
+/// here is interpreted as markup, a URL, or a link, so answer/note text can
+/// never navigate or execute. A citation button reports the exact
 /// [RagSource] to [onOpenSource]; this card never validates or opens it itself.
 final class RagAnswerCard extends StatelessWidget {
   const RagAnswerCard({
@@ -46,7 +46,7 @@ final class RagAnswerCard extends StatelessWidget {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final TextTheme textTheme = Theme.of(context).textTheme;
     return NoteFlowSurface(
-      tone: NoteFlowSurfaceTone.elevated,
+      tone: NoteFlowSurfaceTone.subtle,
       bordered: true,
       radius: NoteFlowRadius.card,
       padding: const EdgeInsets.all(NoteFlowSpacing.lg),
@@ -94,10 +94,28 @@ final class RagAnswerCard extends StatelessWidget {
             const SizedBox(height: NoteFlowSpacing.sm),
             Semantics(
               liveRegion: true,
-              child: Text(
-                copy.failureCodeMessage(sourceFailure!),
-                key: const ValueKey<String>('rag-source-error'),
-                style: textTheme.bodySmall?.copyWith(color: tokens.error),
+              container: true,
+              child: NoteFlowSurface(
+                tone: NoteFlowSurfaceTone.subtle,
+                bordered: true,
+                radius: NoteFlowRadius.row,
+                padding: const EdgeInsets.all(NoteFlowSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.error_outline, size: 18, color: tokens.error),
+                    const SizedBox(width: NoteFlowSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        copy.failureCodeMessage(sourceFailure!),
+                        key: const ValueKey<String>('rag-source-error'),
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: tokens.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -152,21 +170,21 @@ final class _RagSourceButton extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              '[${source.sourceId}]',
-              style: textTheme.labelMedium?.copyWith(
-                color: tokens.link,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: NoteFlowSpacing.sm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
+                    '[${source.sourceId}]',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: tokens.link,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: NoteFlowSpacing.xs),
+                  Text(
                     source.title,
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodyMedium?.copyWith(
                       color: tokens.textPrimary,
@@ -176,7 +194,7 @@ final class _RagSourceButton extends StatelessWidget {
                   const SizedBox(height: NoteFlowSpacing.xs),
                   Text(
                     source.quote,
-                    maxLines: 3,
+                    maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodySmall?.copyWith(
                       color: tokens.textSecondary,

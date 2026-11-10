@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 
@@ -26,9 +27,14 @@ InlineSpan documentSpan(
     fontSize:
         (text.attributes?['font_size'] as num?)?.toDouble() ??
         (heading ? [30.0, 24.0, 20.0, 18.0][level - 1] : null),
+    fontFamily: heading && kIsWeb ? 'NoteFlowHeading' : after.style?.fontFamily,
+    height: heading && kIsWeb ? 1.3 : after.style?.height,
+    letterSpacing: heading && kIsWeb && level == 1
+        ? -.4
+        : after.style?.letterSpacing,
     fontWeight: text.attributes?['bold'] == true
         ? FontWeight.w700
-        : (heading ? FontWeight.w600 : null),
+        : (heading ? (kIsWeb ? FontWeight.w500 : FontWeight.w600) : null),
     fontStyle: text.attributes?['italic'] == true ? FontStyle.italic : null,
     color: color != null
         ? DocumentPalette.text(color, brightness)

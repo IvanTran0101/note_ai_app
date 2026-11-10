@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'editor_popup_guard.dart';
 import 'editor_copy.dart';
@@ -13,9 +14,17 @@ import 'table_commands.dart';
 /// Touch controls keep a guarded caret snapshot while their popup owns focus.
 /// The editor/document writer and history remain the single engine owner.
 final class EditorControls extends StatefulWidget {
-  const EditorControls({super.key, required this.adapter, required this.slash});
+  const EditorControls({
+    super.key,
+    required this.adapter,
+    required this.slash,
+    this.onBlocks,
+    this.blocksOpen = false,
+  });
   final RichEditorAdapter adapter;
   final SlashCommandController slash;
+  final VoidCallback? onBlocks;
+  final bool blocksOpen;
   @override
   State<EditorControls> createState() => _EditorControlsState();
 }
@@ -40,14 +49,24 @@ final class _EditorControlsState extends State<EditorControls> {
         : _selection();
   }
 
-  Widget _button(String label, IconData icon, VoidCallback action) => Listener(
-    onPointerDown: (_) => _pointer = _selection(),
-    child: EditorIconButton(
-      label: editorText(context, label),
-      icon: Icon(icon, size: 20),
-      onPressed: action,
-    ),
-  );
+  Widget _button(String label, IconData icon, VoidCallback action) {
+    final scale = MediaQuery.textScalerOf(context).scale(14);
+    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
+    final compact =
+        kIsWeb &&
+        MediaQuery.sizeOf(context).width >= 720 &&
+        scale <= 14 &&
+        !accessibleNavigation;
+    return Listener(
+      onPointerDown: (_) => _pointer = _selection(),
+      child: EditorIconButton(
+        label: editorText(context, label),
+        icon: Icon(icon, size: 20),
+        onPressed: action,
+        compact: compact,
+      ),
+    );
+  }
 
   void _blocks() {
     final snapshot = _takeSelection();
@@ -104,21 +123,27 @@ final class _EditorControlsState extends State<EditorControls> {
           : TableCommands(adapter).tableAt(selection);
       return Row(
         children: [
-          _button('Add block', Icons.add, _blocks),
-          EditorIconButton(
-            label: editorText(context, 'Undo'),
-            icon: const Icon(Icons.undo, size: 18),
-            onPressed: adapter.editor.undoManager.undoStack.isEmpty
-                ? null
-                : adapter.editor.undoManager.undo,
+          _button(
+            widget.blocksOpen ? 'Close block menu' : 'Add block',
+            Icons.add,
+            widget.onBlocks ?? _blocks,
           ),
-          EditorIconButton(
-            label: editorText(context, 'Redo'),
-            icon: const Icon(Icons.redo, size: 18),
-            onPressed: adapter.editor.undoManager.redoStack.isEmpty
-                ? null
-                : adapter.editor.undoManager.redo,
-          ),
+          if (!kIsWeb)
+            EditorIconButton(
+              label: editorText(context, 'Redo'),
+              icon: const Icon(Icons.redo, size: 22),
+              onPressed: adapter.editor.undoManager.redoStack.isEmpty
+                  ? null
+                  : adapter.editor.undoManager.redo,
+            ),
+          if (!kIsWeb)
+            EditorIconButton(
+              label: editorText(context, 'Undo'),
+              icon: const Icon(Icons.undo, size: 22),
+              onPressed: adapter.editor.undoManager.undoStack.isEmpty
+                  ? null
+                  : adapter.editor.undoManager.undo,
+            ),
           const Spacer(),
           if (table != null)
             _button(

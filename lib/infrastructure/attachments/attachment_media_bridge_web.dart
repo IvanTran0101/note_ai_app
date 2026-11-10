@@ -35,11 +35,13 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
   bool _listening = false;
 
   Future<web.ServiceWorker> _worker() async {
+    final opening = _opening ??= _register();
     try {
-      return await (_opening ??= _register());
-    } on Object {
-      _opening = null;
-      rethrow;
+      return await opening;
+    } finally {
+      // Share only concurrent registration work. An activated worker can be
+      // replaced later, so constructor warmup must not pin it for this session.
+      if (identical(_opening, opening)) _opening = null;
     }
   }
 
@@ -56,24 +58,43 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
           ),
         )
         .toDart;
+    if (registration.installing == null && registration.waiting == null) {
+      try {
+        // register() can return the previous active worker before its update
+        // check discovers a replacement. Finish that check before choosing it.
+        await registration.update().toDart;
+      } on Object {
+        // Offline local reads can still use the installed, activated viewer.
+        if (registration.active?.state != 'activated') rethrow;
+      }
+    }
     final worker =
-        registration.active ?? registration.installing ?? registration.waiting;
+        registration.installing ?? registration.waiting ?? registration.active;
     if (worker == null) {
       throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
     }
-    if (worker.state != 'activated') {
-      final ready = Completer<void>();
-      final listener = ((web.Event _) {
-        if (worker.state == 'activated' && !ready.isCompleted) ready.complete();
-      }).toJS;
-      worker.addEventListener('statechange', listener);
-      try {
-        await ready.future.timeout(const Duration(seconds: 30));
-      } finally {
-        worker.removeEventListener('statechange', listener);
+    await _awaitActivation(worker);
+    return worker;
+  }
+
+  Future<void> _awaitActivation(web.ServiceWorker worker) async {
+    final ready = Completer<void>();
+    void checkState() {
+      if (ready.isCompleted) return;
+      if (worker.state == 'activated') ready.complete();
+      if (worker.state == 'redundant') {
+        ready.completeError(const _MediaWorkerReplaced());
       }
     }
-    return worker;
+
+    final listener = ((web.Event _) => checkState()).toJS;
+    worker.addEventListener('statechange', listener);
+    try {
+      checkState();
+      await ready.future.timeout(const Duration(seconds: 30));
+    } finally {
+      worker.removeEventListener('statechange', listener);
+    }
   }
 
   @override
@@ -83,6 +104,22 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
         !{'video/mp4', 'application/pdf'}.contains(request.mimeType)) {
       throw const FormatException('Unsupported streaming media.');
     }
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await request.authorize();
+      try {
+        return await _openAttempt(request);
+      } on _MediaWorkerReplaced {
+        if (attempt == 1) {
+          throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+        }
+      }
+    }
+    throw const NoteSecurityFailure(NoteSecurityFailureCode.unavailable);
+  }
+
+  Future<AttachmentMediaHandle> _openAttempt(
+    AttachmentMediaRequest request,
+  ) async {
     final worker = await _worker();
     if (!_listening) {
       web.window.navigator.serviceWorker.addEventListener('message', _listener);
@@ -93,6 +130,30 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
         .replaceAll('=', '');
     _sessions[cap] = request;
     final channel = web.MessageChannel();
+    final handle = _WebMediaHandle(_mediaUri(request, cap), () async {
+      _closeSession(worker, cap);
+    });
+    try {
+      await _registerSession(worker, request, cap, channel);
+      if (worker.state != 'activated') throw const _MediaWorkerReplaced();
+      await request.authorize();
+      if (worker.state != 'activated') throw const _MediaWorkerReplaced();
+      return handle;
+    } on Object {
+      await handle.close();
+      rethrow;
+    } finally {
+      channel.port1.close();
+      channel.port2.close();
+    }
+  }
+
+  Future<void> _registerSession(
+    web.ServiceWorker worker,
+    AttachmentMediaRequest request,
+    String cap,
+    web.MessageChannel channel,
+  ) async {
     final registered = Completer<void>();
     final acknowledged = ((web.MessageEvent event) {
       final data = event.data.dartify();
@@ -104,48 +165,52 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
     }).toJS;
     channel.port1.addEventListener('message', acknowledged);
     channel.port1.start();
-    worker.postMessage(
-      {
-        'kind': 'noteflow-media-register',
-        'cap': cap,
-        'size': request.sizeBytes,
-        'mime': request.mimeType,
-        'fileName': request.fileName,
-        'exportFile': request.exportFile,
-      }.jsify(),
-      [channel.port2].toJS,
-    );
-    final uri = Uri.parse(web.document.baseURI)
-        .resolve('attachment_media/host.html')
-        .replace(
-          fragment: cap,
-          queryParameters: request.exportFile
-              ? {'export': '1'}
-              : request.mimeType == 'application/pdf'
-              ? {'pdf': '1'}
-              : null,
-        );
-    final handle = _WebMediaHandle(uri, () async {
-      _sessions.remove(cap);
-      worker.postMessage({'kind': 'noteflow-media-close', 'cap': cap}.jsify());
-      if (_sessions.isEmpty && _listening) {
-        web.window.navigator.serviceWorker.removeEventListener(
-          'message',
-          _listener,
-        );
-        _listening = false;
-      }
-    });
+    if (worker.state != 'activated') throw const _MediaWorkerReplaced();
     try {
+      worker.postMessage(
+        {
+          'kind': 'noteflow-media-register',
+          'cap': cap,
+          'size': request.sizeBytes,
+          'mime': request.mimeType,
+          'fileName': request.fileName,
+          'exportFile': request.exportFile,
+        }.jsify(),
+        [channel.port2].toJS,
+      );
       await registered.future.timeout(const Duration(seconds: 10));
-      await request.authorize();
-      return handle;
     } on Object {
-      await handle.close();
+      if (worker.state != 'activated') throw const _MediaWorkerReplaced();
       rethrow;
-    } finally {
-      channel.port1.close();
-      channel.port2.close();
+    }
+  }
+
+  Uri _mediaUri(AttachmentMediaRequest request, String cap) =>
+      Uri.parse(web.document.baseURI)
+          .resolve('attachment_media/host.html')
+          .replace(
+            fragment: cap,
+            queryParameters: request.exportFile
+                ? {'export': '1'}
+                : request.mimeType == 'application/pdf'
+                ? {'pdf': '1'}
+                : null,
+          );
+
+  void _closeSession(web.ServiceWorker worker, String cap) {
+    _sessions.remove(cap);
+    // Remove local authority even if a replaced worker rejects the close post.
+    try {
+      worker.postMessage({'kind': 'noteflow-media-close', 'cap': cap}.jsify());
+    } on Object {
+      // The abandoned worker's private state is transient.
+    }
+    if (_sessions.isEmpty && _listening) {
+      web.window.navigator.serviceWorker.removeEventListener(
+        'message',
+        _listener,
+      );
+      _listening = false;
     }
   }
 
@@ -193,6 +258,10 @@ final class _WebMediaBridge implements AttachmentMediaBridge {
       port.close();
     }
   }
+}
+
+final class _MediaWorkerReplaced implements Exception {
+  const _MediaWorkerReplaced();
 }
 
 final class _WebMediaHandle implements AttachmentMediaHandle {

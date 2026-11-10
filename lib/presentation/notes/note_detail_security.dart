@@ -197,12 +197,13 @@ extension _NoteDetailSecurity on NoteDetailPageState {
     }
   }
 
-  Widget _securityPanel() {
+  Widget _securityPanel({bool menuItem = false, VoidCallback? onBeforeAction}) {
     final controller = _securityController;
     Widget panel(bool pending) => NoteSecurityPanel(
       localFirst: controller?.noteSecurity?.localFirst ?? false,
       pendingProtection: pending,
       compact: _canRead,
+      menuItem: menuItem,
       note: _note!,
       locked: !_canRead,
       busy: _actionBusy,
@@ -213,7 +214,10 @@ extension _NoteDetailSecurity on NoteDetailPageState {
       onBack: !widget.showAppBar && !_canRead
           ? () => unawaited(_handleBack())
           : null,
-      onAction: (action) => unawaited(_runSecurity(action)),
+      onAction: (action) {
+        onBeforeAction?.call();
+        unawaited(_runSecurity(action));
+      },
     );
     if (controller?.noteSecurity?.localFirst != true) return panel(false);
     return FutureBuilder<bool>(

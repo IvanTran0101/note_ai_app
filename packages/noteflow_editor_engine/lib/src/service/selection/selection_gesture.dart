@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -49,6 +50,9 @@ class SelectionGestureDetectorState extends State<SelectionGestureDetector> {
   Widget build(BuildContext context) {
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
+      // Blocks expose their own editable semantics. A generic Web tap node
+      // over the entire editor would intercept embedded-view pointer input.
+      excludeFromSemantics: kIsWeb,
       gestures: {
         if (widget.enablePanImmediate)
           ImmediateMultiDragGestureRecognizer:

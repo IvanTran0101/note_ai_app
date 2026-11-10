@@ -165,6 +165,7 @@ final class _RagPageState extends State<RagPage> {
             final RagFailure? failure = state.failure;
 
             return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.symmetric(
                 horizontal: NoteFlowSpacing.lg,
                 vertical: NoteFlowSpacing.xl,
@@ -260,6 +261,7 @@ final class _RagPageState extends State<RagPage> {
             key: RagPage.questionFieldKey,
             controller: _questionController,
             focusNode: _questionFocus,
+            scrollPadding: const EdgeInsets.only(bottom: NoteFlowSpacing.xl),
             minLines: 2,
             maxLines: 6,
             keyboardType: TextInputType.multiline,
@@ -303,12 +305,26 @@ final class _RagPageState extends State<RagPage> {
     return Semantics(
       liveRegion: true,
       container: true,
-      child: Text(
-        copy.failureMessage(failure),
-        key: RagPage.failureKey,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: tokens.error),
+      child: NoteFlowSurface(
+        tone: NoteFlowSurfaceTone.subtle,
+        bordered: true,
+        radius: NoteFlowRadius.row,
+        padding: const EdgeInsets.all(NoteFlowSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(Icons.error_outline, size: 18, color: tokens.error),
+            const SizedBox(width: NoteFlowSpacing.sm),
+            Expanded(
+              child: Text(
+                copy.failureMessage(failure),
+                key: RagPage.failureKey,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: tokens.error),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

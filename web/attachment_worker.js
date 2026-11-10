@@ -2,7 +2,7 @@
 const media = new Map();
 const chunkBytes = 256 * 1024;
 const mediaRoot = new URL('./attachment_media/', self.location.href);
-const uiCache = 'noteflow-attachment-ui-pdfjs6.4.299-v2';
+const uiCache = 'noteflow-attachment-ui-pdfjs6.4.299-v5';
 self.addEventListener('install', event => event.waitUntil((async () => {
   const response = await fetch(new URL('asset_manifest.json',mediaRoot),{cache:'no-store'});
   if (!response.ok) throw Error('Viewer assets unavailable');
@@ -10,7 +10,9 @@ self.addEventListener('install', event => event.waitUntil((async () => {
   if (!Array.isArray(paths) || paths.some(p => typeof p !== 'string' || p.includes('..') ||
       !/^(?:host(?:_pdf)?\.(?:html|css|js)|pdfjs\/[A-Za-z0-9_./-]+)$/.test(p))) throw Error('Invalid viewer assets');
   const cache = await caches.open(uiCache);
-  await cache.addAll(paths.map(p=>new URL(p,mediaRoot).href));
+  // A new UI cache must contain this release's assets, not HTTP-cached bytes
+  // from the previous worker. Private attachment responses are never cached.
+  await cache.addAll(paths.map(p=>new Request(new URL(p,mediaRoot),{cache:'reload'})));
   await self.skipWaiting();
 })()));
 self.addEventListener('activate', event => event.waitUntil((async () => {

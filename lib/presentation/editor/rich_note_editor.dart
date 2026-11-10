@@ -9,16 +9,26 @@ import 'package:flutter/services.dart';
 import '../notes/notes_theme_tokens.dart';
 import 'basic_block_menu.dart';
 import 'basic_block_commands.dart';
+import 'block_filter_input.dart';
 import 'editor_popup_guard.dart';
 import 'editor_popup_area.dart';
 import 'editor_shortcuts.dart';
 import 'editor_controls.dart';
+import 'editor_copy.dart';
+import 'native_editor_rail.dart';
+import 'native_clipboard_toolbar.dart';
 import 'editor_header_boundary.dart';
 import 'editor_renderers.dart';
 import 'editor_clipboard.dart';
+import 'editor_input_focus.dart';
 import 'rich_editor_adapter.dart';
 import 'selection_toolbar.dart';
+import 'selection_toolbar_layout.dart';
 import 'slash_command_controller.dart';
+
+part 'rich_note_editor_overlays.dart';
+part 'rich_note_editor_blocks.dart';
+part 'rich_note_editor_focus.dart';
 
 /// Host rendering and menus; persistence stays in the NoteDetail Application port.
 final class RichNoteEditor extends StatefulWidget {
@@ -28,11 +38,13 @@ final class RichNoteEditor extends StatefulWidget {
     required this.focusNode,
     required this.header,
     this.footer = const SizedBox.shrink(),
+    this.fileBlockBuilder,
   });
   final RichEditorAdapter adapter;
   final FocusNode focusNode;
   final Widget header;
   final Widget footer;
+  final Widget Function(String blockId, String? attachmentId)? fileBlockBuilder;
   @override
   State<RichNoteEditor> createState() => _RichNoteEditorState();
 }
@@ -44,7 +56,7 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
     // Web semantics retain DOM focus in a stable bounded viewport.
     shrinkWrap: kIsWeb,
   );
-  OverlayEntry? _blockMenu;
+  final _blockPortal = OverlayPortalController();
   bool _touchMenuShowing = false;
   late final header = ValueNotifier<Widget>(widget.header);
   late final footer = ValueNotifier<Widget>(widget.footer);
@@ -54,6 +66,28 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   bool? _cachedShort;
   double? _cachedScale;
   VoidCallback? _dismissFormatting;
+  Rect? _blockFilterAnchor;
+  ModalRoute<dynamic>? _editorRoute;
+  bool _editorRouteCurrent = true;
+  void Function(VoidCallback reconnect, bool forceReconnect)? _lastInputFocus;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    final routeIsCurrent = route?.isCurrent ?? true;
+    final routeChanged =
+        _editorRoute != null && !identical(route, _editorRoute);
+    final lostCurrentRoute = _editorRouteCurrent && !routeIsCurrent;
+    _editorRoute = route;
+    _editorRouteCurrent = routeIsCurrent;
+    if (routeChanged || lostCurrentRoute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _dismissTransientEditorUi();
+      });
+    }
+  }
+
   @override
   void didUpdateWidget(covariant RichNoteEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -71,6 +105,10 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   }
 
   void menuChanged() {
+    final restoreInput = kIsWeb && !slash.touchOpen && !widget.adapter.composing
+        ? (captureEditorInputFocus() ?? _lastInputFocus)
+        : null;
+    final inputSelection = widget.adapter.capture(range: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (slash.touchOpen && !kIsWeb) {
@@ -78,15 +116,16 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         if (!_touchMenuShowing) unawaited(_showTouchMenu());
         return;
       }
+      final changedVisibility = slash.visible != _blockPortal.isShowing;
       if (slash.visible) {
-        if (_blockMenu == null) {
-          _blockMenu = OverlayEntry(builder: _menuOverlay);
-          Overlay.of(context, rootOverlay: true).insert(_blockMenu!);
-        } else {
-          _blockMenu!.markNeedsBuild();
-        }
+        if (!_blockPortal.isShowing) _blockPortal.show();
       } else {
         _closeBlockMenu();
+        _lastInputFocus = null;
+        _blockFilterAnchor = null;
+      }
+      if (restoreInput != null && inputSelection != null) {
+        _restoreMenuInput(restoreInput, changedVisibility, inputSelection);
       }
     });
     // A touch open/close can occur while the document has no active animation
@@ -96,39 +135,80 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
 
   Future<void> _showTouchMenu() async {
     final snapshot = slash.snapshot;
+    final slashStart = slash.slashStart;
     if (snapshot == null) return;
     _touchMenuShowing = true;
     try {
       await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
       if (!mounted || !widget.adapter.accepts(snapshot, popupOwnsFocus: true)) {
+        if (mounted) slash.close(cancel: true);
         return;
       }
       final choice = await guardedEditorSheet<BasicBlockChoice>(
         context,
         widget.adapter,
         snapshot,
-        (context) => BasicBlockMenu(
-          controller: slash,
-          sheet: true,
-          onClose: () => Navigator.pop(context),
-          onChoose: (choice) => Navigator.pop(context, choice),
-        ),
+        _touchMenuSurface,
+        barrierColor: Colors.transparent,
+        // Let the route resolve width again on rotation instead of retaining
+        // the width of the portrait editor that opened it.
+        constraints: const BoxConstraints(maxWidth: double.infinity),
       );
       if (!mounted) return;
       if (choice == null) {
         slash.close(cancel: true);
       } else {
-        await slash.choose(choice);
+        // This route owns its original guarded selection across focus changes.
+        slash.close();
+        await BasicBlockCommands(widget.adapter).choose(
+          choice,
+          snapshot,
+          slashStart: slashStart,
+          popupOwnsFocus: true,
+        );
       }
     } finally {
       _touchMenuShowing = false;
     }
   }
 
+  Widget _touchMenuSurface(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Material(
+        color: Theme.of(context).colorScheme.surface,
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(
+                child: _controls(onBlocks: () => Navigator.pop(context)),
+              ),
+              IconButton(
+                tooltip: editorText(context, 'Close block menu'),
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.cancel_outlined, size: 24),
+              ),
+            ],
+          ),
+        ),
+      ),
+      Flexible(
+        child: BasicBlockMenu(
+          controller: slash,
+          sheet: true,
+          toolbarOwnsClose: true,
+          onClose: () => Navigator.pop(context),
+          onChoose: (choice) => Navigator.pop(context, choice),
+        ),
+      ),
+    ],
+  );
+
   @override
   void dispose() {
     widget.adapter.editor.autoScroller?.stopAutoScroll();
-    _closeBlockMenu();
     slash.removeListener(menuChanged);
     slash.dispose();
     scroll.dispose();
@@ -138,9 +218,24 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
   }
 
   void _closeBlockMenu() {
-    _blockMenu?.remove();
-    _blockMenu?.dispose();
-    _blockMenu = null;
+    if (_blockPortal.isShowing) _blockPortal.hide();
+  }
+
+  void _dismissFormattingOverlay() {
+    final dismiss = _dismissFormatting;
+    _dismissFormatting = null;
+    dismiss?.call();
+  }
+
+  /// Dismisses only ephemeral overlay UI; the editor selection snapshot remains
+  /// available to guarded formatting dialogs opened by this editor.
+  void _dismissTransientEditorUi() {
+    _dismissFormattingOverlay();
+    // Its guarded native sheet owns this snapshot until the choice returns.
+    if (!_touchMenuShowing && (slash.visible || slash.touchOpen)) {
+      slash.close(cancel: true);
+    }
+    _closeBlockMenu();
   }
 
   @override
@@ -165,7 +260,32 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
       _cachedScale = scale;
       _cachedView = _buildEditor(context);
     }
-    return _cachedView!;
+    // Keep popup semantics under this owner. A separate root OverlayEntry can
+    // reparent the route's Web DOM subtree and blur its active text field.
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      includeSemantics: false,
+      onKeyEvent: (_, event) {
+        if (kIsWeb && event is KeyDownEvent && !widget.adapter.composing) {
+          _lastInputFocus = captureEditorInputFocus() ?? _lastInputFocus;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        child: OverlayPortal(
+          overlayLocation: OverlayChildLocation.rootOverlay,
+          controller: _blockPortal,
+          overlayChildBuilder: (context) => ListenableBuilder(
+            listenable: slash,
+            builder: (context, _) => _menuOverlay(context),
+          ),
+          child: _cachedView!,
+        ),
+      ),
+    );
   }
 
   Widget _buildEditor(BuildContext context) {
@@ -190,82 +310,31 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
         context,
         adapter,
         widget.focusNode,
+        fileBlockBuilder: (block, attachment) =>
+            widget.fileBlockBuilder?.call(block, attachment) ??
+            const SizedBox.shrink(),
+        onAddBlock: _openAfterBlock,
       ),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: _toolbar(context, editor)),
+        Expanded(
+          child: NativeClipboardToolbar(
+            adapter: adapter,
+            focusNode: widget.focusNode,
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              child: _toolbar(context, editor),
+            ),
+          ),
+        ),
         if (!kIsWeb) _nativeControls(context),
       ],
     );
   }
 
-  Widget _header() => EditorHeaderBoundary(
-    adapter: widget.adapter,
-    child: Column(
-      children: [
-        ValueListenableBuilder<Widget>(
-          valueListenable: header,
-          builder: (_, value, _) => value,
-        ),
-      ],
-    ),
-  );
-
-  Widget _controls() => ListenableBuilder(
-    listenable: widget.adapter,
-    builder: (_, _) => widget.adapter.editable
-        ? EditorControls(adapter: widget.adapter, slash: slash)
-        : const SizedBox.shrink(),
-  );
-
-  Widget _nativeControls(BuildContext context) => EditorHeaderBoundary(
-    adapter: widget.adapter,
-    interceptSelection: false,
-    child: ListenableBuilder(
-      listenable: Listenable.merge([widget.adapter, widget.focusNode]),
-      builder: (context, _) {
-        if (!widget.adapter.editable) return const SizedBox.shrink();
-        final selection = widget.adapter.editor.selection;
-        final formatting =
-            NoteFlowLayout.isShortEditor(context) &&
-            NoteFlowLayout.keyboardInset(context) > 0 &&
-            widget.focusNode.hasFocus &&
-            selection != null &&
-            !selection.isCollapsed;
-        return SizedBox(
-          key: const ValueKey('document-controls-rail'),
-          height: 48,
-          child: Offstage(offstage: formatting, child: _controls()),
-        );
-      },
-    ),
-  );
-  Widget _footer(ColorScheme colors) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (kIsWeb)
-        EditorHeaderBoundary(adapter: widget.adapter, child: _controls()),
-      ValueListenableBuilder<Widget>(
-        valueListenable: footer,
-        builder: (_, value, _) =>
-            EditorHeaderBoundary(adapter: widget.adapter, child: value),
-      ),
-      ListenableBuilder(
-        listenable: widget.adapter,
-        builder: (context, _) => widget.adapter.error == null
-            ? const SizedBox(height: 120)
-            : Semantics(
-                liveRegion: true,
-                child: Text(
-                  widget.adapter.error!,
-                  style: TextStyle(color: colors.error),
-                ),
-              ),
-      ),
-    ],
-  );
   Widget _toolbar(BuildContext context, Widget editor) {
     final adapter = widget.adapter, colors = Theme.of(context).colorScheme;
     return engine.FloatingToolbar(
@@ -273,17 +342,20 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
       editorState: adapter.editor,
       editorScrollController: scroll,
       textDirection: Directionality.of(context),
-      floatingToolbarHeight: NoteFlowLayout.isShortEditor(context)
-          ? 48
-          : MediaQuery.sizeOf(context).width < 720
-          ? 144
-          : 96,
+      floatingToolbarHeight: SelectionToolbarLayout.heightFor(context),
+      padding: EdgeInsets.zero,
       style: engine.FloatingToolbarStyle(
         backgroundColor: colors.surface,
         toolbarActiveColor: colors.primary,
         toolbarIconColor: colors.onSurface,
-        toolbarElevation: 8,
+        toolbarElevation: !kIsWeb && NoteFlowLayout.isCompact(context) ? 0 : 8,
       ),
+      decoration: !kIsWeb && NoteFlowLayout.isCompact(context)
+          ? BoxDecoration(
+              color: colors.surface,
+              border: Border(top: BorderSide(color: colors.outlineVariant)),
+            )
+          : null,
       items: [
         engine.ToolbarItem(
           id: 'm09-selection',
@@ -292,59 +364,11 @@ final class _RichNoteEditorState extends State<RichNoteEditor> {
           builder: (_, _, _, _, _) => SelectionToolbar(
             adapter: adapter,
             dialogContext: context,
-            onPopupOpen: () => _dismissFormatting?.call(),
+            onPopupOpen: _dismissFormattingOverlay,
           ),
         ),
       ],
       child: editor,
-    );
-  }
-
-  Widget _menuOverlay(BuildContext context) {
-    final rects = widget.adapter.editor.selectionRects();
-    final rect = rects.isEmpty
-        ? const Rect.fromLTWH(24, 220, 0, 0)
-        : rects.last;
-    final placed = EditorPopupArea.of(context)
-        .place(rect, const Size(320, 320), preferBelow: true);
-    return Positioned.fromRect(
-      rect: placed,
-      child: TapRegion(
-        onTapOutside: (_) => slash.close(cancel: true),
-        child: BasicBlockMenu(controller: slash),
-      ),
-    );
-  }
-
-  Widget _formattingOverlay(
-    BuildContext context,
-    Widget child,
-    VoidCallback close,
-    bool metricsChanged,
-  ) {
-    _dismissFormatting = close;
-    final area = MediaQuery.of(context),
-        rects = widget.adapter.editor.selectionRects();
-    if (rects.isEmpty) return const SizedBox.shrink();
-    final rect = rects.first, width = math.min(area.size.width - 40, 686.0);
-    final short = NoteFlowLayout.isShortEditor(context);
-    final height = short
-        ? 48.0
-        : area.size.width < 720
-        ? 144.0
-        : 96.0;
-    final popup = EditorPopupArea.of(context);
-    final placed = short && area.viewInsets.bottom > 0
-        ? Rect.fromLTWH(
-            popup.bounds.center.dx - width / 2,
-            popup.bounds.bottom - math.min(height, popup.bounds.height),
-            width,
-            math.min(height, popup.bounds.height),
-          )
-        : popup.place(rect, Size(width, height), centered: true);
-    return Positioned.fromRect(
-      rect: placed,
-      child: ClipRect(child: SingleChildScrollView(child: child)),
     );
   }
 }

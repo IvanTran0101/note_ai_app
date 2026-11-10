@@ -17,13 +17,26 @@ final class NestedBlockCommands {
     );
     final snapshot = adapter.capture(range: false);
     if (snapshot == null) return false;
-    final path = [...parent.path, parent.children.length];
-    adapter.expandedToggles[parent.attributes['m09_id'] as String] = true;
+    // Notion inserts a newly added toggle child before the existing children.
+    // Callout's existing trailing action keeps appending to its children.
+    final childIndex = parent.type == 'm09_toggle' ? 0 : parent.children.length;
+    final path = [...parent.path, childIndex];
+    final id = parent.attributes['m09_id'] as String;
+    final previousExpansion = adapter.expandedToggles[id];
+    adapter.expandedToggles[id] = true;
     final transaction = adapter.editor.transaction
       ..insertNode(path, engine.paragraphNode());
     transaction.afterSelection = engine.Selection.collapsed(
       engine.Position(path: path, offset: 0),
     );
-    return adapter.apply(transaction, snapshot);
+    final applied = await adapter.apply(transaction, snapshot);
+    if (!applied) {
+      if (previousExpansion == null) {
+        adapter.expandedToggles.remove(id);
+      } else {
+        adapter.expandedToggles[id] = previousExpansion;
+      }
+    }
+    return applied;
   }
 }

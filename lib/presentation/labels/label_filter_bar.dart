@@ -5,6 +5,7 @@ import '../../application/notes/note_dto.dart';
 import 'label_catalog_scope.dart';
 import 'label_manager_dialog.dart';
 import 'label_copy.dart';
+import '../notes/notes_theme_tokens.dart';
 
 final class LabelFilterBar extends StatelessWidget {
   const LabelFilterBar({
@@ -14,12 +15,16 @@ final class LabelFilterBar extends StatelessWidget {
     required this.onChanged,
     required this.readable,
     this.allowManage = true,
+    this.dense = false,
+    this.singleLine = false,
   });
   final List<NoteDto> notes;
   final Set<LabelSelection> selected;
   final ValueChanged<Set<LabelSelection>> onChanged;
   final bool Function(NoteDto) readable;
   final bool allowManage;
+  final bool dense;
+  final bool singleLine;
   @override
   Widget build(BuildContext context) {
     final scope = LabelCatalogScope.maybeOf(context);
@@ -46,6 +51,7 @@ final class LabelFilterBar extends StatelessWidget {
       }
     }
     final copy = LabelCopy(context);
+    final tokens = NoteFlowUiTokens.of(context);
     final tombstones = scope.labels
         .where((l) => l.ownerId == scope.actor && l.isDeleted)
         .map((l) => (ownerId: l.ownerId, id: l.id))
@@ -59,35 +65,142 @@ final class LabelFilterBar extends StatelessWidget {
         }
       });
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(copy.filter),
-          for (final choice in choices.entries)
-            FilterChip(
-              key: ValueKey(('label-filter', choice.key)),
-              label: Text(choice.value),
-              selected: selected.contains(choice.key),
-              onSelected: (value) {
-                final next = Set<LabelSelection>.of(selected);
-                value ? next.add(choice.key) : next.remove(choice.key);
-                onChanged(next);
-              },
-            ),
-          if (selected.isNotEmpty)
-            TextButton(onPressed: () => onChanged({}), child: Text(copy.clear)),
-          if (allowManage)
-            TextButton.icon(
-              onPressed: () => showLabelManager(context),
-              icon: const Icon(Icons.label_outline),
-              label: Text(copy.manage),
-            ),
-        ],
+    final List<Widget> chips = [
+      for (final choice in choices.entries)
+        _labelFilterChip(
+          context,
+          choice: choice,
+          selected: selected,
+          onChanged: onChanged,
+          tokens: tokens,
+          dense: dense,
+        ),
+    ];
+    final Widget clearButton = TextButton(
+      onPressed: () => onChanged({}),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
+        foregroundColor: tokens.textSecondary,
+        textStyle: Theme.of(context).textTheme.labelMedium
+            ?.copyWith(fontWeight: FontWeight.w400),
+      ),
+      child: Text(copy.clear),
+    );
+    final Widget manageButton = TextButton.icon(
+      onPressed: () => showLabelManager(context),
+      icon: const Icon(Icons.label_outline),
+      label: Text(copy.manage),
+      style: TextButton.styleFrom(
+        foregroundColor: tokens.textSecondary,
+        iconSize: dense ? 16 : 18,
+        minimumSize: const Size(48, 48),
+        padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 12),
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.padded,
+        textStyle: Theme.of(context).textTheme.labelMedium
+            ?.copyWith(fontWeight: FontWeight.w400),
       ),
     );
+    final Widget filterLabel = singleLine || dense
+        ? Tooltip(
+            message: copy.filter,
+            child: Semantics(
+              label: copy.filter,
+              child: SizedBox(
+                width: 32,
+                height: dense && !singleLine ? 32 : 48,
+                child: Icon(
+                  Icons.filter_list,
+                  size: 18,
+                  color: tokens.textMuted,
+                ),
+              ),
+            ),
+          )
+        : Text(
+            copy.filter,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: tokens.textMuted,
+              fontWeight: FontWeight.w400,
+            ),
+          );
+    final Widget controls = Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        filterLabel,
+        ...chips,
+        if (selected.isNotEmpty) clearButton,
+        if (allowManage) manageButton,
+      ],
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: dense ? 0 : 8),
+      child: singleLine
+          ? Row(
+              children: [
+                filterLabel,
+                const SizedBox(width: 4),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (int index = 0; index < chips.length; index++) ...[
+                          if (index > 0) const SizedBox(width: 6),
+                          chips[index],
+                        ],
+                        if (selected.isNotEmpty) clearButton,
+                      ],
+                    ),
+                  ),
+                ),
+                if (allowManage) manageButton,
+              ],
+            )
+          : controls,
+    );
   }
+}
+
+Widget _labelFilterChip(
+  BuildContext context, {
+  required MapEntry<LabelSelection, String> choice,
+  required Set<LabelSelection> selected,
+  required ValueChanged<Set<LabelSelection>> onChanged,
+  required NoteFlowUiTokens tokens,
+  required bool dense,
+}) {
+  final isSelected = selected.contains(choice.key);
+  return FilterChip(
+    key: ValueKey(('label-filter', choice.key)),
+    label: Text(choice.value),
+    labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: isSelected ? tokens.textPrimary : tokens.textSecondary,
+      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+    ),
+    labelPadding: EdgeInsets.symmetric(horizontal: dense ? 4 : 8),
+    padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 8),
+    visualDensity: VisualDensity.standard,
+    materialTapTargetSize: MaterialTapTargetSize.padded,
+    backgroundColor: Colors.transparent,
+    selectedColor: tokens.textPrimary.withValues(alpha: .12),
+    checkmarkColor: tokens.textPrimary,
+    side: BorderSide(
+      color: isSelected
+          ? tokens.textPrimary.withValues(alpha: .36)
+          : tokens.divider,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    selected: isSelected,
+    onSelected: (value) {
+      final next = Set<LabelSelection>.of(selected);
+      value ? next.add(choice.key) : next.remove(choice.key);
+      onChanged(next);
+    },
+  );
 }

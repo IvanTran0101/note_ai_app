@@ -29,6 +29,16 @@ typedef UploadAttachment = Future<Attachment> Function(
   Stream<List<int>> Function() openRead,
 );
 
+/// The canonical Note removal committed, but local encrypted cleanup failed.
+/// Presentation can accept [note] so the removed File block does not remain as
+/// an unavailable tombstone while still showing an actionable cleanup error.
+final class AttachmentRemovalCleanupFailure implements Exception {
+  const AttachmentRemovalCleanupFailure(this.note, this.cause);
+
+  final NoteDto note;
+  final Object cause;
+}
+
 /// Local-first attachment use cases. Binary work never saves a stale Note or
 /// creates a second note outbox. The live M05/M06 guard is mandatory; it must
 /// check actor/session, current ACL and protection/access epochs on each call.
@@ -181,27 +191,73 @@ final class AttachmentApplicationService {
     }
   }
 
-  Future<void> cancel(String noteId, String cacheId) async {
+  Future<NoteDto> cancel(
+    String noteId,
+    String cacheId, {
+    void Function(NoteDto)? onCommitted,
+  }) async {
     final binding = await _capture(noteId);
-    final note = await _fresh(binding);
+    var note = await _fresh(binding);
+    var removedDocumentReference = false;
     if (note.attachments.any((item) => item.id == cacheId)) {
       throw StateError('Remove the linked attachment through the note writer.');
     }
+    if (note.document?.referencesAttachment(cacheId) ?? false) {
+      note = await notes.updateById(
+        noteId: binding.note.noteId,
+        ownerId: binding.note.ownerId,
+        expectedAccountUserId: binding.actorId,
+        canCommit: () {
+          _requireOwner(binding);
+          return true;
+        },
+        change: (fresh) {
+          _requireNote(binding, fresh);
+          if (fresh.attachments.any((item) => item.id == cacheId)) {
+            throw StateError(
+              'Remove the linked attachment through the note writer.',
+            );
+          }
+          fresh.removeAttachment(cacheId, now().toUtc());
+          return fresh;
+        },
+      );
+      removedDocumentReference = true;
+      _requireOwner(binding);
+      onCommitted?.call(NoteDto.fromDomain(note));
+      requestSync?.call(binding.actorId);
+    }
     _cancelled.add(_attemptKey(binding, cacheId));
     cancelMedia(noteId, cacheId);
-    if (remoteCancel != null && drafts is AttachmentTransferCache) {
-      final cache = drafts as AttachmentTransferCache;
-      await cache.queueCancellation(binding, cacheId);
-      _drainCancellations(binding);
-    } else {
-      await drafts.cancelLocal(binding, cacheId);
+    try {
+      if (remoteCancel != null && drafts is AttachmentTransferCache) {
+        final cache = drafts as AttachmentTransferCache;
+        await cache.queueCancellation(binding, cacheId);
+        _drainCancellations(binding);
+      } else {
+        await drafts.cancelLocal(binding, cacheId);
+      }
+    } on Object catch (failure) {
+      if (removedDocumentReference) {
+        _requireOwner(binding);
+        throw AttachmentRemovalCleanupFailure(
+          NoteDto.fromDomain(note),
+          failure,
+        );
+      }
+      rethrow;
     }
     _requireOwner(binding);
+    return NoteDto.fromDomain(note);
   }
 
-  Future<NoteDto> remove(String noteId, String attachmentId) async {
+  Future<NoteDto> remove(
+    String noteId,
+    String attachmentId, {
+    void Function(NoteDto)? onCommitted,
+  }) async {
     final binding = await _capture(noteId);
-    return _removeCaptured(binding, attachmentId);
+    return _removeCaptured(binding, attachmentId, onCommitted: onCommitted);
   }
 
   Stream<List<int>> read(

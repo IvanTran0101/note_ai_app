@@ -121,26 +121,58 @@ final class NoteSummaryFeedback extends StatelessWidget {
   }
 
   Widget _buildProgress(BuildContext context, NoteFlowUiTokens tokens) {
-    return Row(
-      children: <Widget>[
-        const SizedBox.square(
-          dimension: 18,
-          child: CircularProgressIndicator(key: progressKey, strokeWidth: 2),
-        ),
-        const SizedBox(width: NoteFlowSpacing.sm),
-        Expanded(
-          child: Text(
-            copy.summarizing,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: tokens.textSecondary),
-          ),
-        ),
-        TextButton(
-          key: cancelKey,
-          onPressed: onCancel,
-          child: Text(copy.cancel),
-        ),
-      ],
+    final Widget indicator = const SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(key: progressKey, strokeWidth: 2),
+    );
+    final Widget label = Text(
+      copy.summarizing,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: tokens.textSecondary),
+    );
+    final Widget cancel = TextButton(
+      key: cancelKey,
+      onPressed: onCancel,
+      child: Text(copy.cancel),
+    );
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool largerText = MediaQuery.textScalerOf(context).scale(16) > 16;
+        final bool stackAction =
+            largerText ||
+            NoteFlowLayout.isCompact(
+              context,
+              availableWidth: constraints.maxWidth,
+            );
+
+        final Widget progressLabel = Row(
+          children: <Widget>[
+            indicator,
+            const SizedBox(width: NoteFlowSpacing.sm),
+            Expanded(child: label),
+          ],
+        );
+        if (stackAction) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              progressLabel,
+              Align(alignment: AlignmentDirectional.centerEnd, child: cancel),
+            ],
+          );
+        }
+
+        return Row(
+          children: <Widget>[
+            indicator,
+            const SizedBox(width: NoteFlowSpacing.sm),
+            Expanded(child: label),
+            cancel,
+          ],
+        );
+      },
     );
   }
 
@@ -157,11 +189,9 @@ final class NoteSummaryFeedback extends StatelessWidget {
       excludeSemantics: true,
       child: Container(
         key: availabilityKey,
-        padding: const EdgeInsets.all(NoteFlowSpacing.md),
+        padding: const EdgeInsets.symmetric(vertical: NoteFlowSpacing.sm),
         decoration: BoxDecoration(
-          color: tokens.subtleSurface,
-          borderRadius: BorderRadius.circular(NoteFlowRadius.card),
-          border: Border.all(color: tokens.divider),
+          border: Border(top: BorderSide(color: tokens.divider)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,7 +205,7 @@ final class NoteSummaryFeedback extends StatelessWidget {
             Expanded(
               child: Text(
                 notice,
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context).textTheme.bodyMedium
                     ?.copyWith(color: tokens.textSecondary),
               ),
             ),

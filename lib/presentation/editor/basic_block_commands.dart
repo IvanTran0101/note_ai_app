@@ -55,6 +55,16 @@ const basicBlockChoices = [
   BasicBlockChoice('Divider', DocumentBlockKind.divider, 'divider rule'),
 ];
 
+/// Media choices stay in the slash/block picker without changing the thirteen
+/// existing Basic blocks.
+const mediaBlockChoices = [
+  BasicBlockChoice(
+    'File',
+    DocumentBlockKind.attachment,
+    'file attachment tep tin dinh kem',
+  ),
+];
+
 /// Business block conversions use public Delta/Transaction operations.
 final class BasicBlockCommands {
   const BasicBlockCommands(this.adapter);
@@ -78,6 +88,9 @@ final class BasicBlockCommands {
     final selection = snapshot.selection.normalized;
     final node = adapter.editor.document.nodeAtPath(selection.start.path);
     if (node == null || inCell(node) || node.delta == null) return false;
+    if (choice.kind == DocumentBlockKind.attachment) {
+      return _insertFile(node, snapshot, slashStart, popupOwnsFocus);
+    }
     if (choice.kind == DocumentBlockKind.table ||
         choice.kind == DocumentBlockKind.divider) {
       return _insertStructural(
@@ -135,6 +148,107 @@ final class BasicBlockCommands {
             engine.Position(path: node.path, offset: slashStart),
           );
     return adapter.apply(transaction, snapshot, popupOwnsFocus: popupOwnsFocus);
+  }
+
+  Future<bool> _insertFile(
+    engine.Node node,
+    RichSelectionSnapshot snapshot,
+    int? slashStart,
+    bool popupOwnsFocus,
+  ) async {
+    final selection = snapshot.selection.normalized;
+    if (!selection.isCollapsed || node.delta == null) return false;
+    final caret = selection.start.offset;
+    final delta = node.delta!;
+    final length = delta.length;
+    final start = slashStart ?? caret;
+    if (start < 0 || start > caret || caret > length) return false;
+
+    // Keep the original styled Delta on both sides of the insertion. In a
+    // slash command the command text itself is consumed; any following text is
+    // moved into a paragraph after the File block.
+    final prefixContent = delta.slice(0, start);
+    final before = engine.Delta()..addAll(prefixContent);
+    final after = delta.slice(caret, length);
+    final hasPrefix = prefixContent.isNotEmpty;
+    final hasSuffix = after.isNotEmpty;
+    final blockId = adapter.newIdentity();
+    final file = RichDocumentCodec.encodeBlock(
+      DocumentBlock(id: blockId, kind: DocumentBlockKind.attachment),
+    );
+    final trailingDelta = hasSuffix ? after : engine.Delta();
+    final trailing = engine.paragraphNode(delta: trailingDelta);
+    final transaction = adapter.editor.transaction;
+    final preserveCurrentNode = hasPrefix || node.children.isNotEmpty;
+    late final List<int> trailingPath;
+
+    if (preserveCurrentNode) {
+      final edit = delta.diff(before);
+      transaction.add(
+        engine.UpdateTextOperation(node.path, edit, edit.invert(delta)),
+      );
+      final insertionPath = [...node.path];
+      insertionPath[insertionPath.length - 1]++;
+      transaction.insertNodes(insertionPath, [file, trailing]);
+      trailingPath = [...insertionPath];
+      trailingPath[trailingPath.length - 1]++;
+      transaction.afterSelection = engine.Selection.collapsed(
+        engine.Position(path: trailingPath, offset: 0),
+      );
+    } else {
+      // Replacing an empty prefix avoids leaving a visually empty text block
+      // before the newly inserted File block.
+      transaction.deleteNode(node);
+      transaction.add(
+        engine.InsertOperation(node.path, [file, trailing]),
+        transform: false,
+      );
+      trailingPath = [...node.path];
+      trailingPath[trailingPath.length - 1]++;
+      transaction.afterSelection = engine.Selection.collapsed(
+        engine.Position(path: trailingPath, offset: 0),
+      );
+    }
+
+    final document = adapter.editor.document;
+    if (document.root.attributes['m09_inline_attachments'] != true) {
+      transaction.updateNode(document.root, {'m09_inline_attachments': true});
+      // Import the old attachment list only when enabling inline File blocks.
+      // Once inline mode is active, legacy IDs may include refs whose File
+      // blocks were intentionally deleted and must not be resurrected.
+      final presentIds = <String>{};
+      void visit(engine.Node current) {
+        final attachmentId = current.attributes['m09_attachment_id'];
+        if (attachmentId is String) presentIds.add(attachmentId);
+        for (final child in current.children) {
+          visit(child);
+        }
+      }
+
+      visit(document.root);
+      final legacyNodes = [
+        for (final attachmentId in adapter.legacyAttachmentIds)
+          if (presentIds.add(attachmentId))
+            RichDocumentCodec.encodeBlock(
+              DocumentBlock(
+                id: adapter.newIdentity(),
+                kind: DocumentBlockKind.attachment,
+                attachmentId: attachmentId,
+              ),
+            ),
+      ];
+      if (legacyNodes.isNotEmpty) {
+        transaction.insertNodes([document.root.children.length], legacyNodes);
+      }
+    }
+
+    final applied = await adapter.apply(
+      transaction,
+      snapshot,
+      popupOwnsFocus: popupOwnsFocus,
+    );
+    if (applied) adapter.onFileInserted?.call(blockId);
+    return applied;
   }
 
   Future<bool> _insertStructural(

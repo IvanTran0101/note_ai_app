@@ -1,5 +1,296 @@
 # MUST REMEMBER
 
+UI52 source16864ba pushed0/0; actual72 installed/pulled hash456da989...161598 matches. Stable landscape200%+IME field305-457/Share318-444 before keyboard520; Close48dp. Drag/role access and gesture+IME checked, originalfont1/auto1/user0/nav0 restored, AVDoff/dataretained. VM9/strict8, actualChrome71+sameJS72 verified; board70 images. Continue UI53 editor matrix; both95% UNVERIFIED, no broad acceptance. Read CURRENT_WORK/UI52_SHARE_WEB.
+
+## Active29Oct — UI51 verified68; publish then CONTINUE UI52 Share
+
+Read docs/m09/UI51_SETTINGS.md and CURRENT_WORK.md. Settings scoped UI checked:
+Chrome8/8, strict6 clean, prior67 VM11/1Webskip before Web-only68 delta. Source1082/
+6dbd5caa...b9bf4 drift[], exact Chrome4935ad38...b4f38 and installed/pulled APK
+c62f6d47...ffdfe match. Actual Web narrow-first resize/LightDark/VI700/shortscroll/
+48px and native48dp/200%/landscape/gesture safe bounds checked. System Web prefs,
+native font1/auto1,user0/nav0 restored, Dark/System retained; AVD closed/data kept.
+Notion board64 images. Both95% gates UNVERIFIED; no broad functional acceptance.
+Native startupSystemUIANR/nullroot before relaunch/settling remains unfixed;
+SDK37.2 auto2560MB overrides lower RAM flags. QA-origin CORS/profile service limits
+explicit, no API/cloud PASS. One additional LunaMax reviewer found/resolved Web
+resize bug; same worker drafted ignored UI52 proposal.22 workers since UI43.
+Next UI52: desktop Web Share header with existing copy.share/456px/y44 reference,
+no Publish/help/public-sharing feature. Root owns source, old servers untouched.
+Preserve unrelated .playwright-cli/ and final_project.md. No new worktrees.
+
+## Current29Oct — UI50 verified63, next Settings UI51
+
+Read UI50_COMPACT_WEB_SEARCH.md. Initial narrow Web Search now uses the existing
+modal, like actual Notion390px; native phones keep dock. Chrome2/VM3/strict2 pass,
+build63 source1079/f2ba7acb...5f19c drift[], Web56.5s/APK28.7s. Exact actualChrome
+fdf8c5d1...994f9/21,462,180bytes; APK63 built907b17dd...62430, not installed.
+Actual narrow/wide/short/query/Clear48/Escape/barrier/reopen/Light-Dark checked;
+Light restored. Both QA emulators gracefully closed/data kept after RAM~200MB
+and Notion ANR, recovered~6GB. Reopen one at a time after builds. UI49 published
+53ed20ec353f26bfab8ad169ec71cc8413548710. Both95% UNVERIFIED; no broad acceptance.
+UI51 next: existing Settings presentation against actual Preferences measurements
+and safe cropped ref, no fake/new capabilities. IAB control became unavailable
+after resume; earlier ref captured, no Notion preference changed. Root owns source.
+
+## Current29Oct — UI49 final62 verified; continue UI50
+
+Final62 fixes native Search landscape duplicate fields and centers native empty
+in the full available width. VM final3/3 after proper new-test IME cleanup, strict7
+clean; earlier scoped VM10/Chrome11 and page Chrome2 pass at recorded timings.
+Web93.6s/APK50.6s, source1079/d6dd1ad1...bdaea drift[], exact Chrome6553392b...0574
+and installedAPK18275d24...93e56 match. Actual portrait/landscape IME, scroll/tap
+Clear48dp and200% text checked; original font1/auto rotation1,user0/nav0 restored.
+Notion reference app ANR after portrait rotation; reopened without data deletion.
+Green window outline recurred then absent after settled Home/resume: cause unknown.
+Read UI49_NATIVE_SEARCH.md. UI50 next: initial narrow WEB Search must use existing
+safe-width modal like actual Notion, not full-page dock. Native phone keeps dock.
+No new features; both>=95% gates UNVERIFIED, no broad acceptance yet.
+
+## Active29Oct — UI49 landscape repair, UI48 published2084f14
+
+Do not publish61. Actual native landscape exposed duplicate Search fields and
+clipped Clear from _buildBody width-only compact flag. Corrected red test proves
+two fields; root aligned it to NoteFlowLayout.isCompact(...availableWidth...),
+green/analysis/final62 runtime still pending. Keep60dp empty spacing (real Notion
+landscape confirms same header shift), let parent scroll above IME. Original
+both AVD rotation auto1/user0, app font1/nav3 must be restored after checks.
+
+UI48 published2084f14 (10 explicit files, local/remote0/0). Root now integrates
+UI49 native empty + compact Clear target/icon; drafts reviewed, tests still required.
+
+Read docs/m09/CURRENT_WORK.md and UI48_SEARCH_EMPTY.md. UI47 published39768ae;
+UI48 final60 source1078/30e8797a...64bf20 drift[], Web61.1s/APK29.3s, exact
+Chrome2fdd3af3...cd486 and installedAPKeb01daa3...8806c8 verified after runtime
+restart. Chrome compact4/4/final analyzer2 clean (prior4-path pass). VM4 precede
+last Web-only density fix, don't claim a fresh final compact-source VM pass.
+Actual59 target was40 despite min48;60 fixes density, actual body Clear48 now.
+Typing/clear/narrow/short/normal/Light-Dark/Escape checked, Light restored. Stable
+header/one field and same existing callbacks/data/permissions. Notion paired
+crops updated; publish explicit UI48 paths then integrate UI49. Preserve unrelated
+files and AVD/profile data. No new feature or broad functional acceptance.
+
+UI49 reviewed drafts ONLY in output/m09/ui49_draft49 + ui49_dock_draft. Root must
+integrate native compact Search empty centered/60dp reference padding/14-20-w500/
+Clear48 and filled-circle clear icon; keep callback/keys/guards/scroll/SafeArea,
+generic/Web/desktop empty unchanged. Verify compact Web48 target/narrow text width
+for shared dock control; new native icon stays native-only. Worker tests unrun,
+root adjusts kIsWeb expectations and Vietnamese200% case, includes final UI48
+widget cases in next VM batch.20 prior reviewed workers +1 reused Luna Max=21
+actual across task; no active child writes. Both>=95% gates UNVERIFIED. Continue
+UI/matched states; actual iOS unverified, no fabricated similarity score.
+
+## Active noon27Oct — UI45 continuation after published UI44
+
+UI45 published b3ae6bd (remote SHA verified0/0). UI46 final57 verified: root owns
+native page-header10dp side inset and targeted geometry/accessibility checks.
+Actual Notion centers Back/More near90/989px; app56 near63/1017px at420dpi.
+Keep48dp targets and system SafeArea; desktop/compact Web retain their geometry.
+57 actual Back/More centers are within1.5/2px horizontally of ref; portrait3-button,
+landscape and gesture inspected, original3-button/rotation1,0/font1 restored.
+VM6/Chrome6 pass, analyzer2 clean, Web69.9s/APK36.6s; exact bundle/device identity
+and drift[] verified. UI46_NATIVE_HEADER.md records proof and recurring post-
+install splash/null-root recovery (no cold-start PASS). Notion board/progress
+updated. Continue responsive Search/state matrix before broad acceptance.
+Settled matched Web fixture confirms column/title already align (earlier x453
+was a transition/state mismatch); do not change the document column. Labels
+remain below title. No new features, broad acceptance or95% claim.
+The older full synthetic fixture is available in Search's second same-title
+result. Use it; the noon-created duplicate is partial, not the complete fixture.
+Both Web themes were restored to original Light after direct Dark comparison.
+
+UI43 twenty-agent review and UI44 native repair are published0910db2/87b1916.
+Final55 passed scoped checks; Notion board46 images preserves prior history.
+UI45 final56 verified: touch-open has no initial Text fill; keyboard feedback
+remains.2 targeted cases/analyzer3 pass, Web91s/APK69.8s, source1076/b6bc5708
+drift[]; actual Chrome and installedAPK hashes match. Notion board/progress
+updated; see UI45_TOUCH_PALETTE.md. Continue paired Web column/header spacing
+and remaining light/dark/dialog/resize states. Root owns integration/review.
+No new capability; both>=95% platform gates stay UNVERIFIED. Read CURRENT_WORK.
+
+## ACTIVE UI43 — user resumed with at least20 Luna Max (26 October 2026)
+
+Latest continuation27Oct: UI43 technical53 published0910db2, M09 still active.
+Lead continued actual native selection/plus/Share inspection and found flat-grid
+vs dark-tile and panel-height gaps. UI44 adjusts only basic_block_grid/menu/
+choices (native flat palette and safe~288dp cap) plus clipboard capsule color.
+54 built and actual comparison confirmed panel within1px/Text ink within3px;
+final scroll caught44dp File tile, now explicit48dp with compact-theme regression.
+Final55 Web61.5s/APK31s/source ae3a621f...7e4da, drift[] and Chrome/device hashes
+verified.15 scoped cases pass (plus2 repeated target cases), analyzer5 clean;
+actual File target48dp ends above navbar, palette/selection inspected. Read
+UI44_NATIVE_PALETTE.md for proof and remaining matrix. CURRENT_WORK.md starts
+with that scope. No new workers
+needed; the requested20 have all delivered. Do not restart or stop at UI43.
+
+Latest user overrides prior UI42 pause and six-agent limit: continue M09 UI/UX
+with at least20 Luna Max, disjoint file ownership and lead implementing/reviewing.
+Read docs/m09/ui43/OWNERSHIP.md and CURRENT_WORK.md. Existing-features-only,
+local-first, actual Notion Web/Android, platform safe zones and separate >=95%
+gates still apply. Root owns shared config/tokens/integration/browser/build/Git;
+workers may edit only allocated files and their uniquely named tests/reports.
+No global functional signoff before paired visual gates. Never invent a %.
+
+Continuation state (27Oct):20 actual workers have delivered and lead reviewed
+their disjoint patches/tests. Read UI43_REVIEW.md and CURRENT_WORK.md. Final UI43
+source/artifacts are53 (1076 paths, cc0fc644...fc4a), not51/52. Lead repaired Share
+and chooser intrinsic-layout failures and verified both on exact53 Chrome with
+zero console errors. Android installed53 hash matches; settled IME capture shows
+the editor rail above Gboard and shell navigation hidden. VM92 + chooser4 retest
+(3 overlap), Chrome24 unique after repairs, strict61-path analysis and Web/APK
+builds pass. These establish the UI43 technical checkpoint, NOT >=95% similarity.
+Both visual gates remain UNVERIFIED; continue direct paired UI comparison before
+broad functional acceptance. Native selected-text/palette, full visual-state
+matrix, broader first-focus/typing and actual iOS evidence are still open.
+
+## UI42 COMPLETE — publish then STOP (24 October 2026)
+
+Only the three requested fixes are complete on50: first-line contextual +
+including correct Web hit region, Notion-style toggle, and canonical File-block
+removal including local pending cancellation. VM36/36, Chrome15/15, scoped
+analysis/builds and actual UI checks passed. EDITOR_POLISH_UI42.md records proof,
+two Luna Max deliveries, history boundary and remaining broader limitations.
+Notion checked only3 UI42 items and preserved31 old images plus8 new. Both95%
+gates remain UNVERIFIED. Push final-tuankiet, then STOP for the next request.
+
+## UI42 scope history (23 October 2026)
+
+Fix + alignment to the first text line for each block, match toggle UI/UX to
+actual Notion, and remove the File block when its attachment is successfully
+removed (not for generic unavailable/revoked state). Preserve text, styles,
+other files, local-first writer and access guards. Check Chrome/native, update
+Notion and publish final-tuankiet, then stop for next task. Read CURRENT_WORK.
+UI41 pause is superseded only for this slice; whole-platform95% stays open.
+
+## UI41 BOUNDED COMPLETE — publish then STOP (23 October 2026)
+
+Labels below title and File in / plus contextual + are complete on build47.
+40/40 VM,19/19 Chrome,8/8 parser cases; analyzer/strict tsc and Web/APK pass.
+Actual Chrome/native picker, cancel/reopen, inline placement and download
+checked. FILE_BLOCK_UI41.md contains identities, evidence and remaining limits.
+Only this slice is signed off. Both whole-platform95% gates stay UNVERIFIED.
+Publish this checkpoint on final-tuankiet and record it on Notion, then STOP.
+Do not resume other M09 work until the user explicitly supplies the next task.
+
+## LATEST CORRECTION — File belongs to / and block + (23 October 2026)
+
+User rejected UI40 attachment UX. Do NOT treat a restyled footer/Add attachment
+row as Notion parity. Actual /file creates an inline File placeholder at the
+active block, opens Upload/Choose a file, then displays the picked file there.
+Implement existing attachment actions through / and contextual block +, remove
+the separate Add attachment/footer UX. Preserve labels below title. Persist file
+position/reference locally and through existing sync; preserve access/transfer
+owners and old files. No Link/embed, new media capability or other M09 work.
+UI40 attachment completion is superseded, both95% gates remain OPEN.
+
+## CURRENT BOUNDED REQUEST — 23 October 2026
+
+UI40 implementation and bounded QA are complete: VM45/45, Chrome10/10,
+analyzer/Web/APK and actual Chrome/native label/file/menu/preview/download
+checks recorded in docs/m09/LABEL_FILE_UI40.md. Push this milestone, then STOP.
+Do not resume another M09 item until the user supplies the next instruction.
+
+User resumed ONLY two items: put note labels immediately below its title,
+and refine existing attachment UI against actual Notion. Complete and review
+these on Web/Android, update progress and push this milestone, then STOP and
+wait for the user's next task. Do not resume the rest of M09 in this turn.
+Existing capabilities/local-first/access guards remain; both95% gates OPEN.
+
+## USER PAUSE — 23 October 2026
+
+The user requested pushing the current checkpoint and then stopping. After
+that push, do not implement or run further QA until the user says "tiếp tục".
+UI39 focused checks and both builds completed; exact receipts and remaining
+work are in docs/m09/CURRENT_WORK.md. Neither platform's >=95% similarity
+gate has been verified. Resume from that record only after the user continues.
+
+## Latest UI priority — labels, attachments and editor controls (21 October 2026)
+
+Before the usual remaining M09 work, inspect actual Notion Web/Android for
+labels, file attachments and Add block/Undo/Redo. Refine these existing app
+surfaces first. For labels without a matching standalone-page reference, use
+a minimal neutral presentation consistent with Notion; do not add a database
+or change the independent-note flow. Preserve file picking, preview, download,
+retry/cancel/remove, permissions and local-first storage. Match the placement
+and visibility of existing editor controls to directly inspected Notion;
+keep Undo/Redo available when applicable, without inventing new capabilities.
+After this priority slice is reviewed and exercised, resume the existing M09
+sequence. The separate Web/Android >=95% gate remains unchanged.
+
+## Current UI continuation —22 October2026
+
+Priority label/file/controls checkpoint d8c269b is published and remote-verified.
+Chrome31 first/offline exports are verified with semantics/theme and exact67B
+hash. UI37 checkpoint7f48ac8 is published: slow selection drag, native clipboard,
+theme renderer and Web geometry fixes. UI38 is packaged/installed/hash-verified:
+native Home text/pills, anchored avatar popup, content-sized Settings controls.
+Focused43/43 UI cases and20-item analyze pass; actual outside/reopen/Settings/
+Light->Dark paths exercised. Continue current paired reference matrix; next
+confirmed gaps include native dark system navbar style and Web search row
+hierarchy, plus a3–4px Web quote baseline. No runtime diagnostics remain.
+Read docs/m09/CURRENT_WORK.md for exact current build/test identity.
+Both95% gates remain unverified; continue UI work before broad functional QA.
+
+For real Chrome attachment QA, leave Service Workers enabled (CDP bypass=false).
+The narrow media worker is part of the existing guarded viewer. A cache-bypass
+reload loop is a harness configuration issue, not proof of a product failure.
+Verify mouse/keyboard controls with Flutter semantics enabled as well; do not
+force-click through a blocking overlay and report that path as passed.
+
+For focused Flutter Chrome suites on this Windows SDK, use the existing
+tool/run_chrome_tests.py isolated tools overlay (normalizes Windows test URLs).
+Plain flutter test --platform chrome currently serves CanvasKit JS/WASM404 and
+can hang before any case starts; this is a harness failure, never a product pass.
+Do not edit the installed SDK or recreate the blocked custom CanvasKit server.
+
+## Implementation resumed — user-authorized six-agent mode (19 October 2026)
+
+The documentation-only turn is complete. The user now explicitly authorizes
+implementation until the Notion requirements are met, with up to six Luna Max
+subagents and lead review/integration. Follow the ownership map in
+docs/m09/AGENT_IMPLEMENTATION_20261019.md. The UI-first >=95% similarity gate,
+direct Notion Web/Android evidence, safe zones and existing-features-only rule
+below remain mandatory. No previous self-rating is reinstated.
+
+## LATEST USER RULE — UI similarity first (19 October 2026)
+
+READ THIS BEFORE EVERY CODING TURN, including after an interruption or when
+the user says "continue" / "tiếp tục". Then read docs/m09/CURRENT_WORK.md and
+docs/m09/VISUAL_REVIEW.md. Resume REFERENCE UI WORK, not functional acceptance.
+
+The user explicitly says the current UI is not similar enough. WITHDRAW the
+previous Web96.2/100 and Android96.2/100 self-ratings and "UI threshold reached"
+conclusion. The old57.2/60 visual-group calculation also proves no accepted
+similarity percentage. Neither platform is accepted; actual similarity is
+UNVERIFIED. Do not relabel the old scores as percentages or invent a new %.
+
+The target is >=95% UI SIMILARITY SEPARATELY on Web AND Android. Open and
+operate actual Notion Web AND the actual Notion Android app to inspect the
+matching screens/states, then compare and refine NoteFlow. The hinhanh Web/
+Android images remain supporting references; they do not replace direct
+Notion inspection on both platforms. Record paired ref/app evidence, build,
+viewport/device/theme/state/insets, concrete differences and the reasons for
+any estimated %. Missing evidence stays unverified. Do not average platforms,
+hide a visibly mismatched required screen, or turn test counts into similarity.
+
+HARD ORDER: both platforms must have evidence of >=95% similarity BEFORE
+resuming queued functional defects, broad regression or functional/final
+acceptance. Do not self-accept midway. Historical test passes do not open this
+UI gate. On 19 October the user requests DOCUMENTATION FIRST ONLY: update
+Notion, this file and continuity docs; no further UI code/tests in that turn.
+On a later "continue", resume direct Notion comparison and UI refinement.
+
+SAFE ZONE: Android bottom system navbar in BOTH gesture and 3-button modes;
+keep bottom controls, editor toolbar, sheets and final scroll content above
+the navbar and keyboard, without double insets. iOS top header/content must
+avoid the status bar, notch and Dynamic Island; retain Home Indicator handling
+below. iOS checks remain unverified until an actual supported environment is
+available; never tick them from Android screenshots.
+
+Keep existing features only, local-first persistence, guards and user data.
+Notion comparison board (percentages, not points):
+https://app.notion.com/p/3f7f9c7a1aa0816ab867faaefb40454b
+
 ## Latest rule — UI/UX uses existing features only (2026-10-16)
 
 For every UI/UX change, use the app's existing features only. Adjust layout,
@@ -17,13 +308,19 @@ earlier wording that could imply unrestricted feature additions during M09.
 Full policy and proposal register:
 https://app.notion.com/p/3e9f9c7a1aa080bb85a8d4973595bc21
 
+## Completion requirement — superseded order clarified 19 October 2026
+
+Continue UI refinement until Web AND Android each resemble directly inspected
+Notion by >=95%, with current paired evidence. Only then return to functional
+regression/fix-retest and final acceptance. The old points rubric is retired.
+
 ## Visible UI checkpoint — 18 October2026
 
 Reference styling is implemented locally: sidebar/search/new-note icon, neutral
 selection,704px reading column, Web tools below body, folded metadata and
 responsive share panel. Current811 source88194311 and matching actual Web/
 Android captures are in docs/m09/P5_P6_ACCEPTANCE.md. This is a visible P5
-checkpoint, not full M09/95-point acceptance. User prioritizes finishing the
+checkpoint, not evidence of >=95% similarity or full M09 acceptance. User prioritizes finishing the
 visual pass over repeating full suites; finish remaining screens then final QA.
 Earlier1926VM/1728Chrome receipts predate these latest visual changes.
 
@@ -59,13 +356,15 @@ Keep local-first, the canonical encrypted actor store/writer/outbox/cursor,
 all existing module data, session/access guards and unrelated local files.
 No C: worktrees. Use docs/m09/CURRENT_WORK.md for active continuity.
 
-M09 uses hinhanh/UI_web_ref and UI_android_ref for mapped NoteFlow screens.
+M09 must inspect actual Notion Web AND Notion Android for mapped NoteFlow
+screens; hinhanh/UI_web_ref and UI_android_ref are supporting references.
 Keep 13 Basic blocks, no Page/Link to page or child-note flow. Selection toolbar:
 Text/H1-H4, colors/highlight, B/I/U/strike, link, inline code, inline math, clear,
 font sizes 12/14/16/18/24/32 plus custom 12-48 applied to selected text.
 Persist/sync document, marks and size without losing existing data. Follow DDD.
-Each platform must reach >=95/100: visual60/UX20/adaptive10/states10, with
-paired references/screenshots and mandatory flows working. Never invent scores.
+Each platform must reach >=95% UI similarity with direct Notion/app paired
+evidence BEFORE functional acceptance. Retire the old60/20/10/10 points rubric;
+never invent similarity percentages. Follow the latest rule at the top.
 Update Notion/checkboxes only for verified scope and push final-tuankiet after
 each accepted milestone. User has authorized testing/fixes and required schema
 work; source/local results remain distinct from live AWS deployment acceptance.

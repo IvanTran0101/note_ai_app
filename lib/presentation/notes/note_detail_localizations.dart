@@ -42,9 +42,8 @@ final class NoteDetailCopy {
   String get titleLabel => _isVietnamese ? 'Tiêu đề' : 'Title';
   String get contentLabel => _isVietnamese ? 'Nội dung' : 'Content';
   String get summary => _isVietnamese ? 'Tóm tắt' : 'Summary';
-  String get noteDetails => _isVietnamese
-      ? 'Nhãn, tệp và thông tin ghi chú'
-      : 'Labels, files & note details';
+  String get noteDetails =>
+      _isVietnamese ? 'Thông tin ghi chú' : 'Note details';
   String get hideSummary => _isVietnamese ? 'Ẩn tóm tắt' : 'Hide summary';
   String get showSummary => _isVietnamese ? 'Hiện tóm tắt' : 'Show summary';
   String get summaryStale => _isVietnamese

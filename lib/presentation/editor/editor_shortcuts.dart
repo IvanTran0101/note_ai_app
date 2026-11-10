@@ -4,6 +4,7 @@ import 'package:appflowy_editor/appflowy_editor.dart' as engine;
 import 'package:flutter/material.dart';
 
 import 'rich_editor_adapter.dart';
+import 'nested_block_commands.dart';
 import 'selection_formatting_controller.dart';
 import 'slash_command_controller.dart';
 import 'table_navigation.dart';
@@ -19,7 +20,22 @@ List<engine.CommandShortcutEvent> richEditorShortcuts(
       command: command,
       getDescription: () => command,
       handler: (_) {
-        if (!slash.visible || adapter.composing) return KeyEventResult.ignored;
+        if (adapter.composing) return KeyEventResult.ignored;
+        if (command == 'enter' && !slash.visible && adapter.editable) {
+          final selection = adapter.editor.selection;
+          if (selection?.isCollapsed == true) {
+            final node = adapter.editor.document.nodeAtPath(
+              selection!.start.path,
+            );
+            if (node?.type == 'm09_toggle' &&
+                node?.delta != null &&
+                selection.start.offset == node!.delta!.length) {
+              unawaited(NestedBlockCommands(adapter).addChild(node));
+              return KeyEventResult.handled;
+            }
+          }
+        }
+        if (!slash.visible) return KeyEventResult.ignored;
         if (command == 'escape') {
           slash.close(cancel: true);
         } else if (command == 'enter') {

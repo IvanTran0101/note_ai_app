@@ -14,6 +14,77 @@ import 'package:note_ai_app/presentation/notes/note_detail_surface.dart';
 import 'note_detail_test_controller.dart';
 
 void main() {
+  testWidgets(
+    'early local ACK must not replace Undo during an in-flight save',
+    (tester) async {
+      final controller = RichTestNotesController()
+        ..saveGate = Completer<void>();
+      final date = DateTime.utc(2026);
+      final initial = NoteDocument([
+        DocumentBlock(
+          id: 'p',
+          kind: DocumentBlockKind.paragraph,
+          runs: const [DocumentText('AA')],
+        ),
+      ]);
+      final incoming = ValueNotifier(
+        NoteDto(
+          id: 'early-ack',
+          ownerId: 'owner',
+          title: 'Early ACK',
+          content: 'AA',
+          document: initial,
+          createdAt: date,
+          updatedAt: date,
+        ),
+      );
+      addTearDown(incoming.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            NoteDetailCopy.delegate,
+            engine.AppFlowyEditorLocalizations.delegate,
+          ],
+          home: ValueListenableBuilder<NoteDto>(
+            valueListenable: incoming,
+            builder: (_, note, _) => NoteDetailPage(
+              showAppBar: false,
+              notesController: controller,
+              note: note,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final adapter = tester
+          .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+          .adapter;
+      final node = adapter.editor.document.root.children.first;
+      await adapter.editor.apply(
+        adapter.editor.transaction..insertText(node, 2, ' saved'),
+      );
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+      expect(controller.richSaves, 1);
+      incoming.value = controller.last!;
+      await tester.pump();
+      adapter.editor.undoManager.undo();
+      await tester.pump();
+      expect(
+        adapter.document,
+        initial,
+        reason: 'pending ACK cannot erase Undo',
+      );
+      controller.saveGate!.complete();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      expect(controller.last!.content, 'AA');
+      expect(controller.richSaves, 2);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   for (final undoTiming in ['before', 'after', 'none']) {
     testWidgets('save feedback follows current dirty state, undo=$undoTiming', (
       tester,
@@ -94,7 +165,8 @@ void main() {
       );
       if (!undoToSaved) {
         expect(
-          tester.widget<NoteDetailSurface>(find.byType(NoteDetailSurface))
+          tester
+              .widget<NoteDetailSurface>(find.byType(NoteDetailSurface))
               .statusMessage,
           isNot(copy.autoSavePending),
           reason: 'Pending is derived from dirty state, never a stored message',

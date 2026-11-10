@@ -202,8 +202,16 @@ class Note {
   void removeAttachment(String attachmentId, DateTime now) {
     _requireContent();
     final next = _attachments.where((item) => item.id != attachmentId).toList();
-    if (next.length == _attachments.length) return;
-    _attachments = List.unmodifiable(next);
+    final nextDocument =
+        _document?.removeAttachmentReferences([attachmentId]);
+    final manifestChanged = next.length != _attachments.length;
+    final documentChanged = !identical(nextDocument, _document);
+    if (!manifestChanged && !documentChanged) return;
+    if (manifestChanged) _attachments = List.unmodifiable(next);
+    if (documentChanged) {
+      _document = nextDocument;
+      _content = nextDocument!.plainText;
+    }
     _updatedAt = now.toUtc();
   }
 

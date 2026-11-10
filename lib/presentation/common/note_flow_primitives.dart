@@ -90,7 +90,7 @@ final class NoteFlowSectionLabel extends StatelessWidget {
 
 /// One icon+label row in a sidebar or navigation list.
 ///
-/// Keeps a 44dp minimum hit target, a soft selected background, theme-token
+/// Keeps 48dp compact touch targets and dense desktop pointer rows, theme-token
 /// keyboard focus feedback, and hover/press feedback driven by [InkWell] (which
 /// already respects `MediaQuery.disableAnimations`).
 final class NoteFlowSidebarRow extends StatefulWidget {
@@ -121,6 +121,7 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
   @override
   Widget build(BuildContext context) {
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final compact = NoteFlowLayout.isCompact(context);
     final Color foreground = widget.selected
         ? tokens.textPrimary
         : tokens.textSecondary;
@@ -157,10 +158,10 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: NoteFlowLayout.isCompact(context)
+                  minHeight: compact
                       ? 48
                       : widget.dense
-                      ? 40
+                      ? 28
                       : 44,
                 ),
                 child: Padding(
@@ -173,10 +174,10 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
                         widget.selected
                             ? (widget.selectedIcon ?? widget.icon)
                             : widget.icon,
-                        size: 20,
+                        size: compact ? 20 : 18,
                         color: foreground,
                       ),
-                      const SizedBox(width: NoteFlowSpacing.md),
+                      SizedBox(width: compact ? NoteFlowSpacing.md : 8),
                       Expanded(
                         child: Text(
                           widget.label,
@@ -185,8 +186,12 @@ final class _NoteFlowSidebarRowState extends State<NoteFlowSidebarRow> {
                           style: base?.copyWith(
                             color: foreground,
                             fontWeight: widget.selected
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                                ? compact
+                                      ? FontWeight.w600
+                                      : FontWeight.w500
+                                : compact
+                                ? FontWeight.w500
+                                : FontWeight.w400,
                           ),
                         ),
                       ),
@@ -240,7 +245,9 @@ final class NoteFlowMenuItem extends StatelessWidget {
           hoverColor: tokens.subtleSurface,
           borderRadius: BorderRadius.circular(NoteFlowRadius.row),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
+            constraints: BoxConstraints(
+              minHeight: NoteFlowLayout.isCompact(context) ? 48 : 44,
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: NoteFlowSpacing.md,

@@ -277,7 +277,11 @@ class _AppFlowyEditorState extends State<AppFlowyEditor> {
 
     _updateValues();
 
-    if (editorState.service != oldWidget.editorState.service) {
+    if (editorState.service != oldWidget.editorState.service ||
+        !identical(
+          widget.blockComponentBuilders,
+          oldWidget.blockComponentBuilders,
+        )) {
       editorState.renderer = _renderer;
     }
 

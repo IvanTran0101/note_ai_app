@@ -47,6 +47,9 @@ final class RagScopeSelector extends StatelessWidget {
             for (final RagScope option in options)
               ChoiceChip(
                 key: ValueKey<String>('rag-scope-${option.type.name}'),
+                materialTapTargetSize: NoteFlowLayout.isCompact(context)
+                    ? MaterialTapTargetSize.padded
+                    : MaterialTapTargetSize.shrinkWrap,
                 label: Text(
                   option.isAccount
                       ? copy.scopeAccountLabel

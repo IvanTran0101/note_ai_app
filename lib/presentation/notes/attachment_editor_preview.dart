@@ -100,19 +100,38 @@ extension _AttachmentEditorPreview on _AttachmentEditorPanelState {
 
   Widget _previewWidget() {
     final item = _previewItem!, bytes = _preview, media = _media;
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => _update(_clearPreview),
-            child: const Text('Close preview'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w500),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _update(_clearPreview),
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Close preview'),
+              ),
+            ],
           ),
         ),
         if (media?.uri != null)
           SizedBox(
-            height: item.mime == 'application/pdf' ? 420 : 260,
+            height: _exporting
+                ? 100
+                : item.mime == 'application/pdf'
+                ? 420
+                : 260,
             child: AttachmentMediaSurface(
               key: ValueKey(media),
               handle: media!,
@@ -122,21 +141,58 @@ extension _AttachmentEditorPreview on _AttachmentEditorPanelState {
             ),
           ),
         if (bytes != null && item.mime.startsWith('image/'))
-          Image.memory(
-            bytes,
-            height: 220,
-            cacheWidth: 1024,
-            cacheHeight: 1024,
-            errorBuilder: (_, _, _) => const Text('Image preview unavailable.'),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: ColoredBox(
+              color: colors.surfaceContainerLow,
+              child: Image.memory(
+                bytes,
+                height: 220,
+                fit: BoxFit.contain,
+                cacheWidth: 1024,
+                cacheHeight: 1024,
+                errorBuilder: (_, _, _) => const Text(
+                  'Image preview unavailable.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           ),
         if (bytes != null && !item.mime.startsWith('image/'))
-          SelectableText(utf8.decode(bytes, allowMalformed: true)),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: SelectableText(
+                utf8.decode(bytes, allowMalformed: true),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(height: 1.5),
+              ),
+            ),
+          ),
         if (bytes != null && bytes.length < item.size)
-          const Text('Showing the first 64 KiB.'),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Showing the first 64 KiB.',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ),
         if (media == null &&
             bytes == null &&
             _working.contains('open/${item.id}'))
-          Text(_exporting ? 'Saving attachment…' : 'Opening attachment…'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              _exporting ? 'Saving attachment…' : 'Opening attachment…',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ),
       ],
     );
   }

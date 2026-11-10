@@ -3,6 +3,7 @@ import '../labels/label_catalog_scope.dart';
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
@@ -14,6 +15,8 @@ import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_content.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_localizations.dart';
+import 'dashboard_search_dock.dart';
+import 'dashboard_search_dialog.dart';
 import 'dashboard_state.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
@@ -316,9 +319,11 @@ final class DashboardPageState extends State<DashboardPage> {
     if (_searchOpen) {
       return;
     }
+    // Web keeps its modal Search UX even when opened from a narrow window.
+    // Native phones retain the bottom-docked Search presentation.
     final bool showDesktopDialog =
         widget.embeddedInWorkspace &&
-        MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
+        (kIsWeb || !NoteFlowLayout.isCompact(context));
     setState(() {
       _searchOpen = true;
       _desktopSearchDialogOpen = showDesktopDialog;
@@ -356,36 +361,18 @@ final class DashboardPageState extends State<DashboardPage> {
       barrierColor: const Color(0x26000000),
       builder: (BuildContext _) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) {
-          final double verticalShift = MediaQuery.sizeOf(context).height >= 880
-              ? -33
-              : 0;
-          return Transform.translate(
-            offset: Offset(0, verticalShift),
-            child: Dialog(
-              key: DashboardPage.desktopSearchOverlayKey,
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: NoteFlowSpacing.xl,
-                vertical: NoteFlowSpacing.xxxl,
-              ),
-              constraints: const BoxConstraints(maxWidth: 1008, maxHeight: 704),
-              clipBehavior: Clip.antiAlias,
-              child: SizedBox(
-                key: DashboardPage.desktopSearchSurfaceKey,
-                width: 1008,
-                height: 704,
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) =>
-                      _buildBody(
-                        context,
-                        constraints,
-                        DashboardCopy.of(context),
-                        searchOpenOverride: true,
-                        searchOverlay: true,
-                        dialogSetState: setDialogState,
-                      ),
+          return DashboardSearchDialog(
+            key: DashboardPage.desktopSearchOverlayKey,
+            surfaceKey: DashboardPage.desktopSearchSurfaceKey,
+            builder: (BuildContext context, BoxConstraints constraints) =>
+                _buildBody(
+                  context,
+                  constraints,
+                  DashboardCopy.of(context),
+                  searchOpenOverride: true,
+                  searchOverlay: true,
+                  dialogSetState: setDialogState,
                 ),
-              ),
-            ),
           );
         },
       ),
@@ -442,12 +429,18 @@ final class DashboardPageState extends State<DashboardPage> {
     final DashboardCopy copy = DashboardCopy.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final double width = MediaQuery.sizeOf(context).width;
-    final bool compact = width < 600;
+    final bool compact = NoteFlowLayout.isCompact(context);
     final bool wide = width >= 840;
     final bool expanded = width >= 840 && widget.embeddedInWorkspace;
     return Scaffold(
-      backgroundColor: colors.surface,
-      bottomNavigationBar: compact && widget.embeddedInWorkspace && _searchOpen
+      backgroundColor: compact && (!_searchOpen || !kIsWeb)
+          ? NoteFlowWorkspaceTokens.of(context).compactHomeSurface
+          : colors.surface,
+      bottomNavigationBar:
+          compact &&
+              widget.embeddedInWorkspace &&
+              _searchOpen &&
+              !_desktopSearchDialogOpen
           ? _buildCompactSearchDock(context, copy)
           : null,
       appBar: compact && widget.embeddedInWorkspace
@@ -515,8 +508,11 @@ final class DashboardPageState extends State<DashboardPage> {
   }) {
     final bool searchOpen = searchOpenOverride ?? _searchOpen;
     final String searchText = searchTextOverride ?? _searchText;
-    final bool compact =
-        constraints.maxWidth < NoteFlowLayout.compactBreakpoint;
+    // Match the scaffold's phone classification when a phone rotates.
+    final bool compact = NoteFlowLayout.isCompact(
+      context,
+      availableWidth: constraints.maxWidth,
+    );
     if (_isLoading && _notes.isEmpty && !searchOpen) {
       return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
     }
@@ -580,105 +576,26 @@ final class DashboardPageState extends State<DashboardPage> {
       onRetry: reload,
       onRefresh: reload,
       embeddedInWorkspace: widget.embeddedInWorkspace,
-      dockCompactSearch: compact && widget.embeddedInWorkspace,
+      dockCompactSearch:
+          !searchOverlay && compact && widget.embeddedInWorkspace,
       searchOverlay: searchOverlay,
     );
   }
 
-  Widget _buildCompactSearchDock(BuildContext context, DashboardCopy copy) {
-    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
-    final OutlineInputBorder border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(28),
-      borderSide: BorderSide(color: tokens.divider),
-    );
-    return KeyedSubtree(
-      key: DashboardPage.searchDockKey,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            NoteFlowSpacing.md,
-            NoteFlowSpacing.sm,
-            NoteFlowSpacing.xs,
-            NoteFlowSpacing.sm,
-          ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  key: DashboardPage.searchFieldKey,
-                  controller: _searchController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (String value) =>
-                      setState(() => _searchText = value),
-                  decoration: InputDecoration(
-                    hintText: copy.searchNotes,
-                    isDense: true,
-                    filled: true,
-                    fillColor: tokens.subtleSurface,
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: _searchText.isEmpty
-                        ? null
-                        : IconButton(
-                            key: const ValueKey<String>(
-                              'dashboard-clear-search-field',
-                            ),
-                            tooltip: copy.clearSearch,
-                            icon: const Icon(Icons.clear),
-                            onPressed: _clearSearch,
-                          ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: NoteFlowSpacing.md,
-                      vertical: NoteFlowSpacing.sm,
-                    ),
-                    border: border,
-                    enabledBorder: border.copyWith(
-                      borderSide: BorderSide(color: tokens.divider),
-                    ),
-                    focusedBorder: border.copyWith(
-                      borderSide: BorderSide(color: tokens.focusRing),
-                    ),
-                  ),
-                ),
-              ),
-              PopupMenuButton<DashboardSort>(
-                key: DashboardPage.searchDockSortKey,
-                tooltip: copy.sort,
-                initialValue: _sort,
-                onSelected: (DashboardSort value) =>
-                    setState(() => _sort = value),
-                itemBuilder: (BuildContext context) =>
-                    <PopupMenuEntry<DashboardSort>>[
-                      PopupMenuItem<DashboardSort>(
-                        value: DashboardSort.updated,
-                        child: Text(copy.sortUpdated),
-                      ),
-                      PopupMenuItem<DashboardSort>(
-                        value: DashboardSort.created,
-                        child: Text(copy.sortCreated),
-                      ),
-                    ],
-                child: SizedBox.square(
-                  dimension: 48,
-                  child: Tooltip(
-                    message: copy.sort,
-                    child: Icon(Icons.sort, color: tokens.textSecondary),
-                  ),
-                ),
-              ),
-              IconButton(
-                key: DashboardPage.searchDockCloseKey,
-                tooltip: copy.closeSearch,
-                onPressed: closeSearch,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildCompactSearchDock(BuildContext context, DashboardCopy copy) =>
+      DashboardSearchDock(
+        key: DashboardPage.searchDockKey,
+        copy: copy,
+        controller: _searchController,
+        sort: _sort,
+        onChanged: (value) => setState(() => _searchText = value),
+        onClear: _clearSearch,
+        onSortChanged: (value) => setState(() => _sort = value),
+        onClose: closeSearch,
+        fieldKey: DashboardPage.searchFieldKey,
+        sortKey: DashboardPage.searchDockSortKey,
+        closeKey: DashboardPage.searchDockCloseKey,
+      );
 
   @override
   void dispose() {

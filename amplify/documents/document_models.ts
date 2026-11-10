@@ -5,7 +5,7 @@ export type DocumentMarks = Readonly<{
   color?: DocumentColor; highlight?: DocumentColor; fontSize?: number; link?: string;
 }>;
 export type DocumentRun = Readonly<({type: 'text'; text: string} | {type: 'math'; expression: string}) & {marks?: DocumentMarks}>;
-export const blockTypes = ['paragraph', 'heading', 'bulletedList', 'numberedList', 'todo', 'toggle', 'callout', 'quote', 'table', 'divider'] as const;
+export const blockTypes = ['paragraph', 'heading', 'bulletedList', 'numberedList', 'todo', 'toggle', 'callout', 'quote', 'table', 'divider', 'attachment'] as const;
 export type DocumentCell = Readonly<{id: string; runs: readonly DocumentRun[]}>;
 export type DocumentRow = Readonly<{id: string; cells: readonly DocumentCell[]}>;
 export type DocumentBlock = Readonly<{
@@ -13,8 +13,9 @@ export type DocumentBlock = Readonly<{
   children?: readonly DocumentBlock[]; level?: number; checked?: boolean;
   icon?: string; tone?: DocumentColor; rows?: readonly DocumentRow[];
   headerRow?: true; headerColumn?: true;
+  attachmentId?: string;
 }>;
-export type NoteDocument = Readonly<{version: 1; blocks: readonly DocumentBlock[]}>;
+export type NoteDocument = Readonly<{version: 1; blocks: readonly DocumentBlock[]; inlineAttachments?: true}>;
 
 export class InvalidDocumentError extends Error {
   constructor() { super('Invalid or oversized rich document.'); this.name = 'InvalidDocumentError'; }

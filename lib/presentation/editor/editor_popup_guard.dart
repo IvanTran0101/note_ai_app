@@ -22,11 +22,15 @@ Future<T?> guardedEditorSheet<T>(
   BuildContext context,
   RichEditorAdapter adapter,
   RichSelectionSnapshot snapshot,
-  WidgetBuilder builder,
-) => showModalBottomSheet<T>(
+  WidgetBuilder builder, {
+  Color? barrierColor,
+  BoxConstraints? constraints,
+}) => showModalBottomSheet<T>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
+  barrierColor: barrierColor,
+  constraints: constraints,
   builder: (context) => _EditorPopupGuard(
     adapter: adapter,
     snapshot: snapshot,

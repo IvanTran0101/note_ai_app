@@ -11,6 +11,8 @@ final class EditorIconButton extends StatelessWidget {
     this.selected,
     this.value,
     this.tooltip,
+    this.compact = false,
+    this.showTooltip = true,
   });
 
   final String label;
@@ -18,28 +20,45 @@ final class EditorIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool? selected;
   final String? value, tooltip;
+  final bool compact, showTooltip;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip ?? label,
-    excludeFromSemantics: true,
-    child: MergeSemantics(
+  Widget build(BuildContext context) {
+    final button = MergeSemantics(
       child: Semantics(
         label: label,
         value: value,
         child: SizedBox.square(
-          dimension: 48,
+          dimension: compact ? 28 : 48,
           child: IconButton(
             onPressed: onPressed,
             isSelected: selected,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            visualDensity: VisualDensity.standard,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints(
+              minWidth: compact ? 28 : 48,
+              minHeight: compact ? 28 : 48,
+            ),
+            visualDensity: compact
+                ? VisualDensity.compact
+                : VisualDensity.standard,
+            style: IconButton.styleFrom(
+              tapTargetSize: compact
+                  ? MaterialTapTargetSize.shrinkWrap
+                  : MaterialTapTargetSize.padded,
+            ),
             icon: ExcludeSemantics(
               child: MediaQuery.withNoTextScaling(child: icon),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+    return showTooltip
+        ? Tooltip(
+            message: tooltip ?? label,
+            excludeFromSemantics: true,
+            child: button,
+          )
+        : button;
+  }
 }

@@ -43,6 +43,7 @@ final class NoteDetailSurface extends StatelessWidget {
     required this.statusMessage,
     required this.actionBusy,
     this.readOnly = false,
+    this.labels,
     this.attachments,
     this.richEditorBuilder,
     this.headerActions = const [],
@@ -96,6 +97,7 @@ final class NoteDetailSurface extends StatelessWidget {
   final String? statusMessage;
   final bool actionBusy;
   final bool readOnly;
+  final Widget? labels;
   final Widget? attachments;
   final Widget Function(Widget header, Widget footer)? richEditorBuilder;
   final List<Widget> headerActions;
@@ -149,11 +151,14 @@ final class NoteDetailSurface extends StatelessWidget {
 
   Widget _buildLayout(BuildContext context) {
     final bool compact = NoteFlowLayout.isCompact(context);
+    final bool wideWeb = kIsWeb && !compact;
     final bool nativeLandscape =
         NoteFlowLayout.isNativePhone(context) &&
         MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
     final double editorMaxWidth = compact
         ? NoteFlowLayout.compactEditorMaxWidth
+        : kIsWeb
+        ? NoteFlowLayout.webDocumentMaxWidth
         : NoteFlowLayout.editorMaxWidth;
     final double richMaxWidth = nativeLandscape
         ? NoteFlowLayout.editorMaxWidth
@@ -169,10 +174,13 @@ final class NoteDetailSurface extends StatelessWidget {
                     )
                   : 0)
         : NoteFlowLayout.editorTopPadding;
+    // Direct 1280x720 Notion pair: the wide Web text stack needs six more pixels.
     final double richTopPadding = compact
         ? 0
         : MediaQuery.sizeOf(context).height < 600
         ? 24
+        : wideWeb
+        ? 110
         : 104;
     final String pageStatus = isSaving
         ? savingLabel
@@ -201,13 +209,15 @@ final class NoteDetailSurface extends StatelessWidget {
       summarizingLabel: summarizingLabel,
       summarizeTooltip: hasSavedNote ? null : copy.saveBeforeSummary,
       iconOnly: showPageHeader,
+      showSummarizeAction: !compact && !wideWeb,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (showPageHeader && !keyboardTakesHeader)
           NoteFlowPageHeader(
-            breadcrumb: copy.pageBreadcrumb(pageTitle),
+            breadcrumb: compact ? '' : copy.pageBreadcrumb(pageTitle),
+            showDivider: !compact,
             statusLabel: pageStatus,
             statusIndicator: syncController == null
                 ? null
@@ -232,7 +242,11 @@ final class NoteDetailSurface extends StatelessWidget {
           child: richEditorBuilder != null
               ? Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 24 : NoteFlowSpacing.lg,
+                    horizontal: NoteFlowLayout.isNativePhone(context)
+                        ? 26
+                        : compact
+                        ? 24
+                        : NoteFlowSpacing.lg,
                   ),
                   child: Align(
                     alignment: compact
@@ -283,7 +297,7 @@ final class NoteDetailSurface extends StatelessWidget {
                   ),
                 ),
         ),
-        if (!showPageHeader) actionBar,
+        if (!showPageHeader && !wideWeb) actionBar,
       ],
     );
   }
@@ -308,6 +322,7 @@ final class NoteDetailSurface extends StatelessWidget {
     showSaveState: !showPageHeader,
     actionBusy: actionBusy,
     readOnly: readOnly,
+    labels: labels,
     attachments: attachments,
     includeContent: includeContent,
     includeTitle: includeTitle,

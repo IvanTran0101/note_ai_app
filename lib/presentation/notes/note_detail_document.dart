@@ -31,6 +31,8 @@ extension _NoteDetailDocument on NoteDetailPageState {
       accessGeneration: () =>
           _securityController?.accessGeneration ?? _editorEpoch,
       onChanged: _richDocumentChanged,
+      readLegacyAttachmentIds: () => _legacyFileIds,
+      onFileInserted: (id) => unawaited(_openInsertedFile(id)),
     );
   }
 
@@ -48,7 +50,7 @@ extension _NoteDetailDocument on NoteDetailPageState {
     _summaryController.cancelActive(reason: SummaryRunFailureCode.noteChanged);
     if (_isDirty) {
       _summaryController.markStaleIfResult();
-    } else if (_pendingSavedNote != null) {
+    } else if (_pendingSavedNote != null && !_saving) {
       _adoptSavedNote(_pendingSavedNote);
     }
     _ignoreNextEditorFocusLoss = false;
@@ -65,12 +67,20 @@ extension _NoteDetailDocument on NoteDetailPageState {
     if (adapter == null) return const SizedBox.shrink();
     return KeyedSubtree(
       key: NoteDetailPage.contentFieldKey,
-      child: RichNoteEditor(
-        key: ObjectKey(adapter),
-        adapter: adapter,
-        focusNode: _contentFocusNode,
-        header: header,
-        footer: footer,
+      child: Column(
+        children: [
+          _buildAttachmentOwner(hiddenOwner: true) ?? const SizedBox.shrink(),
+          Expanded(
+            child: RichNoteEditor(
+              key: ObjectKey(adapter),
+              adapter: adapter,
+              focusNode: _contentFocusNode,
+              header: header,
+              footer: footer,
+              fileBlockBuilder: _inlineFileBlock,
+            ),
+          ),
+        ],
       ),
     );
   }

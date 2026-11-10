@@ -50,4 +50,9 @@ export class DocumentReader {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || this.ids.has(id)) this.fail();
     this.ids.add(id); return id;
   }
+  referenceId(value: unknown): string {
+    const id = this.str(value);
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) this.fail();
+    return id;
+  }
 }

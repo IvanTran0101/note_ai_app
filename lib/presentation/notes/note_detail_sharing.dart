@@ -116,26 +116,66 @@ extension _NoteDetailSharing on NoteDetailPageState {
         widget.notesController is! SharingNotesController) {
       return const SizedBox.shrink();
     }
-    if (compact) {
-      return IconButton(
-        key: const ValueKey('manage-note-sharing'),
-        tooltip: copy.manage,
-        onPressed: _actionBusy ? null : _manageSharing,
-        icon: const Icon(Icons.people_outline, size: 20),
-      );
-    }
-    return Align(
-      alignment: Alignment.centerRight,
-      child: TextButton.icon(
+    final trigger = _sharingTrigger(copy, compact: compact);
+    return compact
+        ? trigger
+        : Align(alignment: Alignment.centerRight, child: trigger);
+  }
+
+  Widget _sharingTrigger(SharingCopy copy, {required bool compact}) => Builder(
+    builder: (triggerContext) {
+      final onPressed = _actionBusy
+          ? null
+          : () => _manageSharing(triggerContext: triggerContext);
+      if (compact) {
+        return IconButton(
+          key: const ValueKey('manage-note-sharing'),
+          tooltip: copy.manage,
+          onPressed: onPressed,
+          icon: Icon(
+            NoteFlowLayout.isCompact(context)
+                ? Icons.ios_share
+                : Icons.people_outline,
+            size: NoteFlowLayout.isCompact(context) ? 22 : 20,
+          ),
+        );
+      }
+      return TextButton.icon(
         key: const ValueKey('manage-note-sharing'),
         icon: const Icon(Icons.people_outline),
         label: Text(copy.manage),
-        onPressed: _actionBusy ? null : _manageSharing,
-      ),
-    );
+        onPressed: onPressed,
+      );
+    },
+  );
+
+  double? _sharingAnchorInset(BuildContext? triggerContext) {
+    if (!kIsWeb || triggerContext == null || !triggerContext.mounted) {
+      return null;
+    }
+    final trigger = triggerContext.findRenderObject();
+    final overlay = Navigator.of(
+      context,
+      rootNavigator: true,
+    ).overlay?.context.findRenderObject();
+    if (trigger is! RenderBox ||
+        overlay is! RenderBox ||
+        !trigger.attached ||
+        !overlay.attached ||
+        !trigger.hasSize ||
+        !overlay.hasSize) {
+      return null;
+    }
+    final right = overlay
+        .globalToLocal(trigger.localToGlobal(Offset(trigger.size.width, 0)))
+        .dx;
+    return (overlay.size.width - right)
+        .clamp(0.0, overlay.size.width)
+        .toDouble();
   }
 
-  Future<void> _manageSharing() async {
+  Future<void> _manageSharing({BuildContext? triggerContext}) async {
+    final anchorInset = _sharingAnchorInset(triggerContext);
     if (_isDirty && !await _save()) return;
     if (!mounted || !_capabilities.canManage) return;
     final controller = widget.notesController as SharingNotesController;
@@ -146,18 +186,27 @@ extension _NoteDetailSharing on NoteDetailPageState {
     }
     final secured = _securityController;
     final generation = secured?.sessionGeneration;
+    final compact = NoteFlowLayout.isCompact(context) && !kIsWeb;
     await showDialog<void>(
       context: context,
-      builder: (_) => ShareManagementDialog(
-        service: service,
-        identity: _note!.identity,
-        sessionEvents: secured?.securityChanges ?? const Stream<void>.empty(),
-        isCurrent: () =>
-            mounted &&
-            identical(controller.sharing, service) &&
-            secured?.sessionGeneration == generation &&
-            _capabilities.canManage,
-      ),
+      useSafeArea: !compact,
+      barrierColor: compact ? Colors.black54 : Colors.transparent,
+      builder: (_) {
+        final dialog = ShareManagementDialog(
+          service: service,
+          webAnchorInset: anchorInset,
+          identity: _note!.identity,
+          sessionEvents: secured?.securityChanges ?? const Stream<void>.empty(),
+          isCurrent: () =>
+              mounted &&
+              identical(controller.sharing, service) &&
+              secured?.sessionGeneration == generation &&
+              _capabilities.canManage,
+        );
+        // The compact sheet paints behind the navbar; its content consumes the
+        // bottom inset. Keep the route clear of the top and side cutouts here.
+        return compact ? SafeArea(bottom: false, child: dialog) : dialog;
+      },
     );
   }
 }

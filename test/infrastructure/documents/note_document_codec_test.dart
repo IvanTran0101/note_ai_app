@@ -13,47 +13,48 @@ void main() {
   test('all13 choices and semantic marks have canonical JSON roundtrip', () {
     final doc = NoteDocument([
       for (final kind in DocumentBlockKind.values)
-        if (kind == DocumentBlockKind.table)
-          fixture.table('table')
-        else if (kind == DocumentBlockKind.heading)
-          for (var level = 1; level <= 4; level++)
+        if (kind != DocumentBlockKind.attachment)
+          if (kind == DocumentBlockKind.table)
+            fixture.table('table')
+          else if (kind == DocumentBlockKind.heading)
+            for (var level = 1; level <= 4; level++)
+              DocumentBlock(
+                id: 'h$level',
+                kind: kind,
+                level: level,
+                runs: [DocumentText('Heading $level')],
+              )
+          else
             DocumentBlock(
-              id: 'h$level',
+              id: kind.name,
               kind: kind,
-              level: level,
-              runs: [DocumentText('Heading $level')],
-            )
-        else
-          DocumentBlock(
-            id: kind.name,
-            kind: kind,
-            checked: kind == DocumentBlockKind.todo ? false : null,
-            icon: kind == DocumentBlockKind.callout ? '💡' : null,
-            tone: kind == DocumentBlockKind.callout
-                ? DocumentColor.yellow
-                : null,
-            runs: kind == DocumentBlockKind.divider
-                ? const []
-                : [
-                    DocumentText(
-                      'Việt 📝',
-                      marks: DocumentMarks(
-                        bold: true,
-                        italic: true,
-                        underline: true,
-                        strikethrough: true,
-                        color: DocumentColor.purple,
-                        highlight: DocumentColor.yellow,
-                        fontSize: 32,
-                        link: 'https://example.invalid/path',
+              checked: kind == DocumentBlockKind.todo ? false : null,
+              icon: kind == DocumentBlockKind.callout ? '💡' : null,
+              tone: kind == DocumentBlockKind.callout
+                  ? DocumentColor.yellow
+                  : null,
+              runs: kind == DocumentBlockKind.divider
+                  ? const []
+                  : [
+                      DocumentText(
+                        'Việt 📝',
+                        marks: DocumentMarks(
+                          bold: true,
+                          italic: true,
+                          underline: true,
+                          strikethrough: true,
+                          color: DocumentColor.purple,
+                          highlight: DocumentColor.yellow,
+                          fontSize: 32,
+                          link: 'https://example.invalid/path',
+                        ),
                       ),
-                    ),
-                    DocumentMath(r'\sqrt{x^2+1}'),
-                  ],
-            children: kind == DocumentBlockKind.toggle
-                ? [fixture.block('nested', text: 'Child')]
-                : const [],
-          ),
+                      DocumentMath(r'\sqrt{x^2+1}'),
+                    ],
+              children: kind == DocumentBlockKind.toggle
+                  ? [fixture.block('nested', text: 'Child')]
+                  : const [],
+            ),
     ]);
     final json = NoteDocumentCodec.encode(doc);
     expect(doc.blocks.length, 13);

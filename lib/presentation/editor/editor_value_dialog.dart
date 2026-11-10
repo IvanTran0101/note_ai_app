@@ -72,6 +72,7 @@ final class _ValueDialogState extends State<_ValueDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: Text(editorText(context, widget.title)),
     content: SizedBox(
       width: 340,

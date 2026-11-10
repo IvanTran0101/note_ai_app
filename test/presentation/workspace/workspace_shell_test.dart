@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -278,7 +279,9 @@ void main() {
     expect(tester.getTopLeft(avatar).dx, closeTo(21, 0.1));
     expect(tester.getSize(avatar), const Size(38, 38));
     expect(tester.getTopLeft(homePill).dx, closeTo(68, 0.1));
-    expect(tester.getSize(homePill), const Size(64, 40));
+    expect(tester.getSize(homePill), Size(kIsWeb ? 64 : 75, 48));
+    final paint = find.descendant(of: homePill, matching: find.byType(Ink));
+    expect(tester.getSize(paint), Size(kIsWeb ? 64 : 75, 40));
   });
 
   testWidgets('medium width shows a labelled NavigationRail', (
@@ -304,7 +307,7 @@ void main() {
     final Finder sidebar = find.byKey(WorkspaceShell.sidebarKey);
     expect(sidebar, findsOneWidget);
     expect(find.byKey(WorkspaceShell.navigationRailKey), findsNothing);
-    expect(tester.getSize(sidebar).width, 280.0);
+    expect(tester.getSize(sidebar).width, 270.0);
     expect(find.text('NoteFlow'), findsOneWidget);
     expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
     expect(find.text('Workspace'), findsOneWidget);
@@ -485,7 +488,7 @@ void main() {
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
   });
 
-  testWidgets('compact menu sheet switches destinations', (
+  testWidgets('compact avatar popup switches destinations', (
     WidgetTester tester,
   ) async {
     await pumpShell(tester, size: const Size(480, 900));
@@ -493,7 +496,7 @@ void main() {
 
     await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<VoidCallback>), findsWidgets);
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
@@ -629,27 +632,28 @@ void main() {
     expect(diagnosticsOpened, isTrue);
   });
 
-  testWidgets('desktop footer labels existing actions with touch-sized rows', (
-    WidgetTester tester,
-  ) async {
-    await pumpShell(
-      tester,
-      size: const Size(1200, 900),
-      onOpenSettings: () {},
-      onOpenDiagnostics: () {},
-    );
+  testWidgets(
+    'desktop footer labels existing actions with dense pointer rows',
+    (WidgetTester tester) async {
+      await pumpShell(
+        tester,
+        size: const Size(1200, 900),
+        onOpenSettings: () {},
+        onOpenDiagnostics: () {},
+      );
 
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Diagnostics'), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-  });
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Diagnostics'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+    },
+  );
 
   test('localization alias and delegate cover en and vi', () {
     expect(

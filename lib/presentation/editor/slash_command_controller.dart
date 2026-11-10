@@ -23,6 +23,10 @@ final class SlashCommandController extends ChangeNotifier {
         '${basicBlockChoices[i].alias} ${vietnameseBlockAliases[i]}',
       ).contains(foldBlockSearch(query)))
         basicBlockChoices[i],
+    for (final choice in mediaBlockChoices)
+      if (foldBlockSearch('${choice.label} ${choice.alias} tệp đính kèm')
+          .contains(foldBlockSearch(query)))
+        choice,
   ];
   String get _signature =>
       '${adapter.revision}:${adapter.editor.selection?.toJson()}:$query';
@@ -75,12 +79,25 @@ final class SlashCommandController extends ChangeNotifier {
     selected = 0;
     slashStart = null;
     snapshot = current;
+    adapter.setMenuInput(kIsWeb);
     notifyListeners();
   }
 
   void move(int amount) {
     if (choices.isEmpty) return;
     selected = (selected + amount) % choices.length;
+    notifyListeners();
+  }
+
+  void filter(String value) {
+    final current = snapshot;
+    if (!touchOpen ||
+        current == null ||
+        !adapter.accepts(current, popupOwnsFocus: true)) {
+      return;
+    }
+    query = value;
+    selected = 0;
     notifyListeners();
   }
 
@@ -101,12 +118,14 @@ final class SlashCommandController extends ChangeNotifier {
     slashStart = null;
     query = '';
     selected = 0;
+    adapter.setMenuInput(false);
     notifyListeners();
   }
 
   @override
   void dispose() {
     adapter.removeListener(refresh);
+    adapter.setMenuInput(false);
     super.dispose();
   }
 }

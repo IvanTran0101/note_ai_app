@@ -4,6 +4,7 @@ import '../../application/labels/note_query.dart';
 import '../../application/notes/note_dto.dart';
 import '../notes/note_ordering.dart';
 import '../notes/notes_list_panel.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'label_catalog_scope.dart';
 import 'label_copy.dart';
 import 'label_filter_bar.dart';
@@ -40,7 +41,11 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
     super.dispose();
   }
 
-  NotesListPanel _panel(List<NoteDto> notes) {
+  NotesListPanel _panel(
+    List<NoteDto> notes, {
+    Widget? queryControls,
+    Widget? filteredEmpty,
+  }) {
     final p = widget.panel;
     return NotesListPanel(
       notes: notes,
@@ -54,6 +59,8 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
       allowNewNote: p.allowNewNote,
       readable: p.readable,
       queryEnabled: false,
+      queryControls: queryControls,
+      filteredEmpty: filteredEmpty,
     );
   }
 
@@ -62,6 +69,8 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
     final scope = LabelCatalogScope.maybeOf(context), p = widget.panel;
     if (scope?.application == null) return _panel(p.notes);
     final copy = LabelCopy(context);
+    final compact = NoteFlowLayout.isCompact(context);
+    final tokens = NoteFlowUiTokens.of(context);
     final filtered = queryNotes(
       p.notes,
       keyword: _search.text,
@@ -74,56 +83,64 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
         readable: _readable(n),
       ),
     );
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            children: [
-              Semantics(
-                container: true,
-                explicitChildNodes: true,
-                child: TextField(
-                  key: const ValueKey('notes-search-field'),
-                  controller: _search,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: copy.search,
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: copy.clear,
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => setState(_search.clear),
-                          ),
+    return _panel(
+      sortNotes(filtered),
+      queryControls: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          children: [
+            Semantics(
+              container: true,
+              explicitChildNodes: true,
+              child: TextField(
+                key: const ValueKey('notes-search-field'),
+                controller: _search,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 20,
+                    color: tokens.textMuted,
                   ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  hintText: copy.search,
+                  suffixIcon: _search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: copy.clear,
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => setState(_search.clear),
+                        ),
                 ),
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 160),
-                child: SingleChildScrollView(
-                  child: LabelFilterBar(
-                    notes: p.notes,
-                    selected: _selected,
-                    onChanged: (next) => setState(() => _selected = next),
-                    readable: _readable,
-                    allowManage: p.allowNewNote,
-                  ),
+            ),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 160),
+              child: SingleChildScrollView(
+                child: LabelFilterBar(
+                  notes: p.notes,
+                  selected: _selected,
+                  onChanged: (next) => setState(() => _selected = next),
+                  readable: _readable,
+                  allowManage: p.allowNewNote,
+                  dense: compact,
+                  singleLine: compact,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        Expanded(
-          child:
-              filtered.isEmpty &&
-                  p.error == null &&
-                  (_search.text.trim().isNotEmpty || _selected.isNotEmpty)
-              ? Center(child: Text(copy.noResults))
-              : _panel(sortNotes(filtered)),
-        ),
-      ],
+      ),
+      filteredEmpty:
+          filtered.isEmpty &&
+              p.error == null &&
+              (_search.text.trim().isNotEmpty || _selected.isNotEmpty)
+          ? Center(child: Text(copy.noResults))
+          : null,
     );
   }
 }

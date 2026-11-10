@@ -167,15 +167,30 @@ extension _NoteDetailRag on NoteDetailPageState {
   }
 
   /// The compact ask-notes action shown next to the editor.
-  Widget _buildNoteRagAction(BuildContext context) {
+  Widget _buildNoteRagAction(
+    BuildContext context, {
+    bool menuItem = false,
+    VoidCallback? onBeforeAction,
+  }) {
     final bool vi = Localizations.localeOf(context).languageCode == 'vi';
+    void invoke() {
+      onBeforeAction?.call();
+      final NoteDto? note = _note;
+      if (note != null) widget.onOpenNoteRag?.call(note);
+    }
+
+    if (menuItem) {
+      return NoteFlowMenuItem(
+        key: NoteDetailPage.askNotesKey,
+        label: vi ? 'Hỏi ghi chú' : 'Ask notes',
+        icon: Icons.forum_outlined,
+        onTap: _canOpenNoteRag ? invoke : null,
+      );
+    }
     return IconButton(
       key: NoteDetailPage.askNotesKey,
       tooltip: vi ? 'Hỏi ghi chú' : 'Ask notes',
-      onPressed: () {
-        final NoteDto? note = _note;
-        if (note != null) widget.onOpenNoteRag?.call(note);
-      },
+      onPressed: invoke,
       icon: const Icon(Icons.forum_outlined, size: 18),
     );
   }
