@@ -48,17 +48,18 @@ first slice, independent from the currently selected result page.
 
 ## Storage and performance boundary
 
-The encrypted store still exposes one whole account document through
-`ILocalSyncStore.read`. Its envelope, outbox, drafts, conflicts and CAS writer
-are unchanged. A query still decodes this document and sorts matching row
-references. Therefore this batch bounds list DTOs/rendering, not total decoded
-memory or disk reads. It is not per-record IndexedDB pagination and makes no
-1,000-note latency, RAM or offline asset-bootstrap guarantee.
+The original query/UI tranche decoded a whole account. The explicitly authorized
+13 November storage tranche adds separately encrypted metadata/per-note records,
+Web DB3 atomic publication and native schema4 manifest publication. See
+[STORAGE_PAGINATION.md](STORAGE_PAGINATION.md) for the exact read, crypto,
+migration, compatibility and recovery contracts. Implementation/runtime
+verification remains in progress until recorded in CURRENT_WORK.md.
 
-Per-note encrypted record migration would require a separate atomic storage,
-key/epoch, outbox, crash and legacy-writer design. No ad-hoc plaintext index or
-second state writer is introduced here. Cloud sync retains its existing cursor
-pagination. No new dependency or schema/version change is needed.
+Canonical sync/mutations/vault/status ACK flows still use their existing account
+transaction and may decode/retain whole-account payloads. Normal page/detail
+queries use only metadata and selected records after migration. Full-text scans
+records sequentially; metadata itself remains O(note count). No whole-app O(50)
+RAM or performance benchmark is implied. Cloud cursor sync is unchanged.
 
 ## Verification
 

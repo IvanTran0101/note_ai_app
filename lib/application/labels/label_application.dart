@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../domain/notes/note_repository.dart';
 import '../notes/note_dto.dart';
 import '../sync/local_sync_store.dart';
+import '../sync/local_note_page_store.dart';
 import '../sync/local_sync_state.dart';
 import '../sync/note_sync_status.dart';
 import '../sync/pending_mutation.dart';
@@ -51,7 +52,15 @@ final class LabelApplication {
 
   Future<List<LocalLabelState>> list() async {
     final c = _capture();
-    final state = await storeFor(c.actor).read();
+    final store = storeFor(c.actor);
+    if (store is ILocalNotePageStore) {
+      return (store as ILocalNotePageStore).withNotePageView((view) async {
+        _fence(c);
+        if (view.accountId != c.actor) throw const SyncFailure(code: SyncErrorCode.forbidden);
+        return view.labels;
+      });
+    }
+    final state = await store.read();
     _fence(c);
     if (state.accountUserId != c.actor) {
       throw const SyncFailure(code: SyncErrorCode.forbidden);

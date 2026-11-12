@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../application/sync/local_note_page_store.dart';
+import '../../application/labels/local_label_state.dart';
+import 'paged_account_store.dart';
+
 import 'package:cryptography/cryptography.dart';
 
 import '../../application/attachments/attachment_binding.dart';
@@ -28,16 +32,22 @@ import 'encrypted_state_codec.dart';
 
 /// One queue freezes all reads, updates and AI source access during migration.
 /// Cross-context races use CAS; a migration failure never seeds an empty state.
+part 'encrypted_page_store.dart';
 part 'encrypted_local_protection.dart';
 
 class EncryptedSyncStore
     implements
         ILocalSyncStore,
+        ILocalNotePageStore,
         ILocalNoteVault,
         ILocalFirstNoteVault,
         IRichLocalDraftVault {
   EncryptedSyncStore(String accountId, this.backing)
     : codec = EncryptedStateCodec(LocalSyncAccountNamespace(accountId));
+  @override
+  Future<T> withNotePageView<T>(Future<T> Function(LocalNotePageView) query) =>
+      _withPageView(query);
+  int pagePayloadReads = 0;
   final EncodedAccountStore backing;
   Future<void> Function(String reference)? beforeAttachmentProtectionChange;
   final EncryptedStateCodec codec;
@@ -110,7 +120,7 @@ class EncryptedSyncStore
         return state;
       }
       final sealed = await codec.encode(state);
-      if (await backing.compareAndSet(encoded, sealed)) {
+      if (await _commitPageAware(encoded, sealed, state)) {
         await backing.cleanLegacyStaging(
           codec.namespace.accountUserId,
           codec.sealLegacyStaging,
@@ -136,7 +146,7 @@ class EncryptedSyncStore
       if (start != codec.generation) {
         throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
       }
-      if (await backing.compareAndSet(encoded, sealed)) return next;
+      if (await _commitPageAware(encoded, sealed, next)) return next;
     }
     throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
   }

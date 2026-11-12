@@ -5,6 +5,7 @@ import 'package:note_ai_app/presentation/dashboard/dashboard_page.dart';
 import 'package:note_ai_app/presentation/labels/label_catalog_scope.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
 import 'package:note_ai_app/presentation/notes/notes_workspace_page.dart';
+import 'package:note_ai_app/infrastructure/security/encrypted_sync_store.dart';
 
 import 'support/note_pagination_fixture.dart';
 
@@ -45,6 +46,28 @@ class _PaginationManualState extends State<_PaginationManual> {
         appBar: AppBar(
           title: const Text('Pagination QA'),
           actions: [
+            Builder(
+              builder: (buttonContext) => TextButton(
+                onPressed: () {
+                  final store = widget.fixture.store as EncryptedSyncStore;
+                  showDialog<void>(
+                    context: buttonContext,
+                    builder: (dialogContext) => AlertDialog(
+                      content: Text(
+                        'Canonical decodes: ${store.codec.decodedAccountCount}\nPayload reads: ${store.pagePayloadReads}',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: const Text('QA storage'),
+              ),
+            ),
             TextButton(
               onPressed: () => setState(() => _home = false),
               child: const Text('QA Notes'),

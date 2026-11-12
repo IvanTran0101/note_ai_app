@@ -3,6 +3,7 @@ import 'package:note_ai_app/application/labels/label_application.dart';
 import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
+import 'package:note_ai_app/application/sync/local_note_page_store.dart';
 import 'package:note_ai_app/domain/auth/auth_identity.dart';
 import 'package:note_ai_app/domain/note_intelligence/summary.dart';
 import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
@@ -21,8 +22,12 @@ final class PaginationFixture {
 Future<PaginationFixture> createPaginationFixture() async {
   final store = createLocalSyncStore(accountUserId: paginationQaActor);
   final date = DateTime.utc(2026, 11, 12);
-  final initial = await store.read();
-  if (initial.notes.isEmpty) {
+  final count = store is ILocalNotePageStore
+      ? await (store as ILocalNotePageStore).withNotePageView(
+          (view) async => view.headers.length,
+        )
+      : (await store.read()).notes.length;
+  if (count == 0) {
     await store.replace(
       LocalSyncState(
         accountUserId: paginationQaActor,

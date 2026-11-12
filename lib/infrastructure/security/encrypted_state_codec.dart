@@ -1,5 +1,10 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart' as page_digest;
+
+import 'paged_account_store.dart';
+import '../sync/local_note_state_codec.dart';
+
 import 'package:cryptography/cryptography.dart';
 
 import '../../application/notes/note_access.dart';
@@ -17,6 +22,7 @@ import 'device_envelope_keys.dart';
 import 'note_bundle_projection.dart';
 import 'note_crypto.dart';
 
+part 'encrypted_page_codec.dart';
 part 'encrypted_state_keys.dart';
 part 'encrypted_state_migration.dart';
 part 'encrypted_shared_drafts.dart';
@@ -41,6 +47,7 @@ final class EncryptedStateCodec {
   final Map<String, SecretKey> _binaryOpened = {};
   final Map<String, ({SecretKey key, int epoch})> _opened = {};
   int generation = 0;
+  int decodedAccountCount = 0;
   bool migrationRequired = false;
   bool _disposed = false;
 
@@ -84,6 +91,7 @@ final class EncryptedStateCodec {
   }
 
   Future<LocalSyncState> decode(String? encoded) async {
+    decodedAccountCount++;
     try {
       final start = generation;
       final state = await _decode(encoded);

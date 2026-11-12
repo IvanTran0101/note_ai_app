@@ -3,16 +3,23 @@ import 'dart:js_interop';
 import 'package:indexed_db/indexed_db.dart';
 import 'package:note_ai_app/infrastructure/sync/local_sync_store_account_namespace.dart';
 
-Future<Database> _database(String account) => IdbFactory().open(
-  LocalSyncAccountNamespace(account).webDatabaseName,
-  version: 2,
-  onUpgradeNeeded: (event) {
-    final db = event.target.database;
-    if (!(db.objectStoreNames ?? []).contains('local_sync_state')) {
-      db.createObjectStore('local_sync_state');
-    }
-  },
-);
+Future<Database> _database(String account) async {
+  final name = LocalSyncAccountNamespace(account).webDatabaseName;
+  final current = await IdbFactory().open(name);
+  if ((current.objectStoreNames ?? []).contains('local_sync_state')) {
+    return current;
+  }
+  final version = current.version! + 1;
+  current.close();
+  return IdbFactory().open(
+    name,
+    version: version,
+    onUpgradeNeeded: (event) {
+      event.target.database.createObjectStore('local_sync_state');
+    },
+  );
+}
+
 Future<String> readPlatformRecord(String account) async {
   final db = await _database(account);
   try {

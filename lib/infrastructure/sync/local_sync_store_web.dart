@@ -1,12 +1,16 @@
 import 'dart:js_interop';
+import 'dart:async';
 
 import 'package:indexed_db/indexed_db.dart';
 
 import '../../application/sync/local_sync_store.dart';
 import '../security/encoded_account_store.dart';
 import '../security/encrypted_sync_store.dart';
+import '../security/paged_account_store.dart';
 import 'local_sync_store_account_namespace.dart';
 import 'local_sync_store_contract.dart';
+
+part 'local_sync_pages_web.dart';
 
 ILocalSyncStore createLocalSyncStore({
   required String accountUserId,
@@ -20,12 +24,16 @@ final class IndexedDbLocalSyncStore extends EncryptedSyncStore {
 
 /// Crypto awaits outside transactions. CAS commits the single encrypted record
 /// in one transaction so a different tab cannot overwrite a stale snapshot.
-final class _WebAccountStore implements EncodedAccountStore {
+final class _WebAccountStore implements EncodedAccountStore, PagedAccountStore {
   _WebAccountStore(String accountId)
     : namespace = LocalSyncAccountNamespace(accountId);
   final LocalSyncAccountNamespace namespace;
   static const _store = 'local_sync_state';
   static const _record = 'state';
+  static const _meta = 'note_page_meta_v1';
+  static const _pages = 'note_page_records_v1';
+  @override
+  bool pageMode = false;
   Future<Database>? _opening;
 
   Future<Database> _database() => _opening ??= _open();
@@ -33,11 +41,16 @@ final class _WebAccountStore implements EncodedAccountStore {
     try {
       final database = await IdbFactory().open(
         namespace.webDatabaseName,
-        version: 2,
+        version: 3,
         onUpgradeNeeded: (VersionChangeEvent event) {
           final db = event.target.database;
           if (!(db.objectStoreNames ?? []).contains(_store)) {
             db.createObjectStore(_store);
+          }
+          for (final name in [_meta, _pages]) {
+            if (!(db.objectStoreNames ?? []).contains(name)) {
+              db.createObjectStore(name);
+            }
           }
         },
       );
@@ -72,9 +85,15 @@ final class _WebAccountStore implements EncodedAccountStore {
   @override
   Future<String?> readEncoded() async {
     try {
-      final tx = (await _database()).transactionList([_store], 'readonly');
+      final tx = (await _database()).transactionList([
+        _store,
+        _meta,
+      ], 'readonly');
       final record = await tx.objectStore(_store).getObject(_record.toJS);
+      pageMode =
+          _text(await tx.objectStore(_meta).getObject('head'.toJS)) != null;
       await tx.completed;
+      if (record == null && pageMode) throw const CorruptPageRead();
       return _text(record);
     } on Object {
       throw const LocalSyncStoreException(
@@ -86,24 +105,23 @@ final class _WebAccountStore implements EncodedAccountStore {
 
   @override
   Future<bool> compareAndSet(String? expected, String encrypted) async {
-    try {
-      final tx = (await _database()).transactionList([_store], 'readwrite');
-      final store = tx.objectStore(_store);
-      final current = _text(await store.getObject(_record.toJS));
-      if (current != expected) {
-        await tx.completed;
-        return false;
-      }
-      await store.put(encrypted.toJS, _record.toJS);
-      await tx.completed;
-      return true;
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.unwritable,
-        'encrypted state cannot be committed',
-      );
-    }
+    return _commitPages(expected, encrypted, null);
   }
+
+  @override
+  Future<PagedEncodedView?> openPagedView() => _openPages();
+  @override
+  Future<String> readPagedRecord(String generation, String key) =>
+      _readPage(generation, key);
+  @override
+  Future<void> requirePagedGeneration(String generation) =>
+      _requirePages(generation);
+  @override
+  Future<bool> compareAndSetPaged(
+    String? expected,
+    String encrypted,
+    PagedEncodedCommit pages,
+  ) => _commitPages(expected, encrypted, pages);
 
   @override
   Future<void> cleanLegacyStaging(

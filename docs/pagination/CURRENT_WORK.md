@@ -1,3 +1,42 @@
+# Pagination — active storage tranche (13 November)
+
+User: finish through storage, platform runtime and publication. Root owns24
+paths listed in ignored output/pagination-storage-owned.json plus the selectively
+staged pagination prefix of MUST_REMEMBER; preserve all UI53 dirty work.
+No new agents/worktrees. _agent_ops pack absent. Graph transport closed, including
+coverage retry; exact source fallback used, no exhaustive graph claims.
+
+Storage code implemented: local_note_page_store seam, encrypted index/payload
+codec, generation/epoch reader/atomic writer, Web IDB3 transaction and native
+schema4 manifest. See STORAGE_PAGINATION.md. Ordinary page/detail/catalog reads
+skip whole-account decode after migration. Canonical sync/mutations/vault/status
+ACK remain whole-account flows; no whole-app O(50) or benchmark claim.
+
+Verified: VM regression285/2skip before last targeted guards; focused18 pass
+(cache-save recovery), latest native4 pass (missing pointer included); Chrome45
+pass; all21 changed Dart paths analyzer clean. Frozen913-path inventory
+86f57b12f0948e1c218f0f3761b1e8a5b4718594b682d3f6932e5b3ef646c973, drift[].
+Web integration73.7s/manual59.3s builds. Actual integration8781 bundle hashmatch,
+drivertrue/no failures. Manual8782 hashmatch, cold0 canonical/50 payload;
+Next100, global marker9991101 total/0 canonical. Notes/Home query, no-results390
+checked. Owned Chrome closed; synthetic profile retained. Initial8780 subfolder
+root-bundle mismatch discarded (not final proof). Native QA build still compiling
+existing llama hook; APK/emulator runtime and product restore PENDING.
+
+Next: finish exec session74010 QA APK, build product main_dev/local-owner APK
+sequentially, stop idle Gradle, boot only NoteFlow_API35:5554. Capture baseline
+with output/pagination_storage_native_probe.py BEFORE QA launch; install-r QA,
+verify installed/pulled hash, UI gestures/counters/cold reopen +canonical hash.
+Restore product/settings, verify hash, close AVD/data retained. Finish source
+review/explicit stage/push final-tuankiet, NotionS5 and final receipt.
+
+Notion416f9c7a1aa0811ab6a0e33a3819c5d8 S0-S4 checked, S5 pending. Git HEAD/remote
+5c95c9facac32b46484bff31c06611f96c42fc29, nothing staged at last check. Product
+builds include preserved UI53 dirty source; do not call them clean-commit artifacts.
+Both whole-M09>=95% gates remain UNVERIFIED. Do not end at query/UI-only again.
+
+## Chronological history (older statuses below are superseded)
+
 # Pagination — current work
 
 User authorized detailed planning and implementation on 12 November 2026.
@@ -108,3 +147,44 @@ No source work remains for this query/UI tranche. Notion holds the publication
 receipt. Storage-record pagination remains unimplemented; do not relabel this
 as eliminating full-account decoding. Any continuation toward that objective
 starts with its encryption/migration/atomicity design rather than more UI slicing.
+
+## Active storage pagination — 13 November
+
+User explicitly requested completion beyond query/UI slicing. Root is adding
+separately encrypted metadata and note records with canonical/index atomic
+publication: Web IDB3 transaction, native schema4 manifest under original OS
+lock. Legacy writers must fail closed; canonical remains the sync/mutation
+source of truth. Search scans records sequentially; normal pages read only
+selected payloads. Protected content stays in the existing password vault.
+Implementation IN PROGRESS, no new tests/build/runtime claims yet. Preserve
+all UI53 dirty paths. Next: compile, adversarial migration/CAS/corruption tests,
+then real Chrome/Android1000 proof and explicit publication/Notion receipt.
+
+Storage checkpoint: regression285/2skip, focused18 pass after cache-save repair,
+latest native4 pass includes missing manifest fail-closed. All21 owned Dart
+paths analyzed; one wildcard lint corrected and delta clean. Chrome8-target
+aggregate rerun after legacy probe API correction is running. Source inventory
+913 paths/86f57b12f0948e1c218f0f3761b1e8a5b4718594b682d3f6932e5b3ef646c973.
+Canonical sync-status ACK still requires text; speculative metadata-only change
+was restored exactly, not integrated. No new agents/worktrees; root owns changes.
+Next: finish Chrome; build integration/manual Web, run actual1000 count proof;
+build QA/product Android, run retained AVD, restore product/settings, publish.
+
+Runtime freeze: Chrome8-target aggregate45/45 passed after correcting the probe
+factory's version/callback coupling (initial4 failures were test-helper errors).
+Final21-path analyzer clean, latest native missing-pointer/cachesave4/4 pass.
+Web integration build73.7s success; manual build running. Graph coverage retry
+still Transport closed; reviewed exact source instead, no completeness claim.
+
+Actual Web final: integration served at8781 rootstorage-test, fetched JS
+48ea24417a7e39449ffabcd9ea90646daef33a7db989630c1902bf79b3ee1476
+matches disk; driver true/failureDetails[]. Manual8782 rootstorage-manual JS
+17,787,710bytes/e48587dbafe215b6c92457602c6b1e24ca2b10c3cd2899b56127cd562db3737c
+matches. Persistent synthetic Chrome profile only. Cold UI counters canonical0/
+payload50, Next payload100; global marker999 added1001 payload reads (scan1000+
+selected1), canonical still0. Notes/Home search and no-results390 inspected,
+no page errors observed. Owned Chrome closed, data retained. Initial multi-folder
+server8780 loaded a prior root bundle due base-href; discarded that result, never
+counted it as final new-source proof. QA storage dialog is alert semantics, not
+role dialog; wrong locator timed out/reset kernel, recovered in owned profile.
+Android QA build still compiling existing llama native hook, no build result.

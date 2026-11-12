@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import '../../application/notes/note_page.dart';
+import '../../application/sync/local_note_page_store.dart';
+import '../../application/labels/local_label_state.dart';
 import '../../application/notes/note_dto.dart';
 import '../../application/labels/note_query.dart';
 
@@ -99,8 +101,9 @@ final class NoteRepository
   @override
   Future<Note?> findById(String id) {
     return _enqueue<Note?>(() async {
-      final LocalSyncState state = await _readActiveState();
-      final LocalNoteState? note = _findNote(state, id);
+      final fence = _captureWrite();
+      final LocalNoteState? note = await _findPagedNote(fence.account, id);
+      _requireWrite(fence);
       if (note == null || note.isDeleted) {
         return null;
       }
@@ -195,10 +198,6 @@ final class NoteRepository
 
   @override
   Future<void> deleteById(String id) => _deleteById(id);
-
-  Future<LocalSyncState> _readActiveState() {
-    return _readStateFor(_requireActiveAccountUserId());
-  }
 
   Future<LocalSyncState> _readStateFor(String accountUserId) async {
     final LocalSyncState state = await _storeFor(accountUserId).read();
