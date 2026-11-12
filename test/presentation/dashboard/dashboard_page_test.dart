@@ -442,7 +442,14 @@ void main() {
       final Rect heading = tester.getRect(find.text('Gần đây'));
       expect(heading.top, greaterThanOrEqualTo(24));
       expect(heading.top, lessThan(120));
+<<<<<<< Updated upstream
       expect(heading.top - tester.getTopLeft(find.byType(DashboardPage)).dy, closeTo(26, 1));
+=======
+      expect(
+        heading.top - tester.getTopLeft(find.byType(DashboardPage)).dy,
+        closeTo(26, 1),
+      );
+>>>>>>> Stashed changes
       final Rect bottomActions = tester.getRect(
         find.byKey(WorkspaceShell.compactBottomNavigationKey),
       );
