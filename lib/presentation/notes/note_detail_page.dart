@@ -157,6 +157,8 @@ final class NoteDetailPageState extends State<NoteDetailPage>
   String? _error;
   String? _statusMessage;
   bool _saving = false;
+  bool _editorSaveActive = false;
+  bool _lifecycleSavePending = false;
   bool _saveFailed = false;
   bool _deleting = false;
   bool _didPersist = false;
@@ -221,7 +223,7 @@ final class NoteDetailPageState extends State<NoteDetailPage>
         _currentConflict == null) {
       _autosaveTimer?.cancel();
       _autosaveTimer = null;
-      unawaited(_save(automatic: true));
+      unawaited(_save(automatic: true, lifecycle: true));
     }
   }
 

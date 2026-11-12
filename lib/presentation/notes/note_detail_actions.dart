@@ -1,11 +1,13 @@
 part of 'note_detail_page.dart';
 
 extension _NoteDetailActions on NoteDetailPageState {
-  Future<bool> _save({bool automatic = false}) async {
+  Future<bool> _save({bool automatic = false, bool lifecycle = false}) async {
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     if (_actionBusy) {
-      if (automatic) {
+      if (lifecycle && _editorSaveActive) {
+        _lifecycleSavePending = true;
+      } else if (automatic) {
         _scheduleAutosave();
       }
       return false;
@@ -19,6 +21,7 @@ extension _NoteDetailActions on NoteDetailPageState {
     final savingEpoch = _editorEpoch;
     final savingController = widget.notesController;
     bool persisted = false;
+    _editorSaveActive = true;
     _update(() {
       _saving = true;
       _saveFailed = false;
@@ -78,10 +81,22 @@ extension _NoteDetailActions on NoteDetailPageState {
       });
       return false;
     } finally {
+      final bool flushOnLifecycle = _lifecycleSavePending;
+      _lifecycleSavePending = false;
+      _editorSaveActive = false;
       if (mounted) {
         _update(() => _saving = false);
         if (persisted && _isDirty) {
-          _scheduleAutosave();
+          if (flushOnLifecycle &&
+              savingEpoch == _editorEpoch &&
+              identical(savingController, widget.notesController) &&
+              _canSave &&
+              !_backConfirmationVisible &&
+              !_conflictFlowActive) {
+            unawaited(_save(automatic: true));
+          } else {
+            _scheduleAutosave();
+          }
         }
       }
     }
