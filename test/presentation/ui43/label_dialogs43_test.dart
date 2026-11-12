@@ -31,6 +31,54 @@ void main() {
     await app.dispose();
   });
 
+  for (final rename in [false, true]) {
+    testWidgets(
+      '${rename ? 'rename' : 'add'} controller lives until the closing dialog unmounts',
+      (tester) async {
+        _setViewport(tester, const Size(1000, 800));
+        await tester.pumpWidget(
+          _shell(
+            app: app,
+            labels: [_label('first', 'Study')],
+            child: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showLabelManager(context),
+                child: const Text('Open manager'),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open manager'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          rename
+              ? find.byTooltip('Rename label').first
+              : find.text('Add label'),
+        );
+        await tester.pumpAndSettle();
+        final controller = tester
+            .widget<TextField>(find.byType(TextField))
+            .controller!;
+        expect(controller.text, rename ? 'Study' : '');
+
+        await tester.tap(find.text('Cancel').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(find.byType(TextField), findsOneWidget);
+        void listener() {}
+        expect(() => controller.addListener(listener), returnsNormally);
+        controller.removeListener(listener);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpAndSettle();
+        expect(find.byType(TextField), findsNothing);
+        expect(() => controller.addListener(listener), throwsFlutterError);
+        expect(tester.takeException(), isNull);
+        expect(find.text('Study'), findsOneWidget);
+      },
+    );
+  }
+
   testWidgets(
     'desktop chooser has bounded content without intrinsic viewport errors',
     (tester) async {

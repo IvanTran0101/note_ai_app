@@ -266,77 +266,100 @@ Future<String?> _nameDialog(
   BuildContext context,
   String? initial,
   LabelActionFence fence,
-) async {
-  final controller = TextEditingController(text: initial ?? '');
-  final copy = LabelCopy(context);
-  String? error;
-  final result = await showDialog<String>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => !fence.visible(context)
-          ? AlertDialog(
-              scrollable: true,
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              surfaceTintColor: Colors.transparent,
-              contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              content: Text(copy.error),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(copy.cancel),
-                ),
-              ],
-            )
-          : AlertDialog(
-              scrollable: true,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+) => showDialog<String>(
+  context: context,
+  builder: (_) => _LabelNameDialog(initial: initial, fence: fence),
+);
+
+final class _LabelNameDialog extends StatefulWidget {
+  const _LabelNameDialog({required this.initial, required this.fence});
+
+  final String? initial;
+  final LabelActionFence fence;
+
+  @override
+  State<_LabelNameDialog> createState() => _LabelNameDialogState();
+}
+
+final class _LabelNameDialogState extends State<_LabelNameDialog> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = LabelCopy(context);
+    return !widget.fence.visible(context)
+        ? AlertDialog(
+            scrollable: true,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            content: Text(copy.error),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(copy.cancel),
               ),
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              surfaceTintColor: Colors.transparent,
-              title: Text(
-                initial == null ? copy.add : copy.rename,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: copy.name,
-                  errorText: error,
-                ),
-                onSubmitted: (_) {
-                  if (_validName(controller.text)) {
-                    Navigator.pop(context, controller.text.trim());
-                  }
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(copy.cancel),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    if (!_validName(controller.text)) {
-                      setState(() => error = copy.invalid);
-                      return;
-                    }
-                    Navigator.pop(context, controller.text.trim());
-                  },
-                  child: Text(copy.save),
-                ),
-              ],
+            ],
+          )
+        : AlertDialog(
+            scrollable: true,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
-    ),
-  );
-  // The route transition can still reference this controller for one frame.
-  WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
-  return result;
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            title: Text(
+              widget.initial == null ? copy.add : copy.rename,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            content: TextField(
+              controller: _controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: copy.name,
+                errorText: _error,
+              ),
+              onSubmitted: (_) {
+                if (_validName(_controller.text)) {
+                  Navigator.pop(context, _controller.text.trim());
+                }
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(copy.cancel),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (!_validName(_controller.text)) {
+                    setState(() => _error = copy.invalid);
+                    return;
+                  }
+                  Navigator.pop(context, _controller.text.trim());
+                },
+                child: Text(copy.save),
+              ),
+            ],
+          );
+  }
 }
 
 bool _validName(String raw) =>
