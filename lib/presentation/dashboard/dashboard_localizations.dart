@@ -76,6 +76,7 @@ final class DashboardCopy {
   String get pinNote => _isVietnamese ? 'Ghim ghi chú' : 'Pin note';
   String get unpinNote => _isVietnamese ? 'Bỏ ghim ghi chú' : 'Unpin note';
   String get pinned => _isVietnamese ? 'Đã ghim' : 'Pinned';
+  String get shared => _isVietnamese ? 'Được chia sẻ' : 'Shared';
   String get layoutSaveError => _isVietnamese
       ? 'Không thể lưu bố cục ghi chú.'
       : 'Couldn’t save the note layout.';

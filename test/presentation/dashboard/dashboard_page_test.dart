@@ -376,13 +376,13 @@ void main() {
       expect(find.text('Home'), findsNothing);
       expect(find.text('Recents'), findsOneWidget);
       expect(tester.getTopLeft(find.text('Recents')).dx, closeTo(24, 1));
-      expect(tester.getTopLeft(find.text('Recents')).dy, closeTo(20, 1));
+      expect(tester.getTopLeft(find.text('Recents')).dy, closeTo(26, 1));
       final Text recentHeading = tester.widget<Text>(find.text('Recents'));
       expect(
         recentHeading.style?.color,
-        NoteFlowWorkspaceTokens.light().textSecondary,
+        NoteFlowWorkspaceTokens.light().textMuted,
       );
-      expect(recentHeading.style?.fontWeight, FontWeight.w500);
+      expect(recentHeading.style?.fontWeight, FontWeight.w400);
       final Finder recentCard = find.byType(Card).first;
       expect(tester.getSize(recentCard).width, closeTo(132, 0.1));
       expect(tester.getSize(recentCard).height, closeTo(132, 0.1));
@@ -442,6 +442,7 @@ void main() {
       final Rect heading = tester.getRect(find.text('Gần đây'));
       expect(heading.top, greaterThanOrEqualTo(24));
       expect(heading.top, lessThan(120));
+      expect(heading.top - tester.getTopLeft(find.byType(DashboardPage)).dy, closeTo(26, 1));
       final Rect bottomActions = tester.getRect(
         find.byKey(WorkspaceShell.compactBottomNavigationKey),
       );

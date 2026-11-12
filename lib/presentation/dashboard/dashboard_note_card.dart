@@ -107,13 +107,15 @@ final class DashboardNoteCard extends StatelessWidget {
       key: ValueKey<String>('dashboard-note-semantics-${note.id}'),
       button: true,
       selected: selected,
-      label: showPreview
-          ? copy.noteSemantics(
-              title: title,
-              preview: preview,
-              pinned: note.pinnedAt != null,
-            )
-          : (note.pinnedAt == null ? title : '$title, ${copy.pinned}'),
+      label:
+          (showPreview
+              ? copy.noteSemantics(
+                  title: title,
+                  preview: preview,
+                  pinned: note.pinnedAt != null,
+                )
+              : (note.pinnedAt == null ? title : '$title, ${copy.pinned}')) +
+          (note.share?.isActive == true ? ', ${copy.shared}' : ''),
       child: Card(
         key: ValueKey<String>('dashboard-note-card-${note.id}'),
         margin: EdgeInsets.zero,
@@ -211,6 +213,14 @@ final class DashboardNoteCard extends StatelessWidget {
               size: 18,
               color: selected ? foreground : tokens.textMuted,
             ),
+            if (note.share?.isActive == true)
+              ExcludeSemantics(
+                child: Icon(
+                  Icons.people_outline,
+                  size: 18,
+                  color: tokens.textMuted,
+                ),
+              ),
             _pinButton(context),
           ],
         ),
@@ -322,6 +332,14 @@ final class DashboardNoteCard extends StatelessWidget {
                 child: _updatedText(context, updatedDate, secondaryForeground),
               ),
             ],
+            if (note.share?.isActive == true)
+              ExcludeSemantics(
+                child: Icon(
+                  Icons.people_outline,
+                  size: 18,
+                  color: tokens.textMuted,
+                ),
+              ),
             if (onTogglePin != null) _pinButton(context),
           ],
         );

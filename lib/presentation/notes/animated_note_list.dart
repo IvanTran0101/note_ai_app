@@ -145,6 +145,9 @@ final class _AnimatedNoteListState extends State<AnimatedNoteList> {
               size: 20,
               color: selected ? tokens.textPrimary : tokens.textMuted,
             ),
+            trailing: note.pinnedAt == null
+                ? null
+                : Icon(Icons.push_pin, size: 18, semanticLabel: copy.pinned),
             title: Text(
               title,
               maxLines: 1,
