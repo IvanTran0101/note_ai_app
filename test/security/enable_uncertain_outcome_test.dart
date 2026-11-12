@@ -1,0 +1,105 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/auth/current_user_session.dart';
+import 'package:note_ai_app/application/notes/note_access.dart';
+import 'package:note_ai_app/application/notes/note_security_gateway.dart';
+import 'package:note_ai_app/application/notes/note_security_service.dart';
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
+import 'package:note_ai_app/domain/notes/note_protection.dart';
+import 'package:note_ai_app/infrastructure/security/encrypted_sync_store.dart';
+
+import 'security_fixtures.dart';
+
+final class _TimeoutGateway implements INoteSecurityGateway {
+  _TimeoutGateway(this.commitBeforeTimeout);
+  final bool commitBeforeTimeout;
+  NoteProtection remote = const NoteProtection.unprotected();
+
+  @override
+  Future<NoteProtection> metadata(String id) async => remote;
+
+  @override
+  Future<NoteProtection> enable(
+    String id,
+    String password,
+    int revision,
+  ) async {
+    if (commitBeforeTimeout) {
+      remote = NoteProtection(enabled: true, revision: 1);
+    }
+    throw const NoteSecurityFailure(NoteSecurityFailureCode.network);
+  }
+
+  @override
+  void invalidate(String? id) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  for (final committed in [false, true]) {
+    test(
+      'timeout ${committed ? 'after' : 'before'} remote commit keeps offline data across reopen',
+      () async {
+        final account = 'synthetic-timeout-$committed';
+        final session = CurrentUserSession()
+          ..setIdentity(
+            AuthIdentity(
+              userId: account,
+              email: 'synthetic@example.invalid',
+              isEmailVerified: true,
+            ),
+          );
+        final backing = MemoryCiphertextStore();
+        final gateway = _TimeoutGateway(committed);
+        var store = EncryptedSyncStore(account, backing);
+        NoteSecurityService makeService(EncryptedSyncStore target) =>
+            NoteSecurityService(
+              accountId: account,
+              currentUser: session,
+              session: session,
+              store: target,
+              vault: target,
+              gateway: gateway,
+              localFirst: false,
+            );
+        var service = makeService(store);
+        await store.replace(securityState(account));
+        await expectLater(
+          service.enable('alpha', securityPassword, securityPassword),
+          throwsA(
+            isA<NoteSecurityFailure>().having(
+              (e) => e.code,
+              'code',
+              NoteSecurityFailureCode.network,
+            ),
+          ),
+        );
+        expect(gateway.remote.enabled, committed);
+        service.dispose();
+        store.dispose();
+
+        store = EncryptedSyncStore(account, backing);
+        service = makeService(store);
+        addTearDown(() {
+          service.dispose();
+          store.dispose();
+        });
+        final locked = (await store.read()).notes.singleWhere(
+          (n) => n.id == 'alpha',
+        );
+        expect(locked.protection.enabled, isTrue);
+        expect(locked.contentAvailable, isFalse);
+        await service.unlock('alpha', securityPassword, offline: true);
+        final recovered = (await store.read()).notes.singleWhere(
+          (n) => n.id == 'alpha',
+        );
+        expect(recovered.content, privateBody);
+      },
+    );
+  }
+}
