@@ -1,5 +1,11 @@
 # MUST REMEMBER
 
+Active 12 November: user explicitly authorized detailed plan + note pagination.
+Read docs/pagination/CURRENT_WORK.md first for this task. 50-row query/UI pages
+in Notes/Shared/Home/Search, global filtering before slice; encrypted account
+snapshot still decoded whole (NOT disk paging or O(50) total memory). Preserve
+uncommitted UI53 source and unrelated files. No full-M09/95% acceptance implied.
+
 UI52 source16864ba pushed0/0; actual72 installed/pulled hash456da989...161598 matches. Stable landscape200%+IME field305-457/Share318-444 before keyboard520; Close48dp. Drag/role access and gesture+IME checked, originalfont1/auto1/user0/nav0 restored, AVDoff/dataretained. VM9/strict8, actualChrome71+sameJS72 verified; board70 images. Continue UI53 editor matrix; both95% UNVERIFIED, no broad acceptance. Read CURRENT_WORK/UI52_SHARE_WEB.
 
 ## Active29Oct — UI51 verified68; publish then CONTINUE UI52 Share

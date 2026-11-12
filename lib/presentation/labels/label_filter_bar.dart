@@ -17,7 +17,9 @@ final class LabelFilterBar extends StatelessWidget {
     this.allowManage = true,
     this.dense = false,
     this.singleLine = false,
+    this.additionalChoices,
   });
+  final Map<LabelSelection, String>? additionalChoices;
   final List<NoteDto> notes;
   final Set<LabelSelection> selected;
   final ValueChanged<Set<LabelSelection>> onChanged;
@@ -31,7 +33,7 @@ final class LabelFilterBar extends StatelessWidget {
     if (scope?.application == null || scope!.actor.isEmpty) {
       return const SizedBox.shrink();
     }
-    final choices = <LabelSelection, String>{};
+    final choices = <LabelSelection, String>{...?additionalChoices};
     for (final note in notes) {
       for (final label in visibleLabels(
         note,

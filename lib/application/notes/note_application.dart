@@ -1,4 +1,5 @@
 import 'note_access.dart';
+import 'note_page.dart';
 import 'note_dto.dart';
 import 'note_editor_snapshot.dart';
 import '../../domain/notes/note_protection.dart';
@@ -133,6 +134,22 @@ final class NoteApplicationService {
   /// Defaults to [currentUser] when it implements [SessionGenerationSource],
   /// and to 0 otherwise.
   final SessionGenerationReader? sessionGeneration;
+
+  bool get supportsNotePagination => noteRepository is INotePageReader;
+
+  Future<NotePage> listNotePage(NotePageQuery query) async {
+    final context = _captureContext();
+    final repository = noteRepository;
+    if (repository is! INotePageReader) {
+      throw UnsupportedError('Paginated note query is unavailable.');
+    }
+    final page = await (repository as INotePageReader).queryNotePage(
+      context.userId,
+      query,
+    );
+    _requireContext(context);
+    return page;
+  }
 
   /// Lists the notes owned by the authenticated user.
   Future<List<NoteDto>> listNotes() async {

@@ -35,6 +35,11 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
     }
   }
 
+  void _queryChanged() {
+    setState(() {});
+    widget.panel.onQueryChanged?.call(_search.text, _selected);
+  }
+
   @override
   void dispose() {
     _search.dispose();
@@ -61,6 +66,7 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
       queryEnabled: false,
       queryControls: queryControls,
       filteredEmpty: filteredEmpty,
+      pageFooter: p.pageFooter,
     );
   }
 
@@ -71,18 +77,20 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
     final copy = LabelCopy(context);
     final compact = NoteFlowLayout.isCompact(context);
     final tokens = NoteFlowUiTokens.of(context);
-    final filtered = queryNotes(
-      p.notes,
-      keyword: _search.text,
-      selected: _selected,
-      readable: _readable,
-      labelsFor: (n) => visibleLabels(
-        n,
-        scope!.labels,
-        actor: scope.actor,
-        readable: _readable(n),
-      ),
-    );
+    final filtered = p.onQueryChanged != null
+        ? p.notes
+        : queryNotes(
+            p.notes,
+            keyword: _search.text,
+            selected: _selected,
+            readable: _readable,
+            labelsFor: (n) => visibleLabels(
+              n,
+              scope!.labels,
+              actor: scope.actor,
+              readable: _readable(n),
+            ),
+          );
     return _panel(
       sortNotes(filtered),
       queryControls: Padding(
@@ -95,7 +103,7 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
               child: TextField(
                 key: const ValueKey('notes-search-field'),
                 controller: _search,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) => _queryChanged(),
                 decoration: InputDecoration(
                   isDense: true,
                   prefixIcon: Icon(
@@ -113,7 +121,10 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
                       : IconButton(
                           tooltip: copy.clear,
                           icon: const Icon(Icons.clear),
-                          onPressed: () => setState(_search.clear),
+                          onPressed: () {
+                            _search.clear();
+                            _queryChanged();
+                          },
                         ),
                 ),
               ),
@@ -123,8 +134,12 @@ final class _NotesQueryPanelState extends State<NotesQueryPanel> {
               child: SingleChildScrollView(
                 child: LabelFilterBar(
                   notes: p.notes,
+                  additionalChoices: p.labelChoices,
                   selected: _selected,
-                  onChanged: (next) => setState(() => _selected = next),
+                  onChanged: (next) {
+                    _selected = next;
+                    _queryChanged();
+                  },
                   readable: _readable,
                   allowManage: p.allowNewNote,
                   dense: compact,

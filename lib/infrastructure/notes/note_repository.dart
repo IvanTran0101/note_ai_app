@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import '../../application/notes/note_page.dart';
+import '../../application/notes/note_dto.dart';
+import '../../application/labels/note_query.dart';
+
 import '../../application/notes/note_access.dart';
 
 import '../../application/sync/local_note_state.dart';
@@ -21,6 +25,7 @@ import '../../domain/notes/note_metadata.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
 
+part 'note_repository_page.dart';
 part 'note_repository_mutations.dart';
 part 'note_repository_mapping.dart';
 part 'note_repository_save.dart';
@@ -44,10 +49,15 @@ part 'note_repository_update.dart';
 /// mutations that a later sync coordinator pushes.
 final class NoteRepository
     implements
+        INotePageReader,
         domain.INoteDocumentRepository,
         domain.INoteMetadataRepository,
         domain.ISharedNoteRepository,
         domain.INoteSnapshotRepository {
+  @override
+  Future<NotePage> queryNotePage(String actorId, NotePageQuery query) =>
+      _queryPage(actorId, query);
+
   /// Creates a repository from the injected account resolver, store factory,
   /// mutation-id generator, and clock.
   NoteRepository({

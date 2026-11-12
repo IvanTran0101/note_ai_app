@@ -65,10 +65,12 @@ extension _NotesWorkspaceSharing on NotesWorkspacePageState {
       return;
     }
     _update(() {
+      _pageNumber = 0;
       _sharedOnly = shared;
       _selectedNoteId = null;
       _unavailableSelection = null;
       _editingNewNote = false;
     });
+    if (supportsNotePages(_application)) unawaited(_loadNotesInternal());
   }
 }

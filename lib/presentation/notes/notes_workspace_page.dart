@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
 import 'note_ordering.dart';
+import '../../application/notes/note_page.dart';
+import '../../application/labels/note_query.dart';
+import 'note_page_navigation.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
 import 'note_flow_snackbar.dart';
@@ -19,6 +22,7 @@ import 'responsive_notes_workspace.dart';
 import '../sync/sync_presentation_controller.dart';
 import '../sync/sync_widgets.dart';
 
+part 'notes_workspace_pagination.dart';
 part 'notes_workspace_view.dart';
 part 'notes_workspace_sharing.dart';
 
@@ -69,6 +73,12 @@ final class NotesWorkspacePage extends StatefulWidget {
 }
 
 final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
+  Timer? _pageQueryTimer;
+  NotePage? _notePage;
+  int _pageNumber = 0;
+  bool _pageBusy = false;
+  String _pageKeyword = '';
+  Set<LabelSelection> _pageLabels = {};
   String? _detailKeyIdentity;
   GlobalKey<NoteDetailPageState> _detailWidgetKey =
       GlobalKey<NoteDetailPageState>();
@@ -172,6 +182,12 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         setState(() {
           if (changed) {
             _loadSequence++;
+            _notePage = null;
+            _pageNumber = 0;
+            _pageKeyword = '';
+            _pageLabels = {};
+            _pageBusy = false;
+            _unavailableSelection = null;
             _notes = const [];
             _selectedNoteId = null;
             _editingNewNote = false;
@@ -179,6 +195,8 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
             _error = null;
             _loading = false;
           } else {
+            _notePage = null;
+            _unavailableSelection = _unavailableSelection?.metadataOnly();
             _notes = _notes
                 .map(
                   (n) => n.isProtected || !secured.capabilitiesFor(n).canRead
@@ -197,34 +215,13 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   @override
   void dispose() {
+    _pageQueryTimer?.cancel();
     unawaited(_securitySubscription?.cancel());
     widget.syncController?.removeListener(_workspaceSyncChanged);
     super.dispose();
   }
 
-  Future<void> _refreshSecurityList() async {
-    final sequence = ++_loadSequence;
-    try {
-      final notes = sortNotes(await _listAllNotes());
-      if (mounted && sequence == _loadSequence) {
-        setState(() {
-          _preserveSelection(notes);
-          _notes = List.unmodifiable(notes);
-          _error = null;
-          _loading = false;
-        });
-      }
-    } on Object catch (error) {
-      // This read supersedes an initial load too. Its failure must end that
-      // loading state; the stale initial completion cannot do it afterwards.
-      if (mounted && sequence == _loadSequence && _loading) {
-        setState(() {
-          _error = error;
-          _loading = false;
-        });
-      }
-    }
-  }
+  Future<void> _refreshSecurityList() => _loadNotesInternal();
 
   /// Reloads the list after the page becomes active.
   Future<void> reload() {
@@ -235,40 +232,6 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     final Future<void> started = _loadNotesInternal();
     _loadInFlight = started;
     return _clearLoadInFlight(started);
-  }
-
-  Future<void> _clearLoadInFlight(Future<void> operation) async {
-    try {
-      await operation;
-    } finally {
-      if (identical(_loadInFlight, operation)) {
-        _loadInFlight = null;
-      }
-    }
-  }
-
-  Future<void> _loadNotesInternal() async {
-    final sequence = ++_loadSequence;
-    try {
-      final List<NoteDto> notes = sortNotes(await _listAllNotes());
-      if (!mounted || sequence != _loadSequence) {
-        return;
-      }
-      setState(() {
-        _preserveSelection(notes);
-        _notes = List<NoteDto>.unmodifiable(notes);
-        _error = null;
-        _loading = false;
-      });
-    } on Object catch (error) {
-      if (!mounted || sequence != _loadSequence) {
-        return;
-      }
-      setState(() {
-        _error = error;
-        _loading = false;
-      });
-    }
   }
 
   void _selectNote(NoteDto note) {
@@ -320,7 +283,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       (NoteDto item) => item.identity == note.identity,
     );
     if (index == -1) {
-      next.add(note);
+      if (!supportsNotePages(_application)) next.add(note);
     } else {
       next[index] = note;
     }
@@ -328,7 +291,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = note.reference;
       _sharedOnly = note.share != null;
-      _unavailableSelection = null;
+      _unavailableSelection = index == -1 && supportsNotePages(_application)
+          ? note
+          : null;
       _editingNewNote = false;
       _error = null;
       _loading = false;
@@ -362,7 +327,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       (NoteDto item) => item.identity == note.identity,
     );
     if (index == -1) {
-      next.add(note);
+      if (!supportsNotePages(_application)) next.add(note);
     } else {
       next[index] = note;
     }
@@ -370,7 +335,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = note.reference;
       _sharedOnly = note.share != null;
-      _unavailableSelection = null;
+      _unavailableSelection = index == -1 && supportsNotePages(_application)
+          ? note
+          : null;
       _editingNewNote = false;
       _error = null;
       _loading = false;
@@ -399,7 +366,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
             (NoteDto note) => note.identity == saved.identity,
           );
           if (index == -1) {
-            next.add(saved);
+            if (!supportsNotePages(_application)) next.add(saved);
           } else {
             next[index] = saved;
           }
@@ -424,6 +391,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         _error = null;
       }
     });
+    if (supportsNotePages(_application)) unawaited(reload());
   }
 
   void _showMessage(String message) {
