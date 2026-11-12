@@ -1,0 +1,13 @@
+{
+  "document": {
+    "version": 1,
+    "blocks": [
+      {"id": "title", "type": "heading", "runs": [{"type": "text", "text": "Việt 📝", "marks": {"bold": true, "fontSize": 24}}], "level": 4},
+      {"id": "toggle", "type": "toggle", "runs": [{"type": "text", "text": "Chi tiết"}], "children": [{"id": "child", "type": "paragraph", "runs": [{"type": "math", "expression": "\\sqrt{x^2+1}"}]}]},
+      {"id": "todo", "type": "todo", "runs": [{"type": "text", "text": "Done", "marks": {"underline": true, "color": "purple", "highlight": "yellow", "link": "https://example.invalid/path"}}], "checked": false},
+      {"id": "grid", "type": "table", "rows": [{"id": "row", "cells": [{"id": "a", "runs": [{"type": "text", "text": "A"}]}, {"id": "b", "runs": [{"type": "text", "text": "B"}]}]}], "headerRow": true},
+      {"id": "divider", "type": "divider"}
+    ]
+  },
+  "projection": "Việt 📝\nChi tiết\n\\sqrt{x^2+1}\nDone\nA\tB\n"
+}

@@ -9,20 +9,35 @@
 ///
 /// The two frozen routes answer with JSON text; a caller may hand either the
 /// decoded object or the raw body string to the decoders, so JSON parsing lives
-/// in one place. `ownerId` is never encoded: the server derives the account
-/// namespace from the authenticated Cognito `sub`, and a request body is not
-/// authoritative for it.
+/// in one place. Owned routes derive their namespace from the verified actor.
+/// Shared updates carry canonical owner/access epoch on a dedicated route;
+/// these fields never replace JWT actor authority or fall back to owned writes.
 library;
 
 import 'dart:convert';
+
+import 'protection_sync_codec.dart';
+import 'share_wire_codec.dart';
+import '../attachments/attachment_codec.dart';
+import '../labels/label_codec.dart';
+import '../../application/labels/local_label_state.dart';
 
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../application/sync/sync_result.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
+import '../documents/note_document_codec.dart';
+
+part 'sync_note_wire_mapper.dart';
+part 'sync_mutation_wire_encoder.dart';
 
 /// The `status` value of an applied mutation response.
 const String _appliedStatus = 'applied';
+final RegExp _utcTimestampPattern = RegExp(
+  r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$',
+);
 
 /// Maps an HTTP status to the failure it means, per the frozen status table.
 ///
@@ -31,6 +46,7 @@ const String _appliedStatus = 'applied';
 const Map<int, SyncErrorCode> _statusErrorCodes = <int, SyncErrorCode>{
   401: SyncErrorCode.unauthorized,
   403: SyncErrorCode.forbidden,
+  423: SyncErrorCode.forbidden,
   422: SyncErrorCode.invalidMutation,
   429: SyncErrorCode.throttled,
   500: SyncErrorCode.serverUnavailable,
@@ -51,29 +67,12 @@ const Map<String, SyncErrorCode> _envelopeErrorCodes = <String, SyncErrorCode>{
   'SERVER_UNAVAILABLE': SyncErrorCode.serverUnavailable,
   'NETWORK_UNAVAILABLE': SyncErrorCode.networkUnavailable,
   'TIMEOUT': SyncErrorCode.timeout,
+  'NOTE_SECURITY_STALE': SyncErrorCode.forbidden,
+  'NOTE_LOCKED': SyncErrorCode.forbidden,
+  'NOTE_GRANT_EXPIRED': SyncErrorCode.forbidden,
+  'NOTE_ACCESS_DENIED': SyncErrorCode.forbidden,
+  'DOCUMENT_REQUIRES_UPGRADE': SyncErrorCode.documentRequiresUpgrade,
 };
-
-/// Encodes one client mutation as a `POST /sync/mutations` request body.
-///
-/// `payload` is present exactly when the mutation carries one, so a delete
-/// without content omits the key instead of sending `null`. The body never
-/// contains an `ownerId`.
-Map<String, Object?> encodeSyncMutation(SyncMutation mutation) {
-  final Map<String, Object?> body = <String, Object?>{
-    'mutationId': mutation.mutationId,
-    'noteId': mutation.noteId,
-    'operation': mutation.operation.name,
-    'baseRevision': mutation.baseRevision,
-  };
-  final SyncNotePayload? payload = mutation.payload;
-  if (payload != null) {
-    body['payload'] = <String, Object?>{
-      'title': payload.title,
-      'content': payload.content,
-    };
-  }
-  return body;
-}
 
 /// Decodes one `POST /sync/mutations` response.
 ///
@@ -94,11 +93,33 @@ SyncMutationResult decodeSyncMutationResponse({
   String? mutationId,
 }) {
   final Map<String, Object?> json = _asJsonObject(body, 'mutation response');
+  if (json['entityType'] == 'label') {
+    if (json['wireVersion'] != 2) {
+      throw const FormatException('Label wire version required.');
+    }
+    if (statusCode == 409) {
+      return SyncMutationResult.labelConflict(
+        mutationId: _readMutationId(json, mutationId),
+        remote: json['remoteLabel'] == null
+            ? null
+            : LabelCodec.decodeWire(json['remoteLabel']),
+      );
+    }
+    if (statusCode < 200 || statusCode >= 300 || json['status'] != 'applied') {
+      throw const FormatException('Invalid Label outcome.');
+    }
+    return SyncMutationResult.labelApplied(
+      mutationId: _readMutationId(json, mutationId),
+      label: LabelCodec.decodeWire(json['label']),
+    );
+  }
 
+  final documents = json['wireVersion'] == 3;
+  if (documents) _requireDocumentCapability(json);
   if (statusCode == 409) {
     return SyncMutationResult.conflict(
       mutationId: _readMutationId(json, mutationId),
-      remote: _readOptionalNote(json, 'remoteNote'),
+      remote: _readOptionalNote(json, 'remoteNote', documents: documents),
     );
   }
   if (statusCode < 200 || statusCode >= 300) {
@@ -115,7 +136,10 @@ SyncMutationResult decodeSyncMutationResponse({
   }
   return SyncMutationResult.applied(
     mutationId: _readMutationId(json, mutationId),
-    note: _decodeNote(_asJsonObject(note, 'mutation response "note"')),
+    note: _decodeNote(
+      _asJsonObject(note, 'mutation response "note"'),
+      documents: documents,
+    ),
   );
 }
 
@@ -127,17 +151,43 @@ SyncMutationResult decodeSyncMutationResponse({
 /// position rather than only a request for another page. A page that claims
 /// `hasMore` without a cursor is malformed: the caller would have no way to ask
 /// for the next page.
-SyncChangesPage decodeChangesPage(Object? body) {
+SyncChangesPage decodeChangesPage(
+  Object? body, {
+  bool authorizedContent = false,
+}) {
   final Map<String, Object?> json = _asJsonObject(body, 'changes page');
 
   final Object? items = json['items'];
   if (items is! List<Object?>) {
     throw const FormatException('Changes page "items" must be an array.');
   }
-  final List<SyncNoteSnapshot> snapshots = <SyncNoteSnapshot>[
-    for (final Object? item in items)
-      _decodeNote(_asJsonObject(item, 'changes page item')),
-  ];
+  final version = json['wireVersion'] ?? 1;
+  if (version != 1 && version != 2 && version != 3) {
+    throw const FormatException('Unsupported sync version.');
+  }
+  if (version == 3) _requireDocumentCapability(json);
+  final snapshots = <SyncNoteSnapshot>[];
+  final labels = <LocalLabelState>[];
+  for (final item in items) {
+    final row = _asJsonObject(item, 'changes page item');
+    if (version == 1) {
+      snapshots.add(_decodeNote(row));
+      continue;
+    }
+    if (row['entityType'] == 'note') {
+      snapshots.add(
+        _decodeNote(
+          _asJsonObject(row['note'], 'note'),
+          authorizedContent: authorizedContent,
+          documents: version == 3,
+        ),
+      );
+    } else if (row['entityType'] == 'label') {
+      labels.add(LabelCodec.decodeWire(row['label']));
+    } else {
+      throw const FormatException('Typed entity required.');
+    }
+  }
 
   final String? nextCursor = _readOptionalCursor(json);
   final Object? hasMore = json['hasMore'];
@@ -145,6 +195,10 @@ SyncChangesPage decodeChangesPage(Object? body) {
     throw const FormatException('Changes page "hasMore" must be a boolean.');
   }
   final bool hasMorePages = hasMore == true;
+  final catchUpPending = json['catchUpPending'];
+  if (catchUpPending != null && catchUpPending is! bool) {
+    throw const FormatException('Changes catch-up flag must be a boolean.');
+  }
   if (hasMorePages && nextCursor == null) {
     throw const FormatException(
       'Changes page with "hasMore" true must carry a "nextCursor".',
@@ -152,8 +206,11 @@ SyncChangesPage decodeChangesPage(Object? body) {
   }
   return SyncChangesPage(
     snapshots: snapshots,
+    labels: labels,
+    wireVersion: version as int,
     nextCursor: nextCursor,
     hasMore: hasMorePages,
+    catchUpPending: catchUpPending == true,
   );
 }
 
@@ -169,6 +226,9 @@ SyncChangesPage decodeChangesPage(Object? body) {
 /// cross into Application, and user-facing copy is Presentation's concern
 /// rather than Infrastructure's.
 SyncFailure decodeError({int? statusCode, Object? body}) {
+  if (_tryAsJsonObject(body)?['code'] == 'DOCUMENT_REQUIRES_UPGRADE') {
+    return const SyncFailure(code: SyncErrorCode.documentRequiresUpgrade);
+  }
   final SyncErrorCode? fromStatus = statusCode == null
       ? null
       : _statusErrorCodes[statusCode];
@@ -180,82 +240,20 @@ SyncFailure decodeError({int? statusCode, Object? body}) {
 /// Unknown fields are ignored on purpose: the response is a wire payload and
 /// may grow additive fields, and an `ownerId` the server chose to include is
 /// dropped here rather than becoming client state.
-SyncNoteSnapshot _decodeNote(Map<String, Object?> json) {
-  final Object? id = json['id'];
-  if (id is! String || id.trim().isEmpty) {
-    throw const FormatException('Note "id" must be a non-blank string.');
-  }
-  return SyncNoteSnapshot(
-    id: id,
-    title: _readString(json, 'title'),
-    content: _readString(json, 'content'),
-    createdAt: _readTimestamp(json, 'createdAt'),
-    serverUpdatedAt: _readTimestamp(json, 'serverUpdatedAt'),
-    revision: _readPositiveRevision(json),
-    deletedAt: _readOptionalTimestamp(json, 'deletedAt'),
-  );
-}
+SyncNoteSnapshot decodeSyncNoteSnapshot(
+  Object? data, {
+  bool authorizedContent = false,
+  bool documents = false,
+}) => _decodeNote(
+  _asJsonObject(data, 'note snapshot'),
+  authorizedContent: authorizedContent,
+  documents: documents,
+);
 
-/// Reads a required string field, or throws when it is missing or not a string.
-String _readString(Map<String, Object?> json, String fieldName) {
-  if (!json.containsKey(fieldName)) {
-    throw FormatException('Missing required note field "$fieldName".');
+void _requireDocumentCapability(Map<String, Object?> json) {
+  if (json['documentCapability'] != 'basicBlocksV1') {
+    throw const FormatException('Document capability required.');
   }
-  final Object? value = json[fieldName];
-  if (value is! String) {
-    throw FormatException('Note field "$fieldName" must be a string.');
-  }
-  return value;
-}
-
-/// Reads a required ISO-8601 field, or throws when it cannot be parsed.
-///
-/// Anything present must parse, so a malformed timestamp can never become a
-/// silently wrong `DateTime`.
-DateTime _readTimestamp(Map<String, Object?> json, String fieldName) {
-  final DateTime? timestamp = _tryTimestamp(json[fieldName]);
-  if (timestamp == null) {
-    throw FormatException(
-      'Note field "$fieldName" must be a valid ISO-8601 timestamp.',
-    );
-  }
-  return timestamp;
-}
-
-/// Reads the optional tombstone marker: an absent or `null` field means the
-/// note is alive, and anything present must parse.
-DateTime? _readOptionalTimestamp(Map<String, Object?> json, String fieldName) {
-  final Object? value = json[fieldName];
-  if (value == null) {
-    return null;
-  }
-  final DateTime? timestamp = _tryTimestamp(value);
-  if (timestamp == null) {
-    throw FormatException(
-      'Note field "$fieldName" must be null or a valid ISO-8601 timestamp.',
-    );
-  }
-  return timestamp;
-}
-
-/// Parses a non-empty ISO-8601 string, or returns `null` when it cannot.
-DateTime? _tryTimestamp(Object? value) {
-  if (value is! String || value.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(value);
-}
-
-/// Reads the note revision, which the Application contract requires positive.
-int _readPositiveRevision(Map<String, Object?> json) {
-  final Object? value = json['revision'];
-  if (value is! int) {
-    throw const FormatException('Note field "revision" must be an integer.');
-  }
-  if (value <= 0) {
-    throw const FormatException('Note field "revision" must be positive.');
-  }
-  return value;
 }
 
 /// Reads the opaque paging cursor, treating an empty string as absent.
@@ -288,13 +286,17 @@ String _readMutationId(Map<String, Object?> json, String? requestMutationId) {
 /// Reads an optional nested note, or throws when the key holds a non-object.
 SyncNoteSnapshot? _readOptionalNote(
   Map<String, Object?> json,
-  String fieldName,
-) {
+  String fieldName, {
+  bool documents = false,
+}) {
   final Object? value = json[fieldName];
   if (value == null) {
     return null;
   }
-  return _decodeNote(_asJsonObject(value, 'mutation response "$fieldName"'));
+  return _decodeNote(
+    _asJsonObject(value, 'mutation response "$fieldName"'),
+    documents: documents,
+  );
 }
 
 /// Classifies an error envelope by its `code` token alone.

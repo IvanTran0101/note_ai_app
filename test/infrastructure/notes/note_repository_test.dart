@@ -1,3 +1,5 @@
+import 'package:note_ai_app/domain/notes/note_repository.dart';
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -396,6 +398,19 @@ void main() {
 
       await expectLater(
         repository.save(testNote(id: 'note-b', title: 'Overwrite conflict')),
+        throwsStateError,
+      );
+      await expectLater(
+        repository.updateById(
+          noteId: 'note-b',
+          ownerId: 'user-1',
+          canCommit: () => true,
+          expectedAccountUserId: 'user-1',
+          change: (Note note) {
+            note.replaceText('Overwrite', 'Body', clock.now());
+            return note;
+          },
+        ),
         throwsStateError,
       );
       await expectLater(repository.deleteById('note-b'), throwsStateError);
@@ -826,6 +841,105 @@ void main() {
   });
 
   group('NoteRepository atomic writes and serialization', () {
+    test(
+      'updates text and its immutable outbox payload in one write',
+      () async {
+        final FakeLocalSyncStoreFactory factory = statefulFactory(
+          LocalSyncState(
+            accountUserId: 'user-1',
+            notes: <LocalNoteState>[
+              testLocalNote(id: 'note-1', serverRevision: 3),
+            ],
+          ),
+        );
+        final NoteRepository repository = buildRepository(factory);
+
+        final Note updated = (await repository.updateById(
+          noteId: 'note-1',
+          ownerId: 'user-1',
+          canCommit: () => true,
+          expectedAccountUserId: 'user-1',
+          change: (Note note) {
+            note.replaceText(
+              '  Edited title  ',
+              '\nEdited body\n',
+              clock.now(),
+            );
+            note.pin(clock.now());
+            return note;
+          },
+        ));
+
+        final FakeLocalSyncStore store = factory.store('user-1');
+        expect(store.replaceCount, 1);
+        expect(updated.title, '  Edited title  ');
+        expect(updated.content, '\nEdited body\n');
+        expect(updated.pinnedAt, clock.value);
+        expect(store.state.notes.single.title, updated.title);
+        expect(store.state.notes.single.content, updated.content);
+        expect(store.state.outbox.single.payload, isNotNull);
+        expect(store.state.outbox.single.payload!.title, updated.title);
+        expect(store.state.outbox.single.payload!.content, updated.content);
+        expect(store.state.outbox.single.payload!.pinnedAt, clock.value);
+        expect(store.state.outbox.single.payload!.includesPinnedAt, isTrue);
+      },
+    );
+
+    test(
+      'account mismatch and storage failure cannot partially edit',
+      () async {
+        final FakeLocalSyncStoreFactory factory = statefulFactory(
+          LocalSyncState(
+            accountUserId: 'user-1',
+            notes: <LocalNoteState>[
+              testLocalNote(
+                id: 'note-1',
+                title: 'Original',
+                content: 'Original body',
+                serverRevision: 2,
+              ),
+            ],
+          ),
+        );
+        final NoteRepository repository = buildRepository(factory);
+        await repository.findByOwnerId('user-1');
+        final FakeLocalSyncStore store = factory.store('user-1');
+
+        await expectLater(
+          repository.updateById(
+            noteId: 'note-1',
+            ownerId: 'user-1',
+            canCommit: () => true,
+            expectedAccountUserId: 'user-2',
+            change: (Note note) {
+              note.replaceText('Foreign', 'Body', clock.now());
+              return note;
+            },
+          ),
+          throwsA(isA<NoteMutationCancelledException>()),
+        );
+        expect(store.replaceCount, 0);
+
+        store.failure = StateError('disk unavailable');
+        await expectLater(
+          repository.updateById(
+            noteId: 'note-1',
+            ownerId: 'user-1',
+            canCommit: () => true,
+            expectedAccountUserId: 'user-1',
+            change: (Note note) {
+              note.replaceText('Edited', 'Edited body', clock.now());
+              return note;
+            },
+          ),
+          throwsStateError,
+        );
+        expect(store.state.notes.single.title, 'Original');
+        expect(store.state.notes.single.content, 'Original body');
+        expect(store.state.outbox, isEmpty);
+      },
+    );
+
     test(
       'a failed save replace neither persists nor reports success',
       () async {

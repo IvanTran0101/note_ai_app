@@ -33,7 +33,7 @@ const MUTATIONS_PATH = '/sync/mutations';
 const CHANGES_PATH = '/sync/changes';
 
 /** Headers the contract's client sends: `Authorization` plus a JSON body. */
-const SYNC_REQUEST_HEADERS = ['authorization', 'content-type'];
+const SYNC_REQUEST_HEADERS = ['authorization', 'content-type', 'x-note-unlock-grant', 'range'];
 
 export type SyncHttpApiProps = Readonly<{
   /** Scope the API is created in, e.g. `backend.createStack('SyncStack')`. */
@@ -88,6 +88,7 @@ export const createSyncHttpApi = ({
       allowOrigins: allowedOrigins,
       allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.POST, CorsHttpMethod.OPTIONS],
       allowHeaders: SYNC_REQUEST_HEADERS,
+      exposeHeaders: ['content-range', 'content-length', 'accept-ranges', 'content-type'],
       // The client sends a bearer token rather than cookies, so a wildcard
       // origin cannot be used for credentialed cross-site requests.
       allowCredentials: false,
@@ -98,7 +99,21 @@ export const createSyncHttpApi = ({
   // No default authorizer: each route states its authorizer explicitly.
   api.addRoutes({ path: HEALTH_PATH, methods: [HttpMethod.GET], integration, authorizer });
   api.addRoutes({ path: MUTATIONS_PATH, methods: [HttpMethod.POST], integration, authorizer });
+  api.addRoutes({ path: '/sync/protection-predecessor', methods: [HttpMethod.POST], integration, authorizer });
+  api.addRoutes({ path: '/sync/protected-mutations', methods: [HttpMethod.POST], integration, authorizer });
+  api.addRoutes({ path: '/sync/shared-mutations', methods: [HttpMethod.POST], integration, authorizer });
   api.addRoutes({ path: CHANGES_PATH, methods: [HttpMethod.GET], integration, authorizer });
+  for (const path of [MUTATIONS_PATH, '/sync/protection-predecessor', '/sync/protected-mutations', '/sync/shared-mutations']) {
+    api.addRoutes({path: path.replace('/sync/', '/sync/v2/'), methods: [HttpMethod.POST], integration, authorizer});
+  }
+  api.addRoutes({path: '/sync/v2/changes', methods: [HttpMethod.GET], integration, authorizer});
+  for (const path of [MUTATIONS_PATH, '/sync/protection-predecessor', '/sync/protected-mutations', '/sync/shared-mutations']) {
+    api.addRoutes({path: path.replace('/sync/', '/sync/v3/'), methods: [HttpMethod.POST], integration, authorizer});
+  }
+  api.addRoutes({path: '/sync/v3/changes', methods: [HttpMethod.GET], integration, authorizer});
+  api.addRoutes({path: '/sync/v2/label-projections', methods: [HttpMethod.POST], integration, authorizer});
+  api.addRoutes({ path: '/me/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
+  api.addRoutes({ path: '/notes/{proxy+}', methods: [HttpMethod.GET, HttpMethod.POST], integration, authorizer });
 
   return { api, authorizer };
 };

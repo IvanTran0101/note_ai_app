@@ -1,0 +1,557 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NoteFlow runtime architecture",
+    "locale": "en",
+    "output": ".archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/IvanTran0101/note_ai_app.git",
+      "revision": "6f37931a9d82b74d400581af8b169d37be842729",
+      "provider": "github",
+      "link_mode": "local-only"
+    }
+  },
+  "components": [
+    {
+      "id": "flutter-ui",
+      "type": "frontend",
+      "label": "Flutter UI",
+      "sublabel": "Web / native notes workspace",
+      "pos": [
+        40,
+        330
+      ],
+      "size": [
+        175,
+        90
+      ],
+      "sources": [
+        {
+          "path": "lib/presentation/notes/note_detail_actions.dart",
+          "line": 123,
+          "end_line": 146,
+          "label": "Summary action and cancellation"
+        },
+        {
+          "path": "lib/presentation/notes/note_summary_controller.dart",
+          "line": 307,
+          "end_line": 329,
+          "label": "Dispatch selected note to use case"
+        }
+      ]
+    },
+    {
+      "id": "client-runtime",
+      "type": "backend",
+      "label": "Client runtime",
+      "sublabel": "Notes / Sync / Summary",
+      "pos": [
+        330,
+        320
+      ],
+      "size": [
+        205,
+        110
+      ],
+      "sources": [
+        {
+          "path": "lib/main.dart",
+          "line": 479,
+          "end_line": 495,
+          "label": "Application ports and Summary wiring"
+        },
+        {
+          "path": "lib/infrastructure/note_intelligence/summary_run_runtime.dart",
+          "line": 131,
+          "end_line": 166,
+          "label": "Consent guard and remote orchestration"
+        },
+        {
+          "path": "lib/infrastructure/sync/account_sync_runtime.dart",
+          "line": 75,
+          "end_line": 104,
+          "label": "Account store and HTTP sync adapter"
+        }
+      ],
+      "tag": "remote + consent"
+    },
+    {
+      "id": "local-state",
+      "type": "database",
+      "label": "Local account state",
+      "sublabel": "Encrypted state + outbox",
+      "pos": [
+        330,
+        90
+      ],
+      "size": [
+        205,
+        86
+      ],
+      "sources": [
+        {
+          "path": "lib/infrastructure/sync/local_sync_store.dart",
+          "line": 1,
+          "end_line": 25,
+          "label": "Native files / Web IndexedDB"
+        },
+        {
+          "path": "lib/infrastructure/security/encrypted_sync_store.dart",
+          "line": 97,
+          "end_line": 151,
+          "label": "Encrypted CAS reads and writes"
+        },
+        {
+          "path": "lib/infrastructure/sync/local_sync_store_web.dart",
+          "line": 72,
+          "end_line": 104,
+          "label": "Atomic IndexedDB commit"
+        }
+      ]
+    },
+    {
+      "id": "cognito",
+      "type": "security",
+      "label": "Amazon Cognito",
+      "sublabel": "Sign in / session tokens",
+      "pos": [
+        700,
+        90
+      ],
+      "size": [
+        195,
+        86
+      ],
+      "sources": [
+        {
+          "path": "amplify/auth/resource.ts",
+          "line": 16,
+          "end_line": 23,
+          "label": "Managed email authentication"
+        },
+        {
+          "path": "lib/infrastructure/auth/cognito_authentication_service.dart",
+          "line": 76,
+          "end_line": 90,
+          "label": "Client SDK sign in"
+        },
+        {
+          "path": "amplify/backend.ts",
+          "line": 58,
+          "end_line": 66,
+          "label": "Unauthenticated identities disabled"
+        }
+      ]
+    },
+    {
+      "id": "http-apis",
+      "type": "cloud",
+      "label": "HTTP API gateways",
+      "sublabel": "Cognito JWT authorizers",
+      "pos": [
+        700,
+        330
+      ],
+      "size": [
+        195,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/ai/infrastructure.ts",
+          "line": 140,
+          "end_line": 169,
+          "label": "JWT protected Summary route"
+        },
+        {
+          "path": "amplify/sync/http_api.ts",
+          "line": 75,
+          "end_line": 111,
+          "label": "JWT protected Sync / notes routes"
+        },
+        {
+          "path": "lib/infrastructure/note_intelligence/summary_http_gateway.dart",
+          "line": 227,
+          "end_line": 257,
+          "label": "Bearer request dispatch"
+        }
+      ],
+      "tag": "JWT required"
+    },
+    {
+      "id": "summary-lambda",
+      "type": "backend",
+      "label": "Summary Lambda",
+      "sublabel": "ACL / revision / quota",
+      "pos": [
+        1050,
+        330
+      ],
+      "size": [
+        205,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/ai/lambda.ts",
+          "line": 26,
+          "end_line": 51,
+          "label": "Secret / authority / quota composition"
+        },
+        {
+          "path": "amplify/ai/summary_handler.ts",
+          "line": 252,
+          "end_line": 293,
+          "label": "Revalidation before and after generation"
+        },
+        {
+          "path": "amplify/ai/summary_note_authority.ts",
+          "line": 37,
+          "end_line": 86,
+          "label": "Canonical note and stage lineage"
+        }
+      ],
+      "tag": "Fail closed"
+    },
+    {
+      "id": "deepseek",
+      "type": "external",
+      "label": "DeepSeek API",
+      "sublabel": "deepseek-flash",
+      "pos": [
+        1430,
+        330
+      ],
+      "size": [
+        185,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/ai/deepseek_client.ts",
+          "line": 275,
+          "end_line": 294,
+          "label": "HTTPS generation with server key"
+        },
+        {
+          "path": "amplify/ai/deepseek_client.ts",
+          "line": 325,
+          "end_line": 353,
+          "label": "Frozen model and stage budget"
+        },
+        {
+          "path": "amplify/ai/deepseek_client.ts",
+          "line": 243,
+          "end_line": 267,
+          "label": "Reject partial output / validate usage"
+        }
+      ]
+    },
+    {
+      "id": "sync-lambda",
+      "type": "backend",
+      "label": "Sync / security Lambda",
+      "sublabel": "Notes / ACL / attachments",
+      "pos": [
+        700,
+        590
+      ],
+      "size": [
+        195,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/backend.ts",
+          "line": 24,
+          "end_line": 37,
+          "label": "Compose the Sync backend"
+        },
+        {
+          "path": "amplify/sync/dynamo_sync_store.ts",
+          "line": 263,
+          "end_line": 283,
+          "label": "Conditional transaction commit"
+        },
+        {
+          "path": "amplify/attachments/s3_object_store.ts",
+          "line": 15,
+          "end_line": 35,
+          "label": "Presign and pin attachment object"
+        }
+      ]
+    },
+    {
+      "id": "dynamodb",
+      "type": "database",
+      "label": "Amazon DynamoDB",
+      "sublabel": "Notes / run ledger / quota",
+      "pos": [
+        1050,
+        590
+      ],
+      "size": [
+        205,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/ai/infrastructure.ts",
+          "line": 118,
+          "end_line": 137,
+          "label": "Quota table and scoped IAM"
+        },
+        {
+          "path": "amplify/ai/summary_note_authority.ts",
+          "line": 58,
+          "end_line": 86,
+          "label": "Conditional stage run reservation"
+        },
+        {
+          "path": "amplify/sync/dynamo_sync_store.ts",
+          "line": 263,
+          "end_line": 283,
+          "label": "Canonical mutation transaction"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "type": "cloud",
+      "label": "Amazon S3",
+      "sublabel": "Private versioned attachments",
+      "pos": [
+        700,
+        850
+      ],
+      "size": [
+        195,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/attachments/infrastructure.ts",
+          "line": 8,
+          "end_line": 32,
+          "label": "Private SSL / versioning / retention"
+        },
+        {
+          "path": "amplify/attachments/s3_object_store.ts",
+          "line": 15,
+          "end_line": 35,
+          "label": "Presigned staging and exact version"
+        },
+        {
+          "path": "amplify/attachments/s3_object_store.ts",
+          "line": 55,
+          "end_line": 87,
+          "label": "Finalize object bytes"
+        }
+      ]
+    },
+    {
+      "id": "realtime",
+      "type": "messagebus",
+      "label": "Realtime notifications",
+      "sublabel": "Relay + AppSync Events",
+      "pos": [
+        1050,
+        850
+      ],
+      "size": [
+        205,
+        90
+      ],
+      "sources": [
+        {
+          "path": "amplify/realtime/infrastructure.ts",
+          "line": 12,
+          "end_line": 53,
+          "label": "JWT channels / stream / retry schedule"
+        },
+        {
+          "path": "amplify/realtime/handler.ts",
+          "line": 9,
+          "end_line": 32,
+          "label": "Relay execution and ACL lookup"
+        },
+        {
+          "path": "lib/main_realtime.dart",
+          "line": 61,
+          "end_line": 76,
+          "label": "WebSocket events request HTTP sync"
+        }
+      ],
+      "tag": "Owner-scoped"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Client device - locally held state / untrusted requests",
+      "wraps": [
+        "flutter-ui",
+        "client-runtime",
+        "local-state"
+      ],
+      "pad": 26
+    },
+    {
+      "kind": "region",
+      "label": "AWS-managed backend - Cognito / IAM authorization",
+      "wraps": [
+        "cognito",
+        "http-apis",
+        "summary-lambda",
+        "sync-lambda",
+        "dynamodb",
+        "s3",
+        "realtime"
+      ],
+      "pad": 26
+    },
+    {
+      "kind": "region",
+      "label": "External AI provider - content leaves AWS",
+      "wraps": [
+        "deepseek"
+      ],
+      "pad": 26
+    }
+  ],
+  "connections": [
+    {
+      "id": "ui-summary",
+      "from": "flutter-ui",
+      "to": "client-runtime",
+      "label": "Summarize",
+      "variant": "emphasis"
+    },
+    {
+      "id": "client-summary-http",
+      "from": "client-runtime",
+      "to": "http-apis",
+      "label": "HTTPS + JWT",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-summary",
+      "from": "http-apis",
+      "to": "summary-lambda",
+      "label": "POST /ai/summary",
+      "variant": "emphasis"
+    },
+    {
+      "id": "guarded-provider",
+      "from": "summary-lambda",
+      "to": "deepseek",
+      "label": "Guarded HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "client-local-state",
+      "from": "client-runtime",
+      "to": "local-state",
+      "label": "Atomic state"
+    },
+    {
+      "id": "client-signin",
+      "from": "client-runtime",
+      "to": "cognito",
+      "label": "Sign in / JWT",
+      "variant": "security"
+    },
+    {
+      "id": "gateway-sync",
+      "from": "http-apis",
+      "to": "sync-lambda",
+      "label": "Other routes"
+    },
+    {
+      "id": "sync-note-writes",
+      "from": "sync-lambda",
+      "to": "dynamodb",
+      "label": "Conditional TXN"
+    },
+    {
+      "id": "summary-authority",
+      "from": "summary-lambda",
+      "to": "dynamodb",
+      "label": "Authority + quota",
+      "variant": "security"
+    },
+    {
+      "id": "backend-object-verify",
+      "from": "sync-lambda",
+      "to": "s3",
+      "label": "Pin / finalize"
+    },
+    {
+      "id": "change-events",
+      "from": "dynamodb",
+      "to": "realtime",
+      "label": "EVENT# inserts",
+      "variant": "dashed"
+    },
+    {
+      "id": "realtime-revision-hints",
+      "from": "realtime",
+      "to": "client-runtime",
+      "label": "WS revision hints",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One primary journey: cloud Summary",
+      "items": [
+        "The bright path follows a saved note from Flutter to DeepSeek. UI acceptance occurs only while the selected snapshot and session remain current.",
+        "Client-side RemoteSummarizationService chooses one direct call or sequential sections plus one merge; the backend does not orchestrate the whole pipeline.",
+        "The shared policy budgets 16,000 estimated input tokens, 128 section / 256 final output tokens, up to four sections + merge. No automatic generation retry; one HTTP token-refresh resend on 401 is separate.",
+        "The response returns through the same request path. Backend and client validate it; non-stop / partial provider output is refused."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries and authority",
+      "items": [
+        "Client gates improve UX but do not establish server authority. HTTP APIs verify Cognito JWTs; Summary also requires an access-token subject and current consent declaration.",
+        "Summary Lambda rereads note ownership/access, protection grant and revisions before generation and before accepting the result. The conditional run ledger binds sections and merge inputs.",
+        "The DeepSeek key is an Amplify backend secret, resolved inside Lambda. Flutter receives public deployment configuration and Cognito session tokens, never the provider key.",
+        "Drawn boundaries express ownership/trust, not VPC security groups. Only authorized Summary content crosses into the external provider."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Local-first state and durable synchronization",
+      "items": [
+        "Per-account encrypted state uses IndexedDB on Web and app-support files on native platforms. Atomic compare-and-set protects a newer snapshot from stale writers.",
+        "Application/domain ports isolate SDK details; the SyncCoordinator owns outbox push/pull and conflict handling. Labels and preferences share the account store.",
+        "Sync/security handlers own canonical note transactions, ACL and protected-note operations. Client state is not the source of truth for cloud authorization."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Supporting I/O: attachments and realtime",
+      "items": [
+        "S3 arrows show backend verification/finalization. Presigned staging PUT capabilities allow direct client uploads; URL and checksum/version steps are abbreviated here.",
+        "The attachment bucket is private, TLS-only, versioned and retained. Web uploads require an explicitly allowed HTTPS origin; no bucket access is implied by a diagram arrow.",
+        "EVENT# inserts trigger a relay; a one-minute EventBridge rule retries outstanding work. AppSync scopes subscriptions to the authenticated actor and uses IAM publication.",
+        "WebSocket payloads are revision hints, not canonical note reads. The client requests HTTP synchronization after receiving them."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Snapshot, alternatives and scope",
+      "items": [
+        "Source snapshot: final-tuankiet at 6f37931. The original project is the evidence root; the older worktree was not used. Component citations are pinned to committed source.",
+        "Remote Summary requires explicit NOTEFLOW_AI_MODE=remote, Cognito and a valid HTTPS endpoint. Blank/local mode instead uses the native local worker; Web local inference is unavailable.",
+        "Native local inference remains an optional worker / LocalLlmBridge path (main.dart:971-993). Hosting on Mac mini / Cloudflare and RAG proposals are outside this runtime view.",
+        "Graph MCP was unavailable; the local index excludes Dart. Exact source and call sites were inspected. This diagram proves code wiring, not a fresh deployment or live-provider acceptance."
+      ]
+    }
+  ]
+}

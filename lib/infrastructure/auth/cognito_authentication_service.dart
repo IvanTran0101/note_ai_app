@@ -26,7 +26,10 @@ import 'cognito_identity_mapper.dart';
 final class CognitoAuthenticationService implements IAuthenticationService {
   /// Creates the adapter over the Amplify singleton configured by
   /// `configureAmplifyAuthCognito`.
-  const CognitoAuthenticationService();
+  const CognitoAuthenticationService({this.observedIdentityReader});
+
+  /// Optional identity reader for deterministic Hub race checks.
+  final Future<AuthIdentity?> Function()? observedIdentityReader;
 
   /// Translates Cognito user data into NoteFlow identities.
   static const CognitoIdentityMapper _identities = CognitoIdentityMapper();
@@ -112,18 +115,20 @@ final class CognitoAuthenticationService implements IAuthenticationService {
   Stream<AuthIdentity?> observeAuthState() {
     late final StreamController<AuthIdentity?> controller;
     StreamSubscription<AuthHubEvent>? subscription;
+    int eventGeneration = 0;
 
-    Future<void> publishIdentity() async {
+    Future<void> publishIdentity(int capturedGeneration) async {
       try {
-        final AuthIdentity? identity = await getCurrentIdentity();
-        if (!controller.isClosed) {
+        final AuthIdentity? identity =
+            await (observedIdentityReader ?? getCurrentIdentity)();
+        if (!controller.isClosed && capturedGeneration == eventGeneration) {
           controller.add(identity);
         }
       } on AuthenticationFailure catch (failure) {
         // A signed-in event whose identity cannot be read is reported as an
         // error rather than as a signed-out value: claiming "no user" would
         // drop a session that may still be valid.
-        if (!controller.isClosed) {
+        if (!controller.isClosed && capturedGeneration == eventGeneration) {
           controller.addError(failure);
         }
       }
@@ -136,10 +141,11 @@ final class CognitoAuthenticationService implements IAuthenticationService {
         ) {
           switch (event.type) {
             case AuthHubEventType.signedIn:
-              unawaited(publishIdentity());
+              unawaited(publishIdentity(++eventGeneration));
             case AuthHubEventType.signedOut:
             case AuthHubEventType.sessionExpired:
             case AuthHubEventType.userDeleted:
+              eventGeneration++;
               if (!controller.isClosed) {
                 controller.add(null);
               }
@@ -147,6 +153,7 @@ final class CognitoAuthenticationService implements IAuthenticationService {
         });
       },
       onCancel: () async {
+        eventGeneration++;
         // The Hub listener is cancelled with the subscription, so a screen that
         // stops listening does not leave a listener behind.
         await subscription?.cancel();
@@ -273,6 +280,12 @@ final class CognitoAuthenticationService implements IAuthenticationService {
     final List<AuthUserAttribute> attributes = await _guard(
       () => Amplify.Auth.fetchUserAttributes(),
     );
+    final current = await _readCurrentUser();
+    if (current?.userId != user.userId) {
+      throw const AuthenticationFailure(
+        AuthenticationFailureCode.unauthenticated,
+      );
+    }
     return _identities.map(user: user, attributes: attributes);
   }
 }

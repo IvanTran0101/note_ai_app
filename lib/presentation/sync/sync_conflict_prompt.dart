@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_conflict_resolver.dart';
 import '../../application/sync/sync_snapshot.dart';
+import '../notes/notes_theme_tokens.dart';
 import 'sync_localizations.dart';
+import '../../application/sync/sync_metadata_projection.dart';
+import '../notes/note_security_localizations.dart';
 
 enum SyncDirtyDraftChoice { saveAsNew, discard, cancel }
 
@@ -11,11 +14,13 @@ Future<SyncConflictChoice?> showSyncConflictChoices({
   required BuildContext context,
   required SyncConflict conflict,
 }) {
+  conflict = SyncMetadataProjection.conflict(conflict);
   final SyncCopy copy = SyncCopy.of(context);
   final bool compact = MediaQuery.sizeOf(context).width < 600;
   if (compact) {
     return showModalBottomSheet<SyncConflictChoice>(
       context: context,
+      sheetAnimationStyle: NoteFlowMotion.dialogStyle(context),
       isScrollControlled: true,
       builder: (BuildContext context) => SafeArea(
         child: SingleChildScrollView(
@@ -31,6 +36,7 @@ Future<SyncConflictChoice?> showSyncConflictChoices({
   }
   return showDialog<SyncConflictChoice>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
@@ -49,10 +55,12 @@ Future<SyncConflictChoice?> showSyncConflictChoices({
 
 Future<SyncDirtyDraftChoice?> showSyncDirtyDraftChoices({
   required BuildContext context,
+  bool allowSaveAsNew = true,
 }) {
   final SyncCopy copy = SyncCopy.of(context);
   return showDialog<SyncDirtyDraftChoice>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) => AlertDialog(
       title: Text(copy.draftConflictTitle),
       content: Text(copy.draftConflictMessage),
@@ -69,12 +77,13 @@ Future<SyncDirtyDraftChoice?> showSyncDirtyDraftChoices({
               Navigator.of(context).pop(SyncDirtyDraftChoice.discard),
           child: Text(copy.discardDraftAndContinue),
         ),
-        FilledButton(
-          key: const ValueKey<String>('sync-draft-save-as-new'),
-          onPressed: () =>
-              Navigator.of(context).pop(SyncDirtyDraftChoice.saveAsNew),
-          child: Text(copy.saveAsNew),
-        ),
+        if (allowSaveAsNew)
+          FilledButton(
+            key: const ValueKey<String>('sync-draft-save-as-new'),
+            onPressed: () =>
+                Navigator.of(context).pop(SyncDirtyDraftChoice.saveAsNew),
+            child: Text(copy.saveAsNew),
+          ),
       ],
     ),
   );
@@ -94,19 +103,24 @@ final class _SyncConflictChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SyncNoteSnapshot? remote = conflict.remote;
+    final securityCopy = NoteSecurityCopy(context);
+    final hide =
+        conflict.local.protection.enabled || !conflict.local.contentAvailable;
     final Widget local = _VersionCard(
       label: copy.localVersion,
-      title: conflict.local.title,
-      content: conflict.local.content,
+      title: hide ? securityCopy.protectedNote : conflict.local.title,
+      content: hide ? securityCopy.locked : conflict.local.content,
       detail: copy.noteStatus(conflict.local.status),
     );
     final Widget server = _VersionCard(
       label: copy.remoteVersion,
-      title: remote?.title ?? '',
+      title: hide ? securityCopy.protectedNote : remote?.title ?? '',
       content: remote == null
           ? copy.remoteMissing
           : remote.isDeleted
           ? copy.remoteDeleted
+          : hide
+          ? securityCopy.locked
           : remote.content,
       detail: remote == null
           ? copy.remoteMissing

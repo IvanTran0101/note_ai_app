@@ -1,3 +1,5 @@
+import '../../support/legacy_label_fields.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
 import 'package:note_ai_app/application/sync/local_sync_state.dart';
@@ -11,6 +13,34 @@ import 'package:note_ai_app/infrastructure/sync/local_sync_state_codec.dart';
 import 'local_sync_codec_fixtures.dart';
 
 void main() {
+  test(
+    'inner v4 migration preserves pins, preferences and attempted payloads',
+    () {
+      final state = richStateFixture();
+      final encoded = LocalSyncStateCodec.encode(state);
+      encoded['schemaVersion'] = 4;
+      stripM04Fields(encoded);
+      for (final raw in encoded['notes']! as List<Object?>) {
+        (raw! as Map<String, Object?>).remove('attachments');
+      }
+      for (final raw in encoded['conflicts']! as List<Object?>) {
+        final conflict = raw! as Map<String, Object?>;
+        (conflict['local']! as Map<String, Object?>).remove('attachments');
+        final remote = conflict['remote'] as Map<String, Object?>?;
+        remote?.remove('attachments');
+        remote?.remove('includesAttachments');
+      }
+      final migrated = LocalSyncStateCodec.decode(encoded);
+      expect(migrated.notes, state.notes);
+      expect(migrated.outbox, state.outbox);
+      expect(migrated.conflicts, state.conflicts);
+      expect(migrated.cursor, state.cursor);
+      expect(migrated.syncWireVersion, 1);
+      expect(LocalSyncStateCodec.encode(migrated)['outbox'], encoded['outbox']);
+      expect(migrated.userPreferences, state.userPreferences);
+    },
+  );
+
   group('envelope round trip', () {
     test('decodes an encoded account state into an equal state', () {
       final LocalSyncState state = richStateFixture();
@@ -26,28 +56,35 @@ void main() {
       expect(decoded.cursor, const SyncCursor('opaque-cursor-1'));
     });
 
-    test('writes exactly the frozen envelope fields at schema version 2', () {
-      final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
-        richStateFixture(),
-      );
+    test(
+      'writes exactly the frozen envelope fields at inner schema version 7',
+      () {
+        final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
+          richStateFixture(),
+        );
 
-      expect(LocalSyncStateCodec.schemaVersion, 2);
-      expect(LocalSyncSchema.version, 2);
-      expect(envelope.keys.toSet(), <String>{
-        'schemaVersion',
-        'accountUserId',
-        'notes',
-        'outbox',
-        'cursor',
-        'conflicts',
-      });
-      expect(envelope['schemaVersion'], 2);
-      expect(envelope['accountUserId'], 'user-1');
-      expect(envelope['cursor'], 'opaque-cursor-1');
-      expect(envelope['notes'], isA<List<Object?>>());
-      expect(envelope['outbox'], isA<List<Object?>>());
-      expect(envelope['conflicts'], isA<List<Object?>>());
-    });
+        expect(LocalSyncStateCodec.schemaVersion, 7);
+        expect(LocalSyncSchema.version, 7);
+        expect(envelope.keys.toSet(), <String>{
+          'schemaVersion',
+          'accountUserId',
+          'notes',
+          'outbox',
+          'cursor',
+          'conflicts',
+          'userPreferences',
+          'labels',
+          'syncWireVersion',
+        });
+        expect(envelope['schemaVersion'], 7);
+        expect(envelope['accountUserId'], 'user-1');
+        expect(envelope['cursor'], 'opaque-cursor-1');
+        expect(envelope['notes'], isA<List<Object?>>());
+        expect(envelope['outbox'], isA<List<Object?>>());
+        expect(envelope['conflicts'], isA<List<Object?>>());
+        expect(envelope['userPreferences'], isA<Map<String, Object?>>());
+      },
+    );
 
     test('round-trips an empty account with an explicit null cursor', () {
       final LocalSyncState state = LocalSyncState(accountUserId: 'user-1');
@@ -73,7 +110,10 @@ void main() {
       final Map<String, Object?> tombstone = copyRecord(
         (envelope['notes']! as List<Object?>)[2],
       );
-      expect(tombstone.keys.toSet(), LocalSyncSchema.noteFields);
+      expect(
+        tombstone.keys.toSet(),
+        LocalSyncSchema.noteFields.difference({'document'}),
+      );
       expect(tombstone['deletedAt'], fixtureUpdatedAt.toIso8601String());
       expect(tombstone['status'], 'conflict');
       expect(tombstone['serverRevision'], 4);
@@ -105,7 +145,11 @@ void main() {
       final Map<String, Object?> liveRemote = copyRecord(
         copyRecord(conflicts[0])['remote'],
       );
-      expect(liveRemote.keys.toSet(), LocalSyncSchema.snapshotFields);
+      expect(liveRemote.keys.toSet(), {
+        ...LocalSyncSchema.snapshotFields.difference({'document'}),
+        'includesAttachments',
+        'includesLabels',
+      });
       expect(liveRemote['revision'], 5);
       expect(liveRemote['serverUpdatedAt'], fixtureUpdatedAt.toIso8601String());
       expect(liveRemote['deletedAt'], isNull);
@@ -115,6 +159,88 @@ void main() {
       );
       expect(tombstoneRemote['deletedAt'], fixtureUpdatedAt.toIso8601String());
     });
+
+    test('migrates schema 2 without changing attempted mutations', () {
+      final LocalSyncState state = richStateFixture();
+      final Map<String, Object?> legacy = LocalSyncStateCodec.encode(state)
+        ..['schemaVersion'] = 2
+        ..remove('userPreferences');
+      stripM04Fields(legacy);
+
+      final List<Object?> oldConflicts = legacy['conflicts']! as List<Object?>;
+      for (int i = 0; i < oldConflicts.length; i++) {
+        final Map<String, Object?> conflict = copyRecord(oldConflicts[i]);
+        final Map<String, Object?> local = copyRecord(conflict['local'])
+          ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+        final Object? remoteValue = conflict['remote'];
+        Map<String, Object?>? remote;
+        if (remoteValue != null) {
+          remote = copyRecord(remoteValue)
+            ..remove('pinnedAt')
+            ..remove('attachments')
+            ..remove('includesAttachments')
+            ..remove('protected')
+            ..remove('protectionRevision')
+            ..remove('contentAvailable');
+        }
+        oldConflicts[i] = <String, Object?>{
+          ...conflict,
+          'local': local,
+          'remote': remote,
+        };
+      }
+      final List<Object?> notes = legacy['notes']! as List<Object?>;
+      for (int i = 0; i < notes.length; i++) {
+        notes[i] = copyRecord(notes[i])
+          ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+      }
+
+      final LocalSyncState migrated = LocalSyncStateCodec.decode(legacy);
+
+      expect(migrated.outbox, state.outbox);
+      expect(migrated.conflicts, state.conflicts);
+      expect(
+        migrated.notes.every((LocalNoteState note) => note.pinnedAt == null),
+        isTrue,
+      );
+      expect(migrated.userPreferences.noteLayout.name, 'grid');
+      expect(migrated.userPreferences.userId, state.accountUserId);
+    });
+
+    test(
+      'rejects schema 2 records that contain fields from a newer schema',
+      () {
+        final Map<String, Object?> legacy =
+            LocalSyncStateCodec.encode(simpleStateFixture())
+              ..['schemaVersion'] = 2
+              ..remove('userPreferences');
+        stripM04Fields(legacy);
+        final List<Object?> notes = legacy['notes']! as List<Object?>;
+        notes[0] = copyRecord(notes[0])..['unexpected'] = true;
+        notes[0] = copyRecord(notes[0])
+          ..remove('pinnedAt')
+          ..remove('attachments')
+          ..remove('includesAttachments')
+          ..remove('protected')
+          ..remove('protectionRevision')
+          ..remove('contentAvailable');
+
+        expect(
+          () => LocalSyncStateCodec.decode(legacy),
+          throwsA(isA<LocalSyncCodecException>()),
+        );
+      },
+    );
   });
 
   group('cursor opacity', () {
@@ -211,6 +337,9 @@ void main() {
         'outbox',
         'cursor',
         'conflicts',
+        'userPreferences',
+        'labels',
+        'syncWireVersion',
       ]) {
         final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
           simpleStateFixture(),
@@ -225,22 +354,35 @@ void main() {
       }
     });
 
-    test('rejects any schema version but 2', () {
-      final List<Object?> versions = <Object?>[0, 1, 3, '2', 2.0, null, true];
+    test(
+      'rejects versions outside v2/v3/v4/v5/v6 legacy and v7 current contract',
+      () {
+        // Web numbers erase the int/double distinction for integral values.
+        // A fractional version is invalid on both runtimes.
+        final List<Object?> versions = <Object?>[
+          0,
+          1,
+          8,
+          '3',
+          3.25,
+          null,
+          true,
+        ];
 
-      for (final Object? version in versions) {
-        final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
-          simpleStateFixture(),
-        )..['schemaVersion'] = version;
+        for (final Object? version in versions) {
+          final Map<String, Object?> envelope = LocalSyncStateCodec.encode(
+            simpleStateFixture(),
+          )..['schemaVersion'] = version;
 
-        final LocalSyncCodecException error = codecFailure(
-          () => LocalSyncStateCodec.decode(envelope),
-        );
+          final LocalSyncCodecException error = codecFailure(
+            () => LocalSyncStateCodec.decode(envelope),
+          );
 
-        expect(error.path, 'localSyncState.schemaVersion');
-        expect(error, isA<LocalSyncCodecException>());
-      }
-    });
+          expect(error.path, 'localSyncState.schemaVersion');
+          expect(error, isA<LocalSyncCodecException>());
+        }
+      },
+    );
 
     test('rejects a wrong-typed or blank account id', () {
       final Map<String, Object?> wrongType = LocalSyncStateCodec.encode(

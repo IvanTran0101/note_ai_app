@@ -1,0 +1,65 @@
+{
+  "version": "rag-phase4-private.v2-gold1-fresh1",
+  "approvedAt": "2026-10-12",
+  "status": "PASS_SYNTHETIC_PRIVATE",
+  "publicRuntimeEnabled": false,
+  "syntheticOnly": true,
+  "jev": {
+    "model": "jev-1.13.0",
+    "questionSetVersion": "rag-evidence.v2",
+    "thresholdsSource": "development-only",
+    "thresholds": {
+      "answerabilityMin": 0.85,
+      "conflictMax": 0.1
+    },
+    "promotionAllowed": true,
+    "promotionScope": "private-synthetic-only"
+  },
+  "generation": {
+    "model": "deepseek-flash",
+    "thinking": "disabled",
+    "stream": false,
+    "outputMaxTokens": 1024,
+    "providerDto": [
+      "answer",
+      "sourceIds"
+    ],
+    "wireDtoUnchanged": true,
+    "language": "question",
+    "promptVersion": "rag-generation.v2-inline-citations"
+  },
+  "limits": {
+    "requestMs": 26000,
+    "retrievalMs": 6000,
+    "jevMs": 4000,
+    "generationMs": 13000,
+    "responseBytes": 65536,
+    "evidenceDeepSeekTokens": 6000,
+    "jevInputUpperBound": 32000,
+    "jevAdmission": "conservative-UTF8-bytes-plus512-not-exact-tokenizer",
+    "lambdaMemoryMb": 512,
+    "lambdaTimeoutSeconds": 28,
+    "reservedConcurrency": 1
+  },
+  "budget": {
+    "jevCalls": 176,
+    "deepseekCalls": 24,
+    "cohereCalls": 8,
+    "privateQueries": 8,
+    "externalTargetUsd": 1,
+    "accountHardBillingCap": false,
+    "reservationsRefunded": false
+  },
+  "calibration": {
+    "fixtures": 64,
+    "development": 32,
+    "confirmation": 32,
+    "vi": 32,
+    "en": 32,
+    "humanReviewed": false,
+    "confirmationUnsafeAllowMaximum": 0,
+    "confirmationAnswerableAllowMinimum": 0.75,
+    "fixtureVersion": "rag-phase4-fixtures.v2-gold1-fresh1",
+    "calibrationVersion": "rag-phase4-calibration.v2-gold1-fresh1"
+  }
+}

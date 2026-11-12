@@ -3,7 +3,12 @@
  * document client avoids AWS calls and simulates eventual GSI visibility.
  * Run with `npx tsx amplify/sync/dynamo_sync_store.test.ts`.
  */
-import { QueryCommand, type DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  type DynamoDBDocumentClient,
+} from '@aws-sdk/lib-dynamodb';
 
 import { decodeChangeCursor } from './cursor';
 import { DynamoSyncStore } from './dynamo_sync_store';
@@ -51,6 +56,52 @@ const storeWithVisibleRows = (getRows: () => Record<string, unknown>[]): DynamoS
   return new DynamoSyncStore({ tableName: 'notes', documentClient });
 };
 
+const applyUpdate = async (pinnedAt?: string | null) => {
+  const existingPin = '2026-09-25T09:00:00.000Z';
+  let writtenPin: unknown;
+  let transactions = 0;
+  const remote = {
+    id: 'note-1',
+    title: 'Old title',
+    content: 'Old body',
+    revision: 4,
+    createdAt: '2026-09-24T00:00:00.000Z',
+    serverUpdatedAt: '2026-09-25T08:00:00.000Z',
+    pinnedAt: existingPin,
+    deletedAt: null,
+  };
+  const documentClient = {
+    async send(command: unknown) {
+      if (command instanceof GetCommand) {
+        const sortKey = command.input.Key?.noteId;
+        return sortKey === 'NOTE#note-1' ? { Item: remote } : {};
+      }
+      if (command instanceof TransactWriteCommand) {
+        transactions++;
+        const notePut = command.input.TransactItems?.find((item) =>
+          (item.Put?.Item as Record<string, unknown> | undefined)?.noteId === 'NOTE#note-1',
+        );
+        writtenPin = (notePut?.Put?.Item as Record<string, unknown> | undefined)?.pinnedAt;
+      }
+      return {};
+    },
+  } as unknown as DynamoDBDocumentClient;
+  const store = new DynamoSyncStore({ tableName: 'notes', documentClient });
+  const result = await store.applyMutation('user-1', {
+    mutationId: 'mutation-pin',
+    noteId: 'note-1',
+    operation: 'update',
+    baseRevision: 4,
+    payload: {
+      title: 'New title',
+      content: 'New body',
+      ...(pinnedAt === undefined ? {} : { pinnedAt }),
+    },
+  });
+  if (result.status !== 'applied') throw new Error('expected an applied update');
+  return { note: result.note, writtenPin, transactions };
+};
+
 const main = async (): Promise<void> => {
   let visibleRows = [change(1), change(3), change(4)];
   const store = storeWithVisibleRows(() => visibleRows);
@@ -61,6 +112,7 @@ const main = async (): Promise<void> => {
     assertEqual(first.items[0]?.id, 'note-1', 'first item');
     assertEqual(decodeChangeCursor(first.nextCursor, 'user-1'), 1, 'cursor before gap');
     assertEqual(first.hasMore, false, 'a known gap stops this poll');
+    assertEqual(first.catchUpPending, true, 'realtime must retry this gap');
 
     visibleRows = [change(2), change(3), change(4)];
     const recovered = await store.listChanges('user-1', first.nextCursor, 50);
@@ -87,6 +139,30 @@ const main = async (): Promise<void> => {
     assertEqual(last.items.length, 1, 'last page size');
     assertEqual(last.hasMore, false, 'last page status');
     assertEqual(decodeChangeCursor(last.nextCursor, 'user-3'), 3, 'last page cursor');
+  });
+
+  await check('an update without pinnedAt preserves the owner pin', async () => {
+    const result = await applyUpdate();
+    assertEqual(result.note.pinnedAt, '2026-09-25T09:00:00.000Z', 'returned pin');
+    assertEqual(result.writtenPin, '2026-09-25T09:00:00.000Z', 'stored pin');
+    assertEqual(result.transactions, 1, 'atomic transaction count');
+  });
+
+  await check('an explicit null pinnedAt unpins the owner note', async () => {
+    const result = await applyUpdate(null);
+    assertEqual(result.note.pinnedAt, null, 'returned pin');
+    assertEqual(result.writtenPin, null, 'stored pin');
+    assertEqual(result.transactions, 1, 'atomic transaction count');
+  });
+
+  await check('an empty eventual GSI still signals committed actor-feed catch-up', async () => {
+    const documentClient = { async send(command: unknown) {
+      return command instanceof GetCommand ? { Item: { lastSequence: 1 } } : { Items: [] };
+    } } as unknown as DynamoDBDocumentClient;
+    const current = new DynamoSyncStore({ tableName: 'notes', documentClient, sharing: true });
+    const page = await current.listChanges('user', null, 50);
+    assertEqual(page.catchUpPending, true, 'strong metadata detects invisible committed row');
+    assertEqual(decodeChangeCursor(page.nextCursor, 'user'), 0, 'never skip invisible change');
   });
 };
 

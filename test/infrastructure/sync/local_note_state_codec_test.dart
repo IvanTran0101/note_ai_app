@@ -20,7 +20,10 @@ void main() {
 
       expect(decoded, note);
       expect(decoded.isDeleted, isFalse);
-      expect(record.keys.toSet(), LocalSyncSchema.noteFields);
+      expect(
+        record.keys.toSet(),
+        LocalSyncSchema.noteFields.difference({'document'}),
+      );
       expect(record['createdAt'], fixtureCreatedAt.toIso8601String());
       expect(record['updatedAt'], fixtureUpdatedAt.toIso8601String());
       expect(record['deletedAt'], isNull);

@@ -1,0 +1,38 @@
+{
+  "version": "rag-index.v1",
+  "approvedAt": "2026-10-12",
+  "transport": "dynamodb-stream-to-lambda",
+  "sourceRows": ["NOTE#", "PROTECTION#", "RAG#CONSENT"],
+  "kinds": ["RECONCILE_NOTE", "RECONCILE_ACCOUNT"],
+  "canonicalAuthority": true,
+  "publication": "immutable-account-snapshot-canonical-epoch-consent-lease-and-generation-cas",
+  "leaseMs": 180000,
+  "workerTimeoutSeconds": 120,
+  "workerMemoryMb": 512,
+  "memoryAmendment": "user-approved-after-local-tokenizer-process-measured-280-MiB-not-Lambda-proof",
+  "reservedConcurrency": 1,
+  "stream": {
+    "enabledByDefault": false,
+    "startingPosition": "TRIM_HORIZON",
+    "batchSize": 10,
+    "batchingWindowSeconds": 5,
+    "parallelizationFactor": 1,
+    "maximumRetryAttempts": 2,
+    "maximumRecordAgeSeconds": 3600,
+    "reportBatchItemFailures": true
+  },
+  "sdkMaxAttempts": 1,
+  "failureDestination": "private-s3",
+  "failureRetentionDays": 7,
+  "failurePayloadMayContainNoteText": true,
+  "activeManifestAndConsentTtl": false,
+  "recovery": "IAM-manual-latest-canonical-backfill-and-retired-orphan-cleanup",
+  "logs": "metadata-only",
+  "smoke": {
+    "ownerPrefix": "rag-smoke-",
+    "globalEmbeddingInvocationLimit": 20,
+    "includesFailedAttemptsAndRetries": true,
+    "automaticReset": false,
+    "notBillingHardCap": true
+  }
+}

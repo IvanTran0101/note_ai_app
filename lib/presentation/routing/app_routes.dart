@@ -4,6 +4,7 @@ abstract final class AppRoutes {
   static const String home = '/';
   static const String notes = '/notes';
   static const String noteDetails = '/notes/:id';
+  static const String profile = '/settings/profile';
   static const String changePassword = '/settings/change-password';
 
   static const String login = '/login';

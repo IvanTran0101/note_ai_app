@@ -1,7 +1,27 @@
+import 'note_access.dart';
+import 'note_dto.dart';
+import 'note_editor_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
+
+export 'note_dto.dart';
+export '../../domain/users/user_preferences.dart';
+
 import '../../domain/note_intelligence/summary.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
+import '../../domain/notes/note_access_policy.dart';
 import '../../domain/notes/note_repository.dart';
+import '../../domain/users/user_preferences.dart';
+import '../../domain/users/user_preferences_repository.dart';
 import '../auth/current_user.dart';
+import '../auth/current_user_session.dart';
+import '../note_intelligence/summary_cloud_consent.dart';
+import '../note_intelligence/summary_run_context.dart';
+
+part 'note_application_summary.dart';
+part 'note_application_editor.dart';
+part 'note_application_mutations.dart';
+part 'note_application_preferences.dart';
 
 /// Creates identifiers for newly created notes.
 typedef NoteIdGenerator = String Function();
@@ -13,92 +33,39 @@ typedef NoteClock = DateTime Function();
 /// application layer.
 typedef SummarizeNoteContent = Future<Summary> Function(String content);
 
-/// A read-only application projection of the Note aggregate.
-///
-/// The DTO keeps presentation code independent from the domain aggregate's
-/// mutation methods while preserving the fields needed by the Notes UI.
-final class NoteDto {
-  const NoteDto({
-    required this.id,
-    required this.ownerId,
-    required this.title,
-    required this.content,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  /// Creates a presentation-safe projection from a domain Note.
-  factory NoteDto.fromDomain(Note note) {
-    return NoteDto(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-    );
-  }
-
-  final String id;
-  final String ownerId;
-  final String title;
-  final String content;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  @override
-  bool operator ==(Object other) {
-    return other is NoteDto &&
-        other.id == id &&
-        other.ownerId == ownerId &&
-        other.title == title &&
-        other.content == content &&
-        other.createdAt == createdAt &&
-        other.updatedAt == updatedAt;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(id, ownerId, title, content, createdAt, updatedAt);
-
-  @override
-  String toString() {
-    return 'NoteDto(id: $id, ownerId: $ownerId, title: $title, '
-        'content: $content, createdAt: $createdAt, updatedAt: $updatedAt)';
-  }
-}
-
-/// Raised when an application operation targets a note that does not exist.
-final class NoteNotFoundException implements Exception {
-  const NoteNotFoundException(this.noteId);
-
-  final String noteId;
-
-  @override
-  String toString() => 'NoteNotFoundException: note "$noteId" was not found';
-}
-
-/// Raised when the current user attempts to access another owner's note.
-final class NoteOwnershipException implements Exception {
-  const NoteOwnershipException({
-    required this.noteId,
-    required this.expectedOwnerId,
-    required this.actualOwnerId,
-  });
-
-  final String noteId;
-  final String expectedOwnerId;
-  final String actualOwnerId;
-
-  @override
-  String toString() {
-    return 'NoteOwnershipException: note "$noteId" belongs to '
-        '"$actualOwnerId", not "$expectedOwnerId"';
-  }
-}
-
 /// Requests a non-blocking sync after one local note mutation has persisted.
 typedef RequestNoteSync = void Function(String accountUserId);
+
+/// Dispatches one validated, note-aware summary run.
+typedef SummarizeNoteRun = Future<Summary> Function(SummaryRunContext context);
+
+/// Immutable note, account, session, consent, and cancellation facts for a run.
+final class SummaryRunContext {
+  const SummaryRunContext({
+    required this.noteSnapshot,
+    required this.accountUserId,
+    required this.sessionGeneration,
+    required this.consent,
+    required this.scope,
+  });
+
+  final NoteDto noteSnapshot;
+
+  final String accountUserId;
+
+  final int sessionGeneration;
+
+  final SummaryCloudConsentSnapshot consent;
+
+  final SummaryRunScope scope;
+
+  @override
+  String toString() {
+    return 'SummaryRunContext(accountUserId: $accountUserId, '
+        'sessionGeneration: $sessionGeneration, '
+        'noteId: ${noteSnapshot.id}, consentGranted: ${consent.isGranted})';
+  }
+}
 
 /// Application use cases for the Note aggregate.
 ///
@@ -114,7 +81,25 @@ final class NoteApplicationService {
     required this.now,
     required this.summarizeContent,
     this.requestSync,
+    this.userPreferencesRepository,
+    this.summarizeRun,
+    this.cloudConsent,
+    this.sessionGeneration,
+    this.security,
   });
+
+  final IUserPreferencesRepository? userPreferencesRepository;
+  Future<void> _preferenceWrite = Future<void>.value();
+
+  // Theme and layout share one snapshot; serialize both read-modify-write operations.
+  Future<void> _writePreference(Future<void> Function() write) {
+    final operation = _preferenceWrite.then((_) => write());
+    _preferenceWrite = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
 
   final INoteRepository noteRepository;
   final ICurrentUser currentUser;
@@ -122,86 +107,205 @@ final class NoteApplicationService {
   final NoteClock now;
   final SummarizeNoteContent summarizeContent;
   final RequestNoteSync? requestSync;
+  final INoteAccessGuard? security;
+  void _requireDocumentStorage() {
+    final Object repository = noteRepository;
+    if (repository is! INoteDocumentRepository ||
+        repository.documentVersion != NoteDocument.version) {
+      throw const NoteDocumentStorageUnavailable();
+    }
+  }
+
+  /// Optional note-snapshot-aware dispatcher supplied by the composition root.
+  ///
+  /// When set, [summarizeNote] dispatches through it with a validated
+  /// [SummaryRunContext]; otherwise the local [summarizeContent] seam runs.
+  final SummarizeNoteRun? summarizeRun;
+
+  /// In-memory cloud consent captured into every run context.
+  ///
+  /// When null, each run captures a not-granted snapshot, so a missing store
+  /// fails closed instead of inventing consent.
+  final SummaryCloudConsent? cloudConsent;
+
+  /// Overrides how the session generation is read.
+  ///
+  /// Defaults to [currentUser] when it implements [SessionGenerationSource],
+  /// and to 0 otherwise.
+  final SessionGenerationReader? sessionGeneration;
 
   /// Lists the notes owned by the authenticated user.
   Future<List<NoteDto>> listNotes() async {
-    final String userId = currentUser.requiredUserId;
+    final context = _captureContext();
+    final String userId = context.userId;
     final List<Note> notes = await noteRepository.findByOwnerId(userId);
+    _requireContext(context);
     return notes.map(NoteDto.fromDomain).toList(growable: false);
+  }
+
+  Future<List<NoteDto>> listSharedNotes() async {
+    final context = _captureContext();
+    final Object repository = noteRepository;
+    if (repository is! ISharedNoteRepository) return const [];
+    final notes = await repository.findSharedWith(context.userId);
+    _requireContext(context);
+    return notes.map(NoteDto.fromDomain).toList(growable: false);
+  }
+
+  Future<NoteDto> readNote(String noteId) async {
+    final context = _captureContext();
+    final Note note = await _requireOwnedNote(
+      noteId,
+      context,
+      NoteOperation.read,
+    );
+    return NoteDto.fromDomain(note);
+  }
+
+  NoteAccessCapabilities capabilitiesFor(NoteDto note) {
+    if (currentUser.userId == null || !note.contentAvailable) {
+      return const NoteAccessCapabilities();
+    }
+    bool allowed(NoteOperation operation) =>
+        const NoteAccessPolicy().allows(
+          actorId: currentUser.userId!,
+          note: note.identity,
+          share: note.share,
+          operation: operation,
+        ) &&
+        (security?.allows(
+              ownerId: note.ownerId,
+              noteId: note.id,
+              protection: NoteProtection(
+                enabled: note.isProtected,
+                revision: note.protectionRevision,
+              ),
+              operation: operation,
+            ) ??
+            !note.isProtected);
+    return NoteAccessCapabilities(
+      canRead: allowed(NoteOperation.read),
+      canEdit: allowed(NoteOperation.edit),
+      canDelete: allowed(NoteOperation.delete),
+      canManage: allowed(NoteOperation.manage),
+      canSummarize: allowed(NoteOperation.summary),
+      canExport: allowed(NoteOperation.export),
+    );
   }
 
   /// Creates and persists a new Note aggregate.
   Future<NoteDto> createNote({
     required String title,
     required String content,
+    NoteDocument? document,
   }) async {
-    final String userId = currentUser.requiredUserId;
+    if (document != null) _requireDocumentStorage();
+    final context = _captureContext();
+    final String userId = context.userId;
     final Note note = Note.create(
       id: generateId(),
       ownerId: userId,
       title: title,
       content: content,
+      document: document,
       now: now().toUtc(),
     );
     await noteRepository.save(note);
-    requestSync?.call(userId);
-    return NoteDto.fromDomain(note);
-  }
-
-  /// Renames an owned note and persists the changed aggregate.
-  Future<NoteDto> renameNote({
-    required String noteId,
-    required String title,
-  }) async {
-    final String userId = currentUser.requiredUserId;
-    final Note note = await _requireOwnedNote(noteId, userId);
-    note.rename(title, now().toUtc());
-    await noteRepository.save(note);
-    requestSync?.call(userId);
-    return NoteDto.fromDomain(note);
-  }
-
-  /// Replaces the content of an owned note and persists the changed
-  /// aggregate.
-  Future<NoteDto> replaceContent({
-    required String noteId,
-    required String content,
-  }) async {
-    final String userId = currentUser.requiredUserId;
-    final Note note = await _requireOwnedNote(noteId, userId);
-    note.replaceContent(content, now().toUtc());
-    await noteRepository.save(note);
+    _requireContext(context);
+    _requireAccess(note, NoteOperation.edit);
     requestSync?.call(userId);
     return NoteDto.fromDomain(note);
   }
 
   /// Deletes an owned note.
   Future<void> deleteNote(String noteId) async {
-    final String userId = currentUser.requiredUserId;
-    await _requireOwnedNote(noteId, userId);
+    final context = _captureContext();
+    final String userId = context.userId;
+    await _requireOwnedNote(noteId, context, NoteOperation.delete);
     await noteRepository.deleteById(noteId);
+    _requireContext(context);
     requestSync?.call(userId);
   }
 
-  /// Summarizes an owned note without mutating or persisting it.
-  Future<Summary> summarizeNote(String noteId) async {
-    final String userId = currentUser.requiredUserId;
-    final Note note = await _requireOwnedNote(noteId, userId);
-    return summarizeContent(note.content);
+  ({String userId, int session, int access}) _captureContext() => (
+    userId: currentUser.requiredUserId,
+    session: _sessionGeneration(),
+    access: security?.accessGeneration ?? 0,
+  );
+
+  void _requireContext(({String userId, int session, int access}) context) {
+    if (currentUser.userId != context.userId ||
+        _sessionGeneration() != context.session) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    if ((security?.accessGeneration ?? 0) != context.access) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
   }
 
-  Future<Note> _requireOwnedNote(String noteId, String expectedOwnerId) async {
+  int _sessionGeneration() {
+    final SessionGenerationReader? reader = sessionGeneration;
+    if (reader != null) {
+      return reader();
+    }
+    // Widened to Object so the interface test can promote an unrelated type.
+    final Object user = currentUser;
+    return user is SessionGenerationSource ? user.sessionGeneration : 0;
+  }
+
+  Future<Note> _requireOwnedNote(
+    String noteId,
+    ({String userId, int session, int access}) context,
+    NoteOperation operation,
+  ) async {
     final Note? note = await noteRepository.findById(noteId);
+    _requireContext(context);
+    final String expectedOwnerId = context.userId;
     if (note == null) {
       throw NoteNotFoundException(noteId);
     }
-    if (note.ownerId != expectedOwnerId) {
+    if (note.ownerId != expectedOwnerId &&
+        !const NoteAccessPolicy().allows(
+          actorId: expectedOwnerId,
+          note: note.identity,
+          share: note.share,
+          operation: operation,
+        )) {
       throw NoteOwnershipException(
         noteId: noteId,
         expectedOwnerId: expectedOwnerId,
         actualOwnerId: note.ownerId,
       );
     }
+    if (currentUser.userId != expectedOwnerId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    _requireAccess(note, operation);
     return note;
+  }
+
+  void _requireAccess(Note note, NoteOperation operation) {
+    if (!const NoteAccessPolicy().allows(
+      actorId: currentUser.userId ?? '',
+      note: note.identity,
+      share: note.share,
+      operation: operation,
+    )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    if (!note.contentAvailable) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+    final INoteAccessGuard? guard = security;
+    if (!note.protection.enabled && guard == null) return;
+    if (guard == null) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+    guard.requireAccess(
+      ownerId: note.ownerId,
+      noteId: note.id,
+      protection: note.protection,
+      operation: operation,
+    );
   }
 }

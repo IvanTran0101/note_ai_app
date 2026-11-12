@@ -14,6 +14,7 @@ typedef AppWorkspaceBuilder = Widget Function(BuildContext context);
 GoRouter createAppRouter({
   required AuthController authController,
   required AppWorkspaceBuilder workspaceBuilder,
+  AppWorkspaceBuilder? profileBuilder,
 }) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
@@ -89,6 +90,11 @@ GoRouter createAppRouter({
           return workspaceBuilder(context);
         },
       ),
+      if (profileBuilder != null)
+        GoRoute(
+          path: AppRoutes.profile,
+          builder: (context, state) => profileBuilder(context),
+        ),
       GoRoute(
         path: AppRoutes.changePassword,
         builder: (BuildContext context, GoRouterState state) {
@@ -141,7 +147,8 @@ bool _isProtectedPath(String path) {
   return path == AppRoutes.home ||
       path == AppRoutes.notes ||
       path.startsWith('/notes/') ||
-      path == AppRoutes.changePassword;
+      path == AppRoutes.changePassword ||
+      path == AppRoutes.profile;
 }
 
 String? _safeProtectedTarget(Uri uri) {

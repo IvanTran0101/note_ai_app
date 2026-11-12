@@ -28,6 +28,7 @@ final class NoteDetailActionBar extends StatelessWidget {
     required this.summarizingLabel,
     this.summarizeTooltip,
     this.iconOnly = false,
+    this.showSummarizeAction = true,
   });
 
   final bool isSaving;
@@ -45,6 +46,7 @@ final class NoteDetailActionBar extends StatelessWidget {
   final String summarizingLabel;
   final String? summarizeTooltip;
   final bool iconOnly;
+  final bool showSummarizeAction;
 
   @override
   Widget build(BuildContext context) {
@@ -66,9 +68,12 @@ final class NoteDetailActionBar extends StatelessWidget {
     }
 
     final Widget summarizeButton = Semantics(
+      container: true,
       button: true,
       enabled: summarizeEnabled,
       label: isSummarizing ? summarizingLabel : summarizeLabel,
+      onTap: summarizeEnabled ? onSummarize : null,
+      excludeSemantics: true,
       child: FilledButton.tonalIcon(
         key: const ValueKey<String>('note-detail-summarize'),
         onPressed: summarizeEnabled ? onSummarize : null,
@@ -83,7 +88,11 @@ final class NoteDetailActionBar extends StatelessWidget {
     );
     final Widget summarizeAction = summarizeTooltip == null
         ? summarizeButton
-        : Tooltip(message: summarizeTooltip!, child: summarizeButton);
+        : Tooltip(
+            message: summarizeTooltip!,
+            excludeFromSemantics: true,
+            child: Semantics(hint: summarizeTooltip, child: summarizeButton),
+          );
 
     if (iconOnly) {
       Widget iconAction({
@@ -96,25 +105,32 @@ final class NoteDetailActionBar extends StatelessWidget {
         ValueChanged<BuildContext>? onPressedWithContext,
       }) {
         return Builder(
-          builder: (BuildContext buttonContext) => Semantics(
-            button: true,
-            enabled: enabled,
-            label: label,
-            child: IconButton(
-              key: key,
-              tooltip: tooltip ?? label,
-              onPressed: enabled
-                  ? () {
-                      if (onPressedWithContext != null) {
-                        onPressedWithContext(buttonContext);
-                      } else {
-                        onPressed?.call();
-                      }
+          builder: (BuildContext buttonContext) {
+            final VoidCallback? pressed = enabled
+                ? () {
+                    if (onPressedWithContext != null) {
+                      onPressedWithContext(buttonContext);
+                    } else {
+                      onPressed?.call();
                     }
-                  : null,
-              icon: icon,
-            ),
-          ),
+                  }
+                : null;
+            return Semantics(
+              container: true,
+              button: true,
+              enabled: enabled,
+              label: label,
+              hint: tooltip == label ? null : tooltip,
+              onTap: pressed,
+              excludeSemantics: true,
+              child: IconButton(
+                key: key,
+                tooltip: tooltip ?? label,
+                onPressed: pressed,
+                icon: icon,
+              ),
+            );
+          },
         );
       }
 
@@ -134,20 +150,21 @@ final class NoteDetailActionBar extends StatelessWidget {
                     )
                   : const Icon(Icons.save_outlined),
             ),
-          iconAction(
-            label: isSummarizing ? summarizingLabel : summarizeLabel,
-            key: const ValueKey<String>('note-detail-summarize'),
-            enabled: summarizeEnabled,
-            onPressed: onSummarize,
-            icon: isSummarizing
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_awesome_outlined),
-            tooltip: summarizeTooltip,
-          ),
-          if (onMore != null)
+          if (showSummarizeAction)
+            iconAction(
+              label: isSummarizing ? summarizingLabel : summarizeLabel,
+              key: const ValueKey<String>('note-detail-summarize'),
+              enabled: summarizeEnabled,
+              onPressed: onSummarize,
+              icon: isSummarizing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome_outlined),
+              tooltip: summarizeTooltip,
+            ),
+          if (hasMoreAction)
             iconAction(
               label: moreLabel,
               key: const ValueKey<String>('note-detail-more'),
@@ -186,9 +203,12 @@ final class NoteDetailActionBar extends StatelessWidget {
                   children: <Widget>[
                     if (onSave != null)
                       Semantics(
+                        container: true,
                         button: true,
                         enabled: saveEnabled,
                         label: isSaving ? savingLabel : saveLabel,
+                        onTap: saveEnabled ? onSave : null,
+                        excludeSemantics: true,
                         child: FilledButton.icon(
                           key: const ValueKey<String>('note-detail-save'),
                           onPressed: saveEnabled ? onSave : null,
@@ -207,9 +227,14 @@ final class NoteDetailActionBar extends StatelessWidget {
                     if (hasMoreAction)
                       Builder(
                         builder: (BuildContext buttonContext) => Semantics(
+                          container: true,
                           button: true,
                           enabled: moreEnabled,
                           label: moreLabel,
+                          onTap: moreEnabled
+                              ? () => invokeMore(buttonContext)
+                              : null,
+                          excludeSemantics: true,
                           child: OutlinedButton.icon(
                             key: const ValueKey<String>('note-detail-more'),
                             onPressed: moreEnabled

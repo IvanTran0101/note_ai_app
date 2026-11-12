@@ -188,6 +188,304 @@ void main() {
     },
   );
 
+  group('operation races', () {
+    test(
+      'a hub unauthenticated event during login keeps the operation busy',
+      () async {
+        final Completer<AuthUserDto> gate = Completer<AuthUserDto>();
+        service.loginGate = gate;
+        final Future<AuthUserDto> login = controller.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        service.authState.add(null);
+        await pumpEventQueue();
+
+        expect(controller.state.status, AuthStatus.unauthenticated);
+        expect(controller.state.isBusy, isTrue);
+        await expectLater(controller.refreshIdentity(), throwsStateError);
+
+        gate.complete(testUser);
+        final AuthUserDto user = await login;
+
+        expect(user, testUser);
+        expect(controller.state.status, AuthStatus.authenticated);
+        expect(controller.state.user, testUser);
+        expect(controller.state.isBusy, isFalse);
+        expect(controller.state.error, isNull);
+      },
+    );
+
+    test(
+      'a stale login error after logout does not overwrite the logout state',
+      () async {
+        final Completer<AuthUserDto> gate = Completer<AuthUserDto>();
+        service.loginGate = gate;
+        final List<AuthState> states = <AuthState>[];
+        controller.addListener(() => states.add(controller.state));
+        final Future<AuthUserDto> login = controller.login(
+          const LoginInput(email: 'a@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        await controller.logout();
+        gate.completeError(
+          const AuthenticationFailure(
+            AuthenticationFailureCode.unauthenticated,
+          ),
+        );
+
+        await expectLater(login, throwsA(isA<AuthenticationFailure>()));
+        expect(controller.state.status, AuthStatus.unauthenticated);
+        expect(controller.state.isBusy, isFalse);
+        expect(controller.state.error, isNull);
+        expect(states.where((AuthState state) => state.error != null), isEmpty);
+      },
+    );
+
+    test(
+      'a normal login still emits exactly one authenticated state',
+      () async {
+        service.loginResult = testUser;
+        final List<AuthState> states = <AuthState>[];
+        controller.addListener(() => states.add(controller.state));
+
+        await controller.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+
+        expect(states.map((AuthState state) => state.status), <AuthStatus>[
+          AuthStatus.initializing,
+          AuthStatus.authenticated,
+        ]);
+        expect(states.last.user, testUser);
+        expect(states.last.isBusy, isFalse);
+        expect(states.last.error, isNull);
+      },
+    );
+  });
+
+  group('initialize races', () {
+    test('a restore resolving after logout returns its user without re-authenticating', () async {
+      final Completer<AuthUserDto?> gate = Completer<AuthUserDto?>();
+      service.restoreGate = gate;
+      final List<AuthState> states = <AuthState>[];
+      controller.addListener(() => states.add(controller.state));
+      final Future<AuthUserDto?> restore = controller.initialize();
+      await pumpEventQueue();
+
+      await controller.logout();
+      gate.complete(testUser);
+      final AuthUserDto? restored = await restore;
+
+      expect(restored, testUser);
+      expect(service.calls, <String>['restoreSession', 'logout']);
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      expect(controller.state.user, isNull);
+      expect(controller.state.isBusy, isFalse);
+      expect(controller.state.error, isNull);
+      expect(
+        states
+            .where(
+              (AuthState state) => state.status == AuthStatus.authenticated,
+            )
+            .length,
+        0,
+      );
+      expect(states.last.status, AuthStatus.unauthenticated);
+    });
+
+    test('a restore failing after logout throws to its caller without a stale error', () async {
+      final Completer<AuthUserDto?> gate = Completer<AuthUserDto?>();
+      service.restoreGate = gate;
+      final List<AuthState> states = <AuthState>[];
+      controller.addListener(() => states.add(controller.state));
+      final Future<AuthUserDto?> restore = controller.initialize();
+      await pumpEventQueue();
+
+      await controller.logout();
+      gate.completeError(
+        const AuthenticationFailure(
+          AuthenticationFailureCode.temporarilyUnavailable,
+        ),
+      );
+
+      await expectLater(restore, throwsA(isA<AuthenticationFailure>()));
+      expect(service.calls, <String>['restoreSession', 'logout']);
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      expect(controller.state.user, isNull);
+      expect(controller.state.isBusy, isFalse);
+      expect(controller.state.error, isNull);
+      expect(states.where((AuthState state) => state.error != null), isEmpty);
+    });
+
+    test('initialize during a pending login is rejected without a provider restore', () async {
+      final Completer<AuthUserDto> gate = Completer<AuthUserDto>();
+      service.loginGate = gate;
+      final Future<AuthUserDto> login = controller.login(
+        const LoginInput(email: 'user@example.com', password: 'secret'),
+      );
+      await pumpEventQueue();
+
+      await expectLater(controller.initialize, throwsStateError);
+      expect(service.calls, <String>[
+        'login',
+      ], reason: 'the pending login must not be superseded by a restore');
+
+      gate.complete(testUser);
+      expect(await login, testUser);
+      expect(controller.state.status, AuthStatus.authenticated);
+      expect(controller.state.user, testUser);
+      expect(controller.state.isBusy, isFalse);
+    });
+
+    test('initialize during a pending registration is rejected and metadata is kept', () async {
+      final Completer<RegistrationResult> gate =
+          Completer<RegistrationResult>();
+      service.registerGate = gate;
+      final Future<RegistrationResult> registration = controller.register(
+        const RegisterInput(
+          email: 'new@example.com',
+          displayName: ' New User ',
+          password: 'secret',
+          confirmPassword: 'secret',
+        ),
+      );
+      await pumpEventQueue();
+
+      await expectLater(controller.initialize, throwsStateError);
+      expect(
+        service.calls,
+        <String>['register'],
+        reason: 'the pending registration must not be superseded by a restore',
+      );
+
+      gate.complete(
+        RegistrationResult(
+          user: testUser,
+          verificationDispatchStatus: VerificationDispatchStatus.requested,
+          profileSetupPending: true,
+        ),
+      );
+      final RegistrationResult result = await registration;
+      expect(result.user, testUser);
+      expect(controller.state.status, AuthStatus.authenticated);
+      expect(controller.pendingProfileDisplayName, 'New User');
+    });
+
+    test(
+      'login during a pending initialize is rejected without superseding it',
+      () async {
+        final Completer<AuthUserDto?> gate = Completer<AuthUserDto?>();
+        service.restoreGate = gate;
+        final Future<AuthUserDto?> initialize = controller.initialize();
+        await pumpEventQueue();
+
+        await expectLater(
+          () => controller.login(
+            const LoginInput(email: 'user@example.com', password: 'secret'),
+          ),
+          throwsStateError,
+        );
+        expect(service.calls, <String>['restoreSession']);
+
+        gate.complete(testUser);
+        expect(await initialize, testUser);
+        expect(controller.state.status, AuthStatus.authenticated);
+        expect(controller.state.user, testUser);
+      },
+    );
+
+    test('concurrent initialize calls share one restoreSession run', () async {
+      final Completer<AuthUserDto?> gate = Completer<AuthUserDto?>();
+      service.restoreGate = gate;
+      final List<AuthState> states = <AuthState>[];
+      controller.addListener(() => states.add(controller.state));
+      final Future<AuthUserDto?> first = controller.initialize();
+      final Future<AuthUserDto?> second = controller.initialize();
+      await pumpEventQueue();
+
+      expect(
+        service.calls.where((String name) => name == 'restoreSession').length,
+        1,
+      );
+
+      gate.complete(testUser);
+      final List<AuthUserDto?> restored = await Future.wait(
+        <Future<AuthUserDto?>>[first, second],
+      );
+
+      expect(restored, <AuthUserDto?>[testUser, testUser]);
+      expect(
+        service.calls.where((String name) => name == 'restoreSession').length,
+        1,
+      );
+      expect(controller.state.status, AuthStatus.authenticated);
+      expect(controller.state.user, testUser);
+      expect(controller.state.isBusy, isFalse);
+      expect(controller.state.error, isNull);
+      expect(states.map((AuthState state) => state.status), <AuthStatus>[
+        AuthStatus.initializing,
+        AuthStatus.authenticated,
+      ]);
+    });
+
+    test(
+      'a failed initialize clears the shared restore so a retry succeeds',
+      () async {
+        service.failures['restoreSession'] = const AuthenticationFailure(
+          AuthenticationFailureCode.temporarilyUnavailable,
+        );
+
+        await expectLater(
+          controller.initialize,
+          throwsA(isA<AuthenticationFailure>()),
+        );
+
+        service.failures.remove('restoreSession');
+        service.restoreResult = testUser;
+
+        final AuthUserDto? restored = await controller.initialize();
+
+        expect(restored, testUser);
+        expect(service.calls, <String>['restoreSession', 'restoreSession']);
+        expect(controller.state.status, AuthStatus.authenticated);
+        expect(controller.state.user, testUser);
+        expect(controller.state.isBusy, isFalse);
+        expect(controller.state.error, isNull);
+      },
+    );
+
+    test(
+      'a normal initialize completes with authenticated exactly once',
+      () async {
+        service.restoreResult = testUser;
+        final List<AuthState> states = <AuthState>[];
+        controller.addListener(() => states.add(controller.state));
+
+        final AuthUserDto? restored = await controller.initialize();
+
+        expect(restored, testUser);
+        expect(states.map((AuthState state) => state.status), <AuthStatus>[
+          AuthStatus.initializing,
+          AuthStatus.authenticated,
+        ]);
+        expect(
+          states
+              .where(
+                (AuthState state) => state.status == AuthStatus.authenticated,
+              )
+              .length,
+          1,
+        );
+        expect(states.last.user, testUser);
+        expect(states.last.isBusy, isFalse);
+        expect(states.last.error, isNull);
+      },
+    );
+  });
+
   group('auth state stream', () {
     test('subscribes to the service stream on construction', () {
       expect(service.hasAuthStateListener, isTrue);
@@ -286,6 +584,18 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   );
   LoginInput? loginInput;
 
+  /// When set, [login] parks until the completer resolves, so a test can
+  /// deliver auth-state events between the call and its completion.
+  Completer<AuthUserDto>? loginGate;
+
+  /// When set, [restoreSession] parks until the completer resolves, so a
+  /// test can interleave other operations with a pending restore.
+  Completer<AuthUserDto?>? restoreGate;
+
+  /// When set, [register] parks until the completer resolves, so a test can
+  /// interleave initialization with a pending registration.
+  Completer<RegistrationResult>? registerGate;
+
   /// Application auth-state events the fake replays to its observer.
   final StreamController<AuthUserDto?> authState =
       StreamController<AuthUserDto?>.broadcast();
@@ -303,6 +613,10 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   @override
   Future<RegistrationResult> register(RegisterInput input) async {
     _record('register');
+    final Completer<RegistrationResult>? gate = registerGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return registerResult;
   }
 
@@ -310,6 +624,10 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   Future<AuthUserDto> login(LoginInput input) async {
     _record('login');
     loginInput = input;
+    final Completer<AuthUserDto>? gate = loginGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return loginResult;
   }
 
@@ -321,6 +639,10 @@ final class FakeAuthenticationAppService implements IAuthenticationAppService {
   @override
   Future<AuthUserDto?> restoreSession() async {
     _record('restoreSession');
+    final Completer<AuthUserDto?>? gate = restoreGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return restoreResult;
   }
 

@@ -2,8 +2,13 @@
 library;
 
 import '../../application/sync/sync_snapshot.dart';
+import '../../domain/notes/note_protection.dart';
 import 'local_sync_codec_reader.dart';
 import 'local_sync_codec_schema.dart';
+import 'note_share_grant_codec.dart';
+import '../attachments/attachment_codec.dart';
+import '../labels/label_codec.dart';
+import '../documents/note_document_codec.dart';
 
 /// Maps a [SyncNoteSnapshot] to and from its stored form.
 ///
@@ -16,13 +21,31 @@ abstract final class SyncNoteSnapshotCodec {
   /// Encodes [snapshot] as a JSON-compatible object.
   static Map<String, Object?> encode(SyncNoteSnapshot snapshot) {
     return <String, Object?>{
+      LocalSyncSchema.protected: snapshot.protection.enabled,
+      LocalSyncSchema.protectionRevision: snapshot.protection.revision,
+      LocalSyncSchema.contentAvailable: snapshot.contentAvailable,
       LocalSyncSchema.id: snapshot.id,
+      if (snapshot.ownerId != null) LocalSyncSchema.ownerId: snapshot.ownerId,
+      if (snapshot.share != null)
+        LocalSyncSchema.share: NoteShareGrantCodec.encode(snapshot.share!),
       LocalSyncSchema.title: snapshot.title,
       LocalSyncSchema.content: snapshot.content,
+      if (snapshot.includesDocument)
+        LocalSyncSchema.document: snapshot.document == null
+            ? null
+            : NoteDocumentCodec.encode(snapshot.document!),
+      'labelIds': snapshot.labelIds,
+      'labelProjections': LabelCodec.projections(snapshot.labelProjections),
+      'includesLabels': snapshot.includesLabels,
+      LocalSyncSchema.attachments: snapshot.attachments
+          .map(AttachmentCodec.encode)
+          .toList(),
+      if (!snapshot.includesAttachments) 'includesAttachments': false,
       LocalSyncSchema.createdAt: snapshot.createdAt.toIso8601String(),
       LocalSyncSchema.serverUpdatedAt: snapshot.serverUpdatedAt
           .toIso8601String(),
       LocalSyncSchema.revision: snapshot.revision,
+      LocalSyncSchema.pinnedAt: snapshot.pinnedAt?.toIso8601String(),
       LocalSyncSchema.deletedAt: snapshot.deletedAt?.toIso8601String(),
     };
   }
@@ -34,6 +57,7 @@ abstract final class SyncNoteSnapshotCodec {
         data,
         path: path,
         allowedFields: LocalSyncSchema.snapshotFields,
+        optionalFields: LocalSyncSchema.snapshotOptionalFields,
       ),
     );
   }
@@ -50,18 +74,51 @@ abstract final class SyncNoteSnapshotCodec {
       LocalSyncSchema.serverUpdatedAt,
     );
     final int revision = record.requirePositiveInt(LocalSyncSchema.revision);
+    final DateTime? pinnedAt = record.requireNullableTimestamp(
+      LocalSyncSchema.pinnedAt,
+    );
     final DateTime? deletedAt = record.requireNullableTimestamp(
       LocalSyncSchema.deletedAt,
     );
     return buildCodecModel(
       () => SyncNoteSnapshot(
         id: id,
+        ownerId: !record.containsField(LocalSyncSchema.ownerId)
+            ? null
+            : record.requireNonBlankString(LocalSyncSchema.ownerId),
+        share: NoteShareGrantCodec.decodeOptional(record),
         title: title,
         content: content,
+        document: NoteDocumentCodec.decodeOptional(
+          record.rawValue(LocalSyncSchema.document),
+        ),
+        includesDocument: record.containsField(LocalSyncSchema.document),
+        labelIds: LabelCodec.ids(record.rawValue('labelIds')),
+        labelProjections: LabelCodec.decodeProjections(
+          record.rawValue('labelProjections'),
+        ),
+        includesLabels:
+            record.containsField('includesLabels') &&
+            record.requireBool('includesLabels'),
+        attachments: AttachmentCodec.decodeList(
+          record.rawValue(LocalSyncSchema.attachments),
+          noteId: id,
+        ),
+        includesAttachments:
+            !record.containsField('includesAttachments') ||
+            record.requireBool('includesAttachments'),
         createdAt: createdAt,
         serverUpdatedAt: serverUpdatedAt,
         revision: revision,
+        pinnedAt: pinnedAt,
         deletedAt: deletedAt,
+        protection: NoteProtection(
+          enabled: record.requireBool(LocalSyncSchema.protected),
+          revision: record.requireNonNegativeInt(
+            LocalSyncSchema.protectionRevision,
+          ),
+        ),
+        contentAvailable: record.requireBool(LocalSyncSchema.contentAvailable),
       ),
       path: record.path,
     );

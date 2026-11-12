@@ -1,4 +1,11 @@
+import '../../application/sync/sync_mutation.dart';
+import '../../application/sync/local_note_state.dart';
+import '../../application/sync/sync_snapshot.dart';
+import '../../application/sync/sync_failure.dart';
+
 import 'dart:async';
+
+import 'package:http/http.dart' as http;
 
 import '../../application/sync/local_sync_store.dart';
 import '../../application/sync/sync_coordinator_service.dart';
@@ -16,9 +23,35 @@ final class AccountSyncRuntime {
     required this.baseUri,
     required this.localSyncStoreFactory,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+    this.mutationGrant,
+    this.observeSnapshot,
+    this.hydrateSnapshot,
+    this.requireSession,
+    this.sessionGeneration,
+    SyncAccessTokenProvider? tokenProvider,
+    this.client,
+    this.labelsEnabled = false,
+    this.documentsEnabled = false,
+    this.projectionGrant,
+    this.onCatalogChanged,
+  }) : _clock = clock ?? DateTime.now,
+       tokenProvider = tokenProvider ?? const CognitoAccessTokenProvider().call;
 
   final Uri baseUri;
+  final bool labelsEnabled;
+  final bool documentsEnabled;
+  final void Function(String actor)? onCatalogChanged;
+  final String? Function(String account, LocalNoteState note)? projectionGrant;
+  final SyncAccessTokenProvider tokenProvider;
+  final http.Client? client;
+  final Future<String?> Function(String account, SyncMutation mutation)?
+  mutationGrant;
+  final Future<void> Function(String account, SyncNoteSnapshot snapshot)?
+  observeSnapshot;
+  final Future<void> Function(String account, SyncNoteSnapshot snapshot)?
+  hydrateSnapshot;
+  final void Function(String account)? requireSession;
+  final int Function()? sessionGeneration;
   final ILocalSyncStore Function({required String accountUserId})
   localSyncStoreFactory;
   final DateTime Function() _clock;
@@ -33,17 +66,44 @@ final class AccountSyncRuntime {
       throw ArgumentError.value(accountUserId, 'accountUserId');
     }
     return _coordinators.putIfAbsent(accountUserId, () {
+      final captured = sessionGeneration?.call();
+      void requireLive() {
+        requireSession?.call(accountUserId);
+        if (captured != sessionGeneration?.call()) {
+          throw const SyncFailure(code: SyncErrorCode.forbidden);
+        }
+      }
+
       final HttpRemoteNoteDataSource remote = HttpRemoteNoteDataSource(
         baseUri: baseUri,
-        tokenProvider: const CognitoAccessTokenProvider().call,
+        labelsEnabled: labelsEnabled,
+        documentsEnabled: documentsEnabled,
+        projectionGrant: (note) => projectionGrant?.call(accountUserId, note),
+        tokenProvider: tokenProvider,
+        client: client,
         expectedAccountUserId: accountUserId,
+        requireSession: requireLive,
+        mutationGrant: (mutation) async =>
+            mutationGrant?.call(accountUserId, mutation),
       );
       _remoteDataSources[accountUserId] = remote;
       return SyncCoordinatorService(
         accountUserId: accountUserId,
+        labelsEnabled: labelsEnabled,
         localStore: localSyncStoreFactory(accountUserId: accountUserId),
+        onStateChanged: () {
+          requireLive();
+          if (labelsEnabled) onCatalogChanged?.call(accountUserId);
+        },
         remote: remote,
         clock: _clock,
+        requireSession: requireLive,
+        observeSnapshot: (snapshot) async {
+          await observeSnapshot?.call(accountUserId, snapshot);
+        },
+        hydrateSnapshot: (snapshot) async {
+          await hydrateSnapshot?.call(accountUserId, snapshot);
+        },
       );
     });
   }
@@ -54,7 +114,7 @@ final class AccountSyncRuntime {
   }
 
   /// Exposes a manual/run-to-completion path for future sync UI and tests.
-  Future<SyncReport> syncNow(String accountUserId) {
+  Future<SyncReport> syncNow(String accountUserId) async {
     return coordinatorFor(accountUserId).syncNow();
   }
 

@@ -9,6 +9,7 @@ enum SyncErrorCode {
   unauthorized,
   forbidden,
   invalidMutation,
+  documentRequiresUpgrade,
   unexpected,
 }
 

@@ -1,0 +1,40 @@
+M03 private storage handoff - source only; AWS live verification is out of scope.
+
+Template: amplify/attachments/storage.template.json
+This template does NOT enable attachment sync or create authenticated API routes.
+No credentials are stored in source. Deployment is deferred to the leader.
+
+Future deploy environment:
+- AWS_REGION and AWS_PROFILE, or the AWS SDK default credential provider chain.
+- M03_ATTACHMENT_UPLOAD_ORIGIN: exact HTTPS app origin, without a trailing slash.
+- M03_ATTACHMENT_BUCKET: fill from the deployed BucketName output for future adapters.
+- Supply AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN only through the
+  environment when a profile/workload identity is unavailable. Never commit values.
+
+Storage invariants:
+- Block all public access; disable ACLs; encrypt at rest; require TLS; enable versioning.
+- Retain the bucket on stack deletion/replacement. No automatic expiration: unknown
+  upload/association outcomes must be reconciled before cleanup.
+- Browser PUT CORS accepts one explicit origin. Direct S3 GET is not provided.
+- Upload signer can write staging only; verifier reads an exact staging version and
+  writes final; read gateway reads final object versions only.
+- Cleanup role can delete staging only. No final-object delete permission is provided
+  until authoritative reference-safe cleanup has been implemented and tested.
+- IAM role trust is Lambda service only; future execution roles need their own logging
+  permissions, and API/JWT/ACL/grant authorization must be added to the actual handlers.
+
+Still required before client cloud enablement:
+1. Add S3 SDK adapter using environment configuration and default credential providers.
+2. Authenticate attempt/upload/verify/read requests; intersect fresh ACL, actor-owned
+   M05 grant, note identity, protection/access epochs and requested operation.
+3. Limit signed PUT capability to the exact staging key/attempt and enforce actual-byte
+   type/size/SHA-256. Pin validation/copy to the same staging version; verify final
+   bytes/version. Clients must never receive a signed GET/public content URL.
+4. Persist attempts, unknown outcomes and authoritative association/unlink ACKs. Final
+   descriptors must pin immutable verified object versions; retries must be idempotent.
+5. Complete reference-safe cleanup and per-Range authorization/CORS/stream behavior.
+6. Validate this template through CloudFormation in the leader's environment, deploy
+   with least-privilege credentials, then run the separate live acceptance checklist.
+
+Local tests validate JSON and policy invariants only. They are not CloudFormation,
+IAM integration, transport, or AWS live acceptance. Keep legacy attachment 422 gate.

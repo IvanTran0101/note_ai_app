@@ -1,6 +1,8 @@
 /// One queued local change waiting to be pushed to the remote note API.
 library;
 
+import 'protection_sync_change.dart';
+
 import 'sync_failure.dart';
 import 'sync_mutation.dart';
 
@@ -21,6 +23,11 @@ final class PendingMutation {
     required SyncMutationOperation operation,
     required int baseRevision,
     SyncNotePayload? payload,
+    String? ownerId,
+    int? accessRevision,
+    ProtectionSyncChange? protectionChange,
+    SyncEntityType entityType = SyncEntityType.note,
+    String? labelName,
     required this.createdAt,
     int retryCount = 0,
     this.lastError,
@@ -31,6 +38,11 @@ final class PendingMutation {
          operation: operation,
          baseRevision: baseRevision,
          payload: payload,
+         ownerId: ownerId,
+         accessRevision: accessRevision,
+         protectionChange: protectionChange,
+         entityType: entityType,
+         labelName: labelName,
        ),
        retryCount = _requireNonNegative(retryCount, 'retryCount');
 
@@ -54,6 +66,11 @@ final class PendingMutation {
 
   /// The note this entry changes.
   String get noteId => mutation.noteId;
+  String? get ownerId => mutation.ownerId;
+  int? get accessRevision => mutation.accessRevision;
+  ProtectionSyncChange? get protectionChange => mutation.protectionChange;
+  bool get isLabel => mutation.isLabel;
+  String keyFor(String actorId) => mutation.keyFor(actorId);
 
   /// The operation to push.
   SyncMutationOperation get operation => mutation.operation;

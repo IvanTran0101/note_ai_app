@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
+import 'note_ordering.dart';
 import 'note_detail_page.dart';
 import 'note_detail_route_result.dart';
 import 'note_flow_snackbar.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
+import 'sharing_localizations.dart';
 import 'notes_localizations.dart';
 import 'notes_theme_tokens.dart';
 import 'notes_workspace_loading_view.dart';
@@ -16,12 +19,14 @@ import 'responsive_notes_workspace.dart';
 import '../sync/sync_presentation_controller.dart';
 import '../sync/sync_widgets.dart';
 
+part 'notes_workspace_view.dart';
+part 'notes_workspace_sharing.dart';
+
 /// Responsive Notes workspace for the shell's Notes destination.
 ///
 /// This page owns only presentation selection state. Note mutations and AI
-/// calls continue to flow through [NotesApplicationController]. Every
-/// breakpoint uses the Notes content area for one surface at a time: the list
-/// or the focused Note Detail page.
+/// calls continue to flow through [NotesApplicationController]. The same editor
+/// opens as a side peek, center peek, or full page according to the canvas.
 final class NotesWorkspacePage extends StatefulWidget {
   const NotesWorkspacePage({
     super.key,
@@ -33,6 +38,9 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.provisioningReader,
     this.onProvisioningCancel,
     this.syncController,
+    this.onNoteEdited,
+    this.onOpenNoteRag,
+    this.onDetailVisibilityChanged,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -47,21 +55,39 @@ final class NotesWorkspacePage extends StatefulWidget {
   final VoidCallback? onProvisioningCancel;
   final SyncPresentationController? syncController;
 
+  /// Forwards a real saved-note edit from the embedded editor to the host, so
+  /// the composition root can invalidate stale citations without the workspace
+  /// knowing anything about RAG.
+  final ValueChanged<NoteDto>? onNoteEdited;
+
+  /// Opens the ask-notes screen for the current note when the host supports it.
+  final ValueChanged<NoteDto>? onOpenNoteRag;
+  final ValueChanged<bool>? onDetailVisibilityChanged;
+
   @override
   NotesWorkspacePageState createState() => NotesWorkspacePageState();
 }
 
 final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   String? _detailKeyIdentity;
-  GlobalKey<State<StatefulWidget>> _detailWidgetKey =
-      GlobalKey<State<StatefulWidget>>();
+  GlobalKey<NoteDetailPageState> _detailWidgetKey =
+      GlobalKey<NoteDetailPageState>();
   List<NoteDto> _notes = const <NoteDto>[];
   String? _selectedNoteId;
+  NoteDto? _unavailableSelection;
   bool _editingNewNote = false;
+  bool _sharedOnly = false;
+  NoteDetailSelectionRequest? _pendingSelectionRequest;
+  Object? _lastSyncState;
   bool _detailDirty = false;
+  bool? _lastReportedDetailVisibility;
   Object? _error;
   bool _loading = true;
   Future<void>? _loadInFlight;
+  StreamSubscription<void>? _securitySubscription;
+  int? _securitySession;
+  int _loadSequence = 0;
+  void _update(VoidCallback action) => setState(action);
 
   NotesApplicationController get _application {
     final NotesApplicationController? controller = widget.controller;
@@ -81,37 +107,133 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       return null;
     }
     for (final NoteDto note in _notes) {
-      if (note.id == id) {
+      if (note.reference == id) {
         return note;
       }
     }
-    return null;
+    return _unavailableSelection?.reference == id
+        ? _unavailableSelection
+        : null;
   }
 
   Key _detailKeyFor(String identity) {
     if (_detailKeyIdentity != identity) {
       _detailKeyIdentity = identity;
-      _detailWidgetKey = GlobalKey<State<StatefulWidget>>(
+      _detailWidgetKey = GlobalKey<NoteDetailPageState>(
         debugLabel: 'notes-workspace-detail-$identity',
       );
     }
     return _detailWidgetKey;
   }
 
-  /// Whether the current inline detail has edits that have not been saved.
-  bool get hasUnsavedChanges => _detailDirty;
+  /// Includes pending work so the host cannot reload away the active editor.
+  bool get hasUnsavedChanges => _detailDirty || _detailBusy;
+
+  bool get _detailBusy =>
+      _detailWidgetKey.currentState?.hasActiveOperation ?? false;
 
   bool get _showDetail => _editingNewNote || _selectedNote != null;
+
+  bool _readableNote(NoteDto note) => _application is SecuredNotesController
+      ? (_application as SecuredNotesController).capabilitiesFor(note).canRead
+      : !note.isProtected && note.contentAvailable;
+
+  bool get _hasEmbeddedSyncHeader =>
+      widget.embeddedInWorkspace &&
+      _showDetail &&
+      (_detailWidgetKey.currentState?.rendersSyncHeader ??
+          (_selectedNote == null || _readableNote(_selectedNote!)));
+
+  void _reportDetailVisibility() {
+    final visible = _showDetail;
+    if (_lastReportedDetailVisibility == visible) return;
+    _lastReportedDetailVisibility = visible;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _lastReportedDetailVisibility == visible) {
+        widget.onDetailVisibilityChanged?.call(visible);
+      }
+    });
+  }
+
+  Future<void> _requestDetailClose() =>
+      _detailWidgetKey.currentState?.requestClose() ?? Future<void>.value();
 
   @override
   void initState() {
     super.initState();
+    final app = _application;
+    if (app is SecuredNotesController) {
+      final secured = app as SecuredNotesController;
+      _securitySession = secured.sessionGeneration;
+      _securitySubscription = secured.securityChanges.listen((_) {
+        if (!mounted) return;
+        final changed = _securitySession != secured.sessionGeneration;
+        _securitySession = secured.sessionGeneration;
+        setState(() {
+          if (changed) {
+            _loadSequence++;
+            _notes = const [];
+            _selectedNoteId = null;
+            _editingNewNote = false;
+            _detailDirty = false;
+            _error = null;
+            _loading = false;
+          } else {
+            _notes = _notes
+                .map(
+                  (n) => n.isProtected || !secured.capabilitiesFor(n).canRead
+                      ? n.metadataOnly()
+                      : n,
+                )
+                .toList();
+          }
+        });
+        if (!changed) unawaited(_refreshSecurityList());
+      });
+    }
+    widget.syncController?.addListener(_workspaceSyncChanged);
     unawaited(reload());
   }
 
   @override
+  void didUpdateWidget(covariant NotesWorkspacePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.syncController != widget.syncController) {
+      oldWidget.syncController?.removeListener(_workspaceSyncChanged);
+      widget.syncController?.addListener(_workspaceSyncChanged);
+      _workspaceSyncChanged();
+    }
+  }
+
+  @override
   void dispose() {
+    unawaited(_securitySubscription?.cancel());
+    widget.syncController?.removeListener(_workspaceSyncChanged);
     super.dispose();
+  }
+
+  Future<void> _refreshSecurityList() async {
+    final sequence = ++_loadSequence;
+    try {
+      final notes = sortNotes(await _listAllNotes());
+      if (mounted && sequence == _loadSequence) {
+        setState(() {
+          _preserveSelection(notes);
+          _notes = List.unmodifiable(notes);
+          _error = null;
+          _loading = false;
+        });
+      }
+    } on Object catch (error) {
+      // This read supersedes an initial load too. Its failure must end that
+      // loading state; the stale initial completion cannot do it afterwards.
+      if (mounted && sequence == _loadSequence && _loading) {
+        setState(() {
+          _error = error;
+          _loading = false;
+        });
+      }
+    }
   }
 
   /// Reloads the list after the page becomes active.
@@ -136,21 +258,20 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   Future<void> _loadNotesInternal() async {
+    final sequence = ++_loadSequence;
     try {
-      final List<NoteDto> notes = await _application.listNotes();
-      if (!mounted) {
+      final List<NoteDto> notes = sortNotes(await _listAllNotes());
+      if (!mounted || sequence != _loadSequence) {
         return;
       }
       setState(() {
+        _preserveSelection(notes);
         _notes = List<NoteDto>.unmodifiable(notes);
-        _selectedNoteId = null;
-        _editingNewNote = false;
-        _detailDirty = false;
         _error = null;
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted) {
+      if (!mounted || sequence != _loadSequence) {
         return;
       }
       setState(() {
@@ -161,25 +282,35 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _selectNote(NoteDto note) {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
     }
     setState(() {
-      _selectedNoteId = note.id;
+      _unavailableSelection = null;
+      _selectedNoteId = note.reference;
       _editingNewNote = false;
       _error = null;
+      _pendingSelectionRequest = null;
     });
   }
 
   void _startNewNote() {
+    if (_detailBusy) return;
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
     }
     setState(() {
+      _unavailableSelection = null;
       _selectedNoteId = null;
+      _sharedOnly = false;
       _editingNewNote = true;
+      // Autosave can create a note while this workspace still owns a "new"
+      // editor. A new create intent must get a new editor, even with that key.
+      _detailKeyIdentity = null;
+      _pendingSelectionRequest = null;
     });
   }
 
@@ -188,24 +319,74 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
 
   /// Selects an existing note in the workspace editor.
   void openNote(NoteDto note) {
+    if (_detailBusy) return;
+    if (note.isProtected) note = note.metadataOnly();
     if (_detailDirty) {
       _showMessage(NotesCopy.of(context).unsavedChanges);
       return;
     }
     final List<NoteDto> next = List<NoteDto>.of(_notes);
-    final int index = next.indexWhere((NoteDto item) => item.id == note.id);
+    final int index = next.indexWhere(
+      (NoteDto item) => item.identity == note.identity,
+    );
     if (index == -1) {
       next.add(note);
     } else {
       next[index] = note;
     }
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
-      _selectedNoteId = note.id;
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
+      _selectedNoteId = note.reference;
+      _sharedOnly = note.share != null;
+      _unavailableSelection = null;
       _editingNewNote = false;
       _error = null;
       _loading = false;
+      _pendingSelectionRequest = null;
     });
+  }
+
+  /// Opens [note] and reveals the exact [selection] span in its editor.
+  ///
+  /// This is the citation-open commit: it is synchronous, validates the span
+  /// against the content the caller resolved from the local store, and reports
+  /// `true` only when the note is actually shown. It never saves, never unlocks
+  /// protection, and never writes the repository. A dirty editor or an active
+  /// operation refuses the open without changing the displayed note.
+  bool openSource(NoteDto note, TextSelection selection) {
+    if (_detailBusy) return false;
+    if (note.isProtected) note = note.metadataOnly();
+    if (_detailDirty) {
+      _showMessage(NotesCopy.of(context).unsavedChanges);
+      return false;
+    }
+    if (!note.contentAvailable) return false;
+    final String content = note.content;
+    if (selection.start < 0 ||
+        selection.end > content.length ||
+        selection.end <= selection.start) {
+      return false;
+    }
+    final List<NoteDto> next = List<NoteDto>.of(_notes);
+    final int index = next.indexWhere(
+      (NoteDto item) => item.identity == note.identity,
+    );
+    if (index == -1) {
+      next.add(note);
+    } else {
+      next[index] = note;
+    }
+    setState(() {
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
+      _selectedNoteId = note.reference;
+      _sharedOnly = note.share != null;
+      _unavailableSelection = null;
+      _editingNewNote = false;
+      _error = null;
+      _loading = false;
+      _pendingSelectionRequest = NoteDetailSelectionRequest(selection);
+    });
+    return true;
   }
 
   void _handleDetailDirtyChanged(bool dirty) {
@@ -215,7 +396,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   void _handleDetailExit(NoteDetailRouteResult result) {
-    final NoteDto? saved = result.note;
+    final NoteDto? saved = result.note?.isProtected == true
+        ? result.note!.metadataOnly()
+        : result.note;
     final String? selectedId = _selectedNoteId;
     final List<NoteDto> next = List<NoteDto>.of(_notes);
 
@@ -223,7 +406,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
       case NoteDetailExitReason.saved:
         if (saved != null) {
           final int index = next.indexWhere(
-            (NoteDto note) => note.id == saved.id,
+            (NoteDto note) => note.identity == saved.identity,
           );
           if (index == -1) {
             next.add(saved);
@@ -233,7 +416,7 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
         }
       case NoteDetailExitReason.deleted:
         if (selectedId != null) {
-          next.removeWhere((NoteDto note) => note.id == selectedId);
+          next.removeWhere((NoteDto note) => note.reference == selectedId);
         }
       case NoteDetailExitReason.discarded:
       case NoteDetailExitReason.cancelled:
@@ -241,8 +424,9 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
     }
 
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = null;
+      _unavailableSelection = null;
       _editingNewNote = false;
       _detailDirty = false;
       if (result.reason == NoteDetailExitReason.saved ||
@@ -259,160 +443,5 @@ final class NotesWorkspacePageState extends State<NotesWorkspacePage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final NotesCopy copy = NotesCopy.of(context);
-    final bool persistenceUnavailable = _error is UnsupportedError;
-    final String? loadError = _error == null
-        ? null
-        : persistenceUnavailable
-        ? copy.persistenceUnavailable
-        : copy.loadError;
-    final bool compact =
-        MediaQuery.sizeOf(context).width <
-        ResponsiveNotesWorkspace.compactBreakpoint;
-    return Scaffold(
-      appBar: _showDetail || (compact && widget.embeddedInWorkspace)
-          ? null
-          : _buildWorkspaceAppBar(copy),
-      body: _loading
-          ? NotesWorkspaceLoadingView(copy: copy)
-          : Column(
-              children: <Widget>[
-                if (widget.syncController
-                    case final SyncPresentationController sync)
-                  SyncStatusPanel(controller: sync),
-                Expanded(
-                  child: ResponsiveNotesWorkspace(
-                    list: NotesListPanel(
-                      notes: _notes,
-                      selectedNoteId: _selectedNoteId,
-                      error: loadError,
-                      actionBusy: false,
-                      onNewNote: _startNewNote,
-                      onSelectNote: _selectNote,
-                      onRetry: persistenceUnavailable ? null : reload,
-                    ),
-                    detail: _buildDetail(
-                      copy,
-                      showAppBar: compact && !widget.embeddedInWorkspace,
-                    ),
-                    hasSelection: _showDetail,
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  PreferredSizeWidget _buildWorkspaceAppBar(NotesCopy copy) {
-    final bool expanded =
-        MediaQuery.sizeOf(context).width >= 840 && widget.embeddedInWorkspace;
-    return AppBar(
-      title: Text(copy.notes),
-      actions:
-          expanded ||
-              widget.onOpenSettings == null && widget.onOpenDiagnostics == null
-          ? null
-          : <Widget>[
-              if (!expanded && widget.onOpenSettings != null) _settingsAction(),
-              if (!expanded && widget.onOpenDiagnostics != null)
-                TextButton(
-                  key: const ValueKey<String>('open-diagnostics'),
-                  onPressed: widget.onOpenDiagnostics,
-                  child: Text(copy.diagnostics),
-                ),
-            ],
-    );
-  }
-
-  Widget _buildDetail(NotesCopy copy, {required bool showAppBar}) {
-    if (!_showDetail) {
-      final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
-      if (_error != null) {
-        final bool persistenceUnavailable = _error is UnsupportedError;
-        final String errorMessage = persistenceUnavailable
-            ? copy.persistenceUnavailable
-            : copy.loadError;
-        return Center(
-          key: const ValueKey<String>('notes-workspace-detail-error'),
-          child: Semantics(
-            liveRegion: true,
-            container: true,
-            label: errorMessage,
-            child: Padding(
-              padding: const EdgeInsets.all(NoteFlowSpacing.xl),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    Icons.cloud_off_outlined,
-                    size: 32,
-                    color: tokens.textMuted,
-                  ),
-                  const SizedBox(height: NoteFlowSpacing.sm),
-                  Text(
-                    errorMessage,
-                    key: const ValueKey<String>(
-                      'notes-workspace-detail-error-message',
-                    ),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: tokens.textSecondary),
-                  ),
-                  if (!persistenceUnavailable) ...<Widget>[
-                    const SizedBox(height: NoteFlowSpacing.xs),
-                    TextButton.icon(
-                      key: const ValueKey<String>(
-                        'notes-workspace-detail-retry',
-                      ),
-                      onPressed: reload,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: Text(copy.retry),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      }
-      return Center(
-        key: const ValueKey<String>('notes-workspace-detail-empty'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.description_outlined, size: 40, color: tokens.textMuted),
-            const SizedBox(height: NoteFlowSpacing.sm),
-            Text(
-              copy.createFirstNote,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: tokens.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-    final NoteDto? note = _selectedNote;
-    return NoteDetailPage(
-      key: _detailKeyFor(note?.id ?? 'new'),
-      notesController: _application,
-      note: note,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningCancel: widget.onProvisioningCancel,
-      showAppBar: showAppBar,
-      onEmbeddedExit: _handleDetailExit,
-      onDirtyChanged: _handleDetailDirtyChanged,
-      syncController: widget.syncController,
-    );
-  }
-
-  Widget _settingsAction() {
-    final NotesCopy copy = NotesCopy.of(context);
-    return IconButton(
-      key: const ValueKey<String>('open-settings'),
-      tooltip: copy.appearanceAndLanguage,
-      icon: const Icon(Icons.tune_outlined),
-      onPressed: widget.onOpenSettings,
-    );
-  }
+  Widget build(BuildContext context) => _buildWorkspace(context);
 }

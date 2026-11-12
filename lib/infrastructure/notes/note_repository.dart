@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../application/notes/note_access.dart';
+
 import '../../application/sync/local_note_state.dart';
 import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
@@ -9,7 +11,22 @@ import '../../application/sync/sync_conflict.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
+import '../sync/local_note_state_codec.dart';
+import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_membership.dart';
+import '../../domain/notes/note_access_policy.dart';
+import '../../domain/notes/note_metadata.dart';
+import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
+
+part 'note_repository_mutations.dart';
+part 'note_repository_mapping.dart';
+part 'note_repository_save.dart';
+part 'note_repository_access.dart';
+part 'note_repository_delete.dart';
+part 'note_repository_update.dart';
 
 /// Infrastructure implementation of the domain's [domain.INoteRepository].
 ///
@@ -25,7 +42,12 @@ import '../../domain/notes/note_repository.dart' as domain;
 ///
 /// The repository never calls the remote data source: it only queues outbox
 /// mutations that a later sync coordinator pushes.
-final class NoteRepository implements domain.INoteRepository {
+final class NoteRepository
+    implements
+        domain.INoteDocumentRepository,
+        domain.INoteMetadataRepository,
+        domain.ISharedNoteRepository,
+        domain.INoteSnapshotRepository {
   /// Creates a repository from the injected account resolver, store factory,
   /// mutation-id generator, and clock.
   NoteRepository({
@@ -33,6 +55,9 @@ final class NoteRepository implements domain.INoteRepository {
     required this.localSyncStoreFactory,
     required this.generateMutationId,
     required this.now,
+    this.accessGuard,
+    this.sessionGeneration,
+    this.labelsEnabled = false,
   });
 
   /// Resolves the account the next operation acts on.
@@ -47,6 +72,11 @@ final class NoteRepository implements domain.INoteRepository {
 
   /// Supplies the local timestamp recorded on notes and mutations.
   final DateTime Function() now;
+  final INoteAccessGuard? accessGuard;
+  final int Function()? sessionGeneration;
+  final bool labelsEnabled;
+  @override
+  int get documentVersion => NoteDocument.version;
 
   /// One store instance per account, created on first use and reused after.
   final Map<String, ILocalSyncStore> _storesByAccount =
@@ -64,7 +94,18 @@ final class NoteRepository implements domain.INoteRepository {
       if (note == null || note.isDeleted) {
         return null;
       }
-      return _toDomain(note);
+      return _domainNoteFromLocal(
+        note,
+        metadataOnly:
+            note.protection.enabled &&
+            !(accessGuard?.allows(
+                  ownerId: note.ownerId,
+                  noteId: note.id,
+                  protection: note.protection,
+                  operation: NoteOperation.read,
+                ) ??
+                false),
+      );
     });
   }
 
@@ -79,120 +120,71 @@ final class NoteRepository implements domain.INoteRepository {
       final LocalSyncState state = await _readStateFor(accountUserId);
       return List<Note>.unmodifiable(
         state.notes
-            .where((LocalNoteState note) => !note.isDeleted)
-            .map(_toDomain),
+            .where(
+              (LocalNoteState note) =>
+                  !note.isDeleted && note.ownerId == ownerId,
+            )
+            .map(
+              (note) => _domainNoteFromLocal(
+                note,
+                metadataOnly: note.protection.enabled,
+              ),
+            ),
       );
     });
   }
 
   @override
-  Future<void> save(Note note) {
-    return _enqueue<void>(() async {
-      final String accountUserId = _requireActiveAccountUserId();
-      if (note.ownerId != accountUserId) {
-        throw ArgumentError.value(
-          note.ownerId,
-          'note',
-          'belongs to another account',
-        );
-      }
-      final ILocalSyncStore store = _storeFor(accountUserId);
-      await store.update((LocalSyncState current) {
-        if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.noteId == note.id,
-        )) {
-          throw StateError(
-            'Resolve the sync conflict before editing this note.',
-          );
-        }
-        final LocalNoteState? existing = _findNote(current, note.id);
-        if (existing?.isDeleted ?? false) {
-          throw StateError(
-            'A deleted note cannot be restored with the same id.',
-          );
-        }
-        return _stateAfterSave(current, note, now());
-      });
-    });
+  Future<List<Note>> findSharedWith(String actorId) => _enqueue(() async {
+    if (actorId != _requireActiveAccountUserId()) return <Note>[];
+    final state = await _readStateFor(actorId);
+    return state.notes
+        .where(
+          (n) =>
+              n.ownerId != actorId &&
+              !n.isDeleted &&
+              n.share?.isActive == true &&
+              n.share?.recipientId == actorId,
+        )
+        .map((n) => _domainNoteFromLocal(n, metadataOnly: n.protection.enabled))
+        .toList(growable: false);
+  });
+
+  @override
+  Future<NoteMetadata?> findMetadataById(String id) async {
+    final Note? note = await findById(id);
+    return note?.metadata;
   }
 
   @override
-  Future<void> deleteById(String id) {
-    return _enqueue<void>(() async {
-      final String accountUserId = _requireActiveAccountUserId();
-      final ILocalSyncStore store = _storeFor(accountUserId);
-      await store.update((LocalSyncState current) {
-        if (current.conflicts.any(
-          (SyncConflict conflict) => conflict.noteId == id,
-        )) {
-          throw StateError(
-            'Resolve the sync conflict before deleting this note.',
-          );
-        }
-        final LocalNoteState? existing = _findNote(current, id);
-        if (existing == null || existing.isDeleted) {
-          // An absent or already tombstoned note is already deleted.
-          return current;
-        }
-        final int pendingIndex = _lastPendingIndexFor(current, id);
-        final PendingMutation? pending = pendingIndex == -1
-            ? null
-            : current.outbox[pendingIndex];
-        if (existing.serverRevision == 0 && pending == null) {
-          // No server version and no queued create means this note is only a
-          // local draft. Removing it locally cannot lose a remote delete.
-          return _stateWith(
-            current,
-            notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
-                .toList(growable: false),
-            outbox: current.outbox,
-          );
-        }
-        if (pending != null &&
-            pending.operation == SyncMutationOperation.create &&
-            existing.serverRevision == 0 &&
-            _isUnsent(pending)) {
-          // The create never reached the server, so dropping the note and its
-          // mutation is the whole delete: no remote tombstone is needed.
-          return _stateWith(
-            current,
-            notes: current.notes
-                .where((LocalNoteState note) => note.id != id)
-                .toList(growable: false),
-            outbox: current.outbox
-                .where(
-                  (PendingMutation entry) =>
-                      entry.mutationId != pending.mutationId,
-                )
-                .toList(growable: false),
-          );
-        }
-        final DateTime timestamp = now();
-        final LocalNoteState tombstone = LocalNoteState(
-          id: existing.id,
-          ownerId: existing.ownerId,
-          title: '',
-          content: '',
-          createdAt: existing.createdAt,
-          updatedAt: timestamp,
-          serverRevision: existing.serverRevision,
-          deletedAt: timestamp,
-          status: NoteSyncStatus.pending,
-        );
-        return _stateWith(
-          current,
-          notes: _notesWith(current.notes, tombstone),
-          outbox: _outboxAfterDelete(
-            current,
-            existing,
-            pendingIndex,
-            timestamp,
-          ),
-        );
-      });
-    });
-  }
+  Future<List<NoteMetadata>> findMetadataByOwnerId(String ownerId) async =>
+      (await findByOwnerId(ownerId))
+          .map((note) => note.metadata)
+          .toList(growable: false);
+
+  @override
+  Future<void> save(Note note) => _save(note);
+  @override
+  Future<void> saveSnapshot(Note note, Note expected) =>
+      _save(note, expected: expected);
+
+  @override
+  Future<Note> updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required domain.NoteChange change,
+    required domain.NoteCommitFence canCommit,
+  }) => _updateById(
+    noteId: noteId,
+    ownerId: ownerId,
+    expectedAccountUserId: expectedAccountUserId,
+    change: change,
+    canCommit: canCommit,
+  );
+
+  @override
+  Future<void> deleteById(String id) => _deleteById(id);
 
   Future<LocalSyncState> _readActiveState() {
     return _readStateFor(_requireActiveAccountUserId());
@@ -223,190 +215,6 @@ final class NoteRepository implements domain.INoteRepository {
     );
   }
 
-  LocalSyncState _stateAfterSave(
-    LocalSyncState current,
-    Note note,
-    DateTime timestamp,
-  ) {
-    final LocalNoteState? existing = _findNote(current, note.id);
-    if (existing == null) {
-      // A new local note starts unacknowledged and queues one create.
-      return _stateWith(
-        current,
-        notes: <LocalNoteState>[
-          ...current.notes,
-          _toLocalNote(note, serverRevision: 0, status: NoteSyncStatus.pending),
-        ],
-        outbox: <PendingMutation>[
-          ...current.outbox,
-          _pendingMutation(
-            noteId: note.id,
-            operation: SyncMutationOperation.create,
-            baseRevision: 0,
-            payload: _payloadOf(note),
-            timestamp: timestamp,
-          ),
-        ],
-      );
-    }
-    return _stateWith(
-      current,
-      notes: _notesWith(
-        current.notes,
-        _toLocalNote(
-          note,
-          serverRevision: existing.serverRevision,
-          status: NoteSyncStatus.pending,
-        ),
-      ),
-      outbox: _outboxAfterSave(current, note, existing, timestamp),
-    );
-  }
-
-  List<PendingMutation> _outboxAfterSave(
-    LocalSyncState current,
-    Note note,
-    LocalNoteState existing,
-    DateTime timestamp,
-  ) {
-    final SyncNotePayload payload = _payloadOf(note);
-    if (current.outbox.any(
-      (PendingMutation entry) =>
-          entry.noteId == note.id &&
-          entry.blocked &&
-          entry.lastError == SyncErrorCode.invalidMutation,
-    )) {
-      // An explicit edit repairs a rejected request with a fresh id and the
-      // last acknowledged revision; successors of that request cannot run.
-      return <PendingMutation>[
-        ...current.outbox.where(
-          (PendingMutation entry) => entry.noteId != note.id,
-        ),
-        _pendingMutation(
-          noteId: note.id,
-          operation: existing.serverRevision == 0
-              ? SyncMutationOperation.create
-              : SyncMutationOperation.update,
-          baseRevision: existing.serverRevision,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final int index = _lastPendingIndexFor(current, note.id);
-    if (index == -1) {
-      // Nothing is queued yet: base the update on the acknowledged revision.
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.update,
-          baseRevision: existing.serverRevision,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final PendingMutation last = current.outbox[index];
-    if (last.operation == SyncMutationOperation.delete) {
-      throw StateError('A queued delete cannot be undone with the same id.');
-    }
-    if (!_isUnsent(last)) {
-      // The entry may already have been seen by the server, so it stays
-      // byte-for-byte identical and the edit becomes the next queued mutation
-      // at the next predicted revision. Its id remains stable for retries.
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.update,
-          baseRevision: last.baseRevision + 1,
-          payload: payload,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    // Unsent coalescing keeps the queue position, the base revision, and the
-    // mutation id, while the payload always reflects the latest edit.
-    final PendingMutation coalesced = PendingMutation(
-      mutationId: last.mutationId,
-      noteId: note.id,
-      operation: last.operation,
-      baseRevision: last.baseRevision,
-      payload: payload,
-      createdAt: last.createdAt,
-    );
-    return _outboxWithReplacement(current.outbox, index, coalesced);
-  }
-
-  List<PendingMutation> _outboxAfterDelete(
-    LocalSyncState current,
-    LocalNoteState note,
-    int pendingIndex,
-    DateTime timestamp,
-  ) {
-    if (pendingIndex == -1) {
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.delete,
-          baseRevision: note.serverRevision,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    final PendingMutation last = current.outbox[pendingIndex];
-    if (last.operation == SyncMutationOperation.delete) {
-      // The delete is already queued; a second one would be redundant.
-      return current.outbox;
-    }
-    if (!_isUnsent(last)) {
-      return <PendingMutation>[
-        ...current.outbox,
-        _pendingMutation(
-          noteId: note.id,
-          operation: SyncMutationOperation.delete,
-          baseRevision: last.baseRevision + 1,
-          timestamp: timestamp,
-        ),
-      ];
-    }
-    // Unsent coalescing: an update followed by a delete is just the delete,
-    // reusing the mutation id and base revision the server has never seen.
-    final int baseRevision = last.operation == SyncMutationOperation.create
-        ? note.serverRevision
-        : last.baseRevision;
-    return _outboxWithReplacement(
-      current.outbox,
-      pendingIndex,
-      PendingMutation(
-        mutationId: last.mutationId,
-        noteId: note.id,
-        operation: SyncMutationOperation.delete,
-        baseRevision: baseRevision,
-        createdAt: last.createdAt,
-      ),
-    );
-  }
-
-  PendingMutation _pendingMutation({
-    required String noteId,
-    required SyncMutationOperation operation,
-    required int baseRevision,
-    SyncNotePayload? payload,
-    required DateTime timestamp,
-  }) {
-    return PendingMutation(
-      mutationId: generateMutationId(),
-      noteId: noteId,
-      operation: operation,
-      baseRevision: baseRevision,
-      payload: payload,
-      createdAt: timestamp,
-    );
-  }
-
   /// True when the entry has never been pushed, so it can still be rewritten.
   ///
   /// An attempted or blocked entry may already be in flight (or applied with a
@@ -418,7 +226,7 @@ final class NoteRepository implements domain.INoteRepository {
 
   static LocalNoteState? _findNote(LocalSyncState state, String id) {
     for (final LocalNoteState note in state.notes) {
-      if (note.id == id) {
+      if (note.referenceFor(state.accountUserId) == id) {
         return note;
       }
     }
@@ -428,7 +236,11 @@ final class NoteRepository implements domain.INoteRepository {
   /// Index of the newest outbox entry for [noteId], or -1 when none exists.
   static int _lastPendingIndexFor(LocalSyncState state, String noteId) {
     for (int index = state.outbox.length - 1; index >= 0; index--) {
-      if (state.outbox[index].noteId == noteId) {
+      if (state.outbox[index].isLabel) continue;
+      if (state.outbox[index].mutation
+              .identityFor(state.accountUserId)
+              .referenceFor(state.accountUserId) ==
+          noteId) {
         return index;
       }
     }
@@ -440,7 +252,7 @@ final class NoteRepository implements domain.INoteRepository {
     LocalNoteState replacement,
   ) {
     final int index = notes.indexWhere(
-      (LocalNoteState note) => note.id == replacement.id,
+      (LocalNoteState note) => note.identity == replacement.identity,
     );
     if (index == -1) {
       return <LocalNoteState>[...notes, replacement];
@@ -468,42 +280,13 @@ final class NoteRepository implements domain.INoteRepository {
   }) {
     return LocalSyncState(
       accountUserId: current.accountUserId,
+      labels: current.labels,
+      syncWireVersion: current.syncWireVersion,
       notes: notes,
       outbox: outbox,
       conflicts: current.conflicts,
       cursor: current.cursor,
-    );
-  }
-
-  static SyncNotePayload _payloadOf(Note note) {
-    return SyncNotePayload(title: note.title, content: note.content);
-  }
-
-  static LocalNoteState _toLocalNote(
-    Note note, {
-    required int serverRevision,
-    required NoteSyncStatus status,
-  }) {
-    return LocalNoteState(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      serverRevision: serverRevision,
-      status: status,
-    );
-  }
-
-  static Note _toDomain(LocalNoteState note) {
-    return Note.reconstitute(
-      id: note.id,
-      ownerId: note.ownerId,
-      title: note.title,
-      content: note.content,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
+      userPreferences: current.userPreferences,
     );
   }
 
@@ -527,11 +310,17 @@ domain.INoteRepository createNoteRepository({
   localSyncStoreFactory,
   required String Function() generateMutationId,
   required DateTime Function() now,
+  INoteAccessGuard? accessGuard,
+  int Function()? sessionGeneration,
+  bool labelsEnabled = false,
 }) {
   return NoteRepository(
     currentAccountUserId: currentAccountUserId,
     localSyncStoreFactory: localSyncStoreFactory,
     generateMutationId: generateMutationId,
     now: now,
+    accessGuard: accessGuard,
+    sessionGeneration: sessionGeneration,
+    labelsEnabled: labelsEnabled,
   );
 }

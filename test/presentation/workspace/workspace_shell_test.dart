@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -23,6 +24,7 @@ void main() {
     Locale locale = const Locale('en'),
     Widget? dashboardPage,
     Widget? notesPage,
+    bool disableAnimations = false,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -30,6 +32,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (BuildContext context, Widget? child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: disableAnimations),
+          child: child!,
+        ),
         locale: locale,
         supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
         localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
@@ -61,6 +68,27 @@ void main() {
   int stackIndex(WidgetTester tester) {
     return tester.widget<IndexedStack>(find.byType(IndexedStack)).index!;
   }
+
+  testWidgets('phone resize releases desktop navigation on the first frame', (
+    tester,
+  ) async {
+    double pageWidth = 0;
+    await pumpShell(
+      tester,
+      size: const Size(1280, 844),
+      dashboardPage: LayoutBuilder(
+        builder: (context, constraints) {
+          pageWidth = constraints.maxWidth;
+          return const SizedBox.expand();
+        },
+      ),
+    );
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
+    expect(pageWidth, 390);
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('starts on the dashboard destination', (
     WidgetTester tester,
@@ -251,7 +279,9 @@ void main() {
     expect(tester.getTopLeft(avatar).dx, closeTo(21, 0.1));
     expect(tester.getSize(avatar), const Size(38, 38));
     expect(tester.getTopLeft(homePill).dx, closeTo(68, 0.1));
-    expect(tester.getSize(homePill), const Size(64, 40));
+    expect(tester.getSize(homePill), Size(kIsWeb ? 64 : 75, 48));
+    final paint = find.descendant(of: homePill, matching: find.byType(Ink));
+    expect(tester.getSize(paint), Size(kIsWeb ? 64 : 75, 40));
   });
 
   testWidgets('medium width shows a labelled NavigationRail', (
@@ -277,7 +307,7 @@ void main() {
     final Finder sidebar = find.byKey(WorkspaceShell.sidebarKey);
     expect(sidebar, findsOneWidget);
     expect(find.byKey(WorkspaceShell.navigationRailKey), findsNothing);
-    expect(tester.getSize(sidebar).width, 280.0);
+    expect(tester.getSize(sidebar).width, 270.0);
     expect(find.text('NoteFlow'), findsOneWidget);
     expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
     expect(find.text('Workspace'), findsOneWidget);
@@ -419,6 +449,13 @@ void main() {
     expect(find.byKey(WorkspaceShell.sidebarKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final double movingWidth = tester
+        .getSize(find.byKey(_dashboardPageKey))
+        .width;
+    expect(movingWidth, greaterThan(1200 - WorkspaceShell.sidebarWidth - 1));
+    expect(movingWidth, lessThan(1200));
     await tester.pumpAndSettle();
 
     expect(find.byKey(WorkspaceShell.sidebarKey), findsNothing);
@@ -451,7 +488,7 @@ void main() {
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
   });
 
-  testWidgets('compact menu sheet switches destinations', (
+  testWidgets('compact avatar popup switches destinations', (
     WidgetTester tester,
   ) async {
     await pumpShell(tester, size: const Size(480, 900));
@@ -459,12 +496,27 @@ void main() {
 
     await tester.tap(find.byKey(WorkspaceShell.compactMenuKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(WorkspaceShell.notionBrandMarkKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<VoidCallback>), findsWidgets);
     expect(find.byKey(WorkspaceShell.notesDestinationKey), findsOneWidget);
 
     await tester.tap(find.byKey(WorkspaceShell.notesDestinationKey));
     await tester.pumpAndSettle();
     expect(find.text('Notes page').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('reduce motion collapses sidebar immediately', (
+    WidgetTester tester,
+  ) async {
+    await pumpShell(
+      tester,
+      size: const Size(1200, 900),
+      disableAnimations: true,
+    );
+    await tester.tap(find.byKey(WorkspaceShell.collapseToggleKey));
+    await tester.pump();
+    expect(tester.getSize(find.byKey(_dashboardPageKey)).width, 1200);
+    expect(find.byKey(WorkspaceShell.sidebarKey), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('compact shell keeps secondary actions in navigation menu', (
@@ -580,27 +632,28 @@ void main() {
     expect(diagnosticsOpened, isTrue);
   });
 
-  testWidgets('desktop footer labels existing actions with touch-sized rows', (
-    WidgetTester tester,
-  ) async {
-    await pumpShell(
-      tester,
-      size: const Size(1200, 900),
-      onOpenSettings: () {},
-      onOpenDiagnostics: () {},
-    );
+  testWidgets(
+    'desktop footer labels existing actions with dense pointer rows',
+    (WidgetTester tester) async {
+      await pumpShell(
+        tester,
+        size: const Size(1200, 900),
+        onOpenSettings: () {},
+        onOpenDiagnostics: () {},
+      );
 
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Diagnostics'), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-    expect(
-      tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
-      greaterThanOrEqualTo(44),
-    );
-  });
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Diagnostics'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.settingsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+      expect(
+        tester.getSize(find.byKey(WorkspaceShell.diagnosticsKey)).height,
+        greaterThanOrEqualTo(32),
+      );
+    },
+  );
 
   test('localization alias and delegate cover en and vi', () {
     expect(

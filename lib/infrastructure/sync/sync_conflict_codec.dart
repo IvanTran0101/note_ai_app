@@ -51,6 +51,7 @@ abstract final class SyncConflictCodec {
     final SyncCodecObject? remoteRecord = record.requireNullableObject(
       LocalSyncSchema.remote,
       LocalSyncSchema.snapshotFields,
+      optionalFields: LocalSyncSchema.snapshotOptionalFields,
     );
     final SyncNoteSnapshot? remote = remoteRecord == null
         ? null
@@ -58,11 +59,13 @@ abstract final class SyncConflictCodec {
     final SyncCodecObject localRecord = record.requireObject(
       LocalSyncSchema.local,
       LocalSyncSchema.noteFields,
+      optionalFields: LocalSyncSchema.noteOptionalFields,
     );
     final LocalNoteState local = LocalNoteStateCodec.decodeRecord(localRecord);
     final SyncCodecObject pendingRecord = record.requireObject(
       LocalSyncSchema.pending,
       LocalSyncSchema.mutationFields,
+      optionalFields: LocalSyncSchema.mutationOptionalFields,
     );
     final PendingMutation pending = PendingMutationCodec.decodeRecord(
       pendingRecord,

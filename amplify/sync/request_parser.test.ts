@@ -113,8 +113,9 @@ check('update and delete parse, and a delete drops any payload', () => {
   assertEqual(deleteMutation.payload, undefined, 'payload must be dropped');
 });
 
-check('a body-supplied ownerId or extra field never reaches the store', () => {
-  const mutation = mutationOf(createBody({ ownerId: 'somebody-else', extra: true }));
+check('owned route refuses canonical fields and drops unrelated additive fields', () => {
+  assertProblem(createBody({ ownerId: 'somebody-else' }), 'PAYLOAD_INVALID', 'shared identity on owned route');
+  const mutation = mutationOf(createBody({ extra: true }));
   assertDeepEqual(
     Object.keys(mutation).sort(),
     ['baseRevision', 'mutationId', 'noteId', 'operation', 'payload'],
@@ -167,7 +168,7 @@ check('baseRevision must be a non-negative whole number', () => {
   }
 });
 
-check('create and update require a string title and content', () => {
+check('create and update require non-blank title and content', () => {
   for (const operation of ['create', 'update']) {
     for (const payload of [undefined, null, 'text', 42, [1]]) {
       assertProblem(createBody({ operation, payload }), 'PAYLOAD_REQUIRED', `${operation} payload ${JSON.stringify(payload)}`);
@@ -175,14 +176,41 @@ check('create and update require a string title and content', () => {
     assertProblem(createBody({ operation, payload: { title: 1, content: 'c' } }), 'PAYLOAD_INVALID', 'numeric title');
     assertProblem(createBody({ operation, payload: { title: 't' } }), 'PAYLOAD_INVALID', 'missing content');
     assertProblem(createBody({ operation, payload: { title: 't', content: null } }), 'PAYLOAD_INVALID', 'null content');
+    assertProblem(createBody({ operation, payload: { title: '  ', content: 'body' } }), 'PAYLOAD_INVALID', 'blank title');
+    assertProblem(createBody({ operation, payload: { title: 'title', content: '\n\t' } }), 'PAYLOAD_INVALID', 'blank content');
   }
 
-  // Empty strings are valid note content; only their type is a rule.
+  // Whitespace around real text is retained rather than normalized.
   assertDeepEqual(
-    mutationOf(createBody({ payload: { title: '', content: '' } })).payload,
-    { title: '', content: '' },
-    'empty strings',
+    mutationOf(createBody({ payload: { title: '  Title  ', content: '\nBody\n' } })).payload,
+    { title: '  Title  ', content: '\nBody\n' },
+    'text formatting',
   );
+});
+
+check('pinnedAt preserves legacy omission and validates explicit values', () => {
+  const legacy = mutationOf(createBody());
+  assertEqual(Object.prototype.hasOwnProperty.call(legacy.payload ?? {}, 'pinnedAt'), false, 'legacy omission');
+
+  const pinnedAt = '2026-09-25T10:30:00.123Z';
+  assertDeepEqual(
+    mutationOf(createBody({ payload: { title: 'Title', content: 'Content', pinnedAt } })).payload,
+    { title: 'Title', content: 'Content', pinnedAt },
+    'pin timestamp',
+  );
+  assertDeepEqual(
+    mutationOf(createBody({ payload: { title: 'Title', content: 'Content', pinnedAt: null } })).payload,
+    { title: 'Title', content: 'Content', pinnedAt: null },
+    'explicit unpin',
+  );
+
+  for (const invalid of [42, '', 'yesterday', '2026-09-25T10:30:00+00:00', '2026-02-30T10:30:00Z']) {
+    assertProblem(
+      createBody({ payload: { title: 'Title', content: 'Content', pinnedAt: invalid } }),
+      'PAYLOAD_INVALID',
+      `invalid pinnedAt ${JSON.stringify(invalid)}`,
+    );
+  }
 });
 
 check('the first invalid field decides the problem', () => {

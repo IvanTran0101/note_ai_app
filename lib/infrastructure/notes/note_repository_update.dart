@@ -1,0 +1,119 @@
+part of 'note_repository.dart';
+
+extension _NoteRepositoryUpdate on NoteRepository {
+  Future<Note> _updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required domain.NoteChange change,
+    required domain.NoteCommitFence canCommit,
+  }) {
+    final context = _captureWrite();
+    void fence() {
+      if (context.account != expectedAccountUserId || !canCommit()) {
+        throw const domain.NoteMutationCancelledException();
+      }
+      _requireWrite(context);
+    }
+
+    return _enqueue(() async {
+      fence();
+      Note? result;
+      await _storeFor(expectedAccountUserId).update((state) {
+        fence();
+        final existing = state.notes
+            .where(
+              (n) => n.ownerId == ownerId && n.id == noteId && !n.isDeleted,
+            )
+            .firstOrNull;
+        if (existing == null) throw const domain.NoteMutationMissingException();
+        if (state.conflicts.any((c) => c.identity == existing.identity)) {
+          throw StateError(
+            'Resolve the sync conflict before editing this note.',
+          );
+        }
+        final fresh = _domainNoteFromLocal(existing);
+        _authorizeUpdate(fresh, expectedAccountUserId, NoteOperation.read);
+        if (!identical(change(fresh), fresh)) {
+          throw ArgumentError('Note change must return its fresh instance.');
+        }
+        fence();
+        _validateUpdatedNote(fresh, existing, expectedAccountUserId);
+        _validateLabels(fresh, existing.labelIds, state, expectedAccountUserId);
+        result = fresh;
+        if (fresh.title == existing.title &&
+            fresh.content == existing.content &&
+            fresh.document == existing.document &&
+            sameAttachments(fresh.attachments, existing.attachments) &&
+            sameLabelIds(fresh.labelIds, existing.labelIds) &&
+            fresh.pinnedAt == existing.pinnedAt) {
+          return state;
+        }
+        return _stateAfterSave(state, fresh, now());
+      });
+      fence();
+      return result!;
+    });
+  }
+
+  void _authorizeUpdate(Note note, String actor, NoteOperation operation) {
+    if (!const NoteAccessPolicy().allows(
+      actorId: actor,
+      note: note.identity,
+      share: note.share,
+      operation: operation,
+    )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    if (!note.contentAvailable) throw const NoteContentUnavailable();
+    _requireNoteAccess(note.id, note.ownerId, note.protection, operation);
+  }
+
+  void _validateUpdatedNote(Note note, LocalNoteState old, String actor) {
+    if (note.identity != old.identity ||
+        note.createdAt != old.createdAt ||
+        note.protection != old.protection ||
+        note.share != old.share ||
+        note.contentRevision != old.serverRevision ||
+        note.contentAvailable != old.contentAvailable) {
+      throw ArgumentError(
+        'A text/pin mutation cannot change resource authority.',
+      );
+    }
+    if (note.pinnedAt != old.pinnedAt) {
+      _authorizeUpdate(note, actor, NoteOperation.manage);
+    }
+    if (!sameAttachments(note.attachments, old.attachments)) {
+      _authorizeUpdate(note, actor, NoteOperation.attachmentWrite);
+    }
+    if (old.document != null && note.document == null) {
+      throw ArgumentError('A legacy writer cannot discard a rich document.');
+    }
+    if (note.title != old.title ||
+        note.content != old.content ||
+        note.document != old.document) {
+      _authorizeUpdate(note, actor, NoteOperation.edit);
+      if (note.title.trim().isEmpty ||
+          (note.document == null && note.content.trim().isEmpty)) {
+        throw ArgumentError('Note text must not be blank.');
+      }
+    }
+  }
+
+  void _validateLabels(
+    Note note,
+    List<String> old,
+    LocalSyncState state,
+    String actor,
+  ) {
+    if (!sameLabelIds(note.labelIds, old)) {
+      _authorizeUpdate(note, actor, NoteOperation.manage);
+    }
+    requireLabelAssociations(
+      ownerId: note.ownerId,
+      before: old,
+      after: note.labelIds,
+      catalog: state.labels.map((l) => l.toDomain()),
+    );
+  }
+}

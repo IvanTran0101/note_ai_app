@@ -1,7 +1,15 @@
 /// Locally persisted state of one note.
 library;
 
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_projection.dart';
+
 import 'note_sync_status.dart';
+import '../../domain/notes/attachment.dart';
+import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
 
 /// Immutable local projection of one note plus its sync bookkeeping.
 ///
@@ -16,20 +24,49 @@ final class LocalNoteState {
     required String ownerId,
     required this.title,
     required this.content,
+    this.document,
     required this.createdAt,
     required this.updatedAt,
+    this.pinnedAt,
     int serverRevision = 0,
     this.deletedAt,
     this.status = NoteSyncStatus.synced,
+    this.protection = const NoteProtection.unprotected(),
+    this.contentAvailable = true,
+    this.share,
+    Iterable<Attachment> attachments = const [],
+    Iterable<String> labelIds = const [],
+    Iterable<LabelProjection> labelProjections = const [],
   }) : id = _requireNonBlank(id, 'id'),
+       attachments = freezeAttachments(attachments, noteId: id),
+       labelIds = freezeLabelIds(labelIds),
+       labelProjections = List.unmodifiable(labelProjections),
        ownerId = _requireNonBlank(ownerId, 'ownerId'),
-       serverRevision = _requireNonNegative(serverRevision, 'serverRevision');
+       serverRevision = _requireNonNegative(serverRevision, 'serverRevision') {
+    if (share != null && share!.note != identity) {
+      throw ArgumentError('Share must match canonical note identity.');
+    }
+    if (!contentAvailable &&
+        (title.isNotEmpty ||
+            content.isNotEmpty ||
+            this.attachments.isNotEmpty ||
+            this.labelIds.isNotEmpty ||
+            this.labelProjections.isNotEmpty ||
+            document != null)) {
+      throw ArgumentError('Unavailable content must be redacted.');
+    }
+    if (document != null && content != document!.plainText) {
+      throw ArgumentError('Rich content must match its projection.');
+    }
+  }
 
   /// The identity of this note.
   final String id;
+  final NoteShareGrant? share;
+  NoteIdentity get identity => NoteIdentity(ownerId, id);
+  String referenceFor(String actorId) => identity.referenceFor(actorId);
 
-  /// The account this note belongs to. Always the owning account of the store
-  /// that holds it.
+  /// The canonical owner, independent of the actor/account store namespace.
   final String ownerId;
 
   /// The current title.
@@ -37,12 +74,21 @@ final class LocalNoteState {
 
   /// The current content.
   final String content;
+  final NoteDocument? document;
+  final List<Attachment> attachments;
+  final List<String> labelIds;
+  final List<LabelProjection> labelProjections;
+  final NoteProtection protection;
+  final bool contentAvailable;
 
   /// When the note was created locally or remotely.
   final DateTime createdAt;
 
   /// When the note content last changed, locally or remotely.
   final DateTime updatedAt;
+
+  /// Owner pin time, or null when the note is unpinned.
+  final DateTime? pinnedAt;
 
   /// The last revision acknowledged by the server; 0 before the first apply.
   final int serverRevision;
@@ -63,11 +109,19 @@ final class LocalNoteState {
         other.ownerId == ownerId &&
         other.title == title &&
         other.content == content &&
+        other.document == document &&
+        sameAttachments(other.attachments, attachments) &&
+        sameLabelIds(other.labelIds, labelIds) &&
+        _sameLabels(other.labelProjections, labelProjections) &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
+        other.pinnedAt == pinnedAt &&
         other.serverRevision == serverRevision &&
         other.deletedAt == deletedAt &&
-        other.status == status;
+        other.status == status &&
+        other.protection == protection &&
+        other.contentAvailable == contentAvailable &&
+        other.share == share;
   }
 
   @override
@@ -76,11 +130,19 @@ final class LocalNoteState {
     ownerId,
     title,
     content,
+    document,
+    Object.hashAll(attachments),
     createdAt,
     updatedAt,
+    pinnedAt,
     serverRevision,
     deletedAt,
     status,
+    protection,
+    contentAvailable,
+    share,
+    Object.hashAll(labelIds),
+    Object.hashAll(labelProjections),
   );
 
   @override
@@ -90,6 +152,10 @@ final class LocalNoteState {
         'status: ${status.name})';
   }
 }
+
+bool _sameLabels(List<LabelProjection> a, List<LabelProjection> b) =>
+    a.length == b.length &&
+    Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
 String _requireNonBlank(String value, String fieldName) {
   if (value.trim().isEmpty) {

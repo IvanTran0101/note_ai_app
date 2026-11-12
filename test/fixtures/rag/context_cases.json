@@ -1,0 +1,263 @@
+{
+  "provenance": "synthetic-source-span-transform-not-authorized-runtime-evidence",
+  "cases": [
+    {
+      "id": "span-01",
+      "spans": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 20,
+          "endOffset": 50
+        }
+      ],
+      "expected": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 50
+        }
+      ],
+      "contracts": [
+        "C10",
+        "C11",
+        "C12"
+      ]
+    },
+    {
+      "id": "span-02",
+      "spans": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        }
+      ],
+      "expected": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        }
+      ],
+      "contracts": [
+        "C12"
+      ]
+    },
+    {
+      "id": "span-03",
+      "spans": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-conflict",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        }
+      ],
+      "expected": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-conflict",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 30
+        }
+      ],
+      "contracts": [
+        "C13"
+      ]
+    },
+    {
+      "id": "span-04",
+      "spans": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 10
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 2,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 10
+        }
+      ],
+      "expected": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 10
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 2,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 10
+        }
+      ],
+      "contracts": [
+        "C07",
+        "C11",
+        "C12"
+      ]
+    },
+    {
+      "id": "span-05",
+      "spans": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 10
+        },
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 10,
+          "endOffset": 20
+        }
+      ],
+      "expected": [
+        {
+          "ownerId": "actor-a",
+          "noteId": "n-watch",
+          "revision": 1,
+          "sectionId": "section-1",
+          "startOffset": 0,
+          "endOffset": 20
+        }
+      ],
+      "contracts": [
+        "C12"
+      ]
+    }
+  ],
+  "budgetCases": [
+    {
+      "id": "budget-01",
+      "kind": "embedding",
+      "tokens": 512,
+      "characters": 2048,
+      "valid": true,
+      "contracts": [
+        "C02",
+        "C03"
+      ]
+    },
+    {
+      "id": "budget-02",
+      "kind": "embedding",
+      "tokens": 513,
+      "characters": 2048,
+      "valid": false,
+      "contracts": [
+        "C02",
+        "C03"
+      ]
+    },
+    {
+      "id": "budget-03",
+      "kind": "embedding",
+      "tokens": 512,
+      "characters": 2049,
+      "valid": false,
+      "contracts": [
+        "C02",
+        "C03"
+      ]
+    },
+    {
+      "id": "budget-04",
+      "kind": "evidence",
+      "tokens": 6000,
+      "characters": null,
+      "valid": true,
+      "contracts": [
+        "C14",
+        "C15"
+      ]
+    },
+    {
+      "id": "budget-05",
+      "kind": "evidence",
+      "tokens": 6001,
+      "characters": null,
+      "valid": false,
+      "contracts": [
+        "C14",
+        "C15"
+      ]
+    },
+    {
+      "id": "budget-06",
+      "kind": "evidence",
+      "tokens": true,
+      "characters": null,
+      "valid": false,
+      "contracts": [
+        "C14"
+      ]
+    }
+  ],
+  "tokenCountProvenance": "injected-synthetic-counter-values-not-tokenizer-measurements"
+}

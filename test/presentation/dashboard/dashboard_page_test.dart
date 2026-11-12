@@ -1,8 +1,18 @@
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride, kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/labels/label_application.dart';
+import 'package:note_ai_app/infrastructure/notes/note_repository.dart';
+import 'package:note_ai_app/presentation/labels/label_catalog_scope.dart';
+
+import '../../infrastructure/notes/note_repository_test_support.dart';
 
 import 'package:note_ai_app/application/dashboard/dashboard_overview.dart';
 import 'package:note_ai_app/application/dashboard/get_dashboard_overview.dart';
@@ -47,6 +57,108 @@ void main() {
   });
 
   group('DashboardPage', () {
+    testWidgets(
+      'actor change clears Home label filter without a catalog cascade',
+      (tester) async {
+        final actor = ValueNotifier('local-user');
+        final store = FakeLocalSyncStore(accountUserId: actor.value);
+        final repository = NoteRepository(
+          currentAccountUserId: () => actor.value,
+          localSyncStoreFactory: ({required accountUserId}) => store,
+          generateMutationId: () => 'mutation',
+          now: () => _baseTime,
+        );
+        final app = LabelApplication(
+          currentActor: () => actor.value,
+          generation: () => 1,
+          storeFor: (_) => store,
+          notes: repository,
+          generateId: () => 'private-label',
+          now: () => _baseTime,
+          requestSync: (_) {},
+        );
+        final label = await app.create('Private filter');
+        final notes = [_buildNote()];
+        await _pumpDashboard(
+          tester,
+          dashboardController: DashboardController(
+            query: _FakeDashboardQuery(_overview(notes: notes)),
+          ),
+          notesController: _FakeNotesController(notes: notes),
+          wrap: (child) => ValueListenableBuilder<String>(
+            valueListenable: actor,
+            builder: (_, value, _) => LabelCatalogScope(
+              application: app,
+              actor: value,
+              labels: [label],
+              child: child,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Private filter'));
+        await tester.pumpAndSettle();
+        expect(find.byType(DashboardNoteCard), findsNothing);
+        actor.value = 'other';
+        await tester.pumpAndSettle();
+        expect(find.byType(DashboardNoteCard), findsWidgets);
+        expect(find.text('Private filter'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await app.dispose();
+        actor.dispose();
+      },
+    );
+    testWidgets('durable changes refresh Home without navigating away', (
+      tester,
+    ) async {
+      final changes = ChangeNotifier();
+      final notes = _FakeNotesController();
+      final query = _FakeDashboardQuery(_overview(notes: []));
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(query: query),
+        notesController: notes,
+        noteChanges: changes,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.emptyStateKey), findsOneWidget);
+      notes.notes.add(_buildNote(title: 'Arrived after initial sync'));
+      query.result = _overview(notes: notes.notes);
+      changes.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byType(DashboardNoteCard), findsOneWidget);
+      expect(find.byKey(DashboardPage.emptyStateKey), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      changes.dispose();
+    });
+
+    testWidgets('change during loading queues one final Home reload', (
+      tester,
+    ) async {
+      final changes = ChangeNotifier();
+      final gate = Completer<void>();
+      final notes = _FakeNotesController()..listNotesGate = gate;
+      final query = _FakeDashboardQuery(_overview(notes: []));
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(query: query),
+        notesController: notes,
+        noteChanges: changes,
+      );
+      await tester.pump();
+      notes.notes.add(_buildNote());
+      query.result = _overview(notes: notes.notes);
+      changes.notifyListeners();
+      changes.notifyListeners();
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(notes.listNotesCalls, 2);
+      expect(find.byType(DashboardNoteCard), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      changes.dispose();
+    });
+
     testWidgets('shows a loading skeleton while the overview is pending', (
       WidgetTester tester,
     ) async {
@@ -95,11 +207,14 @@ void main() {
       final DashboardController controller = DashboardController(
         query: _FakeDashboardQuery(_overview(notes: notes)),
       );
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: notes,
+      );
 
       await _pumpDashboard(
         tester,
         dashboardController: controller,
-        notesController: _FakeNotesController(notes: notes),
+        notesController: notesController,
         size: const Size(1440, 900),
       );
       await tester.pumpAndSettle();
@@ -134,12 +249,14 @@ void main() {
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+      expect(notesController.savedLayout, NoteLayoutPreference.list);
 
       await tester.tap(find.byIcon(Icons.grid_view_outlined));
       await tester.pumpAndSettle();
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.grid);
+      expect(notesController.savedLayout, NoteLayoutPreference.grid);
       expect(
         find.descendant(
           of: find.byKey(const ValueKey<String>('dashboard-note-card-a')),
@@ -153,6 +270,44 @@ void main() {
 
       expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
       expect(_cardFor(tester, 'b').layout, DashboardNoteCardLayout.list);
+      expect(notesController.savedLayout, NoteLayoutPreference.list);
+    });
+
+    testWidgets('loads a saved list layout and persists owner pin changes', (
+      WidgetTester tester,
+    ) async {
+      final List<NoteDto> notes = <NoteDto>[
+        _buildNote(id: 'a', title: 'Alpha'),
+        _buildNote(id: 'b', title: 'Beta'),
+      ];
+      final _FakeNotesController notesController = _FakeNotesController(
+        notes: notes,
+        savedLayout: NoteLayoutPreference.list,
+      );
+      final DashboardController controller = DashboardController(
+        query: _FakeDashboardQuery(_overview(notes: notes)),
+      );
+
+      await _pumpDashboard(
+        tester,
+        dashboardController: controller,
+        notesController: notesController,
+        size: const Size(1440, 900),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.list);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-note-pin-b')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(notesController.pinWrites, 1);
+      expect(
+        notesController.notes.singleWhere((note) => note.id == 'b').pinnedAt,
+        isNotNull,
+      );
+      expect(find.byTooltip('Unpin note'), findsOneWidget);
     });
 
     testWidgets('wide Home matches the Notion page column and title anchor', (
@@ -221,13 +376,13 @@ void main() {
       expect(find.text('Home'), findsNothing);
       expect(find.text('Recents'), findsOneWidget);
       expect(tester.getTopLeft(find.text('Recents')).dx, closeTo(24, 1));
-      expect(tester.getTopLeft(find.text('Recents')).dy, closeTo(20, 1));
+      expect(tester.getTopLeft(find.text('Recents')).dy, closeTo(26, 1));
       final Text recentHeading = tester.widget<Text>(find.text('Recents'));
       expect(
         recentHeading.style?.color,
-        NoteFlowWorkspaceTokens.light().textSecondary,
+        NoteFlowWorkspaceTokens.light().textMuted,
       );
-      expect(recentHeading.style?.fontWeight, FontWeight.w500);
+      expect(recentHeading.style?.fontWeight, FontWeight.w400);
       final Finder recentCard = find.byType(Card).first;
       expect(tester.getSize(recentCard).width, closeTo(132, 0.1));
       expect(tester.getSize(recentCard).height, closeTo(132, 0.1));
@@ -287,6 +442,14 @@ void main() {
       final Rect heading = tester.getRect(find.text('Gần đây'));
       expect(heading.top, greaterThanOrEqualTo(24));
       expect(heading.top, lessThan(120));
+<<<<<<< Updated upstream
+      expect(heading.top - tester.getTopLeft(find.byType(DashboardPage)).dy, closeTo(26, 1));
+=======
+      expect(
+        heading.top - tester.getTopLeft(find.byType(DashboardPage)).dy,
+        closeTo(26, 1),
+      );
+>>>>>>> Stashed changes
       final Rect bottomActions = tester.getRect(
         find.byKey(WorkspaceShell.compactBottomNavigationKey),
       );
@@ -327,12 +490,7 @@ void main() {
 
         expect(find.byKey(DashboardPage.contentKey), findsOneWidget);
         expect(find.byKey(DashboardPage.newNoteKey), findsOneWidget);
-        expect(
-          _cardFor(tester, 'a').layout,
-          viewport.width >= 840
-              ? DashboardNoteCardLayout.grid
-              : DashboardNoteCardLayout.list,
-        );
+        expect(_cardFor(tester, 'a').layout, DashboardNoteCardLayout.grid);
         expect(tester.takeException(), isNull);
       });
     }
@@ -425,6 +583,9 @@ void main() {
         notesController: _FakeNotesController(notes: notes),
         size: const Size(400, 900),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
       await tester.pumpAndSettle();
 
       final double listA = tester
@@ -708,12 +869,228 @@ void main() {
       expect(find.text('Alpha'), findsWidgets);
       expect(find.byKey(DashboardPage.searchDockSortKey), findsOneWidget);
 
+      final editableBeforeEmpty = tester.element(find.byType(EditableText));
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsOneWidget,
+      );
+      if (!kIsWeb) {
+        expect(
+          find.byKey(const ValueKey('dashboard-native-search-empty')),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          find.byKey(const ValueKey('dashboard-native-search-empty')),
+          findsNothing,
+        );
+      }
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+      final clearField = find.byKey(
+        const ValueKey('dashboard-clear-search-field'),
+      );
+      expect(tester.getSize(clearField).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(clearField).height, greaterThanOrEqualTo(48));
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(find.byKey(DashboardPage.searchDockKey), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsNothing,
+      );
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+
       await tester.tap(find.byKey(DashboardPage.searchDockCloseKey));
       await tester.pumpAndSettle();
       expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
       expect(searchVisibilityChanges, <bool>[true, false]);
       expect(tester.takeException(), isNull);
-    });
+    }, skip: kIsWeb);
+
+    testWidgets('Web Search opened narrow uses one responsive modal', (
+      WidgetTester tester,
+    ) async {
+      final changes = <bool>[];
+      final notes = [_buildNote(id: 'a', title: 'Alpha')];
+      await _pumpDashboard(
+        tester,
+        dashboardController: DashboardController(
+          query: _FakeDashboardQuery(_overview(notes: notes)),
+        ),
+        notesController: _FakeNotesController(notes: notes),
+        embeddedInWorkspace: true,
+        size: const Size(390, 844),
+        onSearchVisibilityChanged: changes.add,
+      );
+      await tester.pumpAndSettle();
+      final state = tester.state<DashboardPageState>(
+        find.byType(DashboardPage),
+      );
+      state.openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      final fieldElement = tester.element(find.byType(EditableText));
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsWidgets);
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+
+      for (final size in [
+        const Size(390, 844),
+        const Size(1280, 900),
+        const Size(390, 420),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        final frame = tester.getRect(
+          find.byKey(DashboardPage.desktopSearchSurfaceKey),
+        );
+        expect(frame.width, closeTo(size.width.clamp(0, 600), 1));
+        expect(frame.top, closeTo(size.height * .09, 1));
+        expect(frame.bottom, lessThanOrEqualTo(size.height - 16));
+        expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+        expect(tester.element(find.byType(EditableText)), same(fieldElement));
+        expect(
+          tester
+              .widget<EditableText>(find.byType(EditableText))
+              .controller
+              .text,
+          'qxzvbnmptkswj',
+        );
+        final clear = find.byKey(
+          const ValueKey('dashboard-clear-search-action'),
+        );
+        expect(tester.getSize(clear).height, greaterThanOrEqualTo(48));
+        expect(tester.getRect(clear).bottom, lessThan(frame.bottom));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        isEmpty,
+      );
+      await tester.tap(find.byKey(const ValueKey('dashboard-search-close')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.searchFieldKey), findsNothing);
+      state.openSearch();
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsOneWidget);
+      await tester.tapAt(const Offset(12, 8));
+      await tester.pumpAndSettle();
+      expect(find.byKey(DashboardPage.desktopSearchOverlayKey), findsNothing);
+      expect(changes, [true, false, true, false]);
+      expect(tester.takeException(), isNull);
+    }, skip: !kIsWeb);
+
+    testWidgets('native phone keeps one docked Search field in landscape', (
+      WidgetTester tester,
+    ) async {
+      final previousPlatform = debugDefaultTargetPlatformOverride;
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        final notes = [_buildNote(id: 'a', title: 'Alpha')];
+        await _pumpDashboard(
+          tester,
+          dashboardController: DashboardController(
+            query: _FakeDashboardQuery(_overview(notes: notes)),
+          ),
+          notesController: _FakeNotesController(notes: notes),
+          embeddedInWorkspace: true,
+          size: const Size(390, 844),
+        );
+        await tester.pumpAndSettle();
+        tester
+            .state<DashboardPageState>(find.byType(DashboardPage))
+            .openSearch();
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(DashboardPage.searchFieldKey),
+          'qxzvbnmptkswj',
+        );
+        await tester.pumpAndSettle();
+
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.viewInsets = const FakeViewPadding(bottom: 160);
+        await tester.pumpAndSettle();
+        expect(find.byKey(DashboardPage.searchDockKey), findsOneWidget);
+        expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('dashboard-search-close')),
+          findsNothing,
+        );
+        expect(
+          tester
+              .getRect(
+                find.byKey(const ValueKey('dashboard-native-search-empty')),
+              )
+              .center
+              .dx,
+          closeTo(422, 1),
+        );
+        expect(
+          tester
+              .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+              .controller!
+              .text,
+          'qxzvbnmptkswj',
+        );
+        final clear = find.byKey(
+          const ValueKey('dashboard-clear-search-action'),
+        );
+        await tester.ensureVisible(clear);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(clear).height, greaterThanOrEqualTo(48));
+        await tester.tap(clear);
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+              .controller!
+              .text,
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        try {
+          await tester.pumpWidget(const SizedBox.shrink());
+        } finally {
+          tester.view.resetViewInsets();
+          debugDefaultTargetPlatformOverride = previousPlatform;
+        }
+      }
+    }, skip: kIsWeb);
 
     testWidgets('workspace desktop Search opens a dismissible overlay', (
       WidgetTester tester,
@@ -760,9 +1137,10 @@ void main() {
       final Rect desktopSearchRect = tester.getRect(
         find.byKey(DashboardPage.desktopSearchSurfaceKey),
       );
-      expect(desktopSearchRect.width, closeTo(1008, 1));
-      expect(desktopSearchRect.height, closeTo(704, 1));
-      expect(desktopSearchRect.top, closeTo(65, 1));
+      expect(desktopSearchRect.width, closeTo(600, 1));
+      expect(desktopSearchRect.height, closeTo(kIsWeb ? 700 : 704, 1));
+      // Web follows the measured 9vh anchor; native dialog geometry stays.
+      expect(desktopSearchRect.top, closeTo(kIsWeb ? 81 : 60, 1));
       expect(
         find.descendant(
           of: desktopSearchOverlay,
@@ -796,19 +1174,37 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: desktopSearchOverlay, matching: find.text('Alpha')),
+        find.descendant(
+          of: desktopSearchOverlay,
+          matching: find.text('Alpha — Alpha body', findRichText: true),
+        ),
         findsOneWidget,
       );
 
       await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
+      if (kIsWeb) {
+        final queryCard = find.descendant(
           of: desktopSearchOverlay,
-          matching: find.text('Alpha body'),
-        ),
-        findsOneWidget,
-      );
+          matching: find.byType(DashboardNoteCard),
+        );
+        expect(
+          find.descendant(of: queryCard, matching: find.text('Alpha')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: queryCard, matching: find.text('Alpha body')),
+          findsOneWidget,
+        );
+      } else {
+        expect(
+          find.descendant(
+            of: desktopSearchOverlay,
+            matching: find.text('Alpha — Alpha body', findRichText: true),
+          ),
+          findsOneWidget,
+        );
+      }
       expect(
         find.byType(PopupMenuButton<DashboardSort>).hitTestable(),
         findsOneWidget,
@@ -817,6 +1213,79 @@ void main() {
         find.byKey(DashboardPage.layoutToggleKey).hitTestable(),
         findsNothing,
       );
+
+      final editableBeforeEmpty = tester.element(find.byType(EditableText));
+      await tester.enterText(
+        find.byKey(DashboardPage.searchFieldKey),
+        'qxzvbnmptkswj',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsOneWidget,
+      );
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      if (kIsWeb) {
+        final emptyBounds = tester.getRect(
+          find.byKey(const ValueKey('dashboard-filtered-empty')),
+        );
+        expect(emptyBounds.center.dx, closeTo(desktopSearchRect.center.dx, 1));
+        expect(emptyBounds.center.dy, greaterThan(desktopSearchRect.center.dy));
+        expect(
+          find.byKey(const ValueKey('dashboard-search-footer')),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-clear-search-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dashboard-filtered-empty')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      await tester.enterText(find.byKey(DashboardPage.searchFieldKey), 'Alpha');
+      await tester.pumpAndSettle();
+      expect(
+        tester.element(find.byType(EditableText)),
+        same(editableBeforeEmpty),
+      );
+
+      tester.view.physicalSize = const Size(500, 900);
+      await tester.pumpAndSettle();
+      final narrowSurface = tester.getRect(
+        find.byKey(DashboardPage.desktopSearchSurfaceKey),
+      );
+      expect(narrowSurface.left, closeTo(kIsWeb ? 0 : 24, 1));
+      expect(narrowSurface.width, closeTo(kIsWeb ? 500 : 452, 1));
+      if (kIsWeb) expect(find.text('Search'), findsNothing);
+      expect(find.byKey(DashboardPage.searchFieldKey), findsOneWidget);
+      expect(find.byKey(DashboardPage.searchDockKey), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(DashboardPage.searchFieldKey))
+            .controller!
+            .text,
+        'Alpha',
+      );
+      expect(tester.takeException(), isNull);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('dashboard-search-close')),
@@ -1289,6 +1758,8 @@ Future<void> _pumpDashboard(
   Size size = const Size(1200, 900),
   double textScale = 1.0,
   ValueChanged<bool>? onSearchVisibilityChanged,
+  Listenable? noteChanges,
+  Widget Function(Widget)? wrap,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -1299,6 +1770,7 @@ Future<void> _pumpDashboard(
 
   await tester.pumpWidget(
     MaterialApp(
+      builder: wrap == null ? null : (_, child) => wrap(child!),
       locale: locale,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
         DashboardCopy.delegate,
@@ -1330,6 +1802,7 @@ Future<void> _pumpDashboard(
             onOpenSettings: onOpenSettings,
             onOpenDiagnostics: onOpenDiagnostics,
             onSearchVisibilityChanged: onSearchVisibilityChanged,
+            noteChanges: noteChanges,
           );
           return MediaQuery(
             data: MediaQuery.of(context)
@@ -1354,6 +1827,7 @@ NoteDto _buildNote({
   String content = 'First note body.',
   DateTime? updatedAt,
   DateTime? createdAt,
+  DateTime? pinnedAt,
 }) {
   return NoteDto(
     id: id,
@@ -1362,6 +1836,7 @@ NoteDto _buildNote({
     content: content,
     createdAt: createdAt ?? _baseTime,
     updatedAt: updatedAt ?? _baseTime,
+    pinnedAt: pinnedAt,
   );
 }
 
@@ -1400,12 +1875,18 @@ final class _FakeDashboardQuery implements IDashboardOverviewQuery {
   }
 }
 
-final class _FakeNotesController implements NotesApplicationController {
-  _FakeNotesController({List<NoteDto>? notes, this.listNotesError})
-    : notes = List<NoteDto>.of(notes ?? const <NoteDto>[]);
+final class _FakeNotesController
+    implements NotesApplicationController, NotesModule02Controller {
+  _FakeNotesController({
+    this.savedLayout = NoteLayoutPreference.grid,
+    List<NoteDto>? notes,
+    this.listNotesError,
+  }) : notes = List<NoteDto>.of(notes ?? const <NoteDto>[]);
 
   final List<NoteDto> notes;
   final Object? listNotesError;
+  NoteLayoutPreference savedLayout;
+  int pinWrites = 0;
 
   /// When set, [listNotes] stays pending until the completer completes so a
   /// test can observe the page while a reload request is in flight.
@@ -1426,6 +1907,43 @@ final class _FakeNotesController implements NotesApplicationController {
       throw error;
     }
     return List<NoteDto>.of(notes);
+  }
+
+  @override
+  Future<NoteDto> updateNote({
+    required String noteId,
+    required String title,
+    required String content,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<NoteDto> setPinned({
+    required String noteId,
+    required bool pinned,
+  }) async {
+    pinWrites++;
+    final int index = notes.indexWhere((NoteDto note) => note.id == noteId);
+    if (index < 0) throw StateError('missing note');
+    final NoteDto current = notes[index];
+    final NoteDto updated = NoteDto(
+      id: current.id,
+      ownerId: current.ownerId,
+      title: current.title,
+      content: current.content,
+      createdAt: current.createdAt,
+      updatedAt: _baseTime,
+      pinnedAt: pinned ? _baseTime : null,
+    );
+    notes[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<NoteLayoutPreference> getNoteLayout() async => savedLayout;
+
+  @override
+  Future<void> setNoteLayout(NoteLayoutPreference layout) async {
+    savedLayout = layout;
   }
 
   @override
@@ -1452,7 +1970,14 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) {
+  SummaryConsentAppService? get summaryConsent => null;
+
+  @override
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) {
     throw UnimplementedError();
   }
 }

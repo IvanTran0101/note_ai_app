@@ -8,6 +8,12 @@ import 'sync_cursor.dart';
 import 'sync_failure.dart';
 import 'sync_result.dart';
 import 'sync_snapshot.dart';
+import 'sync_page_projection.dart';
+import 'sync_document_projection.dart';
+import '../labels/local_label_state.dart';
+import 'label_sync_reconciliation.dart';
+
+part 'sync_document_recovery.dart';
 
 /// Applies remote outcomes to fresh local state inside store transactions.
 final class SyncStateReconciliation {
@@ -50,19 +56,35 @@ final class SyncStateReconciliation {
             ..[index] = copyEntry(
               entry,
               lastError: failure.code,
-              blocked: failure.code == SyncErrorCode.invalidMutation,
+              blocked:
+                  failure.code == SyncErrorCode.invalidMutation ||
+                  failure.code == SyncErrorCode.documentRequiresUpgrade ||
+                  failure.code == SyncErrorCode.forbidden,
             );
       final List<LocalNoteState> notes =
-          failure.code == SyncErrorCode.invalidMutation
+          (failure.code == SyncErrorCode.invalidMutation ||
+              failure.code == SyncErrorCode.documentRequiresUpgrade ||
+              failure.code == SyncErrorCode.forbidden)
           ? current.notes
                 .map(
-                  (LocalNoteState note) => note.id == entry.noteId
+                  (LocalNoteState note) =>
+                      !entry.isLabel &&
+                          note.identity ==
+                              entry.mutation.identityFor(accountUserId)
                       ? withStatus(note, NoteSyncStatus.failed)
                       : note,
                 )
                 .toList()
           : current.notes;
-      return copyState(current, outbox: outbox, notes: notes);
+      final labels = current.labels
+          .map(
+            (label) =>
+                entry.isLabel && label.id == entry.noteId && !failure.retryable
+                ? label.withStatus(NoteSyncStatus.failed)
+                : label,
+          )
+          .toList();
+      return copyState(current, outbox: outbox, notes: notes, labels: labels);
     });
   }
 
@@ -77,10 +99,14 @@ final class SyncStateReconciliation {
       );
       if (entryIndex < 0) return current;
       final int noteIndex = current.notes.indexWhere(
-        (LocalNoteState note) => note.id == requested.noteId,
+        (LocalNoteState note) =>
+            note.identity == requested.mutation.identityFor(accountUserId),
       );
       final SyncNoteSnapshot? remote = result.conflictRemote;
-      if (noteIndex < 0 || (remote != null && remote.id != requested.noteId)) {
+      if (noteIndex < 0 ||
+          (remote != null &&
+              remote.identityFor(accountUserId) !=
+                  requested.mutation.identityFor(accountUserId))) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       final LocalNoteState local = current.notes[noteIndex];
@@ -96,7 +122,9 @@ final class SyncStateReconciliation {
       final List<SyncConflict> conflicts =
           List<SyncConflict>.of(current.conflicts)
             ..removeWhere(
-              (SyncConflict item) => item.noteId == requested.noteId,
+              (SyncConflict item) =>
+                  item.identity ==
+                  requested.mutation.identityFor(accountUserId),
             )
             ..add(
               SyncConflict(
@@ -116,7 +144,7 @@ final class SyncStateReconciliation {
     });
     return updated.conflicts.any(
       (SyncConflict item) =>
-          item.noteId == requested.noteId &&
+          item.identity == requested.mutation.identityFor(accountUserId) &&
           item.pending.mutationId == requested.mutationId,
     );
   }
@@ -125,6 +153,24 @@ final class SyncStateReconciliation {
     PendingMutation requested,
     SyncNoteSnapshot snapshot,
   ) async {
+    if (snapshot.identityFor(accountUserId) !=
+        requested.mutation.identityFor(accountUserId)) {
+      throw const SyncFailure(code: SyncErrorCode.unexpected);
+    }
+    if (requested.payload?.includesAttachments == true &&
+        requested.payload!.attachments.isNotEmpty &&
+        !snapshot.includesAttachments) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
+    if (requested.payload?.includesLabels == true && !snapshot.includesLabels) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
+    if (requested.payload?.includesDocument == true &&
+        (!snapshot.includesDocument ||
+            snapshot.contentAvailable &&
+                snapshot.document != requested.payload!.document)) {
+      throw const SyncFailure(code: SyncErrorCode.invalidMutation);
+    }
     var acknowledged = false;
     await update((current) {
       final int entryIndex = current.outbox.indexWhere(
@@ -132,14 +178,17 @@ final class SyncStateReconciliation {
       );
       if (entryIndex < 0) return current;
       final int noteIndex = current.notes.indexWhere(
-        (LocalNoteState note) => note.id == requested.noteId,
+        (LocalNoteState note) =>
+            note.identity == requested.mutation.identityFor(accountUserId),
       );
       if (noteIndex < 0) {
         throw const SyncFailure(code: SyncErrorCode.unexpected);
       }
       final bool later = current.outbox.any(
         (PendingMutation item) =>
-            item.noteId == requested.noteId &&
+            !item.isLabel &&
+            item.mutation.identityFor(accountUserId) ==
+                requested.mutation.identityFor(accountUserId) &&
             item.mutationId != requested.mutationId,
       );
       final List<PendingMutation> outbox = current.outbox
@@ -149,19 +198,45 @@ final class SyncStateReconciliation {
           .toList();
       final List<LocalNoteState> notes = List<LocalNoteState>.of(current.notes);
       final LocalNoteState local = notes[noteIndex];
-      notes[noteIndex] = later
+      if (snapshot.protection.revision < local.protection.revision &&
+          requested.protectionChange == null) {
+        throw const SyncFailure(code: SyncErrorCode.unexpected);
+      }
+      notes[noteIndex] =
+          later ||
+              (requested.protectionChange != null && local.contentAvailable) ||
+              (snapshot.protection.enabled &&
+                  local.protection == snapshot.protection &&
+                  local.contentAvailable)
           ? LocalNoteState(
               id: local.id,
               ownerId: local.ownerId,
+              share: snapshot.share ?? local.share,
               title: local.title,
               content: local.content,
+              document: local.document,
               createdAt: local.createdAt,
               updatedAt: local.updatedAt,
+              pinnedAt: local.pinnedAt,
+              attachments: local.attachments,
+              labelIds: local.labelIds,
+              labelProjections: local.labelProjections,
               deletedAt: local.deletedAt,
               serverRevision: snapshot.revision,
-              status: local.status,
+              status: later ? local.status : NoteSyncStatus.synced,
+              protection:
+                  outbox.any(
+                    (m) =>
+                        !m.isLabel &&
+                        m.mutation.identityFor(accountUserId) ==
+                            local.identity &&
+                        m.protectionChange != null,
+                  )
+                  ? local.protection
+                  : snapshot.protection,
+              contentAvailable: local.contentAvailable,
             )
-          : fromRemote(snapshot, NoteSyncStatus.synced);
+          : fromRemote(snapshot, NoteSyncStatus.synced, previous: local);
       acknowledged = true;
       return copyState(current, notes: notes, outbox: outbox);
     });
@@ -176,63 +251,35 @@ final class SyncStateReconciliation {
     var changed = false;
     final LocalSyncState updated = await update((current) {
       if (current.cursor?.value != expectedCursor) return current;
-      final List<LocalNoteState> notes = List<LocalNoteState>.of(current.notes);
-      final List<SyncConflict> conflicts = List<SyncConflict>.of(
-        current.conflicts,
-      );
-      for (final SyncNoteSnapshot snapshot in page.snapshots) {
-        final int conflictIndex = conflicts.indexWhere(
-          (SyncConflict item) => item.noteId == snapshot.id,
-        );
-        if (conflictIndex >= 0) {
-          final SyncConflict conflict = conflicts[conflictIndex];
-          if (snapshot.revision > (conflict.remote?.revision ?? 0)) {
-            conflicts[conflictIndex] = SyncConflict(
-              noteId: conflict.noteId,
-              remote: snapshot,
-              local: conflict.local,
-              pending: conflict.pending,
-              detectedAt: conflict.detectedAt,
-            );
-            changed = true;
-          }
-          continue;
-        }
-        if (current.outbox.any(
-          (PendingMutation item) => item.noteId == snapshot.id,
-        )) {
-          continue;
-        }
-        final int noteIndex = notes.indexWhere(
-          (LocalNoteState item) => item.id == snapshot.id,
-        );
-        if (noteIndex >= 0 &&
-            snapshot.revision <= notes[noteIndex].serverRevision) {
-          continue;
-        }
-        final LocalNoteState incoming = fromRemote(
-          snapshot,
-          NoteSyncStatus.synced,
-        );
-        if (noteIndex < 0) {
-          notes.add(incoming);
-        } else {
-          notes[noteIndex] = incoming;
-        }
-        pulled++;
-        changed = true;
+      final projection = SyncPageProjection(current, fromRemote);
+      final labels = LabelSyncReconciliation(this)
+          .mergePage(current, page.labels);
+      for (final snapshot in page.snapshots) {
+        projection.apply(snapshot);
       }
+      changed = projection.changed;
+      pulled = projection.pulled;
       final SyncCursor? cursor = page.nextCursor == null
           ? current.cursor
           : SyncCursor(page.nextCursor);
-      if (!changed && cursor == current.cursor) {
+      if (!changed &&
+          cursor == current.cursor &&
+          labels.length == current.labels.length &&
+          Iterable<int>.generate(labels.length)
+              .every((i) => labels[i] == current.labels[i]) &&
+          page.wireVersion <= current.syncWireVersion) {
         return current;
       }
       return copyState(
         current,
-        notes: notes,
-        conflicts: conflicts,
+        notes: projection.notes,
+        outbox: projection.outbox,
+        conflicts: projection.conflicts,
         cursor: cursor,
+        labels: labels,
+        syncWireVersion: page.wireVersion > current.syncWireVersion
+            ? page.wireVersion
+            : current.syncWireVersion,
       );
     });
     final bool cursorMatched =
@@ -250,12 +297,17 @@ final class SyncStateReconciliation {
     Iterable<PendingMutation>? outbox,
     Iterable<SyncConflict>? conflicts,
     SyncCursor? cursor,
+    Iterable<LocalLabelState>? labels,
+    int? syncWireVersion,
   }) => LocalSyncState(
     accountUserId: current.accountUserId,
+    labels: labels ?? current.labels,
+    syncWireVersion: syncWireVersion ?? current.syncWireVersion,
     notes: notes ?? current.notes,
     outbox: outbox ?? current.outbox,
     conflicts: conflicts ?? current.conflicts,
     cursor: cursor ?? current.cursor,
+    userPreferences: current.userPreferences,
   );
 
   PendingMutation copyEntry(
@@ -266,9 +318,14 @@ final class SyncStateReconciliation {
   }) => PendingMutation(
     mutationId: entry.mutationId,
     noteId: entry.noteId,
+    ownerId: entry.ownerId,
+    accessRevision: entry.accessRevision,
     operation: entry.operation,
     baseRevision: entry.baseRevision,
     payload: entry.payload,
+    protectionChange: entry.protectionChange,
+    entityType: entry.mutation.entityType,
+    labelName: entry.mutation.labelName,
     createdAt: entry.createdAt,
     retryCount: retryCount ?? entry.retryCount,
     lastError: lastError ?? entry.lastError,
@@ -279,27 +336,58 @@ final class SyncStateReconciliation {
       LocalNoteState(
         id: note.id,
         ownerId: note.ownerId,
+        share: note.share,
         title: note.title,
         content: note.content,
+        document: note.document,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
+        pinnedAt: note.pinnedAt,
+        attachments: note.attachments,
+        labelIds: note.labelIds,
+        labelProjections: note.labelProjections,
         serverRevision: note.serverRevision,
         deletedAt: note.deletedAt,
         status: status,
+        protection: note.protection,
+        contentAvailable: note.contentAvailable,
       );
 
-  LocalNoteState fromRemote(SyncNoteSnapshot snapshot, NoteSyncStatus status) =>
-      LocalNoteState(
-        id: snapshot.id,
-        ownerId: accountUserId,
-        title: snapshot.title,
-        content: snapshot.content,
-        createdAt: snapshot.createdAt,
-        updatedAt: snapshot.serverUpdatedAt,
-        serverRevision: snapshot.revision,
-        deletedAt: snapshot.deletedAt,
-        status: status,
-      );
+  LocalNoteState fromRemote(
+    SyncNoteSnapshot snapshot,
+    NoteSyncStatus status, {
+    LocalNoteState? previous,
+  }) => LocalNoteState(
+    id: snapshot.id,
+    ownerId: snapshot.ownerId ?? accountUserId,
+    share: snapshot.share,
+    title: snapshot.title,
+    content: snapshot.content,
+    document: projectSyncDocument(snapshot, previous),
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.serverUpdatedAt,
+    pinnedAt: snapshot.pinnedAt,
+    attachments: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesAttachments
+        ? snapshot.attachments
+        : previous?.attachments ?? const [],
+    labelIds: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesLabels
+        ? snapshot.labelIds
+        : previous?.labelIds ?? const [],
+    labelProjections: !snapshot.contentAvailable || snapshot.isDeleted
+        ? const []
+        : snapshot.includesLabels
+        ? snapshot.labelProjections
+        : previous?.labelProjections ?? const [],
+    serverRevision: snapshot.revision,
+    deletedAt: snapshot.deletedAt,
+    status: status,
+    protection: snapshot.protection,
+    contentAvailable: snapshot.contentAvailable,
+  );
 }
 
 final class SyncPageApply {
