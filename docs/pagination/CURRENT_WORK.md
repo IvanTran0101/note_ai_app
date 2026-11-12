@@ -98,3 +98,13 @@ paths, never logs or other ignored data. No config exception is needed.
 
 Next: explicit stage/review/commit/push pagination paths; verify remote SHA;
 finish Notion scoped checks and handoff. No source edits remain for query/UI.
+
+## Published delivery
+
+Query/UI code checkpoint6e87d1a553209849b2131443b5c49a2a4a1fe8df pushed to
+origin/final-tuankiet; ls-remote matched exactly. Only34 owned paths were staged.
+UI53 source/tests/docs and .playwright-cli/final_project.md remained unstaged.
+No source work remains for this query/UI tranche. Notion holds the publication
+receipt. Storage-record pagination remains unimplemented; do not relabel this
+as eliminating full-account decoding. Any continuation toward that objective
+starts with its encryption/migration/atomicity design rather than more UI slicing.

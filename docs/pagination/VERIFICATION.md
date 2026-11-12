@@ -81,3 +81,7 @@ available on loopback8780. Raw screenshots/APKs/logs stay ignored under output.
 Next storage work, if pursued: design per-record encrypted reads/migration and
 atomic writer compatibility before claiming bounded account decoding. M09 UI53
 and both >=95% visual gates remain separate, unfinished work.
+
+Published source/query checkpoint:6e87d1a553209849b2131443b5c49a2a4a1fe8df,
+normal fast-forward push and exact remote SHA verified. The following docs-only
+receipt does not change the runtime source fingerprint or test scope.
