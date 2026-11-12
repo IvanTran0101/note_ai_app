@@ -1,6 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/notes/note_access.dart';
+import 'package:note_ai_app/application/labels/label_application.dart';
+import 'package:note_ai_app/application/sync/sync_failure.dart';
 import 'package:note_ai_app/application/notes/note_security_service.dart';
 import 'package:note_ai_app/application/notes/note_page.dart';
 import 'package:note_ai_app/application/sync/local_note_state.dart';
@@ -181,6 +183,56 @@ void main() {
     );
     store.codec.dispose();
   });
+
+  test(
+    'repository fences session change during the store final generation await',
+    () async {
+      final disk = MemoryPagedStore();
+      final store = EncryptedSyncStore(actor, disk);
+      await store.replace(securityState(actor));
+      await repository(store).queryNotePage(actor, NotePageQuery());
+      var current = actor, fences = 0;
+      final repo = NoteRepository(
+        currentAccountUserId: () => current,
+        localSyncStoreFactory: ({required accountUserId}) => store,
+        generateMutationId: () => 'unused',
+        now: () => fixtureTime,
+      );
+      disk.beforeFence = () {
+        if (++fences == 4) current = 'different-session';
+      };
+      await expectLater(
+        repo.queryNotePage(actor, NotePageQuery()),
+        throwsA(isA<NoteSecurityFailure>()),
+      );
+      expect(fences, 4);
+      store.dispose();
+    },
+  );
+
+  test(
+    'label catalog fences session change during final generation await',
+    () async {
+      final disk = MemoryPagedStore();
+      final store = EncryptedSyncStore(actor, disk);
+      await store.replace(securityState(actor));
+      await repository(store).queryNotePage(actor, NotePageQuery());
+      var current = actor;
+      final labels = LabelApplication(
+        currentActor: () => current,
+        generation: () => 0,
+        storeFor: (_) => store,
+        notes: repository(store),
+        generateId: () => 'unused',
+        now: () => fixtureTime,
+        requestSync: (_) {},
+      );
+      disk.beforeFence = () => current = 'different-session';
+      await expectLater(labels.list(), throwsA(isA<SyncFailure>()));
+      labels.dispose();
+      store.dispose();
+    },
+  );
 
   test('cross-context generation change retries without mixed rows', () async {
     final disk = MemoryPagedStore();

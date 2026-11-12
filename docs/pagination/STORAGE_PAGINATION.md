@@ -73,8 +73,8 @@ whole-app offline asset-bootstrap, iOS runtime or M09 similarity claim is made.
 
 ## Verification status
 
-VM regression285 pass/2 configured skips before the final missing-cache save and
-missing-pointer guards. Focused18 pass after missing-cache save recovery (before
-the final missing-pointer test). Final analyzer was clean at that checkpoint.
-Final platform/browser/native runtime checks are in progress; see CURRENT_WORK.md
-and the forthcoming storage verification receipt for the final source evidence.
+Scoped page/detail/catalog reads are verified on Chrome and Android API35.
+Final focused VM30/30, Chrome47/47, scoped analyzer clean; real platform1,000-note
+runtime/cold read and preservation proof recorded in STORAGE_VERIFICATION.md.
+Historical intermediate failures and their fixes are retained there. Canonical
+whole-account boundaries above remain explicit; no whole-app O(50) claim.

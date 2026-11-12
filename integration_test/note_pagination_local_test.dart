@@ -127,6 +127,12 @@ void main() {
     );
     await settleUntil(find.text('1–1 / 1'));
     expect(store.codec.decodedAccountCount, 0);
+    // Drain browser text-input/focus callbacks before the test binding disposes
+    // its FocusManager. The manual/runtime app has no test-binding teardown.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

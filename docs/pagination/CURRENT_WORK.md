@@ -1,39 +1,42 @@
-# Pagination — active storage tranche (13 November)
+# Pagination — verified storage delivery (13 November)
 
-User: finish through storage, platform runtime and publication. Root owns24
-paths listed in ignored output/pagination-storage-owned.json plus the selectively
-staged pagination prefix of MUST_REMEMBER; preserve all UI53 dirty work.
-No new agents/worktrees. _agent_ops pack absent. Graph transport closed, including
-coverage retry; exact source fallback used, no exhaustive graph claims.
+PASS for the scoped local page/detail/catalog read path on Chrome and Android
+API35 emulator. See STORAGE_VERIFICATION.md for evidence, resolved failures and
+boundaries. User requested finish through storage, runtime and publication.
 
-Storage code implemented: local_note_page_store seam, encrypted index/payload
-codec, generation/epoch reader/atomic writer, Web IDB3 transaction and native
-schema4 manifest. See STORAGE_PAGINATION.md. Ordinary page/detail/catalog reads
-skip whole-account decode after migration. Canonical sync/mutations/vault/status
-ACK remain whole-account flows; no whole-app O(50) or benchmark claim.
+Final checks: focused VM30/30, Chrome47/47, all21 changed Dart paths analyzer
+clean; integration teardown delta separately clean. Broader VM285/2configured
+skips preceded final targeted guards. Final Chrome driver true/failureDetails[]
+read twice, fetched artifact hash verified. Actual manual Chrome and native UI
+Next/Previous/global marker999/no-results/Clear checked. Native page target48dp
+above navbar/IME; no whole-screen visual acceptance or latency benchmark.
 
-Verified: VM regression285/2skip before last targeted guards; focused18 pass
-(cache-save recovery), latest native4 pass (missing pointer included); Chrome45
-pass; all21 changed Dart paths analyzer clean. Frozen913-path inventory
-86f57b12f0948e1c218f0f3761b1e8a5b4718594b682d3f6932e5b3ef646c973, drift[].
-Web integration73.7s/manual59.3s builds. Actual integration8781 bundle hashmatch,
-drivertrue/no failures. Manual8782 hashmatch, cold0 canonical/50 payload;
-Next100, global marker9991101 total/0 canonical. Notes/Home query, no-results390
-checked. Owned Chrome closed; synthetic profile retained. Initial8780 subfolder
-root-bundle mismatch discarded (not final proof). Native QA build still compiling
-existing llama hook; APK/emulator runtime and product restore PENDING.
+Retained Android canonical512,343bytes hash2857de69...c9ed50ce unchanged across
+root3→manifest4 migration,1,000 encrypted records, search, force-stop/reopen and
+product restoration. Native cold UI0 canonical decodes/50 payload reads; Next
+adds50. FinalQA cbe274bc...80c1ac211 and product c0582366...42d530ae installed/
+pulled hashes match. Product main_dev restored with install-r/process observed;
+originalfont1.0/auto1/user0/nav0 verified. Chrome and AVD closed, all data retained.
 
-Next: finish exec session74010 QA APK, build product main_dev/local-owner APK
-sequentially, stop idle Gradle, boot only NoteFlow_API35:5554. Capture baseline
-with output/pagination_storage_native_probe.py BEFORE QA launch; install-r QA,
-verify installed/pulled hash, UI gestures/counters/cold reopen +canonical hash.
-Restore product/settings, verify hash, close AVD/data retained. Finish source
-review/explicit stage/push final-tuankiet, NotionS5 and final receipt.
+Final runtime inventory913/124fbd6bbe052fea3c3287608849c0b8fcd846b94359d47ec3881454abfa378a,
+drift[]. APK/manual production freeze764ca6fd...ac9d83e; subsequent change was
+only integration-only focus teardown, unreachable from those entrypoints.
+Builds include pre-existing dirty UI53; no exact clean-commit artifact claim.
 
-Notion416f9c7a1aa0811ab6a0e33a3819c5d8 S0-S4 checked, S5 pending. Git HEAD/remote
-5c95c9facac32b46484bff31c06611f96c42fc29, nothing staged at last check. Product
-builds include preserved UI53 dirty source; do not call them clean-commit artifacts.
-Both whole-M09>=95% gates remain UNVERIFIED. Do not end at query/UI-only again.
+Initial source checkpoint88ce76f pushed. Final actor fences (Note page/catalog),
+regressions, integration cleanup and this receipt are now ready for explicit
+commit/push to final-tuankiet. Notion416f9c7a1aa0811ab6a0e33a3819c5d8 S5 awaits
+that publication receipt. No remaining source/runtime task for this scope.
+
+Canonical sync/mutation/vault/status ACK remain whole-account flows. Full-text
+search scans payloads sequentially; metadata is O(note count). No whole-app O(50),
+live AWS/iOS, UI53 completion or whole-M09>=95% acceptance claim.
+
+Unrelated UI53 source/tests/docs, .playwright-cli and final_project.md preserved.
+MUST_REMEMBER staging must include ONLY pagination prefix; keep its UI53 hunk
+unstaged. No new agents/worktrees (live tree only root). Graph transport/coverage
+unavailable, exact source fallback used. _agent_ops absent: continuity/closure
+recorded here and MUST_REMEMBER instead of fabricating pack files/receipts.
 
 ## Chronological history (older statuses below are superseded)
 
@@ -188,3 +191,24 @@ server8780 loaded a prior root bundle due base-href; discarded that result, neve
 counted it as final new-source proof. QA storage dialog is alert semantics, not
 role dialog; wrong locator timed out/reset kernel, recovered in owned profile.
 Android QA build still compiling existing llama native hook, no build result.
+
+Source checkpoint pushed88ce76f5df9ae5d8c4f52803e6931917c3927eca, remote matched.
+Only25 owned paths, MUST prefix selectively staged; UI53 remained dirty/unstaged.
+S5 Android/build still active, NOT finished. QA universal native hook was on
+ARM64 at04:21 local, after ARM32, x64 still expected. No compile error observed.
+
+Final review delta after88ce76f: repository page callback checked actor before
+store's final generation await. Added outer _requireWrite after withPageView
+returns and precise final-await account-switch regression. No new UI/codec/write
+behavior. Must run new focused/Chrome regression, refresh source inventory and
+final runtime builds before completion. Prior Web runtime is pre-this-fence delta.
+Android native hook still ongoing; do not claim its first artifact final until
+an incremental rebuild against the frozen final source completes.
+
+Final fences: Notes page and Label catalog now recheck actor AFTER the store's
+last generation await; dedicated regressions added for both. Latest VM30/30,
+Chrome47/47 pass. One braces-only lint fixed after these behavioral runs; analyzer
+rerun pending. Final913-source fingerprint764ca6fd5ec2585a7888c128d44f68c65897405c63d5faed0de01ddacac9d83e.
+First universal QA build1038.3s completed; final pipeline exec45729 rebuilds Web
+integration/manual then QA/product APK sequentially from the final freeze.
+Do not use the earlier source fingerprint or pre-fence runtime as final evidence.

@@ -1,5 +1,8 @@
 # Pagination query/UI checkpoint
 
+Historical12 November checkpoint. Storage pagination was subsequently implemented
+and verified: see [STORAGE_VERIFICATION.md](STORAGE_VERIFICATION.md).
+
 12 November 2026. Scoped query/UI implementation verified. **Storage-record
 pagination is not implemented**: the encrypted whole-account decode remains.
 This checkpoint must not be presented as removing all 1,000-note memory loads.

@@ -52,8 +52,8 @@ The original query/UI tranche decoded a whole account. The explicitly authorized
 13 November storage tranche adds separately encrypted metadata/per-note records,
 Web DB3 atomic publication and native schema4 manifest publication. See
 [STORAGE_PAGINATION.md](STORAGE_PAGINATION.md) for the exact read, crypto,
-migration, compatibility and recovery contracts. Implementation/runtime
-verification remains in progress until recorded in CURRENT_WORK.md.
+migration, compatibility and recovery contracts. Scoped read-path implementation and platform verification are complete; see
+STORAGE_VERIFICATION.md for evidence and CURRENT_WORK.md for publication.
 
 Canonical sync/mutations/vault/status ACK flows still use their existing account
 transaction and may decode/retain whole-account payloads. Normal page/detail

@@ -4,20 +4,19 @@ extension _NoteRepositoryPage on NoteRepository {
   Future<LocalNoteState?> _findPagedNote(String actor, String id) async {
     final store = _storeFor(actor);
     if (store is ILocalNotePageStore) {
-      final result = await (store as ILocalNotePageStore).withNotePageView<LocalNoteState?>((
-        view,
-      ) async {
-        if (view.accountId != actor) {
-          throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
-        }
-        final header = view.headers
-            .where((n) => n.referenceFor(actor) == id)
-            .firstOrNull;
-        if (header == null || header.isDeleted) return null;
-        return header.protection.enabled || !header.contentAvailable
-            ? header
-            : await view.readNote(header);
-      });
+      final result = await (store as ILocalNotePageStore)
+          .withNotePageView<LocalNoteState?>((view) async {
+            if (view.accountId != actor) {
+              throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+            }
+            final header = view.headers
+                .where((n) => n.referenceFor(actor) == id)
+                .firstOrNull;
+            if (header == null || header.isDeleted) return null;
+            return header.protection.enabled || !header.contentAvailable
+                ? header
+                : await view.readNote(header);
+          });
       // Protected content remains exclusively in the existing password vault.
       if (result == null ||
           !result.protection.enabled ||
@@ -42,7 +41,9 @@ extension _NoteRepositoryPage on NoteRepository {
         }
         final store = _storeFor(actor);
         if (store is ILocalNotePageStore) {
-          return (store as ILocalNotePageStore).withNotePageView((view) async {
+          final result = await (store as ILocalNotePageStore).withNotePageView((
+            view,
+          ) async {
             if (view.accountId != actor) {
               throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
             }
@@ -57,6 +58,8 @@ extension _NoteRepositoryPage on NoteRepository {
             _requireWrite(fence);
             return page;
           });
+          _requireWrite(fence);
+          return result;
         }
         final state = await _readStateFor(actor);
         final result = await _selectPage(

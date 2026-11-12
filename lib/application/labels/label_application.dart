@@ -54,11 +54,17 @@ final class LabelApplication {
     final c = _capture();
     final store = storeFor(c.actor);
     if (store is ILocalNotePageStore) {
-      return (store as ILocalNotePageStore).withNotePageView((view) async {
+      final result = await (store as ILocalNotePageStore).withNotePageView((
+        view,
+      ) async {
         _fence(c);
-        if (view.accountId != c.actor) throw const SyncFailure(code: SyncErrorCode.forbidden);
+        if (view.accountId != c.actor) {
+          throw const SyncFailure(code: SyncErrorCode.forbidden);
+        }
         return view.labels;
       });
+      _fence(c);
+      return result;
     }
     final state = await store.read();
     _fence(c);

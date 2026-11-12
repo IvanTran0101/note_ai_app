@@ -51,6 +51,15 @@ void main() {
     await repository(store).queryNotePage(actor, NotePageQuery(size: 1));
     final marker = jsonDecode(await root.readAsString()) as Map;
     expect(marker['schemaVersion'], 4);
+    // The pre-pagination codec accepts ciphertext envelopes, not manifests.
+    // Its raw CAS expectation also differs from the new root pointer.
+    expect(await root.readAsString(), isNot(oldCanonical));
+    final legacyDecoder = EncryptedStateCodec(LocalSyncAccountNamespace(actor));
+    await expectLater(
+      legacyDecoder.decode(await root.readAsString()),
+      throwsA(anything),
+    );
+    legacyDecoder.dispose();
     final stale = open();
     expect(
       await stale.backing.compareAndSet('not-current', oldCanonical),

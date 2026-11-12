@@ -10,6 +10,7 @@ final class MemoryPagedStore implements EncodedAccountStore, PagedAccountStore {
   int commits = 0;
   int lastUpserts = 0;
   void Function()? beforeRecord;
+  void Function()? beforeFence;
   @override
   bool get pageMode => view != null;
   @override
@@ -50,6 +51,7 @@ final class MemoryPagedStore implements EncodedAccountStore, PagedAccountStore {
 
   @override
   Future<void> requirePagedGeneration(String generation) async {
+    beforeFence?.call();
     if (view?.generation != generation) throw const StalePageRead();
   }
 
