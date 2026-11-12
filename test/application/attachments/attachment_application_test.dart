@@ -600,7 +600,9 @@ void main() {
             .join(' | '),
       );
       expect(find.textContaining('Pending on this device'), findsOneWidget);
-      await tester.tap(find.byTooltip('Retry upload'));
+      await tester.tap(find.byTooltip('Attachment actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retry upload'));
       await settlePanel();
       expect(
         find.textContaining('Cloud attachments are unavailable'),
