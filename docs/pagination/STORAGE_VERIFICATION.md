@@ -76,8 +76,10 @@ is paginated reads, not elimination of every account-sized operation.
 ## Publication
 
 Initial storage checkpoint88ce76f was pushed with25 explicitly owned paths.
-Final review fixes and this runtime receipt are published separately; the resolved
-source/receipt SHAs are recorded on the linked Notion plan and CURRENT_WORK.md.
+Final review fixes and the runtime receipt were pushed as
+70a066fbfa59d092e2fb2f0007e075e13b3ad399 (12 explicit paths; remote matched).
+Notion S0-S5 is checked and authoritative progress/limits updated. This later
+docs-only closure records the publication without changing runtime source.
 No new agents/worktrees were used for pagination. Graph transport/coverage was
 unavailable; exact source/tests were used. _agent_ops is absent in this checkout;
 continuity is maintained in MUST_REMEMBER.md and docs/pagination/CURRENT_WORK.md.
