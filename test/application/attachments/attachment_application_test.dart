@@ -601,7 +601,7 @@ void main() {
       );
       expect(find.textContaining('Pending on this device'), findsOneWidget);
       await tester.tap(find.byTooltip('Attachment actions'));
-      await tester.pumpAndSettle();
+      await settlePanel();
       await tester.tap(find.text('Retry upload'));
       await settlePanel();
       expect(

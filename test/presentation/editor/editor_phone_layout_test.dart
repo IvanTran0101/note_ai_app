@@ -164,14 +164,53 @@ void main() {
         );
         await tester.pumpAndSettle();
         final rail = find.byKey(const ValueKey('document-controls-rail'));
-        expect(rail, editable && !kIsWeb ? findsOneWidget : findsNothing);
-        if (editable && !kIsWeb) {
-          expect(tester.getBottomLeft(rail).dy, 914);
-          expect(tester.getTopLeft(rail).dy, 866);
-          expect(
-            tester.getTopLeft(find.byTooltip('Add block')).dy,
-            greaterThan(800),
-          );
+        expect(rail, kIsWeb ? findsNothing : findsOneWidget);
+        if (!kIsWeb) {
+          expect(tester.getSize(rail).height, 0);
+          expect(find.byTooltip('Add block'), findsNothing);
+          tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+          focus.requestFocus();
+          await tester.pumpAndSettle();
+          expect(tester.getSize(rail).height, editable ? 48 : 0);
+          final add = find.byTooltip('Add block');
+          expect(add, editable ? findsOneWidget : findsNothing);
+          if (editable) {
+            expect(tester.getSize(add).height, 48);
+            expect(tester.getBottomLeft(add).dy, lessThanOrEqualTo(634));
+            focus.unfocus();
+            await tester.pumpAndSettle();
+            expect(add, findsNothing, reason: 'focus loss closes the overlay');
+            focus.requestFocus();
+            await tester.pumpAndSettle();
+            expect(add, findsOneWidget);
+
+            tester.view.viewInsets = const FakeViewPadding();
+            await tester.pumpAndSettle();
+            expect(
+              add,
+              findsNothing,
+              reason: 'keyboard dismissal closes the overlay',
+            );
+            tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+            await tester.pumpAndSettle();
+            expect(add, findsOneWidget);
+
+            adapter.editor.selection = engine.Selection(
+              start: engine.Position(path: [0], offset: 0),
+              end: engine.Position(path: [0], offset: 2),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              add,
+              findsNothing,
+              reason: 'range selection closes the overlay',
+            );
+            adapter.editor.selection = engine.Selection.collapsed(
+              engine.Position(path: [0], offset: 0),
+            );
+            await tester.pumpAndSettle();
+            expect(add, findsOneWidget);
+          }
         }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());

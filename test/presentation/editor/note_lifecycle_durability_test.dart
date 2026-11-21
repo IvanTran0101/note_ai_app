@@ -26,57 +26,205 @@ void main() {
     );
     await tester.pumpWidget(page(initial));
     await tester.pumpAndSettle();
-    final adapter = tester.widget<RichNoteEditor>(find.byType(RichNoteEditor)).adapter;
+    final adapter = tester
+        .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+        .adapter;
     final node = adapter.editor.document.root.children.first;
-    await adapter.editor.apply(adapter.editor.transaction..insertText(node, 2, ' A'));
+    await adapter.editor.apply(
+      adapter.editor.transaction..insertText(node, 2, ' A'),
+    );
     await tester.pump(const Duration(seconds: 4));
     await tester.pump();
     expect(controller.attempts, 1);
-    await adapter.editor.apply(adapter.editor.transaction..insertText(node, 4, ' B'));
+    await adapter.editor.apply(
+      adapter.editor.transaction..insertText(node, 4, ' B'),
+    );
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();
     controller.firstSave.complete();
     await tester.pump();
     await tester.pump();
-    expect(controller.attempts, 2, reason: 'pause should not leave B on the debounce timer');
+    expect(
+      controller.attempts,
+      2,
+      reason: 'pause should not leave B on the debounce timer',
+    );
     expect(controller.persisted.content, 'AA A B');
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(page(controller.persisted));
     await tester.pumpAndSettle();
-    expect(tester.widget<RichNoteEditor>(find.byType(RichNoteEditor)).adapter.document!.plainText, 'AA A B');
+    expect(
+      tester
+          .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+          .adapter
+          .document!
+          .plainText,
+      'AA A B',
+    );
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpWidget(const SizedBox());
   });
-  for (final failure in ['write', 'conflict']) {
-    testWidgets('pause preserves the draft on $failure failure', (tester) async {
-      final controller = _GatedController();
-      controller.failure = failure == 'write'
-          ? StateError('synthetic write failure')
-          : NoteEditorChanged(controller.persisted);
-      await tester.pumpWidget(MaterialApp(
+  testWidgets('repeated lifecycle events coalesce even if resumed before ACK', (
+    tester,
+  ) async {
+    final controller = _GatedController();
+    await tester.pumpWidget(
+      MaterialApp(
         localizationsDelegates: const [
           NoteDetailCopy.delegate,
           engine.AppFlowyEditorLocalizations.delegate,
         ],
-        home: NoteDetailPage(notesController: controller, note: controller.persisted),
-      ));
+        home: NoteDetailPage(
+          notesController: controller,
+          note: controller.persisted,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final adapter = tester
+        .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+        .adapter;
+    final node = adapter.editor.document.root.children.first;
+    await adapter.editor.apply(
+      adapter.editor.transaction..insertText(node, 2, ' A'),
+    );
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    await adapter.editor.apply(
+      adapter.editor.transaction..insertText(node, 4, ' B'),
+    );
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    controller.firstSave.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(controller.persisted.content, 'AA A B');
+    expect(controller.attempts, 2);
+    await tester.pump(const Duration(seconds: 4));
+    expect(
+      controller.attempts,
+      2,
+      reason: 'no duplicate save after lifecycle flush',
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'a changed note or controller cannot receive the old lifecycle flush',
+    (tester) async {
+      final oldController = _GatedController();
+      final newController = _GatedController(id: 'other');
+      Widget page(_GatedController controller) => MaterialApp(
+        localizationsDelegates: const [
+          NoteDetailCopy.delegate,
+          engine.AppFlowyEditorLocalizations.delegate,
+        ],
+        home: NoteDetailPage(
+          notesController: controller,
+          note: controller.persisted,
+        ),
+      );
+      await tester.pumpWidget(page(oldController));
       await tester.pumpAndSettle();
-      final adapter = tester.widget<RichNoteEditor>(find.byType(RichNoteEditor)).adapter;
+      final adapter = tester
+          .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+          .adapter;
       final node = adapter.editor.document.root.children.first;
-      await adapter.editor.apply(adapter.editor.transaction..insertText(node, 2, ' A'));
+      await adapter.editor.apply(
+        adapter.editor.transaction..insertText(node, 2, ' A'),
+      );
       await tester.pump(const Duration(seconds: 4));
       await tester.pump();
-      await adapter.editor.apply(adapter.editor.transaction..insertText(node, 4, ' B'));
+      await adapter.editor.apply(
+        adapter.editor.transaction..insertText(node, 4, ' B'),
+      );
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(
+        oldController.attempts,
+        1,
+        reason: 'only A is running before switching',
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(page(newController));
+      await tester.pump();
+      expect(
+        tester
+            .widget<NoteDetailPage>(find.byType(NoteDetailPage))
+            .notesController,
+        same(newController),
+      );
+      expect(
+        oldController.attempts,
+        1,
+        reason: 'switching must not start a second save',
+      );
+      oldController.firstSave.complete();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 4));
+      expect(oldController.attempts, 1);
+      expect(newController.attempts, 0);
+      expect(newController.persisted.content, 'AA');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  for (final failure in ['write', 'conflict']) {
+    testWidgets('pause preserves the draft on $failure failure', (
+      tester,
+    ) async {
+      final controller = _GatedController();
+      controller.failure = failure == 'write'
+          ? StateError('synthetic write failure')
+          : NoteEditorChanged(controller.persisted);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            NoteDetailCopy.delegate,
+            engine.AppFlowyEditorLocalizations.delegate,
+          ],
+          home: NoteDetailPage(
+            notesController: controller,
+            note: controller.persisted,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final adapter = tester
+          .widget<RichNoteEditor>(find.byType(RichNoteEditor))
+          .adapter;
+      final node = adapter.editor.document.root.children.first;
+      await adapter.editor.apply(
+        adapter.editor.transaction..insertText(node, 2, ' A'),
+      );
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+      await adapter.editor.apply(
+        adapter.editor.transaction..insertText(node, 4, ' B'),
+      );
       await tester.pump();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
       controller.firstSave.complete();
       await tester.pump();
       await tester.pump(const Duration(seconds: 4));
-      expect(controller.attempts, 1, reason: 'failed A must not trigger a B write');
+      expect(
+        controller.attempts,
+        1,
+        reason: 'failed A must not trigger a B write',
+      );
       expect(controller.persisted.content, 'AA');
       expect(adapter.document!.plainText, 'AA A B');
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -87,12 +235,25 @@ void main() {
   }
 }
 
-final class _GatedController implements NotesApplicationController, DocumentNotesController {
-  _GatedController() {
+final class _GatedController
+    implements NotesApplicationController, DocumentNotesController {
+  _GatedController({String id = 'test'}) {
     final document = NoteDocument([
-      DocumentBlock(id: 'p', kind: DocumentBlockKind.paragraph, runs: const [DocumentText('AA')]),
+      DocumentBlock(
+        id: 'p',
+        kind: DocumentBlockKind.paragraph,
+        runs: const [DocumentText('AA')],
+      ),
     ]);
-    persisted = NoteDto(id: 'test', ownerId: 'owner', title: 'Title', content: 'AA', document: document, createdAt: DateTime.utc(2026), updatedAt: DateTime.utc(2026));
+    persisted = NoteDto(
+      id: id,
+      ownerId: 'owner',
+      title: 'Title',
+      content: 'AA',
+      document: document,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+    );
   }
   final firstSave = Completer<void>();
   late NoteDto persisted;
@@ -101,14 +262,27 @@ final class _GatedController implements NotesApplicationController, DocumentNote
   @override
   get summaryConsent => null;
   @override
-  Future<NoteDto> saveDocumentSnapshot(NoteDto selected, String title, NoteDocument document) async {
+  Future<NoteDto> saveDocumentSnapshot(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  ) async {
     attempts++;
     if (attempts == 1) {
       await firstSave.future;
       if (failure case final error?) throw error;
     }
-    return persisted = NoteDto(id: selected.id, ownerId: selected.ownerId, title: title, content: document.plainText, document: document, createdAt: selected.createdAt, updatedAt: DateTime.utc(2026));
+    return persisted = NoteDto(
+      id: selected.id,
+      ownerId: selected.ownerId,
+      title: title,
+      content: document.plainText,
+      document: document,
+      createdAt: selected.createdAt,
+      updatedAt: DateTime.utc(2026),
+    );
   }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

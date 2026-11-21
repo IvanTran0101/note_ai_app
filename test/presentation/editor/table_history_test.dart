@@ -41,7 +41,11 @@ void main() {
       onChanged: () => edits++,
     );
   });
-  Future<void> paint(WidgetTester tester, {double scale = 1}) async {
+  Future<void> paint(
+    WidgetTester tester, {
+    double scale = 1,
+    bool focusEditor = false,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: const [
@@ -63,10 +67,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    if (focusEditor) {
+      // The native rail is only mounted while the editor owns focus.
+      focus.requestFocus();
+      await tester.pumpAndSettle();
+    }
   }
 
   Future<void> dispose(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
+    focus.unfocus();
     adapter.dispose();
     focus.dispose();
   }
@@ -74,6 +84,10 @@ void main() {
   testWidgets('table measurement is viewing, not an undoable document edit', (
     tester,
   ) async {
+    tester.view
+      ..physicalSize = const Size(411, 914)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     try {
       final before = adapter.document;
       await paint(tester);
@@ -92,26 +106,38 @@ void main() {
   testWidgets('painted row change undoes once and layout retains redo', (
     tester,
   ) async {
+    // Table options and history share the native rail with the IME above it.
+    tester.view
+      ..physicalSize = const Size(411, 914)
+      ..devicePixelRatio = 1
+      ..viewInsets = const FakeViewPadding(bottom: 280);
+    addTearDown(tester.view.reset);
     try {
-      await paint(tester);
+      await paint(tester, focusEditor: true);
       final before = adapter.document;
       adapter.editor.selection = engine.Selection.collapsed(
         engine.Position(path: [0, 0, 0], offset: 0),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Table options'), findsOneWidget);
       await tester.tap(find.byTooltip('Table options'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add row below'));
       await tester.pumpAndSettle();
       final added = adapter.document;
       expect(added!.blocks.single.rows.length, 3);
+      // The dialog took focus; the rail only returns once the editor has it.
+      focus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Undo'), findsOneWidget);
       await tester.tap(find.byTooltip('Undo'));
       await tester.pumpAndSettle();
       expect(adapter.document, before);
       expect(adapter.editor.undoManager.redoStack.isNonEmpty, true);
-      await paint(tester, scale: 1.6);
+      await paint(tester, scale: 1.6, focusEditor: true);
       expect(adapter.document, before);
       expect(adapter.editor.undoManager.redoStack.isNonEmpty, true);
+      expect(find.byTooltip('Redo'), findsOneWidget);
       await tester.tap(find.byTooltip('Redo'));
       await tester.pumpAndSettle();
       expect(adapter.document, added);
