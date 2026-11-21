@@ -1,4 +1,5 @@
 // coverage:ignore-file
+// Legacy APIs preserve Flutter 3.32 and vector_math compatibility.
 
 import 'dart:math' as math;
 
@@ -80,7 +81,9 @@ class CustomShrinkWrappingViewport extends CustomViewport {
           Viewport.getDefaultCrossAxisDirection(context, axisDirection)
       ..anchor = anchor
       ..offset = offset
+      // ignore: deprecated_member_use
       ..cacheExtent = cacheExtent
+      // ignore: deprecated_member_use
       ..cacheExtentStyle = cacheExtentStyle
       ..clipBehavior = clipBehavior;
   }
@@ -282,11 +285,14 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
     final forwardDirectionRemainingPaintExtent =
         (mainAxisExtent - centerOffset).clamp(0.0, mainAxisExtent);
 
+    // ignore: deprecated_member_use
     switch (cacheExtentStyle) {
       case CacheExtentStyle.pixel:
+        // ignore: deprecated_member_use
         _calculatedCacheExtent = cacheExtent;
         break;
       case CacheExtentStyle.viewport:
+        // ignore: deprecated_member_use
         _calculatedCacheExtent = mainAxisExtent * cacheExtent!;
         break;
     }
@@ -672,7 +678,9 @@ abstract class CustomRenderViewport
     double anchor = 0.0,
     List<RenderSliver>? children,
     RenderSliver? center,
+    // ignore: deprecated_member_use
     super.cacheExtent,
+    // ignore: deprecated_member_use
     super.cacheExtentStyle,
     super.clipBehavior,
   })  : assert(anchor >= 0.0 && anchor <= 1.0),
@@ -927,6 +935,7 @@ abstract class CustomRenderViewport
   @override
   void applyPaintTransform(RenderObject child, Matrix4 transform) {
     final Offset offset = paintOffsetOf(child as RenderSliver);
+    // ignore: deprecated_member_use
     transform.translate(offset.dx, offset.dy);
   }
 

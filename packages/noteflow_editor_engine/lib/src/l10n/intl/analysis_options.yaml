@@ -1,0 +1,6 @@
+include: ../../../../../../analysis_options.yaml
+
+# intl_utils generates these message functions without parameter types.
+analyzer:
+  errors:
+    strict_top_level_inference: ignore

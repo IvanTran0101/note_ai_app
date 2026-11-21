@@ -53,23 +53,46 @@ void main() {
   testWidgets('keyboard menu selection scrolls the last block into view', (
     tester,
   ) async {
+    // The Add block action lives in the native rail that surfaces above the
+    // IME once the editable editor owns focus.
+    tester.view
+      ..physicalSize = const Size(411, 914)
+      ..devicePixelRatio = 1
+      ..viewInsets = const FakeViewPadding(bottom: 280);
+    addTearDown(tester.view.reset);
     final adapter = _adapter(), focus = FocusNode();
     await tester.pumpWidget(_host(adapter, focus));
     await tester.pumpAndSettle();
-    adapter.editor.selection = engine.Selection.collapsed(
+    focus.requestFocus();
+    await tester.pumpAndSettle();
+    final selection = engine.Selection.collapsed(
       engine.Position(path: [0], offset: 4),
     );
-    await tester.pump();
+    adapter.editor.selection = selection;
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Add block'), findsOneWidget);
     await tester.tap(find.byTooltip('Add block'));
     await tester.pumpAndSettle();
-    final controls = tester.widget<EditorControls>(find.byType(EditorControls));
+    // The rail may still be settling out while the sheet owns focus, so read
+    // the menu controller from whichever mounted controls use it.
+    final controls = tester
+        .widgetList<EditorControls>(find.byType(EditorControls))
+        .last;
+    expect(controls.slash.visible, isTrue);
+    expect(controls.slash.snapshot?.selection, selection);
     controls.slash.move(12);
     await tester.pumpAndSettle();
     expect(find.text('Divider').hitTestable(), findsOneWidget);
     controls.slash.move(1);
     await tester.pumpAndSettle();
+    expect(find.text('File').hitTestable(), findsOneWidget);
+    controls.slash.move(1);
+    await tester.pumpAndSettle();
     expect(find.text('Text').hitTestable(), findsOneWidget);
+    // Moving the menu highlight does not rewrite the captured caret.
+    expect(controls.slash.snapshot?.selection, selection);
     await tester.pumpWidget(const SizedBox());
+    focus.unfocus();
     adapter.dispose();
     focus.dispose();
     expect(tester.takeException(), isNull);

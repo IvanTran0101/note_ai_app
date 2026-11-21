@@ -31,14 +31,14 @@ extension _AttachmentInlineTransfer on _AttachmentEditorPanelState {
       final bindPicked = widget.onFilesPicked;
       if (bindPicked == null) {
         _setRecoveryError(blockId);
-        _showPendingRecoveryFeedback(context);
+        _showPendingRecoveryFeedback();
         return;
       }
       final bound = await bindPicked(blockId, ids);
       if (!bound) {
         if (sameResource()) {
           _setRecoveryError(blockId);
-          _showPendingRecoveryFeedback(context);
+          _showPendingRecoveryFeedback();
         }
         return;
       }
@@ -67,9 +67,9 @@ extension _AttachmentInlineTransfer on _AttachmentEditorPanelState {
     });
   }
 
-  void _showPendingRecoveryFeedback(BuildContext anchorContext) {
-    if (!anchorContext.mounted) return;
-    ScaffoldMessenger.maybeOf(anchorContext)?.showSnackBar(
+  void _showPendingRecoveryFeedback() {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(
         content: Text(
           'File is saved on this device. Insert a File block and tap Retry local files.',
@@ -162,7 +162,7 @@ extension _AttachmentInlineTransfer on _AttachmentEditorPanelState {
           _error = _attachmentFailureMessage(failure);
           _inlineErrorBlock = blockId;
         });
-        _showPendingRecoveryFeedback(context);
+        _showPendingRecoveryFeedback();
       }
       return;
     }
@@ -185,7 +185,7 @@ extension _AttachmentInlineTransfer on _AttachmentEditorPanelState {
     final bindPicked = widget.onFilesPicked;
     if (bindPicked == null) {
       _setRecoveryError(blockId);
-      _showPendingRecoveryFeedback(context);
+      _showPendingRecoveryFeedback();
       return;
     }
 
@@ -198,14 +198,14 @@ extension _AttachmentInlineTransfer on _AttachmentEditorPanelState {
           _error = _attachmentFailureMessage(failure);
           _inlineErrorBlock = blockId;
         });
-        _showPendingRecoveryFeedback(context);
+        _showPendingRecoveryFeedback();
       }
       return;
     }
     if (!bound) {
       if (sameResource()) {
         _setRecoveryError(blockId);
-        _showPendingRecoveryFeedback(context);
+        _showPendingRecoveryFeedback();
       }
       return;
     }

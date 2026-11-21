@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 // coverage:ignore-file
+// Legacy viewport APIs preserve Flutter 3.32 compatibility.
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -25,6 +26,7 @@ class UnboundedCustomScrollView extends CustomScrollView {
     bool shrinkWrap = false,
     super.center,
     double anchor = 0.0,
+    // ignore: deprecated_member_use
     super.cacheExtent,
     super.slivers,
     super.semanticChildCount,
@@ -56,6 +58,7 @@ class UnboundedCustomScrollView extends CustomScrollView {
         axisDirection: axisDirection,
         offset: offset,
         slivers: slivers,
+        // ignore: deprecated_member_use
         cacheExtent: cacheExtent,
         center: center,
         anchor: anchor,
@@ -65,6 +68,7 @@ class UnboundedCustomScrollView extends CustomScrollView {
       axisDirection: axisDirection,
       offset: offset,
       slivers: slivers,
+      // ignore: deprecated_member_use
       cacheExtent: cacheExtent,
       center: center,
       anchor: anchor,

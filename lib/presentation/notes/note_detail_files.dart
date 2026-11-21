@@ -37,8 +37,9 @@ extension _NoteDetailFiles on NoteDetailPageState {
     if (_note == null && !await _save()) return;
     if (!mounted ||
         !_canEdit ||
-        session != _securityController?.sessionGeneration)
+        session != _securityController?.sessionGeneration) {
       return;
+    }
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_canEdit || _richEditor?.fileBlock(id) == null) return;
     await _inlineFiles.openPicker(id);
