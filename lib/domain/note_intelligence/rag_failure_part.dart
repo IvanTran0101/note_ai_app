@@ -140,7 +140,7 @@ final class RagFailure implements Exception {
   /// Creates a failure for [code].
   ///
   /// [retryAfterSeconds] is sanitized on read: it is non-null only for
-  /// [RagFailureCode.rateLimited] and only inside `1..3600`, so an invalid hint
+  /// [RagFailureCode.rateLimited] and only inside `1..18000`, so an invalid hint
   /// is dropped rather than clamped.
   const RagFailure(this.code, {int? retryAfterSeconds})
     // The public hint name and the private const field differ on purpose: the
@@ -149,7 +149,7 @@ final class RagFailure implements Exception {
     : _retryAfterSeconds = retryAfterSeconds;
 
   /// The only hint range a caller may act on, mirroring the API contract.
-  static const int maxRetryAfterSeconds = 3600;
+  static const int maxRetryAfterSeconds = 18000;
 
   /// Builds the safe failure for one backend error envelope.
   ///

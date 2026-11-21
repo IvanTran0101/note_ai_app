@@ -276,3 +276,15 @@ test('construction validates the region, table and injected port', () => {
   assert.ok(refused(() => createRuntimeConfigReader({ region: 'ap-southeast-1', stateTable: 'state', client: {} as never })));
   assert.ok(refused(() => createRuntimeConfigReader(null as never)));
 });
+
+test('verified-account admission defaults off and participates in the entire config guard', () => {
+  const legacy = parseRuntimeConfig(dynamicConfig());
+  assert.equal(legacy.verifiedAccountsEnabled, undefined);
+  const enabled = parseRuntimeConfig(dynamicConfig({ verifiedAccountsEnabled: true }));
+  const rolledBack = parseRuntimeConfig(dynamicConfig({ verifiedAccountsEnabled: false }));
+  assert.equal(enabled.verifiedAccountsEnabled, true);
+  assert.ok(!sameRuntimeConfig(enabled, rolledBack));
+  assert.ok(!sameRuntimeConfig(legacy, rolledBack));
+  assert.ok(refused(() => parseRuntimeConfig(dynamicConfig({ verifiedAccountsEnabled: 'true' }))));
+  assert.ok(refused(() => parseRuntimeConfig(rawConfig({ verifiedAccountsEnabled: true }))));
+});

@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {App,Duration,Stack} from 'aws-cdk-lib';
 import {Template} from 'aws-cdk-lib/assertions';
+import {UserPool} from 'aws-cdk-lib/aws-cognito';
 import {AttributeType,StreamViewType,Table} from 'aws-cdk-lib/aws-dynamodb';
 import {Code,Function,Runtime} from 'aws-cdk-lib/aws-lambda';
 import {mkdtempSync} from 'node:fs';
@@ -178,4 +179,27 @@ test('Phase5 API refuses an empty audience, wildcard origin, bad owner and empty
   assert.throws(()=>attempt({allowedOrigins:['https://evil.example']}),/origin/);
   assert.throws(()=>attempt({ownerIds:[]}),/owner/);
   assert.throws(()=>attempt({ownerIds:['993a958c-1051-70fe-41b4-f5c997da1652','NOT-A-SUB']}),/Cognito sub/);
+});
+
+test('staged verified-account API throttles only query and grants exact-pool identity reads and scoped consent writes',()=>{
+  const {stack,notes,state,fn}=fixture();
+  const verifiedPool=new UserPool(stack,'VerifiedPool',{signInAliases:{email:true}});
+  createPhase5Infrastructure({handler:fn,notesTable:notes,stateTable:state,ownerIds:[OWNER],
+    issuerUrl:ISSUER,audience:[AUDIENCE],verifiedPool,queryThrottle:{rate:2.5,burst:4}});
+  const template=Template.fromStack(stack);
+  template.hasResourceProperties('AWS::ApiGatewayV2::Stage',{RouteSettings:{
+    'POST /ai/rag/query':{ThrottlingRateLimit:2.5,ThrottlingBurstLimit:4},
+  }});
+  const statements=Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+    (item:any)=>item.Properties.PolicyDocument.Statement);
+  const cognito=statements.filter((s:any)=>[s.Action].flat().some((action:string)=>action.startsWith('cognito-idp:')));
+  assert.equal(cognito.length,1);
+  assert.equal(cognito[0].Action,'cognito-idp:AdminGetUser');
+  assert.notEqual(cognito[0].Resource,'*');
+  const consentWrite=statements.find((s:any)=>s.Action==='dynamodb:UpdateItem');
+  assert.deepEqual(consentWrite.Condition['ForAllValues:StringEquals'],{'dynamodb:Attributes':CONSENT_ATTRIBUTES});
+  assert.deepEqual(consentWrite.Condition['ForAllValues:StringLike'],{
+    'dynamodb:LeadingKeys':['OWNER#????????-????-????-????-????????????'],
+  });
+  assert.deepEqual(consentWrite.Condition.Null,{'dynamodb:LeadingKeys':'false','dynamodb:Attributes':'false'});
 });

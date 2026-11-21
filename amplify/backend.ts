@@ -50,13 +50,26 @@ const notesTable = createNotesTable(syncStack);
 // Keep RAG resources declared on every deploy; its reviewed pilot stream mapping defaults disabled.
 // The worker/probe get the same Amplify-resolved Cloudflare Access secrets as the managed Lambda;
 // the values are deploy-time references, never literals in this file or the synthesized template.
-const rag = createRagInfrastructure(syncStack, notesTable, ragPilotScope, resolveRagSecrets(syncStack));
-createPrivateRagInfrastructure(backend.ragQuery.resources.lambda, notesTable, rag);
+const verifiedPool = process.env.NOTEFLOW_RAG_PROVISION_VERIFIED_ACCOUNTS === 'true'
+  ? backend.auth.resources.userPool
+  : undefined;
+const rag = createRagInfrastructure(
+  syncStack, notesTable, ragPilotScope, resolveRagSecrets(syncStack), verifiedPool,
+);
+createPrivateRagInfrastructure(
+  backend.ragQuery.resources.lambda, notesTable, rag,
+  process.env.NOTEFLOW_RAG_QUERY_ADMISSION_ENABLED === 'true',
+);
 const ragPhase5 = createPhase5Infrastructure({
   handler: backend.ragQuery.resources.lambda,
   notesTable,
   stateTable: rag.state,
   ownerIds: ragPilotScope.owners.map((owner) => owner.ownerId),
+  verifiedPool,
+  queryThrottle: verifiedPool === undefined ? undefined : {
+    rate: Number(process.env.NOTEFLOW_RAG_QUERY_THROTTLE_RATE),
+    burst: Number(process.env.NOTEFLOW_RAG_QUERY_THROTTLE_BURST),
+  },
   issuerUrl: `https://cognito-idp.${syncStack.region}.amazonaws.com/${backend.auth.resources.userPool.userPoolId}`,
   audience: [backend.auth.resources.userPoolClient.userPoolClientId],
 });

@@ -24,6 +24,7 @@ import { DEEPSEEK_SYSTEM_PROMPT } from '../providers/deepseek';
 import { deepFreeze } from '../query_diagnostics';
 import type { DiagnosticMetadata } from '../query_diagnostics';
 import { deepSeekInputUpperBound, jevInputUpperBound } from '../token_fit';
+import { acceptsVerifiedAccounts, type AccountAccess } from './verified_account';
 import { RagFailure } from '../types';
 import type { Counters, ErrorCode, Providers, RagRequest, RagResponse } from '../types';
 import type { PilotBudget, QueryLease } from './pilot_budget';
@@ -45,6 +46,8 @@ export type PilotQueryDeps = Readonly<{
   loadIndex: () => IndexDeps;
   /** Pilot budget: lease, JEV/DeepSeek reservation and the atomic embedding admission. */
   budget: PilotBudget;
+  verifiedBudget?: PilotBudget;
+  accountAccess?: AccountAccess;
   /** Raw JEV/DeepSeek ports; reserved by this module before each single call. */
   rawProviders: Providers;
   /** Token counters; the embedding counter always comes from the loaded index. */
@@ -80,7 +83,7 @@ const logSafely = (
 };
 
 /** Releases the lease only when the token still matches; a stale/expired lease is a silent no-op. */
-const releaseLease = async (deps: PilotQueryDeps, lease: QueryLease): Promise<void> => {
+const releaseLease = async (deps: PilotQueryDeps, budget: PilotBudget, lease: QueryLease): Promise<void> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PILOT_RELEASE_TIMEOUT_MS);
   const expired = new Promise<never>((_resolve, reject) => {
@@ -89,7 +92,7 @@ const releaseLease = async (deps: PilotQueryDeps, lease: QueryLease): Promise<vo
   try {
     // Race the independent deadline too: a port that ignores the abort signal still cannot hold
     // the request open past the release budget.
-    await Promise.race([deps.budget.release(lease, controller.signal), expired]);
+    await Promise.race([budget.release(lease, controller.signal), expired]);
   } catch (error) {
     logSafely(deps, {
       stage: 'query-lease-release',
@@ -158,11 +161,27 @@ export function createPilotQuery(deps: PilotQueryDeps): PilotQuery {
     if (!isValidIdentifier(requestId)) throw new RagFailure('INVALID_INPUT');
     const deadline = new RequestDeadline(LIVE_TOTAL_DEADLINE_MS, Date.now, deps.parentSignal);
     let lease: QueryLease | null = null;
+    let quotaFailure: RagFailure | undefined;
+    let queryBudget = deps.budget;
     try {
       // Initial trusted permit: read the config and require an enabled, listed actor before any
       // canonical body/index/tokenizer composition.
       const config = await deadline.within(() => deps.readConfig(deadline.signal));
-      assertPilotActor(config.policy, actor);
+      const publicAccess = acceptsVerifiedAccounts(config) ? deps.accountAccess : undefined;
+      let pilotPolicy = config.policy;
+      if (publicAccess === undefined) {
+        assertPilotActor(config.policy, actor);
+      } else {
+        if (!(await deadline.within(() => publicAccess.verifyOwner(actor, deadline.signal)))) {
+          throw new RagFailure('SCOPE_DENIED');
+        }
+        const grant = await deadline.within(() => publicAccess.readConsent(actor, deadline.signal));
+        if (!grant.accepted) throw new RagFailure('CONSENT_REQUIRED');
+        if (deps.verifiedBudget === undefined) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+        queryBudget = deps.verifiedBudget;
+        // Bind the existing live pipeline's actor guard to this request's verified identity.
+        pilotPolicy = Object.freeze({ ...config.policy, owners: Object.freeze([actor]) });
+      }
       const approval = await deadline.within(() => deps.readApproval(deadline.signal));
 
       const index = deps.loadIndex();
@@ -171,6 +190,7 @@ export function createPilotQuery(deps: PilotQueryDeps): PilotQuery {
         budget: deps.budget,
         readConfig: deps.readConfig,
         config,
+        verifyOwner: publicAccess?.verifyOwner,
       });
       const ports = createQueryPorts({ ...index, store });
       const counters: Counters = Object.freeze({
@@ -192,21 +212,31 @@ export function createPilotQuery(deps: PilotQueryDeps): PilotQuery {
           requestTimeoutMs: LIVE_TOTAL_DEADLINE_MS,
         }),
         liveApproval: approval,
-        pilotPolicy: config.policy,
+        pilotPolicy,
         signal: deadline.signal,
         // Reuse the existing bounded sink; the pipeline freezes an allowlisted event and swallows
         // sink failures, so the production JSON console logger can never change the response.
         onDiagnostic: (diagnostic) => logSafely(deps, diagnostic),
         consumeQuota: async (quotaActor, signal) => {
-          lease = await deps.budget.acquireQuery(quotaActor, requestId, signal);
+          try {
+            lease = await queryBudget.acquireQuery(quotaActor, requestId, signal);
+          } catch (error) {
+            if (error instanceof RagFailure && error.retryAfterSeconds !== undefined) quotaFailure = error;
+            throw error;
+          }
           return true;
         },
       });
-      return await run(actor, request, requestId);
+      const response = await run(actor, request, requestId);
+      if (response.status === 'ERROR' && response.code === 'RATE_LIMITED' && quotaFailure !== undefined) {
+        throw quotaFailure;
+      }
+      return response;
     } catch (error) {
+      if (error === quotaFailure && quotaFailure !== undefined) throw quotaFailure;
       return failure(requestId, error instanceof RagFailure ? error.code : 'PROVIDER_UNAVAILABLE');
     } finally {
-      if (lease !== null) await releaseLease(deps, lease);
+      if (lease !== null) await releaseLease(deps, queryBudget, lease);
       deadline.close();
     }
   };

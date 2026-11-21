@@ -13,6 +13,7 @@ void main() {
     WidgetTester tester,
     NoteDocument document,
   ) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
     final adapter = RichEditorAdapter(
       document: document,
       legacyText: '',
@@ -23,9 +24,14 @@ void main() {
     );
     final focus = FocusNode();
     addTearDown(() async {
-      await tester.pumpWidget(const SizedBox());
-      adapter.dispose();
-      focus.dispose();
+      try {
+        focus.unfocus();
+        await tester.pumpWidget(const SizedBox());
+      } finally {
+        tester.view.reset();
+        adapter.dispose();
+        focus.dispose();
+      }
     });
     await tester.pumpWidget(
       MaterialApp(
@@ -41,6 +47,8 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    focus.requestFocus();
     await tester.pumpAndSettle();
     return adapter;
   }
@@ -141,10 +149,9 @@ void main() {
         await tester.scrollUntilVisible(
           target,
           180,
-          scrollable: find.descendant(
-            of: menu,
-            matching: find.byType(Scrollable),
-          ),
+          scrollable: find
+              .descendant(of: menu, matching: find.byType(Scrollable))
+              .first,
         );
         await tester.pumpAndSettle();
         await tester.tap(target);

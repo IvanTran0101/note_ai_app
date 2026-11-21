@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 // coverage:ignore-file
+// Legacy viewport APIs preserve Flutter 3.32 compatibility.
 
 import 'dart:math' as math;
 
@@ -22,6 +23,7 @@ class UnboundedViewport extends Viewport {
     double anchor = 0.0,
     required super.offset,
     super.center,
+    // ignore: deprecated_member_use
     super.cacheExtent,
     super.slivers,
   }) : _anchor = anchor;
@@ -41,6 +43,7 @@ class UnboundedViewport extends Viewport {
           Viewport.getDefaultCrossAxisDirection(context, axisDirection),
       anchor: anchor,
       offset: offset,
+      // ignore: deprecated_member_use
       cacheExtent: cacheExtent,
     );
   }
@@ -230,11 +233,14 @@ class UnboundedRenderViewport extends RenderViewport {
     final double forwardDirectionRemainingPaintExtent =
         (mainAxisExtent - centerOffset).clamp(0.0, mainAxisExtent);
 
+    // ignore: deprecated_member_use
     switch (cacheExtentStyle) {
       case CacheExtentStyle.pixel:
+        // ignore: deprecated_member_use
         _calculatedCacheExtent = cacheExtent;
         break;
       case CacheExtentStyle.viewport:
+        // ignore: deprecated_member_use
         _calculatedCacheExtent = mainAxisExtent * cacheExtent!;
         break;
     }

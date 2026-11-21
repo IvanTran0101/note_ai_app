@@ -11,7 +11,7 @@ import deepSeekManifest from '../../docs/rag/deepseek_tokenizer_manifest.json';
 import cohereManifest from '../../docs/rag/tokenizer_manifest.json';
 import embeddingGemmaManifest from '../../docs/rag/embeddinggemma_tokenizer_manifest.json';
 
-export function createPrivateRagInfrastructure(handler: IFunction, notes: Table, rag: ReturnType<typeof createRagInfrastructure>) {
+export function createPrivateRagInfrastructure(handler: IFunction, notes: Table, rag: ReturnType<typeof createRagInfrastructure>, queryAdmissionEnabled = false) {
   if (!(handler instanceof LambdaFunction)) throw new Error('Managed RAG handler must support environment/layers');
   const scope = Stack.of(handler);
   const assetDirectory = fileURLToPath(new URL('../../output/rag/phase4-tokenizer-layer/', import.meta.url));
@@ -48,7 +48,7 @@ export function createPrivateRagInfrastructure(handler: IFunction, notes: Table,
     RAG_TOKENIZER_DIR: '/opt', RAG_DEEPSEEK_TOKENIZER_DIR: '/opt/deepseek-tokenizer',
     RAG_PRIVATE_PHASE4: 'synthetic-only',
     // The index migration publishes vectors; public query admission stays independently closed.
-    RAG_QUERY_ADMISSION_ENABLED: 'false',
+    RAG_QUERY_ADMISSION_ENABLED: String(queryAdmissionEnabled),
   })) handler.addEnvironment(name, value);
   handler.addToRolePolicy(new PolicyStatement({ actions: ['dynamodb:GetItem', 'dynamodb:Query'], resources: [notes.tableArn, rag.state.tableArn] }));
   handler.addToRolePolicy(new PolicyStatement({ actions: ['dynamodb:UpdateItem'], resources: [rag.state.tableArn],

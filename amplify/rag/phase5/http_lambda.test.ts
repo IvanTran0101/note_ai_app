@@ -29,7 +29,8 @@ import {
 import type { PilotHttpDeps, PilotProductionSeam } from './http_lambda';
 import type { PilotBudgetPort } from './pilot_budget';
 import { PILOT_RELEASE_TIMEOUT_MS } from './pilot_query';
-import { RUNTIME_CASE_HASH, RUNTIME_CONFIG_VERSION, RUNTIME_CORPUS_KIND } from './runtime_config';
+import { RUNTIME_CASE_HASH, RUNTIME_CONFIG_VERSION, RUNTIME_CORPUS_KIND,
+  RUNTIME_ELIGIBLE_OWN_NOTES_KIND } from './runtime_config';
 import { LIVE_TOTAL_DEADLINE_MS } from '../live_policy';
 
 const ACTOR = '00000001-0000-4000-8000-000000000001';
@@ -919,5 +920,82 @@ test('the production consent GET stays available to a listed owner while admissi
     const get = await handler(consentGet()) as { statusCode: number; body: string };
     assert.equal(get.statusCode, 200, get.body);
     assert.deepEqual(JSON.parse(get.body).consent, { accepted: false, version: CONSENT_VERSION, generation: 0 });
+  });
+});
+
+test('public HTTP admission validates live email and consent, then returns the rolling wait without provider calls', async () => {
+  const other = '00000002-0000-4000-8000-000000000002';
+  const config = {
+    version: RUNTIME_CONFIG_VERSION,
+    generation: 1,
+    policy: { ...configValue.policy, owners: [other] },
+    verifiedAccountsEnabled: true,
+    corpus: { kind: RUNTIME_ELIGIBLE_OWN_NOTES_KIND, caseHash: null, owners: { [other]: [] } },
+  };
+  const fake = documentFake(stateWithConfig(config));
+  const index = syntheticIndex();
+  const providers = { jev: 0, generate: 0 };
+  const now = Date.parse('2026-11-21T03:00:00Z');
+  const verified = new Set<string>();
+  const consentKey = consentRowKey(ACTOR);
+  const verifyCalls: string[] = [];
+  await withEnv({ ...QUERY_ENV, RAG_VERIFIED_USER_POOL_ID: 'ap-southeast-1_TestPool' }, async () => {
+    const handler = createDefaultHandler({
+      client: () => fake.client,
+      loadIndex: () => index.deps,
+      countOutput: () => countSyntheticTokens,
+      readApproval: async () => approval,
+      rawProviders: syntheticProviders(providers),
+      now: () => now,
+      verifyOwner: async (owner) => { verifyCalls.push(owner); return verified.has(owner); },
+    });
+    const query = async (event = httpEvent()) => await handler(event) as {
+      statusCode: number; headers: Record<string, string>; body: string;
+    };
+    const spoofed = httpEvent({
+      requestContext: {
+        http: { method: 'POST' },
+        authorizer: { jwt: { claims: { token_use: 'access', sub: ACTOR, email_verified: true } } },
+      },
+    });
+    assert.equal(JSON.parse((await query(spoofed)).body).code, 'SCOPE_DENIED');
+    assert.deepEqual(verifyCalls, [ACTOR]);
+    assert.equal(JSON.parse((await query(consentPut(0))).body).code, 'SCOPE_DENIED');
+    verified.add(ACTOR);
+    assert.equal(JSON.parse((await query()).body).code, 'CONSENT_REQUIRED');
+    assert.equal(index.counts.loads, 0);
+
+    assert.equal((await query(consentPut(0))).statusCode, 200);
+    // Match the synthetic manifest's current consent generation.
+    fake.notesItems.set(keyOf(consentKey), {
+      ...consentKey, accepted: true, version: CONSENT_VERSION, generation: 2,
+    });
+    const window = { ownerId: 'BUDGET#PHASE5', noteId: 'WINDOW#' + ACTOR };
+    fake.stateItems.set(keyOf(window), { ...window, admittedAt: Array<number>(100).fill(now - 5000) });
+    const limited = await query();
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.headers['retry-after'], '17995');
+    assert.equal(JSON.parse(limited.body).code, 'RATE_LIMITED');
+    assert.equal(index.counts.embeds, 0);
+    assert.deepEqual(providers, { jev: 0, generate: 0 });
+
+    fake.stateItems.delete(keyOf(window));
+    const answered = await query();
+    assert.equal(answered.statusCode, 200, answered.body);
+    assert.equal(JSON.parse(answered.body).sources[0].noteId, 'n-a');
+    assert.equal(index.counts.embeds, 1);
+
+    // This owner has lost verification, and the public switch has been rolled back.
+    verified.delete(ACTOR);
+    fake.stateItems.set(CONFIG_ITEM_KEY, {
+      ownerId: 'CONFIG#PHASE5', noteId: 'PILOT',
+      config: { ...config, generation: 2, verifiedAccountsEnabled: false },
+    });
+    const revoke = consentPut(2);
+    revoke.body = JSON.stringify({ accepted: false, version: CONSENT_VERSION, expectedGeneration: 2 });
+    assert.equal((await query(revoke)).statusCode, 200);
+    assert.equal(fake.notesItems.get(keyOf(consentKey))?.['accepted'], false);
+    assert.equal((await query()).statusCode, 503);
+    assert.equal(index.counts.embeds, 1);
   });
 });

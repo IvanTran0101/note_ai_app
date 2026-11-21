@@ -225,7 +225,7 @@ void main() {
     test('reads a bounded whole number of seconds', () {
       expect(retry('1').retryAfterSeconds, 1);
       expect(retry('30').retryAfterSeconds, 30);
-      expect(retry('3600').retryAfterSeconds, 3600);
+      expect(retry('18000').retryAfterSeconds, 18000);
       expect(retry(' 42 ').retryAfterSeconds, 42);
     });
 
@@ -234,7 +234,7 @@ void main() {
         null,
         '',
         '0',
-        '3601',
+        '18001',
         '-5',
         '1.5',
         'soon',

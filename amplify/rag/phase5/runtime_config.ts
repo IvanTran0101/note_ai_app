@@ -97,6 +97,7 @@ export type RuntimeConfig = Readonly<{
   version: typeof RUNTIME_CONFIG_VERSION;
   generation: number;
   policy: PilotPolicy;
+  verifiedAccountsEnabled?: boolean;
   corpus: Readonly<{
     kind: RuntimeCorpusKind;
     caseHash: typeof RUNTIME_CASE_HASH | null;
@@ -116,7 +117,11 @@ export type RuntimeConfig = Readonly<{
  *    note id or digest can imply a gold corpus or widen the canonical eligibility authority.
  */
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
-  if (!isRecord(value) || !hasExactKeys(value, CONFIG_KEYS)) refuse();
+  if (!isRecord(value)) refuse();
+  const hasVerifiedMode = Object.prototype.hasOwnProperty.call(value, 'verifiedAccountsEnabled');
+  if (!hasExactKeys(value, hasVerifiedMode ? [...CONFIG_KEYS, 'verifiedAccountsEnabled'] : CONFIG_KEYS)) refuse();
+  const verifiedAccountsEnabled = value['verifiedAccountsEnabled'];
+  if (hasVerifiedMode && typeof verifiedAccountsEnabled !== 'boolean') refuse();
   if (value['version'] !== RUNTIME_CONFIG_VERSION) refuse();
   const generation = value['generation'];
   if (!isSafeInteger(generation) || generation < 1) refuse();
@@ -141,6 +146,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
     refuse();
   }
   const dynamic = kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
+  if (verifiedAccountsEnabled === true && !dynamic) refuse();
 
   const rawOwners = corpus['owners'];
   if (!isRecord(rawOwners)) refuse();
@@ -178,6 +184,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
     version: RUNTIME_CONFIG_VERSION,
     generation,
     policy,
+    ...(typeof verifiedAccountsEnabled === 'boolean' ? { verifiedAccountsEnabled } : {}),
     corpus: Object.freeze({ kind, caseHash, owners: Object.freeze(owners) }),
   });
 }
@@ -208,6 +215,7 @@ const sameOwners = (
 export const sameRuntimeConfig = (left: RuntimeConfig, right: RuntimeConfig): boolean =>
   left.version === right.version &&
   left.generation === right.generation &&
+  left.verifiedAccountsEnabled === right.verifiedAccountsEnabled &&
   left.policy.enabled === right.policy.enabled &&
   left.policy.model === right.policy.model &&
   left.policy.thresholds.answerabilityMin === right.policy.thresholds.answerabilityMin &&

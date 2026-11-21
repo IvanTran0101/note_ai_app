@@ -19,6 +19,7 @@ import type { Counter } from '../types';
 import { RagFailure } from '../types';
 import { RUNTIME_CASE_HASH, RUNTIME_ELIGIBLE_OWN_NOTES_KIND, parseRuntimeConfig } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
+import type { AccountAccess } from './verified_account';
 import { createPilotWorkerHandler, sanitizePilotMetadata } from './pilot_worker';
 import { EMBEDDING_DIMENSIONS } from '../retrieval';
 
@@ -187,6 +188,7 @@ class MemoryEmbedding implements Embedding {
 type RigOptions = Readonly<{
   state?: IndexState;
   config?: Row;
+  accountAccess?: AccountAccess;
   onRead?: (call: number) => void;
   onCohere?: () => void | Promise<void>;
   onEmbed?: () => void | Promise<void>;
@@ -211,6 +213,7 @@ const rig = (options: RigOptions = {}) => {
   };
   const handler = createPilotWorkerHandler({
     readConfig,
+    accountAccess: options.accountAccess,
     runtime: () => ({ store, artifacts, embedding, log: (metadata) => logs.push({ ...metadata }) }),
     budget: {
       async acquireEmbedding(): Promise<void> {
@@ -767,4 +770,72 @@ test('a non-finite injected invocation deadline fails closed before any load', a
   );
   assert.equal(h.store.loads, 0);
   assert.equal(h.embedding.calls.length, 0);
+});
+
+test('a verified non-pilot opts in through the account job, while other owners and ineligible notes stay out', async () => {
+  const extraOwner = '00000003-0000-4000-8000-000000000003';
+  const verified = new Set([OTHER]);
+  let accepted = true;
+  const h = rig({
+    config: dynamicConfig({ verifiedAccountsEnabled: true }),
+    state: state({
+      ownerId: OTHER,
+      notes: [
+        note({ ownerId: OTHER, noteId: 'old-note', content: 'OWN OLD BODY' }),
+        note({ ownerId: OTHER, noteId: 'protected', protected: true, content: 'PROTECTED BODY' }),
+        note({ ownerId: OTHER, noteId: 'deleted', deleted: true, content: 'DELETED BODY' }),
+      ],
+    }),
+    accountAccess: {
+      readConsent: async (owner) => consent(owner === OTHER && accepted),
+      verifyOwner: async (owner) => verified.has(owner),
+    },
+  });
+  const result = await h.handler(stream(
+    recordFor(OTHER, 'RAG#CONSENT', '1'),
+    recordFor(extraOwner, 'NOTE#foreign', '2'),
+    recordFor(OTHER, 'META#not-a-rag-event', '3'),
+  ));
+  assert.deepEqual(failuresOf(result), []);
+  assert.deepEqual([...new Set(h.store.loadedOwners)], [OTHER]);
+  assert.equal(h.store.manifests[0]?.status, 'READY');
+  assert.match(JSON.stringify(h.embedding.calls), /OWN OLD BODY/);
+  assert.doesNotMatch(JSON.stringify(h.embedding.calls), /PROTECTED BODY|DELETED BODY/);
+
+  const initialEmbeds = h.embedding.calls.length;
+  const initialLoads = h.store.loads;
+  verified.delete(OTHER);
+  await h.handler(stream(recordFor(OTHER, 'NOTE#old-note', '4')));
+  assert.equal(h.store.loads, initialLoads);
+  assert.equal(h.embedding.calls.length, initialEmbeds);
+
+  accepted = false;
+  h.store.state = { ...h.store.state, consent: consent(false, 2) };
+  h.setConfig(dynamicConfig({ generation: 2, verifiedAccountsEnabled: false }));
+  await h.handler(stream(recordFor(OTHER, 'RAG#CONSENT', '5')));
+  assert.equal(h.store.manifests[1]?.status, 'BLOCKED');
+  assert.equal(h.embedding.calls.length, initialEmbeds);
+});
+
+test('verification lost before embedding dispatch blocks provider and READY publication', async () => {
+  let verified = true;
+  let providerCalls = 0;
+  const h = rig({
+    config: dynamicConfig({ verifiedAccountsEnabled: true }),
+    state: state({ ownerId: OTHER, notes: [note({ ownerId: OTHER })] }),
+    accountAccess: {
+      readConsent: async () => consent(true),
+      verifyOwner: async () => verified,
+    },
+  });
+  h.embedding.dispatch = async (beforeDispatch) => {
+    verified = false;
+    assert.ok(beforeDispatch);
+    await beforeDispatch();
+    providerCalls += 1;
+  };
+  await h.handler(stream(recordFor(OTHER, 'NOTE#n1', '1')));
+  assert.equal(h.budgetCalls.length, 1);
+  assert.equal(providerCalls, 0);
+  assert.equal(h.store.manifests.length, 0);
 });

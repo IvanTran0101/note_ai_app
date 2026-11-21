@@ -131,7 +131,7 @@ Object? _decodeLenient(Uint8List bodyBytes) {
   }
 }
 
-/// Reads a valid integer `Retry-After` header, bounded to `1..3600`.
+/// Reads a valid integer `Retry-After` header, bounded to `1..18000`.
 int? _retryAfterSeconds(Map<String, String> headers) {
   final String? raw = _header(headers, 'retry-after')?.trim();
   if (raw == null || raw.isEmpty) {

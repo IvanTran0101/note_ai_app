@@ -50,7 +50,8 @@ import type { ConsentGuard } from './consent_store';
 import {
   canaryFailure, createEmbeddingCanary, EMBEDDING_CANARY_KIND, isEmbeddingCanaryEvent,
 } from './embedding_canary';
-import { isPilotOwner } from './pilot_policy';
+import { acceptsVerifiedAccounts, createVerifiedOwnerReader, type AccountAccess } from './verified_account';
+import { isCognitoSub, isPilotOwner } from './pilot_policy';
 import { createPilotBudget } from './pilot_budget';
 import type { PilotBudget, PilotBudgetPort } from './pilot_budget';
 import { createPilotQuery } from './pilot_query';
@@ -93,6 +94,7 @@ export type PilotProductionSeam = Readonly<{
   readApproval?: (signal: AbortSignal) => Promise<LiveApproval>;
   /** Replaces the raw JEV/DeepSeek ports; default builds them from the environment API keys. */
   rawProviders?: Providers;
+  verifyOwner?: AccountAccess['verifyOwner'];
   privateHandler?: (event: unknown) => Promise<unknown>;
   requestId?: () => string;
   now?: () => number;
@@ -225,6 +227,15 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
   let index: IndexDeps | undefined;
   const loadIndex = (): IndexDeps => (index ??= (seam.loadIndex ?? runtime)());
   const now: () => number = seam.now ?? Date.now;
+  const poolId = process.env['RAG_VERIFIED_USER_POOL_ID'];
+  const accountAccess: AccountAccess | undefined = poolId
+    ? {
+      verifyOwner: seam.verifyOwner ?? createVerifiedOwnerReader(poolId),
+      readConsent: createConsentStore(region, notesTable, client).read,
+    }
+    : undefined;
+  const verifiedBudget = accountAccess === undefined ? undefined :
+    createPilotBudget(region, stateTable, client, { now, rollingQueries: true });
 
   let counters: Readonly<{ budget: PilotBudget; countOutput: Counter }> | undefined;
   /**
@@ -273,6 +284,8 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
       readApproval,
       loadIndex,
       budget: built.budget,
+      verifiedBudget,
+      accountAccess,
       rawProviders: built.rawProviders,
       counters: { evidence: built.countOutput, jev: jevInputUpperBound, output: built.countOutput },
       parentSignal: parent,
@@ -310,9 +323,12 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
 
   const consent = async (signal: AbortSignal): Promise<ConsentHandler> => {
     const config = await readConfig(signal);
-    // Membership, not admission: a listed owner can always GET/revoke while admission is off.
     const assertActor = (actor: string) => {
-      if (!isPilotOwner(config.policy, actor)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+      // Once the infrastructure is staged, account settings remain accessible after rollback
+      // so existing public grants can be revoked even if the account loses verification.
+      if ((accountAccess === undefined || !isCognitoSub(actor)) && !isPilotOwner(config.policy, actor)) {
+        throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+      }
     };
     // The exact captured config rides into the write transaction; every read/write re-validates
     // the whole captured identity against a fresh config, so a removal, generation move or corpus
@@ -323,8 +339,9 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
       value: config,
       revalidate: async (actor: string, io: AbortSignal) => {
         const fresh = await readConfig(io);
-        // Membership first: a removed actor is denied even when the config identity also moved.
-        if (!isPilotOwner(fresh.policy, actor)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+        if (accountAccess === undefined && !isPilotOwner(fresh.policy, actor)) {
+          throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+        }
         // The captured whole-config identity is the permit. A generation/corpus/policy move is a
         // source change, never a stale success. The write transaction may already have committed,
         // so this reports the move; it never rolls back, revokes or refunds anything.
@@ -334,6 +351,19 @@ export function composeProduction(seam: PilotProductionSeam = {}): PilotHttpDeps
     return createConsentHandler({
       store: createConsentStore(region, notesTable, client, guard),
       assertActor,
+      assertWrite: async (actor, next, deadline) => {
+        if (accountAccess !== undefined && acceptsVerifiedAccounts(config)) {
+          if (next.accepted && !(await accountAccess.verifyOwner(actor, deadline))) {
+            throw new RagFailure('SCOPE_DENIED');
+          }
+        } else if (next.accepted && accountAccess !== undefined && !isPilotOwner(config.policy, actor)) {
+          throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+        }
+        // Revoke applies only to an existing grant for accounts outside the legacy pilot.
+        if (!next.accepted && next.expectedGeneration === 0 && !isPilotOwner(config.policy, actor)) {
+          throw new RagFailure('CONSENT_REQUIRED');
+        }
+      },
       signal,
     });
   };

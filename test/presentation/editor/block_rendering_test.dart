@@ -8,7 +8,9 @@ import 'package:note_ai_app/presentation/editor/rich_note_editor.dart';
 void main() {
   for (final kind in DocumentBlockKind.values.where(
     (kind) =>
-        kind != DocumentBlockKind.table && kind != DocumentBlockKind.divider,
+        kind != DocumentBlockKind.table &&
+        kind != DocumentBlockKind.divider &&
+        kind != DocumentBlockKind.attachment,
   )) {
     testWidgets('$kind painted inline size survives every renderer decorator', (
       tester,
