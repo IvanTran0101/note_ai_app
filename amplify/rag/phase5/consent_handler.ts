@@ -36,6 +36,7 @@ export type ConsentHandlerDeps = Readonly<{
   store: ConsentStore;
   /** Server-side permission for this exact actor. Must throw a RagFailure when refused. */
   assertActor: (actor: string) => void;
+  assertWrite?: (actor: string, next: ConsentWrite, signal: AbortSignal) => Promise<void>;
   requestId?: () => string;
   /**
    * Optional enclosing request deadline. When supplied, the consent deadline is parented to it,
@@ -209,7 +210,10 @@ export function createConsentHandler(deps: ConsentHandlerDeps): ConsentHandler {
       if (method !== 'PUT') throw new RagFailure('INVALID_INPUT');
       if (!isJsonUtf8(headerOf(event, 'content-type'))) throw new RagFailure('INVALID_INPUT');
       const next = parseConsentWrite(readRawBody(event));
-      return respond(id, await deadline.within(() => store.write(actor, next, deadline.signal)));
+      return respond(id, await deadline.within(async () => {
+        await deps.assertWrite?.(actor, next, deadline.signal);
+        return store.write(actor, next, deadline.signal);
+      }));
     } catch (error) {
       return errorEnvelope(id, error instanceof RagFailure ? error.code : 'PROVIDER_UNAVAILABLE');
     } finally {

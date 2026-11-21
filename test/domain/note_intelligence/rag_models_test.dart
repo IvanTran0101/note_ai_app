@@ -384,7 +384,7 @@ void main() {
         isNull,
       );
       expect(
-        const RagFailure(RagFailureCode.rateLimited, retryAfterSeconds: 3601)
+        const RagFailure(RagFailureCode.rateLimited, retryAfterSeconds: 18001)
             .retryAfterSeconds,
         isNull,
       );

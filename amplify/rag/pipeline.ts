@@ -205,21 +205,23 @@ const askQuota = async (deadline: RequestDeadline, deps: PipelineDeps, actor: st
   return stage(deadline, 'PROVIDER_UNAVAILABLE', () => consume(actor, deadline.signal));
 };
 
-const embedQuery = async (
-  run: StageRunner,
-  deadline: RequestDeadline,
-  deps: PipelineDeps,
-  context: RequestContext,
-): Promise<readonly number[]> => {
-  const question = context.request.question;
+const validateEmbeddingInput = (deps: PipelineDeps, question: string): void => {
   // Preflight the exact query input: the wire bound does not prove embedding fit (truncate NONE),
   // so an oversized question is refused instead of shortened or silently truncated by a provider.
   if (countTokens(deps.counters.embedding, question) > MAX_EMBEDDING_TOKENS) {
     throw new RagFailure('INPUT_TOO_LONG');
   }
   if (countUnicodeCharacters(question) > MAX_EMBEDDING_CHARACTERS) throw new RagFailure('INPUT_TOO_LONG');
+};
+
+const embedQuery = async (
+  run: StageRunner,
+  deadline: RequestDeadline,
+  deps: PipelineDeps,
+  context: RequestContext,
+): Promise<readonly number[]> => {
   const vector = await run('PROVIDER_UNAVAILABLE', () =>
-    deps.retrieval.embedQuery(question, context.signal, () => revalidate(deadline, context)),
+    deps.retrieval.embedQuery(context.request.question, context.signal, () => revalidate(deadline, context)),
   );
   validateVector(vector);
   return vector;
@@ -339,7 +341,8 @@ export function createQuery(
         ...traceIdentity(context.actor, context.state.manifestVersion),
         relevancePolicyVersion: RELEVANCE_POLICY_VERSION,
       };
-      // Quota after authorization, before any retrieval/provider egress.
+      if (context.notes.length !== 0) validateEmbeddingInput(deps, context.request.question);
+      // Quota after authorization and input validation, before retrieval/provider egress.
       if ((await askQuota(deadline, deps, actor)) !== true) {
         reason = 'RATE_LIMITED';
         return errorResponse(requestId, 'RATE_LIMITED');

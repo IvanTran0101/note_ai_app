@@ -6,6 +6,8 @@ import {WORKER_MARGIN_MS,remainingUntil} from './stream';
 import {createPilotWorkerHandler} from '../phase5/pilot_worker';
 import {createRuntimeConfigReader} from '../phase5/runtime_config';
 import {createPilotBudget} from '../phase5/pilot_budget';
+import {createConsentStore} from '../phase5/consent_store';
+import {createVerifiedOwnerReader} from '../phase5/verified_account';
 import {IndexFailure,WORKER_MS} from './types';
 import type {IndexStore} from './types';
 import type {Context} from 'aws-lambda';
@@ -54,7 +56,14 @@ const composePrivate=(deps:ReturnType<typeof runtime>,streamArn:string):Handler=
 const composePilot=(deps:ReturnType<typeof runtime>,streamArn:string):Handler=>{
   const configReader=createRuntimeConfigReader({region:deps.region,stateTable:deps.stateTable});
   const budget=createPilotBudget(deps.region,deps.stateTable);
+  const poolId=process.env['RAG_VERIFIED_USER_POOL_ID'];
+  const notesTable=process.env['RAG_NOTES_TABLE'];
+  const accountAccess=poolId&&notesTable?{
+    readConsent:createConsentStore(deps.region,notesTable).read,
+    verifyOwner:createVerifiedOwnerReader(poolId),
+  }:undefined;
   const pilot=createPilotWorkerHandler({
+    accountAccess,
     readConfig:(signal)=>configReader.read(signal),
     runtime:()=>deps,
     budget,

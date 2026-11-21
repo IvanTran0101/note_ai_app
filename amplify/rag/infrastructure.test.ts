@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {App,Stack,Aspects,CfnResource,RemovalPolicy} from 'aws-cdk-lib';
 import {Template} from 'aws-cdk-lib/assertions';
+import {UserPool} from 'aws-cdk-lib/aws-cognito';
 import {Table,AttributeType,StreamViewType} from 'aws-cdk-lib/aws-dynamodb';
 import {mkdtempSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -373,4 +374,29 @@ test('pilot scope fails closed on an empty, over-cap, malformed or duplicate own
     {ownerId:PILOT_OWNER,noteIds:['p5-hs']},{ownerId:PILOT_OWNER,noteIds:['p5-cost']}]}),/unique/);
   const overCap=Array.from({length:6},(_,index)=>({ownerId:`00000000-0000-4000-8000-00000000000${index}`,noteIds:['p5-hs']}));
   assert.throws(()=>readRagPilotScope({owners:overCap}),/one to five/);
+});
+
+test('verified-account stream keeps the owner-row filter, consent sort key and existing mapping resource',()=>{
+  const app=new App({outdir:mkdtempSync(join(tmpdir(),'rag-verified-synth-'))});
+  const env={account:'864946423771',region:'ap-southeast-1'};
+  const stack=new Stack(app,'Test',{env});
+  const auth=new Stack(app,'Auth',{env});
+  const pool=new UserPool(auth,'TestPool',{signInAliases:{email:true}});
+  const notes=new Table(stack,'ExistingNotes',{partitionKey:{name:'ownerId',type:AttributeType.STRING},
+    sortKey:{name:'noteId',type:AttributeType.STRING},stream:StreamViewType.NEW_IMAGE});
+  const {mapping}=createRagInfrastructure(stack,notes,dynamicScope(true),undefined,pool);
+  const resources=Template.fromStack(stack).toJSON().Resources as Record<string,any>;
+  const filter=eventMapping(resources).Properties.FilterCriteria.Filters[0].Pattern;
+  assert.deepEqual(JSON.parse(filter),{
+    eventName:['INSERT','MODIFY','REMOVE'],
+    dynamodb:{Keys:{ownerId:{S:[{prefix:'OWNER#'}]},
+      noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}},
+  });
+  assert.match(stack.getLogicalId(mapping.node.defaultChild as CfnResource),/^RagNoteStream/);
+  assert.ok(workerFunction(resources).Properties.Environment.Variables.RAG_VERIFIED_USER_POOL_ID);
+  const statements=Object.values(resources).filter((r:any)=>r.Type==='AWS::IAM::Policy')
+    .flatMap((r:any)=>r.Properties.PolicyDocument.Statement);
+  const cognito=statements.filter((s:any)=>[s.Action].flat().includes('cognito-idp:AdminGetUser'));
+  assert.equal(cognito.length,1);
+  assert.notEqual(cognito[0].Resource,'*');
 });

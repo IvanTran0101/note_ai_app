@@ -33,7 +33,7 @@ final class RagHttpMapper {
   const RagHttpMapper();
 
   /// Upper bound for a served retry hint, mirroring the backend clamp.
-  static const int maxRetryAfterSeconds = 3600;
+  static const int maxRetryAfterSeconds = RagFailure.maxRetryAfterSeconds;
 
   /// Maximum citations one answered result may carry (`MAX_GENERATED_SOURCES`).
   static const int maxGeneratedSources = 24;

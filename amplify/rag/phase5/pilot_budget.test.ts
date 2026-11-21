@@ -21,7 +21,7 @@ import { BUDGET_OWNER_KEY, BUDGET_SORT_KEY } from '../indexing/store';
 import { RagFailure } from '../types';
 import {
   GLOBAL_EMBEDDING_KEY, GLOBAL_EMBEDDING_LIMIT, PILOT_BUDGET_KEY, PILOT_DAILY_QUERY_LIMIT,
-  PILOT_EMBEDDING_LIMIT, PILOT_LIMITS, PILOT_QUERY_LEASE_MS, PILOT_USD_MICROS_LIMIT, createPilotBudget,
+  PILOT_EMBEDDING_LIMIT, ROLLING_QUERY_WINDOW_MS, PILOT_LIMITS, PILOT_QUERY_LEASE_MS, PILOT_USD_MICROS_LIMIT, createPilotBudget,
 } from './pilot_budget';
 import type { PilotBudgetPort, PilotCommand, QueryLease } from './pilot_budget';
 
@@ -53,7 +53,9 @@ const tokenize = (expression: string): string[] =>
 
 const compare = (left: unknown, operator: string, right: unknown): boolean => {
   switch (operator) {
-    case '=': return left === right;
+    case '=': return Array.isArray(left) && Array.isArray(right)
+      ? left.length === right.length && left.every((value, index) => value === right[index])
+      : left === right;
     case '<': return typeof left === 'number' && typeof right === 'number' && left < right;
     case '<=': return typeof left === 'number' && typeof right === 'number' && left <= right;
     case '>': return typeof left === 'number' && typeof right === 'number' && left > right;
@@ -173,6 +175,7 @@ const fakeDynamo = (): Fake => {
       const fallback = values[match[3] as string] as number;
       next[attribute] = ((next[attribute] as number | undefined) ?? fallback) + (values[match[4] as string] as number);
     }
+    if (expression === 'SET admittedAt = :next') next['admittedAt'] = values[':next'];
     return next;
   };
 
@@ -1122,3 +1125,42 @@ function aborted(): AbortSignal {
 function leaseOf(actor: string, token: string): QueryLease {
   return { actor, token, expiresAt: START + PILOT_QUERY_LEASE_MS };
 }
+
+test('rolling query admission spans devices and expires from the oldest accepted timestamp', async () => {
+  let now = START;
+  const fake = fakeDynamo();
+  const device = () => createPilotBudget('ap-southeast-1', 'state', fake.port, { now: () => now, rollingQueries: true });
+  const firstDevice = device();
+  const secondDevice = device();
+  const actor = SUB(1);
+  for (let i = 0; i < 99; i += 1) {
+    const budget = i % 2 === 0 ? firstDevice : secondDevice;
+    const lease = await budget.acquireQuery(actor, 'req-1', signal());
+    await budget.release(lease, signal());
+    now += 1;
+  }
+  // Both devices read 99 before either transaction can commit. Only one takes the last slot.
+  const concurrent = await Promise.allSettled([
+    firstDevice.acquireQuery(actor, 'req-1', signal()), secondDevice.acquireQuery(actor, 'req-2', signal()),
+  ]);
+  const accepted = concurrent.filter((r) => r.status === 'fulfilled');
+  const refused = concurrent.filter((r) => r.status === 'rejected');
+  assert.equal(accepted.length, 1);
+  assert.equal(refused.length, 1);
+  assert.equal(refused[0].reason.code, 'RATE_LIMITED');
+  assert.equal(refused[0].reason.retryAfterSeconds, 18_000);
+  await firstDevice.release(accepted[0].value, signal());
+  const otherActor = await secondDevice.acquireQuery(SUB(2), 'req-1', signal());
+  await secondDevice.release(otherActor, signal());
+  const writes = fake.writes();
+  now = START + ROLLING_QUERY_WINDOW_MS - 1;
+  await assert.rejects(firstDevice.acquireQuery(actor, 'req-3', signal()), {
+    code: 'RATE_LIMITED', retryAfterSeconds: 1,
+  });
+  assert.equal(fake.writes(), writes);
+  now += 1;
+  await firstDevice.acquireQuery(actor, 'req-4', signal());
+  const rolled = fake.items.get(fake.at({ ownerId: PILOT_BUDGET_KEY.ownerId, noteId: 'WINDOW#' + actor }));
+  assert.equal((rolled?.['admittedAt'] as number[]).length, 100);
+  assert.equal((rolled?.['admittedAt'] as number[])[0], START + 1);
+});

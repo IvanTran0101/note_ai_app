@@ -4,7 +4,7 @@
  * (`BUDGET#PHASE4`, `BUDGET#SMOKE`) are never read, reset or reused.
  *
  * One atomic `TransactWriteCommand` admits one query attempt: the global attempt counter, the
- * per-account UTC-day counter and the per-account in-flight lease move together or not at all,
+ * per-account rolling window (UTC-day in pilot mode) and the in-flight lease move together or not at all,
  * so a refused admission never debits a counter and never leaves half a lease. Counters include
  * failed calls, are never refunded, and no path deletes or resets a counter item: the ~28s lease
  * only stops a second device from running two queries at once. `release` deletes the lease item,
@@ -55,6 +55,8 @@ export const PILOT_EMBEDDING_LIMIT = 5000;
  * module). Normal operation never refunds or erases recorded attempts.
  */
 export const PILOT_DAILY_QUERY_LIMIT = 100;
+export const ROLLING_QUERY_LIMIT = 100;
+export const ROLLING_QUERY_WINDOW_MS = 5 * 60 * 60 * 1000;
 /** Longer than the 26s request deadline and the 28s Lambda timeout it guards. */
 export const PILOT_QUERY_LEASE_MS = 28_000;
 /** One shared external ceiling for JEV + DeepSeek reservations, in USD micros. */
@@ -92,7 +94,7 @@ export type PilotBudget = Readonly<{
   read(signal: AbortSignal): Promise<PilotBudgetCounters>;
 }>;
 /** Test seams only: a bounded clock and the lease/table id factory. */
-export type PilotBudgetOptions = Readonly<{ now?: () => number; id?: () => string }>;
+export type PilotBudgetOptions = Readonly<{ now?: () => number; id?: () => string; rollingQueries?: boolean }>;
 
 const AWS_REGION = /^[a-z]{2}-[a-z]+-\d$/;
 const COUNTER_NAMES = [
@@ -200,6 +202,9 @@ export function createPilotBudget(
   }
   const rawOptions: unknown = options;
   if (rawOptions !== undefined && !isRecord(rawOptions)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  if (options?.rollingQueries !== undefined && typeof options.rollingQueries !== 'boolean') {
+    throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
+  }
   const nowOption = isRecord(rawOptions) ? rawOptions['now'] : undefined;
   const idOption = isRecord(rawOptions) ? rawOptions['id'] : undefined;
   if (nowOption !== undefined && typeof nowOption !== 'function') throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
@@ -264,6 +269,50 @@ export function createPilotBudget(
       counters[name] = value;
     }
     return counters;
+  };
+
+  const rollingDebit = async (owner: string, now: number, signal: AbortSignal) => {
+    const key = { ownerId: PILOT_BUDGET_KEY.ownerId, noteId: 'WINDOW#' + owner };
+    const output = await send(new GetCommand({ TableName: table, Key: key, ConsistentRead: true }), signal);
+    if (!isRecord(output)) throw new RagFailure('PROVIDER_UNAVAILABLE');
+    const item = output['Item'];
+    const attempts = item === undefined ? [] : isRecord(item) ? item['admittedAt'] : undefined;
+    if (!Array.isArray(attempts) || attempts.length > ROLLING_QUERY_LIMIT ||
+        (item !== undefined && (!isRecord(item) || item['ownerId'] !== key.ownerId || item['noteId'] !== key.noteId)) ||
+        attempts.some((stamp, index) => !isSafeInteger(stamp) || stamp < 0 || stamp > MAX_CLOCK_MS ||
+          (index > 0 && stamp < attempts[index - 1]))) {
+      throw new RagFailure('PROVIDER_UNAVAILABLE');
+    }
+    // Do not prune future timestamps if sequential Lambdas disagree slightly about the time.
+    const active = attempts.filter((stamp) => stamp > now - ROLLING_QUERY_WINDOW_MS);
+    if (active.length >= ROLLING_QUERY_LIMIT) {
+      const wait = Math.min(ROLLING_QUERY_WINDOW_MS, active[0] + ROLLING_QUERY_WINDOW_MS - now);
+      throw new RagFailure('RATE_LIMITED', Math.ceil(wait / 1000));
+    }
+    const admittedAt = [...active, now].sort((a, b) => a - b);
+    return {
+      TableName: table,
+      Key: key,
+      UpdateExpression: 'SET admittedAt = :next',
+      ConditionExpression: item === undefined ? 'attribute_not_exists(noteId)' : 'admittedAt = :previous',
+      ExpressionAttributeValues: { ':next': admittedAt, ...(item === undefined ? {} : { ':previous': attempts }) },
+    };
+  };
+
+  const dailyDebit = async (owner: string, now: number, signal: AbortSignal) => {
+    const day = new Date(now).toISOString().slice(0, 10);
+    const key = dailyKey(day, owner);
+    const daily = await readCounters(key, [DAILY_COUNTER], signal);
+    return {
+      TableName: table,
+      Key: key,
+      UpdateExpression: 'ADD attempts :one',
+      ConditionExpression: counterCas('attempts', daily[DAILY_COUNTER] ?? 0, ':capturedAttempts', ':limit'),
+      ExpressionAttributeValues: {
+        ':one': 1, ':limit': PILOT_DAILY_QUERY_LIMIT, ':zero': 0,
+        ':capturedAttempts': daily[DAILY_COUNTER] ?? 0,
+      },
+    };
   };
 
   /**
@@ -352,11 +401,10 @@ export function createPilotBudget(
       const token = nextId();
       if (!isValidIdentifier(token)) throw new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
       const expiresAt = now + PILOT_QUERY_LEASE_MS;
-      const day = new Date(now).toISOString().slice(0, 10);
-      // Both counter rows are validated and captured before the one admission transaction.
       const pilot = await readCounters(PILOT_BUDGET_KEY, COUNTER_NAMES, deadline);
-      const daily = await readCounters(dailyKey(day, owner), [DAILY_COUNTER], deadline);
-      await send(new TransactWriteCommand({
+      const rolling = options?.rollingQueries === true;
+      const account = await (rolling ? rollingDebit : dailyDebit)(owner, now, deadline);
+      const admission = new TransactWriteCommand({
         TransactItems: [
           { Update: {
             TableName: table,
@@ -367,16 +415,7 @@ export function createPilotBudget(
               ':one': 1, ':limit': PILOT_LIMITS.query, ':zero': 0, ':capturedQuery': pilot['queryCalls'] ?? 0,
             },
           } },
-          { Update: {
-            TableName: table,
-            Key: dailyKey(day, owner),
-            UpdateExpression: 'ADD attempts :one',
-            ConditionExpression: counterCas('attempts', daily[DAILY_COUNTER] ?? 0, ':capturedAttempts', ':limit'),
-            ExpressionAttributeValues: {
-              ':one': 1, ':limit': PILOT_DAILY_QUERY_LIMIT, ':zero': 0,
-              ':capturedAttempts': daily[DAILY_COUNTER] ?? 0,
-            },
-          } },
+          { Update: account },
           { Put: {
             TableName: table,
             // A lease Put carries its key inside the item; the key must never expire by TTL.
@@ -390,7 +429,16 @@ export function createPilotBudget(
             ExpressionAttributeValues: { ':now': now, ':zero': 0 },
           } },
         ],
-      }), deadline);
+      });
+      try {
+        await send(admission, deadline);
+      } catch (error) {
+        // Another device may have taken the last slot between our read and the CAS.
+        if (rolling && error instanceof RagFailure && error.code === 'RATE_LIMITED') {
+          await rollingDebit(owner, nowMs(), deadline);
+        }
+        throw error;
+      }
       return Object.freeze({ actor: owner, token, expiresAt });
     },
 

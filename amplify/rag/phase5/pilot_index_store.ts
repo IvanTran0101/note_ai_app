@@ -41,12 +41,15 @@ import {
 } from './runtime_config';
 import type { RuntimeConfig } from './runtime_config';
 import type { PilotBudget } from './pilot_budget';
+import { isCognitoSub } from './pilot_policy';
+import { acceptsVerifiedAccounts, type AccountAccess } from './verified_account';
 
 export type PilotIndexStoreDeps = Readonly<{
   store: IndexStore;
   budget: Pick<PilotBudget, 'acquireEmbedding'>;
   readConfig: (signal: AbortSignal) => Promise<RuntimeConfig>;
   config: RuntimeConfig;
+  verifyOwner?: AccountAccess['verifyOwner'];
 }>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -113,8 +116,19 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
     throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
   }
 
+  const { verifyOwner } = deps;
   const isListedOwner = (ownerId: string): boolean =>
     Object.prototype.hasOwnProperty.call(captured.corpus.owners, ownerId);
+  const allowsOwner = (ownerId: string): boolean =>
+    isListedOwner(ownerId) || (verifyOwner !== undefined && isCognitoSub(ownerId));
+  const assertActiveOwner = async (ownerId: string, signal: AbortSignal): Promise<void> => {
+    if (!captured.policy.enabled) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+    if (verifyOwner !== undefined && acceptsVerifiedAccounts(captured)) {
+      if (!(await verifyOwner(ownerId, signal))) throw new IndexFailure('SCOPE_DENIED', false);
+    } else if (!isListedOwner(ownerId)) {
+      throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+    }
+  };
   // Dynamic mode has no frozen note id/digest list; canonical eligibility and freshness are the
   // only body authority. Every other permit check below is shared with the reviewed mode.
   const dynamicCorpus = captured.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
@@ -160,15 +174,14 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
    */
   const authorize = async (ownerId: string, signal: AbortSignal): Promise<IndexState> => {
     if (!isValidIdentifier(ownerId)) throw new IndexFailure('INVALID_INPUT', false);
-    if (!isListedOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+    if (!allowsOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
     const state = await store.load(ownerId, signal);
-    await readConfigNow(signal);
     const bound = bindIndexState(state, ownerId);
     if (consentAccepted(bound)) {
-      if (captured.policy.enabled !== true) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
-      const approved = captured.corpus.owners[bound.ownerId];
-      if (approved === undefined) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+      await assertActiveOwner(bound.ownerId, signal);
       if (!dynamicCorpus) {
+        const approved = captured.corpus.owners[bound.ownerId];
+        if (approved === undefined) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
         const digestById = new Map<string, string>();
         for (const entry of approved) digestById.set(entry.noteId, entry.inputDigest);
         for (const note of bound.notes) {
@@ -181,6 +194,7 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
         }
       }
     }
+    await readConfigNow(signal);
     return state;
   };
 
@@ -194,8 +208,13 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
     async (ownerId: string, deadline: AbortSignal): Promise<FreshnessMarkers> => {
       await readConfigNow(deadline);
       if (!isValidIdentifier(ownerId)) throw new IndexFailure('INVALID_INPUT', false);
-      if (!isListedOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
-      return innerLoadMarkers(ownerId, deadline);
+      if (!allowsOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+      const markers = await innerLoadMarkers(ownerId, deadline);
+      if (verifyOwner !== undefined && acceptsVerifiedAccounts(captured) && consentMarkersAccepted(markers.consent)) {
+        await assertActiveOwner(ownerId, deadline);
+        await readConfigNow(deadline);
+      }
+      return markers;
     };
 
   return Object.freeze({
@@ -265,9 +284,10 @@ export function createPilotIndexStore(deps: PilotIndexStoreDeps): IndexStore {
           // mid-flight content drift is caught by the revision/epoch markers per the indexing
           // writer invariant (jobs.markersOf).
           if (!isValidIdentifier(ownerId)) throw new IndexFailure('INVALID_INPUT', false);
-          if (!isListedOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
+          if (!allowsOwner(ownerId)) throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
           const markers = await innerLoadMarkers(ownerId, deadline);
-          if (config.policy.enabled !== true || !consentMarkersAccepted(markers.consent)) {
+          await assertActiveOwner(ownerId, deadline);
+          if (!consentMarkersAccepted(markers.consent)) {
             throw new IndexFailure('LIVE_POLICY_NOT_CONFIGURED', false);
           }
         } else {

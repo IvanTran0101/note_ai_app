@@ -110,11 +110,14 @@ const readRawBody = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string => 
   return raw;
 };
 
-const errorEnvelope = (requestId: string, code: ErrorCode): RagHttpResponse => {
+const errorEnvelope = (requestId: string, code: ErrorCode, retryAfterSeconds?: number): RagHttpResponse => {
   const envelope: RagResponse = { wireVersion: WIRE_VERSION, requestId, status: 'ERROR', code };
   return Object.freeze({
     statusCode: ERROR_STATUS[code] ?? 503,
-    headers: JSON_HEADERS,
+    headers: code === 'RATE_LIMITED' && retryAfterSeconds !== undefined &&
+      Number.isSafeInteger(retryAfterSeconds) && retryAfterSeconds > 0
+      ? { ...JSON_HEADERS, 'retry-after': String(retryAfterSeconds) }
+      : JSON_HEADERS,
     body: JSON.stringify(envelope),
   });
 };
@@ -186,7 +189,9 @@ export function createRagHandler(query: RagQuery, requestId: () => string = rand
       const request = parseRequest(readRawBody(event));
       return respond(id, assertRagResponse(await query(actor, request, id), id));
     } catch (error) {
-      return errorEnvelope(id, error instanceof RagFailure ? error.code : 'PROVIDER_UNAVAILABLE');
+      return error instanceof RagFailure
+        ? errorEnvelope(id, error.code, error.retryAfterSeconds)
+        : errorEnvelope(id, 'PROVIDER_UNAVAILABLE');
     }
   };
 }

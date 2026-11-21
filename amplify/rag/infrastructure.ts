@@ -1,4 +1,5 @@
 import {Aspects,AspectPriority,CfnResource,Duration,RemovalPolicy,Stack} from 'aws-cdk-lib';
+import type {IUserPool} from 'aws-cdk-lib/aws-cognito';
 import {AttributeType,BillingMode,Table} from 'aws-cdk-lib/aws-dynamodb';
 import {Bucket,BlockPublicAccess,BucketEncryption} from 'aws-cdk-lib/aws-s3';
 import {CfnVectorBucket,CfnIndex} from 'aws-cdk-lib/aws-s3vectors';
@@ -17,6 +18,7 @@ import {Construct} from 'constructs';
 import {isValidIdentifier} from './contract';
 import {CONSENT_SORT_KEY,NOTE_KEY_PREFIX,OWNER_KEY_PREFIX,PROTECTION_KEY_PREFIX} from './indexing/jobs';
 import {MAX_PILOT_OWNERS,isCognitoSub} from './phase5/pilot_policy';
+import {grantVerifiedOwnerLookup} from './phase5/infrastructure';
 import {RUNTIME_CORPUS_KIND,RUNTIME_ELIGIBLE_OWN_NOTES_KIND} from './phase5/runtime_config';
 
 /**
@@ -206,9 +208,13 @@ const readSecretEnvironment=(value:unknown):RagSecretEnvironment|undefined=>{
 };
 
 // Additive resources in SyncStack: existing Notes/Auth/Attachment IDs stay intact.
-export function createRagInfrastructure(scope:Stack,notes:Table,pilot?:RagPilotScope,secrets?:RagSecretEnvironment){
+export function createRagInfrastructure(
+  scope:Stack,notes:Table,pilot?:RagPilotScope,secrets?:RagSecretEnvironment,verifiedPool?:IUserPool,
+){
   // Re-validate the supplied scope (never trust a caller cast) before anything is created.
   const approved=pilot===undefined?undefined:readRagPilotScope(pilot);
+  if(verifiedPool!==undefined&&approved?.kind!==RUNTIME_ELIGIBLE_OWN_NOTES_KIND)
+    throw Error('RAG verified-account infrastructure requires the eligible-own-notes corpus');
   const secretEnvironment=readSecretEnvironment(secrets);
   const tokenizerDir=resolve(fileURLToPath(new URL('../../output/rag/embeddinggemma-tokenizer/',import.meta.url)));
   for(const [file,digest] of Object.entries(tokenizerManifest.files)){
@@ -257,6 +263,7 @@ export function createRagInfrastructure(scope:Stack,notes:Table,pilot?:RagPilotS
   };
   const worker=make('RagWorker','./indexing/worker_lambda.ts',jobs.workerTimeoutSeconds);
   const probe=make('RagRetrievalProbe','./indexing/probe_lambda.ts',28);
+  if(verifiedPool!==undefined)grantVerifiedOwnerLookup(worker,verifiedPool);
   // Autopilot baseline is narrowed to the approved resources/actions; no object-lock/KMS grants.
   for(const fn of [worker,probe]){
     fn.addToRolePolicy(new PolicyStatement({actions:['dynamodb:GetItem','dynamodb:Query'],resources:[notes.tableArn]}));
@@ -290,7 +297,11 @@ export function createRagInfrastructure(scope:Stack,notes:Table,pilot?:RagPilotS
   // `NOTE#`/`PROTECTION#` prefixes and the exact `RAG#CONSENT` row; no other `RAG#` row matches.
   // The reviewed mode keeps its exact note/protection keys. Absent scope keeps the legacy smoke
   // filter. Both pilot modes keep failure destinations on the retained private S3 bucket.
-  const filters=approved===undefined
+  const filters=verifiedPool!==undefined
+    ?[FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{
+      ownerId:{S:FilterRule.beginsWith(OWNER_KEY_PREFIX)},
+      noteId:{S:[{prefix:NOTE_KEY_PREFIX},{prefix:PROTECTION_KEY_PREFIX},CONSENT_SORT_KEY]}}}})]
+    :approved===undefined
     ?[FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{ownerId:{S:FilterRule.beginsWith('OWNER#rag-smoke-')},
       noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}}})]
     :approved.kind===RUNTIME_ELIGIBLE_OWN_NOTES_KIND

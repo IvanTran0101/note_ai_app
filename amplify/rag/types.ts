@@ -3,7 +3,7 @@ import policy from '../../docs/rag/policy_v2.json';
 export { policy };
 export type ErrorCode = keyof typeof policy.technicalDefaults.errorHttpStatus;
 export class RagFailure extends Error {
-  constructor(public readonly code: ErrorCode) { super(code); }
+  constructor(public readonly code: ErrorCode, public readonly retryAfterSeconds?: number) { super(code); }
 }
 export type Scope = Readonly<{ type: 'account' }> | Readonly<{ type: 'note'; noteId: string }>;
 export type RagRequest = Readonly<{ wireVersion: 1; question: string; scope: Scope }>;

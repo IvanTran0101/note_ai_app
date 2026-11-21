@@ -78,10 +78,11 @@ const toRagFailure = (error: unknown, signal: AbortSignal): RagFailure => {
       case 'PROVIDER_UNAVAILABLE': return new RagFailure('PROVIDER_UNAVAILABLE');
       // A provider-side 401/403 is an outage for the user, never a user authorization failure.
       case 'UNAUTHORIZED': return new RagFailure('PROVIDER_UNAVAILABLE');
-      // The Phase 5 guarded store adds these two typed refusals; keep their safe codes instead of
+      // The Phase 5 guarded store adds typed refusals; keep their safe codes instead of
       // flattening them into INDEX_NOT_READY, which would hide a revoked/stale pilot permit.
       case 'LIVE_POLICY_NOT_CONFIGURED': return new RagFailure('LIVE_POLICY_NOT_CONFIGURED');
       case 'CONSENT_REQUIRED': return new RagFailure('CONSENT_REQUIRED');
+      case 'SCOPE_DENIED': return new RagFailure('SCOPE_DENIED');
       default: return new RagFailure('INDEX_NOT_READY');
     }
   }

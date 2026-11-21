@@ -1,12 +1,13 @@
 import {Duration,Stack} from 'aws-cdk-lib';
 import {
-  CfnIntegration,CorsHttpMethod,HttpApi,HttpMethod,PayloadFormatVersion,
+  CfnIntegration,CfnStage,CorsHttpMethod,HttpApi,HttpMethod,PayloadFormatVersion,
 } from 'aws-cdk-lib/aws-apigatewayv2';
 import {HttpJwtAuthorizer} from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import {HttpLambdaIntegration} from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import type {IUserPool} from 'aws-cdk-lib/aws-cognito';
 import type {ITable} from 'aws-cdk-lib/aws-dynamodb';
 import {PolicyStatement} from 'aws-cdk-lib/aws-iam';
-import type {IFunction} from 'aws-cdk-lib/aws-lambda';
+import {Function as LambdaFunction,type IFunction} from 'aws-cdk-lib/aws-lambda';
 import {policy} from '../types';
 import {CONSENT_PATH} from './consent_handler';
 import {MAX_PILOT_OWNERS,isCognitoSub} from './pilot_policy';
@@ -55,6 +56,17 @@ const CONSENT_ROW_ATTRIBUTES: readonly string[] = Object.freeze([
   'ownerId','noteId','accepted','version','generation','ttl','canonicalOwnerId',
   'relayQueue','relayDueAt','changeOwnerId','changeSequence',
 ]);
+const VERIFIED_OWNER_KEY = 'OWNER#????????-????-????-????-????????????';
+
+export function grantVerifiedOwnerLookup(handler: IFunction, pool: IUserPool): void {
+  if (!(handler instanceof LambdaFunction)) throw Error('RAG Cognito lookup requires a managed function');
+  handler.addEnvironment('RAG_VERIFIED_USER_POOL_ID', pool.userPoolId);
+  handler.addToRolePolicy(new PolicyStatement({
+    actions: ['cognito-idp:AdminGetUser'],
+    resources: [pool.userPoolArn],
+  }));
+}
+
 const RAG_QUERY_PATH: string = policy.technicalDefaults.wire.route;
 
 const isRecord=(value:unknown):value is Record<string,unknown>=>
@@ -101,6 +113,8 @@ export type Phase5InfrastructureProps=Readonly<{
   audience:readonly string[];
   /** Browser origins allowed to call the API. @default the two reviewed origins */
   allowedOrigins?:readonly string[];
+  verifiedPool?:IUserPool;
+  queryThrottle?:Readonly<{ rate:number; burst:number }>;
 }>;
 
 export type Phase5Infrastructure=Readonly<{api:HttpApi}>;
@@ -147,6 +161,21 @@ export function createPhase5Infrastructure(props:Phase5InfrastructureProps):Phas
   if(!(cfn instanceof CfnIntegration))throw Error('Phase5 RAG integration construct missing.');
   cfn.timeoutInMillis=30_000;
 
+  if(props.queryThrottle!==undefined){
+    const {rate,burst}=props.queryThrottle;
+    const stage=api.defaultStage?.node.defaultChild;
+    if(!(stage instanceof CfnStage)||!Number.isFinite(rate)||rate<=0||!Number.isSafeInteger(burst)||burst<=0)
+      throw Error('RAG query throttle needs a positive rate and integer burst');
+    stage.addPropertyOverride('RouteSettings', {
+      ['POST '+RAG_QUERY_PATH]:{ThrottlingRateLimit:rate,ThrottlingBurstLimit:burst},
+    });
+  }
+  if(props.verifiedPool!==undefined){
+    if(props.queryThrottle===undefined)throw Error('Verified-account infrastructure requires a staged query throttle');
+    grantVerifiedOwnerLookup(handler,props.verifiedPool);
+  }
+
+
   // Consent write transaction: the exact `CONFIG#PHASE5` config row must still match.
   handler.addToRolePolicy(new PolicyStatement({
     actions:['dynamodb:ConditionCheckItem'],
@@ -162,9 +191,12 @@ export function createPhase5Infrastructure(props:Phase5InfrastructureProps):Phas
     resources:[notesTable.tableArn],
     conditions:{
       'ForAllValues:StringEquals':{
-        'dynamodb:LeadingKeys':[...ownerKeys],
+        ...(props.verifiedPool===undefined?{'dynamodb:LeadingKeys':[...ownerKeys]}:{}),
         'dynamodb:Attributes':[...CONSENT_ROW_ATTRIBUTES],
       },
+      ...(props.verifiedPool===undefined?{}:{
+        'ForAllValues:StringLike':{'dynamodb:LeadingKeys':[VERIFIED_OWNER_KEY]},
+      }),
       Null:{'dynamodb:LeadingKeys':'false','dynamodb:Attributes':'false'},
     },
   }));
