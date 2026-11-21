@@ -7,8 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import '../../application/sync/local_sync_store.dart';
 import '../security/encoded_account_store.dart';
 import '../security/encrypted_sync_store.dart';
+import '../security/paged_account_store.dart';
 import 'local_sync_store_account_namespace.dart';
 import 'local_sync_store_contract.dart';
+
+part 'local_sync_pages_io.dart';
 
 ILocalSyncStore createLocalSyncStore({
   required String accountUserId,
@@ -28,7 +31,8 @@ final class FileLocalSyncStore extends EncryptedSyncStore {
        );
 }
 
-final class _FileAccountStore implements EncodedAccountStore {
+final class _FileAccountStore
+    implements EncodedAccountStore, PagedAccountStore {
   _FileAccountStore(String accountId, this.resolver)
     : namespace = LocalSyncAccountNamespace(accountId);
   final LocalSyncAccountNamespace namespace;
@@ -36,6 +40,8 @@ final class _FileAccountStore implements EncodedAccountStore {
   static int _sequence = 0;
   static final Map<String, Future<void>> _tails = {};
   bool _stagingCleaned = false;
+  @override
+  bool pageMode = false;
 
   Future<File> _file() async {
     try {
@@ -64,7 +70,7 @@ final class _FileAccountStore implements EncodedAccountStore {
   @override
   Future<String?> readEncoded() async {
     try {
-      return await _read(await _file());
+      return await _readCanonical(await _file());
     } on Object {
       throw const LocalSyncStoreException(
         LocalSyncStoreFailure.unreadable,
@@ -75,18 +81,37 @@ final class _FileAccountStore implements EncodedAccountStore {
 
   @override
   Future<bool> compareAndSet(String? expected, String encrypted) async {
+    return _serializedCommit(expected, encrypted, null);
+  }
+
+  @override
+  Future<bool> compareAndSetPaged(
+    String? expected,
+    String encrypted,
+    PagedEncodedCommit pages,
+  ) => _serializedCommit(expected, encrypted, pages);
+
+  Future<bool> _serializedCommit(
+    String? expected,
+    String encrypted,
+    PagedEncodedCommit? pages,
+  ) async {
     final previous = _tails[namespace.hash] ?? Future<void>.value();
     final release = Completer<void>();
     _tails[namespace.hash] = release.future;
     await previous;
     try {
-      return await _commit(expected, encrypted);
+      return await _commit(expected, encrypted, pages);
     } finally {
       release.complete();
     }
   }
 
-  Future<bool> _commit(String? expected, String encrypted) async {
+  Future<bool> _commit(
+    String? expected,
+    String encrypted,
+    PagedEncodedCommit? pages,
+  ) async {
     final target = await _file();
     RandomAccessFile? lock;
     File? temporary;
@@ -94,21 +119,29 @@ final class _FileAccountStore implements EncodedAccountStore {
       await target.parent.create(recursive: true);
       lock = await File('${target.path}.lock').open(mode: FileMode.append);
       await lock.lock(FileLock.blockingExclusive);
-      if (await _read(target) != expected) return false;
+      if (await _readCanonical(target) != expected) return false;
+      final published = pages != null || pageMode
+          ? await _preparePages(target, encrypted, pages)
+          : encrypted;
       temporary = File(
         '${target.path}.tmp-$pid-${DateTime.now().microsecondsSinceEpoch}-${++_sequence}',
       );
       await temporary.create(exclusive: true);
       final handle = await temporary.open(mode: FileMode.writeOnly);
       try {
-        await handle.writeString(encrypted);
+        await handle.writeString(published);
         await handle.flush();
       } finally {
         await handle.close();
       }
       await temporary.rename(target.path);
+      if (pages != null || pageMode) {
+        pageMode = true;
+        await _collectPages(target, published, pages?.liveKeys ?? const {});
+      }
       return true;
-    } on Object {
+    } on Object catch (error) {
+      if (error is CorruptPageRead) rethrow;
       throw const LocalSyncStoreException(
         LocalSyncStoreFailure.unwritable,
         'encrypted state cannot be committed',
@@ -135,6 +168,15 @@ final class _FileAccountStore implements EncodedAccountStore {
       }
     }
   }
+
+  @override
+  Future<PagedEncodedView?> openPagedView() => _openPages();
+  @override
+  Future<String> readPagedRecord(String generation, String key) =>
+      _readPage(generation, key);
+  @override
+  Future<void> requirePagedGeneration(String generation) =>
+      _requirePages(generation);
 
   @override
   Future<void> cleanLegacyStaging(
