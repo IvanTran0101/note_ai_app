@@ -1,6 +1,7 @@
 import '../../application/attachments/attachment_application.dart';
 import '../../application/attachments/attachment_input.dart';
 import '../../application/notes/note_application.dart';
+import '../../application/notes/note_page.dart';
 import '../../application/notes/note_editor_snapshot.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/note_intelligence/summary_consent_app_service.dart';
@@ -8,6 +9,16 @@ import '../../application/notes/note_access.dart';
 import '../../application/notes/note_security_service.dart';
 import '../../application/notes/note_sharing_app_service.dart';
 import '../../domain/notes/note_document.dart';
+
+/// Optional seam: production never loads the full DTO list for a page.
+bool supportsNotePages(NotesApplicationController controller) =>
+    controller is PagedNotesController &&
+    (controller as PagedNotesController).notePaginationAvailable;
+
+abstract interface class PagedNotesController {
+  bool get notePaginationAvailable;
+  Future<NotePage> listNotePage(NotePageQuery query);
+}
 
 abstract interface class DocumentNotesController {
   Future<NoteDto> saveDocumentSnapshot(
@@ -121,6 +132,7 @@ abstract interface class NotesModule02Controller {
 final class NoteApplicationServiceController
     implements
         NotesApplicationController,
+        PagedNotesController,
         DocumentNotesController,
         NotesModule02Controller,
         SecuredNotesController,
@@ -193,6 +205,13 @@ final class NoteApplicationServiceController
   @override
   NoteAccessCapabilities capabilitiesFor(NoteDto note) =>
       _service.capabilitiesFor(note);
+
+  @override
+  bool get notePaginationAvailable => _service.supportsNotePagination;
+
+  @override
+  Future<NotePage> listNotePage(NotePageQuery query) =>
+      _service.listNotePage(query);
 
   final NoteApplicationService _service;
 

@@ -1,5 +1,11 @@
 import 'dart:async';
 
+import '../../application/notes/note_page.dart';
+import '../../application/sync/local_note_page_store.dart';
+import '../../application/labels/local_label_state.dart';
+import '../../application/notes/note_dto.dart';
+import '../../application/labels/note_query.dart';
+
 import '../../application/notes/note_access.dart';
 
 import '../../application/sync/local_note_state.dart';
@@ -21,6 +27,7 @@ import '../../domain/notes/note_metadata.dart';
 import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
 
+part 'note_repository_page.dart';
 part 'note_repository_mutations.dart';
 part 'note_repository_mapping.dart';
 part 'note_repository_save.dart';
@@ -44,10 +51,15 @@ part 'note_repository_update.dart';
 /// mutations that a later sync coordinator pushes.
 final class NoteRepository
     implements
+        INotePageReader,
         domain.INoteDocumentRepository,
         domain.INoteMetadataRepository,
         domain.ISharedNoteRepository,
         domain.INoteSnapshotRepository {
+  @override
+  Future<NotePage> queryNotePage(String actorId, NotePageQuery query) =>
+      _queryPage(actorId, query);
+
   /// Creates a repository from the injected account resolver, store factory,
   /// mutation-id generator, and clock.
   NoteRepository({
@@ -89,8 +101,9 @@ final class NoteRepository
   @override
   Future<Note?> findById(String id) {
     return _enqueue<Note?>(() async {
-      final LocalSyncState state = await _readActiveState();
-      final LocalNoteState? note = _findNote(state, id);
+      final fence = _captureWrite();
+      final LocalNoteState? note = await _findPagedNote(fence.account, id);
+      _requireWrite(fence);
       if (note == null || note.isDeleted) {
         return null;
       }
@@ -185,10 +198,6 @@ final class NoteRepository
 
   @override
   Future<void> deleteById(String id) => _deleteById(id);
-
-  Future<LocalSyncState> _readActiveState() {
-    return _readStateFor(_requireActiveAccountUserId());
-  }
 
   Future<LocalSyncState> _readStateFor(String accountUserId) async {
     final LocalSyncState state = await _storeFor(accountUserId).read();

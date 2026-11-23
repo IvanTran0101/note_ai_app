@@ -1,4 +1,5 @@
 import '../auth/current_user.dart';
+import '../notes/note_page.dart';
 import '../auth/current_user_session.dart';
 import '../notes/note_access.dart';
 import '../../domain/notes/note_repository.dart';
@@ -43,6 +44,23 @@ final class GetDashboardOverview implements IDashboardOverviewQuery {
     final generation = user is SessionGenerationSource
         ? user.sessionGeneration
         : 0;
+    final reader = noteRepository;
+    if (reader is INotePageReader && recentLimit <= 100) {
+      final result = await (reader as INotePageReader).queryNotePage(
+        userId,
+        NotePageQuery(size: recentLimit, pinFirst: false),
+      );
+      if (currentUser.userId != userId ||
+          (user is SessionGenerationSource &&
+              user.sessionGeneration != generation)) {
+        throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+      }
+      return DashboardOverview(
+        totalNotes: result.total,
+        recentNotes: result.notes,
+        lastUpdatedAt: result.notes.firstOrNull?.updatedAt,
+      );
+    }
     final List<NoteDto> notes = (await noteRepository.findByOwnerId(userId))
         .map(NoteDto.fromDomain)
         .toList();

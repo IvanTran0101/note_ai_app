@@ -1,4 +1,5 @@
 import '../labels/notes_query_panel.dart';
+import '../../application/labels/note_query.dart';
 
 import 'package:flutter/material.dart';
 
@@ -28,8 +29,14 @@ final class NotesListPanel extends StatelessWidget {
     this.queryEnabled = true,
     this.queryControls,
     this.filteredEmpty,
+    this.pageFooter,
+    this.onQueryChanged,
+    this.labelChoices,
   });
 
+  final Widget? pageFooter;
+  final void Function(String, Set<LabelSelection>)? onQueryChanged;
+  final Map<LabelSelection, String>? labelChoices;
   final String? titleOverride;
   final bool allowNewNote;
   final bool Function(NoteDto)? readable;
@@ -309,6 +316,7 @@ final class NotesListPanel extends StatelessWidget {
                                     onSelectNote: onSelectNote,
                                   )),
                       ),
+                      ?pageFooter,
                     ],
                   );
                 },

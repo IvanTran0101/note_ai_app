@@ -58,6 +58,11 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                       preferFullPage: widget.embeddedInWorkspace,
                       list: NotesListPanel(
                         readable: _readableNote,
+                        pageFooter: _workspacePageFooter(),
+                        onQueryChanged: supportsNotePages(_application)
+                            ? _changePageQuery
+                            : null,
+                        labelChoices: _notePage?.labelChoices,
                         notes: _notes
                             .where((n) => (n.share != null) == _sharedOnly)
                             .toList(),
@@ -67,7 +72,7 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
                         allowNewNote: !_sharedOnly,
                         selectedNoteId: _selectedNoteId,
                         error: loadError,
-                        actionBusy: _detailBusy,
+                        actionBusy: _detailBusy || _pageBusy,
                         onNewNote: _startNewNote,
                         onSelectNote: _selectNote,
                         onRetry: persistenceUnavailable ? null : reload,
