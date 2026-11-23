@@ -1,0 +1,997 @@
+{
+  "provenance": "synthetic-wire-and-provider-envelopes-not-live-responses",
+  "requests": [
+    {
+      "id": "w-r01",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": true,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r02",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "note",
+          "noteId": "n-watch"
+        }
+      },
+      "valid": true,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r03",
+      "payload": {
+        "wireVersion": true,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r04",
+      "payload": {
+        "wireVersion": 1,
+        "question": null,
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r05",
+      "payload": {
+        "wireVersion": 1,
+        "question": " \n ",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r06",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        },
+        "ownerId": "actor-b"
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r07",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        },
+        "model": "arbitrary-provider"
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r08",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "all"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r09",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "note",
+          "noteId": false
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r10",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "note",
+          "noteId": ""
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r11",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account",
+          "noteId": "n-watch"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r12",
+      "payload": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": null
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r13",
+      "payload": {
+        "wireVersion": 2,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-r14",
+      "payload": {
+        "wireVersion": 1,
+        "question": 123,
+        "scope": {
+          "type": "account"
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C01",
+        "C21",
+        "C24"
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "id": "w-s01",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": true,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s02",
+      "caseId": "q04",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q04",
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "answer": null,
+        "sources": []
+      },
+      "valid": true,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s03",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-error",
+        "status": "ERROR",
+        "code": "TIMEOUT"
+      },
+      "valid": true,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s04",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Unknown. [S9]",
+        "sources": [
+          {
+            "sourceId": "S9",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s05",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Wrong label. [S9]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s06",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "80 hours without the condition"
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s07",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 2,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s08",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          },
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s09",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel.",
+            "url": "https://untrusted.example"
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s10",
+      "caseId": "q04",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q04",
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "answer": "Invented answer",
+        "sources": []
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s11",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-error",
+        "status": "ERROR",
+        "code": "TIMEOUT",
+        "providerMessage": "raw-provider-body"
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s12",
+      "caseId": "q10",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q10",
+        "status": "ANSWERED",
+        "answer": "Fixture answer. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031 của tài khoản khác",
+            "startOffset": 0,
+            "endOffset": 49,
+            "quote": "SLGH031 dự trữ 999 giờ trong fixture của actor-b."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s13",
+      "caseId": "q19",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q19",
+        "status": "ANSWERED",
+        "answer": "Fixture answer. [S1]",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-meeting",
+            "revision": 1,
+            "title": "Buổi demo",
+            "startOffset": 0,
+            "endOffset": 58,
+            "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s14",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "sources": []
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s15",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-q01",
+        "status": "ANSWERED",
+        "answer": "Answer with no source label",
+        "sources": [
+          {
+            "sourceId": "S1",
+            "noteId": "n-watch",
+            "revision": 1,
+            "title": "SLGH031",
+            "startOffset": 0,
+            "endOffset": 125,
+            "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+          }
+        ]
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-s16",
+      "caseId": "q01",
+      "payload": {
+        "wireVersion": 1,
+        "requestId": "fixture-error",
+        "status": "ERROR",
+        "code": "HIDDEN_PROVIDER_ERROR"
+      },
+      "valid": false,
+      "contracts": [
+        "C17",
+        "C20",
+        "C21",
+        "C24"
+      ]
+    }
+  ],
+  "nouls": [
+    {
+      "id": "w-n01",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": true,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n02",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": true
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n03",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": "0.9"
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n04",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": -0.1
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n05",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 1.1
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n06",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": null,
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n07",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n08",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96,
+            "confidence": 0.99
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n09",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": true,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n10",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "unrequested": {
+            "type": "noul",
+            "noul": 0.9
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n11",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 1
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": true,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n12",
+      "payload": {
+        "model": null,
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n13",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": -1
+        }
+      },
+      "valid": false,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    },
+    {
+      "id": "w-n14",
+      "payload": {
+        "model": "jev-fixture",
+        "answers": {
+          "answerable_from_evidence": {
+            "type": "noul",
+            "noul": 1
+          },
+          "has_unresolved_conflict": {
+            "type": "noul",
+            "noul": 1
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 10
+        }
+      },
+      "valid": true,
+      "contracts": [
+        "C16",
+        "C18",
+        "C24"
+      ]
+    }
+  ]
+}

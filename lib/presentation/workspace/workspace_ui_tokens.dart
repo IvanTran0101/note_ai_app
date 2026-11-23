@@ -18,6 +18,7 @@ final class NoteFlowWorkspaceTokens {
     required this.link,
     required this.focusRing,
     required this.error,
+    this.compactHomeSurface = const Color(0xFFF9F8F7),
   });
 
   static const NoteFlowWorkspaceTokens _light = NoteFlowWorkspaceTokens(
@@ -28,14 +29,15 @@ final class NoteFlowWorkspaceTokens {
     selectedSurface: Color(0xFFF0EFED),
     textPrimary: Color(0xFF252525),
     textSecondary: Color(0xFF5D625F),
-    textMuted: Color(0xFF777C78),
+    textMuted: Color(0xFF656965),
     divider: Color(0xFFE5E8E5),
-    link: Color(0xFF227FDC),
-    focusRing: Color(0xFF227FDC),
-    error: Color(0xFFEB5757),
+    link: Color(0xFF236BB3),
+    focusRing: Color(0xFF236BB3),
+    error: Color(0xFFB3261E),
   );
 
   static const NoteFlowWorkspaceTokens _dark = NoteFlowWorkspaceTokens(
+    compactHomeSurface: Color(0xFF202020),
     pageSurface: Color(0xFF191919),
     sidebarSurface: Color(0xFF202020),
     elevatedSurface: Color(0xFF2F2F2F),
@@ -45,9 +47,9 @@ final class NoteFlowWorkspaceTokens {
     textSecondary: Color(0xFFC0C5C1),
     textMuted: Color(0xFF969C98),
     divider: Color(0xFF353A37),
-    link: Color(0xFF4695EB),
-    focusRing: Color(0xFF4695EB),
-    error: Color(0xFFE06A6A),
+    link: Color(0xFF80B6F4),
+    focusRing: Color(0xFF80B6F4),
+    error: Color(0xFFFFB4AB),
   );
 
   static NoteFlowWorkspaceTokens light() => _light;
@@ -55,6 +57,7 @@ final class NoteFlowWorkspaceTokens {
   static NoteFlowWorkspaceTokens dark() => _dark;
 
   final Color pageSurface;
+  final Color compactHomeSurface;
   final Color sidebarSurface;
   final Color elevatedSurface;
   final Color subtleSurface;

@@ -2,6 +2,7 @@
 library;
 
 import 'sync_snapshot.dart';
+import '../labels/local_label_state.dart';
 
 enum SyncMutationResultStatus { applied, conflict }
 
@@ -11,6 +12,8 @@ final class SyncMutationResult {
     required this.status,
     this.note,
     this.conflictRemote,
+    this.label,
+    this.labelRemote,
   });
 
   factory SyncMutationResult.applied({
@@ -39,6 +42,24 @@ final class SyncMutationResult {
   final SyncMutationResultStatus status;
   final SyncNoteSnapshot? note;
   final SyncNoteSnapshot? conflictRemote;
+  final LocalLabelState? label;
+  final LocalLabelState? labelRemote;
+  factory SyncMutationResult.labelApplied({
+    required String mutationId,
+    required LocalLabelState label,
+  }) => SyncMutationResult._(
+    mutationId: _requireNonBlank(mutationId, 'mutationId'),
+    status: SyncMutationResultStatus.applied,
+    label: label,
+  );
+  factory SyncMutationResult.labelConflict({
+    required String mutationId,
+    LocalLabelState? remote,
+  }) => SyncMutationResult._(
+    mutationId: _requireNonBlank(mutationId, 'mutationId'),
+    status: SyncMutationResultStatus.conflict,
+    labelRemote: remote,
+  );
 
   bool get isApplied => status == SyncMutationResultStatus.applied;
   bool get isConflict => status == SyncMutationResultStatus.conflict;

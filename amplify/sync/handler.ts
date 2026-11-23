@@ -1,5 +1,13 @@
+import { createProfileService, handleProfile } from '../profile/http_routes';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoLabelStore } from '../labels/dynamo_label_store';
+import { AttachmentAttemptStore } from '../attachments/attempt_store';
+import { S3AttachmentObjects } from '../attachments/s3_object_store';
+import { AttachmentUseCases } from '../attachments/use_cases';
+import { handleAttachments, isAttachmentPath } from '../attachments/handler';
+import { parseLabelMutation } from '../labels/label_models';
+import { labelProjectionResponse } from '../labels/label_projection_handler';
 import type {
   APIGatewayProxyEventV2WithJWTAuthorizer,
   APIGatewayProxyHandlerV2WithJWTAuthorizer,
@@ -9,6 +17,18 @@ import { SyncInvalidCursorError } from './cursor';
 import { DynamoSyncStore, SyncInvalidMutationError, SyncStorageError } from './dynamo_sync_store';
 import type { SyncStore } from './dynamo_sync_store';
 import { parseChangesQuery, parseMutationBody } from './request_parser';
+import { Argon2idPasswordHasher } from '../protection/argon2id_password_hasher';
+import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
+import { ProtectionUseCases } from '../protection/use_cases';
+import { NoteSecurityError } from '../protection/protection_store';
+import { DynamoNoteAcl } from '../sharing/dynamo_note_acl';
+import { DynamoShareStore } from '../sharing/dynamo_share_store';
+import { CognitoRecipientResolver } from '../sharing/cognito_recipient_resolver';
+import { ShareUseCases } from '../sharing/share_use_cases';
+import { handleShares } from '../sharing/share_handler';
+import { SesRecoveryMailer } from '../protection/ses_recovery_mailer';
+import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
+import { CognitoRecoveryMailbox } from '../protection/cognito_recovery_mailbox';
 import {
   appliedMutationResponse,
   changesResponse,
@@ -17,6 +37,7 @@ import {
   invalidChangesResponse,
   invalidMutationResponse,
   jsonResponse,
+  noteV2MutationResponse,
   notFoundResponse,
   storageFailureResponse,
   unauthorizedResponse,
@@ -82,7 +103,21 @@ const documentClient = DynamoDBDocumentClient.from(
   { marshallOptions: { removeUndefinedValues: true } },
 );
 
-const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient });
+const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NAME, documentClient, true),
+  new Argon2idPasswordHasher(), new DynamoNoteAcl(NOTES_TABLE_NAME, documentClient),
+  new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
+  Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
+const attachmentAttempts = process.env.ATTACHMENT_BUCKET ? new AttachmentAttemptStore(NOTES_TABLE_NAME, documentClient) : undefined;
+const attachmentService = attachmentAttempts ? new AttachmentUseCases(attachmentAttempts,
+  new S3AttachmentObjects(process.env.ATTACHMENT_BUCKET!), security) : undefined;
+const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true, attachments: attachmentAttempts });
+const labels = new DynamoLabelStore(NOTES_TABLE_NAME, documentClient);
+const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
+  new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
+const recoveryMailbox = new CognitoRecoveryMailbox();
+const profileService = process.env.ATTACHMENT_BUCKET
+  ? createProfileService(documentClient, NOTES_TABLE_NAME, process.env.ATTACHMENT_BUCKET)
+  : undefined;
 
 const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
   event.requestContext?.http?.method?.toUpperCase() ?? '';
@@ -95,9 +130,13 @@ const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
 const matchesMethod = (expected: string, method: string): boolean => method === '' || method === expected;
 
 const routeOf = (method: string, path: string): SyncRoute => {
-  switch (path) {
+  switch (path.replace(/^\/sync\/v[23]\//, '/sync/')) {
     case HEALTH_PATH:
       return matchesMethod('GET', method) ? 'health' : 'unknown';
+    case '/sync/protection-predecessor':
+    case '/sync/protected-mutations':
+    case '/sync/shared-mutations':
+    case '/sync/label-projections':
     case MUTATIONS_PATH:
       return matchesMethod('POST', method) ? 'mutations' : 'unknown';
     case CHANGES_PATH:
@@ -108,14 +147,17 @@ const routeOf = (method: string, path: string): SyncRoute => {
 };
 
 /**
- * The Cognito subject that owns every note these routes read and write. Verified
- * claims are the only identity source the handler trusts; optional chaining
- * keeps an authorizer-less direct invocation from throwing, so a missing
- * identity is a 401 rather than a 500.
+ * The Cognito subject that owns every note these routes read and write - the
+ * subject of an ACCESS token only: an ID token carries the same `sub` but is
+ * addressed to the client, not to this API, so it never authenticates a data
+ * route. Verified claims are the only identity source the handler trusts;
+ * optional chaining keeps an authorizer-less direct invocation from throwing,
+ * so a missing identity - or the wrong token type - is a 401 rather than a 500.
  */
-const ownerSubOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined => {
-  const sub = event.requestContext?.authorizer?.jwt?.claims?.['sub'];
-  return typeof sub === 'string' ? sub : undefined;
+const accessTokenSubOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined => {
+  const claims = event.requestContext?.authorizer?.jwt?.claims;
+  const sub = claims?.['sub'];
+  return claims?.token_use === 'access' && typeof sub === 'string' ? sub : undefined;
 };
 
 /** An error's class name is a classifier, never request content. */
@@ -137,6 +179,7 @@ const responseForStoreError = (
   route: SyncRoute,
   error: unknown,
 ): APIGatewayProxyStructuredResultV2 | undefined => {
+  if (error instanceof NoteSecurityError) return securityErrorResponse(error);
   if (error instanceof SyncInvalidMutationError) {
     logRejected(route, error.reason);
     return invalidMutationResponse(error.reason);
@@ -156,15 +199,33 @@ const handleMutation = async (
   event: APIGatewayProxyEventV2WithJWTAuthorizer,
   ownerId: string,
 ): Promise<APIGatewayProxyStructuredResultV2> => {
-  const parsed = parseMutationBody(event.body);
+  const v2 = event.rawPath.startsWith('/sync/v2/');
+  const wireVersion = event.rawPath.startsWith('/sync/v3/') ? 3 : v2 ? 2 : 1;
+  if (v2 && event.rawPath === '/sync/v2/mutations') {
+    try {
+      const body = JSON.parse(event.body ?? 'null');
+      if (body?.entityType === 'label') {
+        const result = await labels.apply(ownerId, parseLabelMutation(body));
+        return jsonResponse(result.status === 'applied' ? 200 : 409, result);
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) return invalidMutationResponse('BODY_MALFORMED');
+      const mapped = responseForStoreError('mutations', error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  }
+  const path = event.rawPath.replace(/^\/sync\/v[23]\//, '/sync/');
+  const parsed = parseMutationBody(event.body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', wireVersion);
   if (!parsed.ok) {
     logRejected('mutations', parsed.problem);
     return invalidMutationResponse(parsed.problem);
   }
 
   try {
-    const result = await store.applyMutation(ownerId, parsed.mutation);
-    return result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+    const result = await store.applyMutation(parsed.mutation.ownerId ?? ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
+      inspectOnly: path === '/sync/protection-predecessor' });
+    return wireVersion >= 2 ? noteV2MutationResponse(result, wireVersion as 2 | 3) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
   } catch (error) {
     const mapped = responseForStoreError('mutations', error);
     if (mapped !== undefined) {
@@ -185,7 +246,8 @@ const handleChanges = async (
   }
 
   try {
-    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit));
+    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit,
+      event.rawPath.startsWith('/sync/v3/') ? 3 : event.rawPath.startsWith('/sync/v2/') ? 2 : 1));
   } catch (error) {
     const mapped = responseForStoreError('changes', error);
     if (mapped !== undefined) {
@@ -199,6 +261,23 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
   let route: SyncRoute = 'unknown';
   try {
     route = routeOf(methodOf(event), event.rawPath);
+    if (event.rawPath.startsWith('/me/')) {
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) {
+        return unauthorizedResponse();
+      }
+      return profileService ? await handleProfile(event, actor, profileService)
+        : jsonResponse(503, {code: 'PROFILE_UNAVAILABLE'});
+    }
+    if (event.rawPath.startsWith('/notes/')) {
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) return unauthorizedResponse();
+      if (isAttachmentPath(event.rawPath)) return attachmentService
+        ? await handleAttachments(event, actor, attachmentService)
+        : jsonResponse(503, {code: 'ATTACHMENT_UNAVAILABLE', retryable: true});
+      return event.rawPath.endsWith('/shares') ? await handleShares(event, actor, sharing)
+        : await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub));
+    }
 
     // M1.1 behaviour, unchanged: health answers without an identity so the
     // deployment can be probed. The deployed API still puts it behind the JWT
@@ -210,14 +289,23 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
       return notFoundResponse();
     }
 
-    const ownerId = ownerSubOf(event);
+    const ownerId = accessTokenSubOf(event);
     if (ownerId === undefined) {
-      // Only reachable when the authorizer was bypassed (a direct invoke).
+      // Reachable when the authorizer was bypassed (a direct invoke) or the
+      // token presented is not a Cognito access token.
       return unauthorizedResponse();
+    }
+    if (event.rawPath === '/sync/v2/label-projections' && methodOf(event) === 'POST') {
+      let body: unknown;
+      try { body = JSON.parse(event.body ?? 'null'); }
+      catch { return invalidMutationResponse('BODY_MALFORMED'); }
+      return await labelProjectionResponse(ownerId, body, NOTES_TABLE_NAME, documentClient, security);
     }
 
     return route === 'mutations' ? await handleMutation(event, ownerId) : await handleChanges(event, ownerId);
   } catch (error) {
+    const mapped = responseForStoreError(route, error);
+    if (mapped !== undefined) return mapped;
     // Nothing about the failure crosses the contract: no message, stack, cause,
     // token, or request data is logged or returned.
     console.error('sync request failed', { route, errorName: errorNameOf(error) });

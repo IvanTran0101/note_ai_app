@@ -1,282 +1,204 @@
-/// [ILocalSyncStore] implementation for `dart:io` platforms.
-///
-/// Persists one account's whole local sync state as a schemaVersion 2 JSON
-/// envelope at
-/// `<app support>/accounts/<sha256 of the account id>/local_sync_state.json`,
-/// resolved with `path_provider`'s [getApplicationSupportDirectory] by default.
-/// The directory resolver is injectable so unit tests run without a plugin
-/// channel.
-///
-/// The account namespace is the SHA-256 digest of the account id, never the raw
-/// id, so an account identifier does not appear in any file or directory name.
-/// Each
-/// store instance is bound to exactly one account: [FileLocalSyncStore.read]
-/// returns an empty state for that account when nothing is stored yet, and
-/// [FileLocalSyncStore.replace] rejects state of another account.
-///
-/// Writes are atomic: the encoded envelope is written to a same-directory
-/// temporary file, flushed and closed, then renamed over the target. On failure
-/// only the temporary file this write issued is cleaned up, so a failed
-/// replacement leaves the previously stored state in place. All operations,
-/// including read-modify-write updates, are serialized per store instance.
-/// Reads never repair persisted data: a
-/// malformed document, or one that carries another account, raises
-/// [LocalSyncStoreException] and is left exactly as it was found.
-///
-/// The legacy global `notes.json` and `local-user` documents are not read,
-/// imported, or migrated here.
-library;
-
-import 'dart:async';
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../../application/sync/local_sync_state.dart';
 import '../../application/sync/local_sync_store.dart';
-import 'local_sync_state_codec.dart';
+import '../security/encoded_account_store.dart';
+import '../security/encrypted_sync_store.dart';
 import 'local_sync_store_account_namespace.dart';
 import 'local_sync_store_contract.dart';
 
-/// Creates a native [FileLocalSyncStore], matching the Web and stub factories.
-///
-/// [applicationSupportPathResolver] overrides the default
-/// [getApplicationSupportDirectory] lookup (used by unit tests). The Web and
-/// stub factories accept the same parameter and ignore it.
 ILocalSyncStore createLocalSyncStore({
   required String accountUserId,
   LocalSyncApplicationSupportPathResolver? applicationSupportPathResolver,
-}) {
-  return FileLocalSyncStore(
-    accountUserId: accountUserId,
-    applicationSupportPathResolver: applicationSupportPathResolver,
-  );
-}
+}) => FileLocalSyncStore(
+  accountUserId: accountUserId,
+  applicationSupportPathResolver: applicationSupportPathResolver,
+);
 
-/// JSON-file [ILocalSyncStore] for native platforms.
-///
-/// The file is private to the application and holds exactly one envelope:
-///
-/// ```json
-/// {"schemaVersion": 2, "accountUserId": "...", "notes": [], ...}
-/// ```
-final class FileLocalSyncStore implements ILocalSyncStore {
-  /// Binds the store to [accountUserId].
-  ///
-  /// [applicationSupportPathResolver] overrides the default
-  /// [getApplicationSupportDirectory] lookup (used by unit tests).
+final class FileLocalSyncStore extends EncryptedSyncStore {
   FileLocalSyncStore({
     required String accountUserId,
     LocalSyncApplicationSupportPathResolver? applicationSupportPathResolver,
-  }) : _namespace = LocalSyncAccountNamespace(accountUserId),
-       _applicationSupportPathResolver =
-           applicationSupportPathResolver ?? _defaultApplicationSupportPath;
+  }) : super(
+         accountUserId,
+         _FileAccountStore(accountUserId, applicationSupportPathResolver),
+       );
+}
 
-  /// File name of the whole-state document inside the account namespace.
-  static const String _fileName = 'local_sync_state.json';
-  static int _temporaryFileSequence = 0;
+final class _FileAccountStore implements EncodedAccountStore {
+  _FileAccountStore(String accountId, this.resolver)
+    : namespace = LocalSyncAccountNamespace(accountId);
+  final LocalSyncAccountNamespace namespace;
+  final LocalSyncApplicationSupportPathResolver? resolver;
+  static int _sequence = 0;
+  static final Map<String, Future<void>> _tails = {};
+  bool _stagingCleaned = false;
 
-  final LocalSyncAccountNamespace _namespace;
-  final LocalSyncApplicationSupportPathResolver _applicationSupportPathResolver;
-
-  /// The tail is always a successful release future; operation failures are
-  /// returned only to the caller of that operation and do not poison the queue
-  /// for later reads or writes.
-  Future<void> _operationTail = Future<void>.value();
-
-  static Future<String> _defaultApplicationSupportPath() async {
-    final Directory directory = await getApplicationSupportDirectory();
-    return directory.path;
-  }
-
-  @override
-  Future<LocalSyncState> read() {
-    return _enqueue<LocalSyncState>(_readState);
-  }
-
-  @override
-  Future<void> replace(LocalSyncState state) {
-    return _enqueue<void>(() => _replaceState(state));
-  }
-
-  @override
-  Future<LocalSyncState> update(
-    LocalSyncState Function(LocalSyncState current) transform,
-  ) {
-    return _enqueue<LocalSyncState>(() async {
-      final LocalSyncState current = await _readState();
-      final LocalSyncState next = transform(current);
-      _namespace.requireOwned(next);
-      if (next == current) {
-        return current;
-      }
-      await _replaceState(next);
-      return next;
-    });
-  }
-
-  Future<LocalSyncState> _readState() async {
-    final File file = await _stateFile();
-    if (!await file.exists()) {
-      return _emptyState();
-    }
-
-    final String encoded;
+  Future<File> _file() async {
     try {
-      encoded = await file.readAsString();
+      final directory = resolver == null
+          ? (await getApplicationSupportDirectory()).path
+          : await resolver!();
+      if (directory.trim().isEmpty) throw const FormatException();
+      final separator = Platform.pathSeparator;
+      return File(
+        '$directory${separator}accounts$separator${namespace.hash}${separator}local_sync_state.json',
+      );
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unavailable,
+        'local storage unavailable',
+      );
+    }
+  }
+
+  Future<String?> _read(File file) async {
+    if (!await file.exists()) return null;
+    if (await file.length() > 32 * 1024 * 1024) throw const FormatException();
+    return file.readAsString();
+  }
+
+  @override
+  Future<String?> readEncoded() async {
+    try {
+      return await _read(await _file());
     } on Object {
       throw const LocalSyncStoreException(
         LocalSyncStoreFailure.unreadable,
-        'the local sync state could not be read',
+        'local state cannot be read',
       );
     }
-
-    return _decode(encoded);
   }
 
-  Future<void> _replaceState(LocalSyncState state) async {
-    _namespace.requireOwned(state);
-
-    final File target = await _stateFile();
-
-    final String encoded;
+  @override
+  Future<bool> compareAndSet(String? expected, String encrypted) async {
+    final previous = _tails[namespace.hash] ?? Future<void>.value();
+    final release = Completer<void>();
+    _tails[namespace.hash] = release.future;
+    await previous;
     try {
-      encoded = jsonEncode(LocalSyncStateCodec.encode(state));
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.unwritable,
-        'the local sync state could not be encoded',
-      );
+      return await _commit(expected, encrypted);
+    } finally {
+      release.complete();
     }
+  }
 
+  Future<bool> _commit(String? expected, String encrypted) async {
+    final target = await _file();
+    RandomAccessFile? lock;
+    File? temporary;
     try {
       await target.parent.create(recursive: true);
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.unwritable,
-        'the local sync state namespace directory could not be created',
+      lock = await File('${target.path}.lock').open(mode: FileMode.append);
+      await lock.lock(FileLock.blockingExclusive);
+      if (await _read(target) != expected) return false;
+      temporary = File(
+        '${target.path}.tmp-$pid-${DateTime.now().microsecondsSinceEpoch}-${++_sequence}',
       );
-    }
-
-    final File temporary = File(_temporaryPathFor(target));
-    bool temporaryIssued = false;
-    try {
       await temporary.create(exclusive: true);
-      temporaryIssued = true;
-
-      final RandomAccessFile handle = await temporary.open(
-        mode: FileMode.writeOnly,
-      );
+      final handle = await temporary.open(mode: FileMode.writeOnly);
       try {
-        await handle.writeString(encoded);
+        await handle.writeString(encrypted);
         await handle.flush();
       } finally {
         await handle.close();
       }
-
-      // The temporary file is in the same directory, so this is one
-      // filesystem rename rather than a copy followed by a delete. On the
-      // supported native filesystems it atomically replaces the old file, so
-      // a reader sees either the previous complete state or the new one.
       await temporary.rename(target.path);
+      return true;
     } on Object {
-      if (temporaryIssued) {
-        await _cleanIssuedTemporaryFile(temporary);
-      }
       throw const LocalSyncStoreException(
         LocalSyncStoreFailure.unwritable,
-        'the local sync state could not be replaced',
+        'encrypted state cannot be committed',
       );
-    }
-  }
-
-  LocalSyncState _emptyState() {
-    return LocalSyncState(accountUserId: _namespace.accountUserId);
-  }
-
-  /// Decodes a stored document without ever letting a value escape.
-  ///
-  /// Every failure becomes one of two typed failures with a fixed message: a
-  /// codec path, a note title, a cursor value, an account id, and this file's
-  /// path all stay out of the exception.
-  LocalSyncState _decode(String encoded) {
-    final Object? document;
-    try {
-      document = jsonDecode(encoded);
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.malformed,
-        'the stored local sync state is not valid JSON',
-      );
-    }
-
-    final LocalSyncState state;
-    try {
-      state = LocalSyncStateCodec.decode(document);
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.malformed,
-        'the stored local sync state does not match the M2 schema',
-      );
-    }
-
-    _namespace.requireOwned(state);
-    return state;
-  }
-
-  Future<File> _stateFile() async {
-    final String supportPath;
-    try {
-      supportPath = (await _applicationSupportPathResolver()).trim();
-    } on Object {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.unavailable,
-        'the application support directory could not be resolved',
-      );
-    }
-    if (supportPath.isEmpty) {
-      throw const LocalSyncStoreException(
-        LocalSyncStoreFailure.unavailable,
-        'the application support directory path is empty',
-      );
-    }
-
-    final String separator = Platform.pathSeparator;
-    return File(
-      '${Directory(supportPath).path}$separator'
-      '${LocalSyncAccountNamespace.accountsDirectoryName}$separator'
-      '${_namespace.hash}$separator$_fileName',
-    );
-  }
-
-  static String _temporaryPathFor(File target) {
-    final int sequence = ++_temporaryFileSequence;
-    final int timestamp = DateTime.now().microsecondsSinceEpoch;
-    return '${target.path}.tmp-$pid-$timestamp-$sequence';
-  }
-
-  static Future<void> _cleanIssuedTemporaryFile(File temporary) async {
-    try {
-      if (await temporary.exists()) {
-        await temporary.delete();
-      }
-    } on Object {
-      // Cleanup must never replace the original persistence failure, and it
-      // must not search for or delete any path other than this issued file.
-    }
-  }
-
-  Future<T> _enqueue<T>(Future<T> Function() operation) {
-    final Future<void> previous = _operationTail;
-    final Completer<void> release = Completer<void>();
-    _operationTail = release.future;
-    return previous.then((_) async {
+    } finally {
       try {
-        return await operation();
-      } finally {
-        release.complete();
+        if (temporary != null && await temporary.exists()) {
+          await temporary.delete();
+        }
+      } on Object {
+        /* issued ciphertext only */
       }
-    });
+      if (lock != null) {
+        try {
+          await lock.unlock();
+        } on Object {
+          /* fixed persistence result already returned */
+        }
+        try {
+          await lock.close();
+        } on Object {
+          /* never expose filesystem errors */
+        }
+      }
+    }
+  }
+
+  @override
+  Future<void> cleanLegacyStaging(
+    String accountId,
+    Future<String> Function(String) sealLegacy,
+  ) async {
+    if (_stagingCleaned) return;
+    final target = await _file();
+    if (!await target.parent.exists()) {
+      _stagingCleaned = true;
+      return;
+    }
+    try {
+      var count = 0;
+      await for (final entry in target.parent.list(followLinks: false)) {
+        if (entry is! File || !entry.path.startsWith('${target.path}.tmp-')) {
+          continue;
+        }
+        if (++count > 32) throw const FormatException();
+        final raw = await _read(entry);
+        if (raw == null) continue;
+        Object? document;
+        try {
+          document = jsonDecode(raw);
+        } on Object {
+          continue;
+        }
+        if (document is Map &&
+            document['schemaVersion'] == 2 &&
+            document['accountUserId'] == accountId) {
+          await _sealStaging(entry, await sealLegacy(raw));
+        }
+      }
+      _stagingCleaned = true;
+    } on Object {
+      throw const LocalSyncStoreException(
+        LocalSyncStoreFailure.unwritable,
+        'legacy staging cleanup is incomplete',
+      );
+    }
+  }
+
+  Future<void> _sealStaging(File target, String encrypted) async {
+    final issued = File(
+      '${target.path}.sealed-${DateTime.now().microsecondsSinceEpoch}-${++_sequence}',
+    );
+    try {
+      await issued.create(exclusive: true);
+      final handle = await issued.open(mode: FileMode.writeOnly);
+      try {
+        await handle.writeString(encrypted);
+        await handle.flush();
+      } finally {
+        await handle.close();
+      }
+      await issued.rename(target.path);
+    } finally {
+      try {
+        if (await issued.exists()) {
+          await issued.delete();
+        }
+      } on Object {
+        /* ciphertext only */
+      }
+    }
   }
 }

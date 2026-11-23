@@ -93,7 +93,11 @@ void main() {
       final SyncNoteSnapshot live = snapshotFixture();
       final Map<String, Object?> record = SyncNoteSnapshotCodec.encode(live);
 
-      expect(record.keys.toSet(), LocalSyncSchema.snapshotFields);
+      expect(record.keys.toSet(), {
+        ...LocalSyncSchema.snapshotFields.difference({'document'}),
+        'includesAttachments',
+        'includesLabels',
+      });
       expect(record['serverUpdatedAt'], fixtureUpdatedAt.toIso8601String());
       expect(record['deletedAt'], isNull);
       expect(SyncNoteSnapshotCodec.decode(record), live);

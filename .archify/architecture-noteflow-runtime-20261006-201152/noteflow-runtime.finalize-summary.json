@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/candidate.json",
+    "sha256": "8f4a3d46668ff054fb9793a2c77eeb70ec4da649dc7732effef782833d3bcb21",
+    "bytes": 15803
+  },
+  "artifact": {
+    "path": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.html",
+    "sha256": "fe60e9ea852a27acabf6d8e1b2d939b8ea463a39076c8d3d50fe73123632c61f",
+    "bytes": 780809
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.finalize.json",
+    "summaryReceipt": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.finalize-summary.json",
+    "browserCheckReceipt": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-06T13:23:13.461Z",
+    "source": "network",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 1818,
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 2,
+      "routesOverSuggestedBends": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "client-summary-http",
+            "from": "client-runtime",
+            "to": "http-apis",
+            "label": "HTTPS + JWT",
+            "collectionIndex": 1,
+            "artifactIndex": 2
+          },
+          "right": {
+            "id": "client-signin",
+            "from": "client-runtime",
+            "to": "cognito",
+            "label": "Sign in / JWT",
+            "collectionIndex": 5,
+            "artifactIndex": 6
+          },
+          "point": [
+            617.4999999999994,
+            361
+          ],
+          "sharedNode": "client-runtime"
+        },
+        {
+          "left": {
+            "id": "backend-object-verify",
+            "from": "sync-lambda",
+            "to": "s3",
+            "label": "Pin / finalize",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "right": {
+            "id": "realtime-revision-hints",
+            "from": "realtime",
+            "to": "client-runtime",
+            "label": "WS revision hints",
+            "collectionIndex": 11,
+            "artifactIndex": 12
+          },
+          "point": [
+            797.5,
+            826
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "realtime-revision-hints",
+            "from": "realtime",
+            "to": "client-runtime",
+            "label": "WS revision hints",
+            "collectionIndex": 11,
+            "artifactIndex": 12
+          },
+          "bends": 3,
+          "stretch": 1
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "client-runtime → http-apis and client-runtime → cognito cross next to client-runtime: move node http-apis or cognito so the two reach client-runtime from different sides (for example one level with it, one directly above or below it).",
+      "sync-lambda → s3 crosses realtime → client-runtime: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "realtime → client-runtime needs 3 bends: move node realtime or client-runtime so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

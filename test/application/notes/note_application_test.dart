@@ -67,6 +67,26 @@ final class _FakeNoteRepository implements INoteRepository {
   }
 
   @override
+  Future<Note> updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required NoteChange change,
+    required NoteCommitFence canCommit,
+  }) async {
+    final Note? note = notes[noteId];
+    if (!canCommit()) throw const NoteMutationCancelledException();
+    if (note == null || note.ownerId != ownerId) {
+      throw const NoteMutationMissingException();
+    }
+    change(note);
+    if (!canCommit()) throw const NoteMutationCancelledException();
+    if (!canCommit()) throw const NoteMutationCancelledException();
+    await save(note);
+    return note;
+  }
+
+  @override
   Future<void> save(Note note) async {
     final Object? error = saveError;
     if (error != null) {
@@ -94,6 +114,7 @@ Note _note({
   String content = 'Content',
   DateTime? createdAt,
   DateTime? updatedAt,
+  DateTime? pinnedAt,
 }) {
   final DateTime created = createdAt ?? _createdAt;
   return Note.reconstitute(
@@ -103,6 +124,7 @@ Note _note({
     content: content,
     createdAt: created,
     updatedAt: updatedAt ?? created,
+    pinnedAt: pinnedAt,
   );
 }
 
@@ -155,7 +177,10 @@ void main() {
       expect(dto.content, note.content);
       expect(dto.createdAt, note.createdAt);
       expect(dto.updatedAt, note.updatedAt);
+      expect(dto.pinnedAt, note.pinnedAt);
       expect(dto.hashCode, NoteDto.fromDomain(note).hashCode);
+      expect(dto.toString(), isNot(contains(note.title)));
+      expect(dto.toString(), isNot(contains(note.content)));
     });
   });
 

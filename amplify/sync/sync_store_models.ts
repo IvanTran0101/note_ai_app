@@ -1,0 +1,174 @@
+import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import type { NoteSecurityAuthority } from '../protection/protection_store';
+import type { ShareRecord } from '../sharing/share_models';
+import type { LabelSnapshot } from '../labels/label_models';
+import type { AttachmentDescriptor } from '../attachments/models';
+import type { AttachmentAttemptStore } from '../attachments/attempt_store';
+import type { NoteDocument } from '../documents/document_models';
+
+export type NoteSnapshot = Readonly<{
+  id: string;
+  title: string;
+  content: string;
+  document?: NoteDocument | null;
+  revision: number;
+  createdAt: string;
+  serverUpdatedAt: string;
+  pinnedAt?: string | null;
+  deletedAt: string | null;
+  protected?: boolean;
+  protectionRevision?: number;
+  contentAvailable?: boolean;
+  ownerId?: string;
+  share?: ShareRecord;
+  /** Internal membership CAS; never exposed by transport. */
+  sharingRevision?: number;
+  labelIds?: readonly string[];
+  attachments?: readonly AttachmentDescriptor[];
+  labelProjections?: readonly Readonly<{id: string; name: string}>[];
+}>;
+
+export type ProtectionSyncChange = Readonly<{
+  before: Readonly<{ enabled: boolean; revision: number }>;
+  after: Readonly<{ enabled: boolean; revision: number }>;
+  verifier: string | null;
+}>;
+
+export type SyncOperation = 'create' | 'update' | 'delete';
+
+/** `create` and `update` require this; `delete` ignores it. */
+export type MutationPayload = Readonly<{ title: string; content: string; document?: NoteDocument | null; pinnedAt?: string | null; labelIds?: readonly string[]; attachments?: readonly AttachmentDescriptor[] }>;
+
+/** One client mutation, already stripped of transport concerns. */
+export type SyncMutation = Readonly<{
+  wireVersion?: 2 | 3;
+  mutationId: string;
+  noteId: string;
+  operation: SyncOperation;
+  baseRevision: number;
+  payload?: MutationPayload;
+  protectionChange?: ProtectionSyncChange;
+  ownerId?: string;
+  accessRevision?: number;
+}>;
+
+export type AppliedMutation = Readonly<{
+  status: 'applied';
+  mutationId: string;
+  note: NoteSnapshot;
+  /** True when the stored result of an earlier identical mutation was replayed. */
+  replayed: boolean;
+}>;
+
+export type ConflictedMutation = Readonly<{
+  status: 'conflict';
+  mutationId: string;
+  /** The stored note at decision time, or `null` when the account has none. */
+  remoteNote: NoteSnapshot | null;
+}>;
+
+export type ApplyMutationResult = AppliedMutation | ConflictedMutation;
+
+export type ChangesPage = Readonly<{
+  wireVersion?: 2 | 3;
+  labels?: readonly LabelSnapshot[];
+  items: readonly NoteSnapshot[];
+  /** Always minted: the caller stores it and sends it back on the next poll. */
+  nextCursor: string;
+  hasMore: boolean;
+  /** Event committed, but the eventual GSI has not exposed the whole prefix. */
+  catchUpPending?: boolean;
+}>;
+
+/** The port `handler.ts` codes against; nothing here knows about HTTP. */
+export interface SyncStore {
+  /**
+   * Applies one mutation for `ownerId` (the verified JWT `sub`).
+   *
+   * @throws SyncInvalidMutationError when the request cannot be applied as sent.
+   * @throws SyncStorageError when storage failed; `retryable` says whether the
+   *         same request may be sent again.
+   */
+  applyMutation(ownerId: string, mutation: SyncMutation,
+    authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult>;
+
+  /**
+   * Lists changes above `cursor` in ascending sequence order. A missing cursor
+   * starts from the beginning; `limit` is clamped to 1..100 (default 50). The
+   * cursor advances only across contiguous sequence numbers, so an eventually
+   * consistent GSI gap is retried on a later poll instead of being skipped.
+   *
+   * @throws SyncInvalidCursorError when the cursor is not this account's.
+   * @throws SyncStorageError when storage failed.
+   */
+  listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion?: 1 | 2 | 3): Promise<ChangesPage>;
+}
+
+export type InvalidMutationReason =
+  | 'MUTATION_ID_INVALID'
+  | 'MUTATION_ID_REUSED'
+  | 'NOTE_ID_INVALID'
+  | 'OPERATION_UNSUPPORTED'
+  | 'BASE_REVISION_INVALID'
+  | 'PAYLOAD_REQUIRED'
+  | 'PAYLOAD_INVALID'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'ATTACHMENTS_UNSUPPORTED'
+  | 'DOCUMENTS_UNSUPPORTED';
+
+/** The request is not applicable as sent; the handler maps this to a client error. */
+export class SyncInvalidMutationError extends Error {
+  readonly code = 'INVALID_MUTATION';
+  readonly reason: InvalidMutationReason;
+
+  constructor(reason: InvalidMutationReason, message: string) {
+    super(message);
+    this.name = 'SyncInvalidMutationError';
+    this.reason = reason;
+  }
+}
+
+/** Storage failed. `retryable` distinguishes "send it again" from "do not". */
+export class SyncStorageError extends Error {
+  readonly code = 'STORAGE_FAILURE';
+  readonly retryable: boolean;
+
+  /** `cause` carries the provider error for server-side logs only; never serialize it. */
+  constructor(message: string, options?: Readonly<{ retryable?: boolean; cause?: unknown }>) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = 'SyncStorageError';
+    this.retryable = options?.retryable !== false;
+  }
+}
+
+export type DynamoSyncStoreOptions = Readonly<{
+  tableName: string;
+  /** Defaults to the client's own chain, which resolves `AWS_REGION` in Lambda. */
+  region?: string;
+  /** Injection seam: a warmer path or a test can supply its own document client. */
+  documentClient?: DynamoDBDocumentClient;
+  security?: NoteSecurityAuthority;
+  sharing?: boolean;
+  attachments?: AttachmentAttemptStore;
+}>;
+
+export type NormalizedMutation = Readonly<{
+  wireVersion?: 2 | 3;
+  mutationId: string;
+  noteId: string;
+  operation: SyncOperation;
+  baseRevision: number;
+  payload: MutationPayload | null;
+  protectionChange?: ProtectionSyncChange;
+  ownerId?: string;
+  accessRevision?: number;
+  fingerprint: string;
+}>;
+
+export type StoredMutation = Readonly<{ fingerprint: string; note: NoteSnapshot }>;
+
+export type ConflictCheck =
+  | Readonly<{ kind: 'apply' }>
+  | Readonly<{ kind: 'conflict'; remoteNote: NoteSnapshot | null }>;
+
+export type CommitOutcome = Readonly<{ kind: 'committed'; note: NoteSnapshot }> | Readonly<{ kind: 'retry' }>;

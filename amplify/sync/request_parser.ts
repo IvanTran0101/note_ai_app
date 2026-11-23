@@ -18,6 +18,10 @@
  * the caller's `ownerId`; the parser only carries it through.
  */
 
+import { parseProtectionChange } from './sync_protection_change';
+import { labelIds } from '../labels/label_models';
+import { manifest } from '../attachments/models';
+import { parseNoteDocument, projectDocument } from '../documents/note_document';
 import type { InvalidMutationReason, SyncMutation, SyncOperation } from './dynamo_sync_store';
 
 /** Contract defaults for `GET /sync/changes`; the store clamps to the same window. */
@@ -31,7 +35,22 @@ export const MAX_CHANGE_LIMIT = 100;
  */
 const MAX_IDENTIFIER_LENGTH = 128;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+const UTC_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/;
 const UNSIGNED_INTEGER = /^\d+$/;
+
+const isUtcTimestamp = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const parts = UTC_TIMESTAMP.exec(value);
+  if (parts === null) return false;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) &&
+    parsed.getUTCFullYear() === Number(parts[1]) &&
+    parsed.getUTCMonth() + 1 === Number(parts[2]) &&
+    parsed.getUTCDate() === Number(parts[3]) &&
+    parsed.getUTCHours() === Number(parts[4]) &&
+    parsed.getUTCMinutes() === Number(parts[5]) &&
+    parsed.getUTCSeconds() === Number(parts[6]);
+};
 
 /** The body was absent, unreadable, or not a JSON object; no single field to blame. */
 export type BodyProblem = 'BODY_MALFORMED';
@@ -71,14 +90,16 @@ const readBaseRevision = (value: unknown): number | null =>
 /**
  * Parses a `POST /sync/mutations` body.
  *
- * `create` and `update` need a `{title, content}` payload. A `delete` is
+ * `create` and `update` need a `{title, content}` payload. `pinnedAt` is
+ * optional for old clients; when omitted on update, the stored value survives.
+ * A `delete` is
  * payload-free by contract: one sent alongside it is ignored rather than
  * refused, and the store writes a payload-free tombstone either way.
  *
  * Unknown fields are ignored, so a later additive contract change does not
  * break older servers.
  */
-export const parseMutationBody = (body: string | null | undefined): MutationParseResult => {
+export const parseMutationBody = (body: string | null | undefined, protectedRoute = false, sharedRoute = false, wireVersion: 1 | 2 | 3 = 1): MutationParseResult => {
   if (typeof body !== 'string' || body.length === 0) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
@@ -92,7 +113,21 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
   if (!isRecord(decoded)) {
     return { ok: false, problem: 'BODY_MALFORMED' };
   }
+  if (wireVersion >= 2 ? decoded.wireVersion !== wireVersion || decoded.entityType !== 'note' :
+      'wireVersion' in decoded || 'entityType' in decoded) return {ok: false, problem: 'PAYLOAD_INVALID'};
+  if (wireVersion === 3 && decoded.documentCapability !== 'basicBlocksV1') return {ok: false, problem: 'DOCUMENTS_UNSUPPORTED'};
+  const ownerId = readIdentifier(decoded.ownerId);
+  const accessRevision = decoded.accessRevision;
+  if (sharedRoute ? !ownerId || typeof accessRevision !== 'number' || !Number.isSafeInteger(accessRevision) ||
+      accessRevision < 1 || decoded.operation !== 'update' || protectedRoute :
+      'ownerId' in decoded || 'accessRevision' in decoded) return { ok: false, problem: 'PAYLOAD_INVALID' };
 
+  if (protectedRoute !== ('protectionChange' in decoded)) return { ok: false, problem: 'PAYLOAD_INVALID' };
+  let protectionChange;
+  if (protectedRoute) {
+    try { protectionChange = parseProtectionChange(decoded.protectionChange); }
+    catch { return { ok: false, problem: 'PAYLOAD_INVALID' }; }
+  }
   const mutationId = readIdentifier(decoded.mutationId);
   if (mutationId === null) {
     return { ok: false, problem: 'MUTATION_ID_INVALID' };
@@ -114,7 +149,8 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
   }
 
   if (operation === 'delete') {
-    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision } };
+    if (protectionChange) return { ok: false, problem: 'PAYLOAD_INVALID' };
+    return { ok: true, mutation: { mutationId, noteId, operation, baseRevision, ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3} : {}) } };
   }
 
   const payload = decoded.payload;
@@ -123,13 +159,51 @@ export const parseMutationBody = (body: string | null | undefined): MutationPars
   }
 
   const { title, content } = payload;
-  if (typeof title !== 'string' || typeof content !== 'string') {
+  const hasDocument = Object.hasOwn(payload, 'document');
+  if (hasDocument && wireVersion !== 3) return {ok: false, problem: 'DOCUMENTS_UNSUPPORTED'};
+  if (wireVersion === 3 && !hasDocument) return {ok: false, problem: 'PAYLOAD_INVALID'};
+  let document;
+  try { document = hasDocument ? payload.document === null ? null : parseNoteDocument(payload.document) : undefined; }
+  catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
+  if (document && projectDocument(document) !== content) return {ok: false, problem: 'PAYLOAD_INVALID'};
+  let ids: readonly string[] | undefined;
+  if (Object.hasOwn(payload, 'labelIds')) {
+    if (wireVersion < 2 || sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
+    try { ids = labelIds(payload.labelIds); } catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
+  }
+  let attachments;
+  if (Object.hasOwn(payload, 'attachments')) {
+    if (wireVersion < 2) return {ok: false, problem: 'ATTACHMENTS_UNSUPPORTED'};
+    if (sharedRoute) return {ok: false, problem: 'PAYLOAD_INVALID'};
+    try { attachments = manifest(payload.attachments, noteId); }
+    catch { return {ok: false, problem: 'PAYLOAD_INVALID'}; }
+  }
+  if (
+    typeof title !== 'string' ||
+    typeof content !== 'string' ||
+    title.trim().length === 0 ||
+    (!document && content.trim().length === 0)
+  ) {
+    return { ok: false, problem: 'PAYLOAD_INVALID' };
+  }
+
+  const hasPinnedAt = Object.prototype.hasOwnProperty.call(payload, 'pinnedAt');
+  const pinnedAt = payload.pinnedAt;
+  if (
+    (sharedRoute && hasPinnedAt) ||
+    hasPinnedAt &&
+    pinnedAt !== null &&
+    !isUtcTimestamp(pinnedAt)
+  ) {
     return { ok: false, problem: 'PAYLOAD_INVALID' };
   }
 
   return {
     ok: true,
-    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content } },
+    mutation: { mutationId, noteId, operation, baseRevision, payload: { title, content, ...(hasDocument ? {document} : {}), ...(hasPinnedAt ? { pinnedAt: pinnedAt as string | null } : {}), ...(ids ? {labelIds: ids} : {}), ...(attachments ? {attachments} : {}) },
+      ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3} : {}),
+      ...(sharedRoute ? { ownerId: ownerId!, accessRevision: accessRevision as number } : {}),
+      ...(protectionChange ? { protectionChange } : {}) },
   };
 };
 

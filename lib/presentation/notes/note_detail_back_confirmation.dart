@@ -18,6 +18,7 @@ Future<NoteDetailBackDecision?> showNoteDetailBackConfirmation({
 }) {
   return showDialog<NoteDetailBackDecision>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) {
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
       return buildNoteDetailConfirmationDialog(

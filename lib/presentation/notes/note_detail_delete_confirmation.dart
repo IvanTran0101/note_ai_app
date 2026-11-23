@@ -15,6 +15,7 @@ Future<bool?> showNoteDetailDeleteConfirmation({
 }) {
   return showDialog<bool>(
     context: context,
+    animationStyle: NoteFlowMotion.dialogStyle(context),
     builder: (BuildContext context) {
       final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
       return buildNoteDetailConfirmationDialog(

@@ -76,12 +76,13 @@ const NOTE: NoteSnapshot = {
   revision: 3,
   createdAt: '2026-09-24T10:00:00.000Z',
   serverUpdatedAt: '2026-09-24T10:00:01.000Z',
+  pinnedAt: null,
   deletedAt: null,
 };
 
 const TOMBSTONE: NoteSnapshot = { ...NOTE, deletedAt: '2026-09-24T10:00:02.000Z' };
 
-const NOTE_KEYS = ['content', 'createdAt', 'deletedAt', 'id', 'revision', 'serverUpdatedAt', 'title'];
+const NOTE_KEYS = ['content', 'createdAt', 'deletedAt', 'id', 'pinnedAt', 'revision', 'serverUpdatedAt', 'title'];
 
 check('an applied result is a 200 with the note and no store bookkeeping', () => {
   const applied: AppliedMutation = {
@@ -102,6 +103,13 @@ check('the wire note is exactly the snapshot the Application port builds', () =>
   const note = body.note as Record<string, unknown>;
   assertDeepEqual(Object.keys(note).sort(), NOTE_KEYS, 'note keys');
   assertEqual(note.deletedAt, null, 'a live note has no deletion time');
+  assertEqual(note.pinnedAt, null, 'an unpinned note has a stable null field');
+});
+
+check('the response exposes the owner pin status', () => {
+  const pinned: NoteSnapshot = { ...NOTE, pinnedAt: '2026-09-24T10:30:00.000Z' };
+  const body = bodyOf(appliedMutationResponse({ status: 'applied', mutationId: 'm', note: pinned, replayed: false }));
+  assertEqual((body.note as Record<string, unknown>).pinnedAt, pinned.pinnedAt, 'pin timestamp');
 });
 
 check('a tombstone keeps its deletion time and identity', () => {

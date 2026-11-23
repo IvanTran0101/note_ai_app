@@ -202,7 +202,7 @@ void main() {
         ),
       );
       final source = FakeRemote();
-      await service(store, source).syncNow();
+      await service(store, source).syncNow().timeout(const Duration(seconds: 2));
       expect(source.pushes, isEmpty);
       expect(store.state.outbox, hasLength(2));
     },

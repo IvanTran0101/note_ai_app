@@ -5,7 +5,13 @@ import '../../application/sync/pending_mutation.dart';
 import '../../application/sync/sync_failure.dart';
 import '../../application/sync/sync_mutation.dart';
 import 'local_sync_codec_reader.dart';
+import 'protection_sync_codec.dart';
 import 'local_sync_codec_schema.dart';
+import '../attachments/attachment_codec.dart';
+import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label_membership.dart';
+import '../labels/label_codec.dart';
+import '../documents/note_document_codec.dart';
 
 /// Maps a [PendingMutation] to and from one stored outbox record.
 ///
@@ -22,14 +28,17 @@ abstract final class PendingMutationCodec {
     return <String, Object?>{
       LocalSyncSchema.mutationId: entry.mutationId,
       LocalSyncSchema.noteId: entry.noteId,
+      if (entry.isLabel) 'entityType': 'label',
+      if (entry.mutation.labelName != null)
+        'labelName': entry.mutation.labelName,
+      if (entry.ownerId != null) LocalSyncSchema.ownerId: entry.ownerId,
+      if (entry.accessRevision != null)
+        LocalSyncSchema.accessRevision: entry.accessRevision,
+      if (entry.protectionChange != null)
+        'protectionChange': ProtectionSyncCodec.encode(entry.protectionChange!),
       LocalSyncSchema.operation: entry.operation.name,
       LocalSyncSchema.baseRevision: entry.baseRevision,
-      LocalSyncSchema.payload: payload == null
-          ? null
-          : <String, Object?>{
-              LocalSyncSchema.title: payload.title,
-              LocalSyncSchema.content: payload.content,
-            },
+      LocalSyncSchema.payload: payload == null ? null : _encodePayload(payload),
       LocalSyncSchema.createdAt: entry.createdAt.toIso8601String(),
       LocalSyncSchema.retryCount: entry.retryCount,
       LocalSyncSchema.lastError: entry.lastError?.name,
@@ -44,6 +53,7 @@ abstract final class PendingMutationCodec {
         data,
         path: path,
         allowedFields: LocalSyncSchema.mutationFields,
+        optionalFields: LocalSyncSchema.mutationOptionalFields,
       ),
     );
   }
@@ -62,7 +72,15 @@ abstract final class PendingMutationCodec {
       LocalSyncSchema.baseRevision,
     );
     final SyncNotePayload? payload = _decodePayload(record);
-    if (operation != SyncMutationOperation.delete && payload == null) {
+    final isLabel =
+        record.containsField('entityType') &&
+        record.rawValue('entityType') == 'label';
+    if (record.containsField('entityType') && !isLabel) {
+      record.fail('entityType', 'Unsupported entity type.');
+    }
+    if (!isLabel &&
+        operation != SyncMutationOperation.delete &&
+        payload == null) {
       record.fail(
         LocalSyncSchema.payload,
         'is required for create and update.',
@@ -83,9 +101,22 @@ abstract final class PendingMutationCodec {
       () => PendingMutation(
         mutationId: mutationId,
         noteId: noteId,
+        ownerId: !record.containsField(LocalSyncSchema.ownerId)
+            ? null
+            : record.requireNonBlankString(LocalSyncSchema.ownerId),
+        accessRevision: !record.containsField(LocalSyncSchema.accessRevision)
+            ? null
+            : record.requirePositiveInt(LocalSyncSchema.accessRevision),
+        protectionChange: record.containsField('protectionChange')
+            ? ProtectionSyncCodec.decode(record.rawValue('protectionChange'))
+            : null,
         operation: operation,
         baseRevision: baseRevision,
         payload: payload,
+        entityType: isLabel ? SyncEntityType.label : SyncEntityType.note,
+        labelName: record.containsField('labelName')
+            ? record.requireString('labelName')
+            : null,
         createdAt: createdAt,
         retryCount: retryCount,
         lastError: lastError,
@@ -99,6 +130,12 @@ abstract final class PendingMutationCodec {
     final SyncCodecObject? payload = record.requireNullableObject(
       LocalSyncSchema.payload,
       LocalSyncSchema.payloadFields,
+      optionalFields: <String>{
+        LocalSyncSchema.pinnedAt,
+        LocalSyncSchema.attachments,
+        'labelIds',
+        LocalSyncSchema.document,
+      },
     );
     if (payload == null) {
       return null;
@@ -106,6 +143,42 @@ abstract final class PendingMutationCodec {
     return SyncNotePayload(
       title: payload.requireString(LocalSyncSchema.title),
       content: payload.requireString(LocalSyncSchema.content),
+      document: NoteDocumentCodec.decodeOptional(
+        payload.rawValue(LocalSyncSchema.document),
+      ),
+      includesDocument: payload.contains(LocalSyncSchema.document),
+      labelMembership: payload.contains('labelIds')
+          ? LabelMembership(LabelCodec.ids(payload.rawValue('labelIds')))
+          : const LabelMembership.empty(),
+      includesLabels: payload.contains('labelIds'),
+      pinnedAt: payload.requireNullableTimestamp(LocalSyncSchema.pinnedAt),
+      includesPinnedAt: payload.contains(LocalSyncSchema.pinnedAt),
+      includesAttachments: payload.contains(LocalSyncSchema.attachments),
+      attachmentManifest: payload.contains(LocalSyncSchema.attachments)
+          ? AttachmentManifest(
+              AttachmentCodec.decodeList(
+                payload.rawValue(LocalSyncSchema.attachments),
+                noteId: record.requireNonBlankString(LocalSyncSchema.noteId),
+              ),
+            )
+          : const AttachmentManifest.empty(),
     );
   }
+
+  static Map<String, Object?> _encodePayload(SyncNotePayload payload) =>
+      <String, Object?>{
+        LocalSyncSchema.title: payload.title,
+        LocalSyncSchema.content: payload.content,
+        if (payload.includesDocument)
+          LocalSyncSchema.document: payload.document == null
+              ? null
+              : NoteDocumentCodec.encode(payload.document!),
+        if (payload.includesLabels) 'labelIds': payload.labelIds,
+        if (payload.includesAttachments)
+          LocalSyncSchema.attachments: payload.attachments
+              .map(AttachmentCodec.encode)
+              .toList(),
+        if (payload.includesPinnedAt)
+          LocalSyncSchema.pinnedAt: payload.pinnedAt?.toIso8601String(),
+      };
 }

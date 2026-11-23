@@ -79,6 +79,7 @@ final class RegistrationResult {
   const RegistrationResult({
     required this.user,
     required this.verificationDispatchStatus,
+    this.profileSetupPending = false,
   });
 
   /// The registered user as reported by the provider.
@@ -86,6 +87,9 @@ final class RegistrationResult {
 
   /// What happened to this registration's verification message.
   final VerificationDispatchStatus verificationDispatchStatus;
+
+  /// Cognito succeeded, but Profile must be completed without signing up again.
+  final bool profileSetupPending;
 }
 
 /// Stable reasons why Application-level auth input validation rejected input.

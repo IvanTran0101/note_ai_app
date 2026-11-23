@@ -37,6 +37,7 @@ final class NotesCopy {
   String get createFirstNote =>
       _isVietnamese ? 'Tạo ghi chú đầu tiên' : 'Create your first note';
   String get noContent => _isVietnamese ? 'Không có nội dung' : 'No content';
+  String get pinned => _isVietnamese ? 'Đã ghim' : 'Pinned';
   String get untitled => _isVietnamese ? '(Chưa đặt tên)' : '(Untitled)';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get loadingNotes =>

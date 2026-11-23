@@ -1,3 +1,6 @@
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -31,6 +34,149 @@ import 'package:note_ai_app/presentation/workspace/workspace_localizations.dart'
 final DateTime _time = DateTime.utc(2026, 9, 26, 10);
 
 void main() {
+  for (final local in ['saved', 'pending', 'failed']) {
+    testWidgets(
+      'header combines $local and cloud status with one sync action',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          final coordinator = _FakeCoordinator();
+          final sync = _controller(
+            _MemoryStore(LocalSyncState(accountUserId: 'account-1')),
+            coordinator,
+          );
+          addTearDown(sync.dispose);
+          addTearDown(coordinator.close);
+          await sync.refresh();
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: SyncStatusPanel(
+                  controller: sync,
+                  iconOnly: true,
+                  additionalStatus: 'Local $local',
+                  localPending: local == 'pending',
+                  localFailed: local == 'failed',
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final button = find.byKey(const ValueKey<String>('sync-now'));
+          expect(button, findsOneWidget);
+          final label = tester.getSemantics(button).label;
+          expect(label, contains('Local $local'));
+          expect(RegExp('All synced').allMatches(label).length, 1);
+          expect(tester.getSize(button).shortestSide, greaterThanOrEqualTo(48));
+          expect(
+            find.byIcon(
+              local == 'failed'
+                  ? Icons.error_outline
+                  : local == 'pending'
+                  ? Icons.cloud_upload_outlined
+                  : Icons.cloud_done_outlined,
+            ),
+            findsOneWidget,
+          );
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(coordinator.calls, 1);
+          coordinator.publish(const SyncStatusSnapshot.offline());
+          await tester.pumpAndSettle();
+          expect(tester.getSemantics(button).label, contains('Offline'));
+          expect(tester.getSemantics(button).label, contains('Retry'));
+          expect(
+            find.byIcon(
+              local == 'failed'
+                  ? Icons.error_outline
+                  : Icons.cloud_off_outlined,
+            ),
+            findsOneWidget,
+          );
+          await tester.pumpWidget(const SizedBox());
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
+  for (final scenario in [
+    'same text ACK',
+    'remote text changed',
+    'dirty draft',
+  ]) {
+    testWidgets('new embedded editor handles $scenario before Summary', (
+      tester,
+    ) async {
+      final store = _MemoryStore(LocalSyncState(accountUserId: 'account-1'));
+      final coordinator = _FakeCoordinator();
+      final sync = _controller(store, coordinator);
+      final notes = _FakeNotesController([]);
+      addTearDown(() async {
+        sync.dispose();
+        await coordinator.close();
+      });
+      await _pumpWorkspace(tester, notes, sync);
+      await tester.tap(find.text('Create your first note').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(NoteDetailPage.titleFieldKey),
+        'ACK note',
+      );
+      await tester.enterText(
+        find.byKey(NoteDetailPage.contentFieldKey),
+        'Saved body',
+      );
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      final original = notes.notes.single;
+      if (scenario == 'dirty draft') {
+        await tester.enterText(
+          find.byKey(NoteDetailPage.contentFieldKey),
+          'Keep this draft',
+        );
+        await tester.pump();
+      }
+      final ack = LocalNoteState(
+        id: original.id,
+        ownerId: original.ownerId,
+        title: original.title,
+        content: scenario == 'remote text changed'
+            ? 'Remote body'
+            : original.content,
+        createdAt: _time.add(const Duration(seconds: 1)),
+        updatedAt: _time.add(const Duration(seconds: 1)),
+        serverRevision: 1,
+      );
+      store.state = LocalSyncState(accountUserId: 'account-1', notes: [ack]);
+      notes.notes[0] = NoteDto.fromLocalState(ack);
+      await sync.refresh();
+      await tester.pumpAndSettle();
+      if (scenario == 'dirty draft') {
+        final field = tester.widget<TextField>(
+          find.byKey(NoteDetailPage.contentFieldKey),
+        );
+        expect(field.controller!.text, 'Keep this draft');
+        expect(notes.summarizedSnapshot, isNull);
+      } else {
+        await tester.tap(
+          find.byKey(const ValueKey<String>('note-detail-summarize')),
+        );
+        await tester.pumpAndSettle();
+        if (scenario == 'same text ACK') {
+          expect(notes.summarizedSnapshot, NoteDto.fromLocalState(ack));
+          expect(find.byKey(NoteDetailPage.summaryKey), findsOneWidget);
+        } else {
+          expect(notes.summarizedSnapshot, isNull);
+          expect(
+            find.text('The note changed. Please try again.'),
+            findsWidgets,
+          );
+        }
+      }
+    });
+  }
+
   group('SyncPresentationController', () {
     test(
       'projects account note states and listens to coordinator status',
@@ -495,6 +641,7 @@ final class _MemoryStore implements ILocalSyncStore {
 }
 
 final class _FakeCoordinator implements ISyncCoordinator {
+  int calls = 0;
   final StreamController<SyncStatusSnapshot> _changes =
       StreamController<SyncStatusSnapshot>.broadcast();
   SyncStatusSnapshot _status = const SyncStatusSnapshot.idle();
@@ -506,7 +653,10 @@ final class _FakeCoordinator implements ISyncCoordinator {
   Stream<SyncStatusSnapshot> get statusChanges => _changes.stream;
 
   @override
-  Future<SyncReport> syncNow() async => SyncReport();
+  Future<SyncReport> syncNow() async {
+    calls++;
+    return SyncReport();
+  }
 
   void publish(SyncStatusSnapshot value) {
     _status = value;
@@ -522,6 +672,7 @@ final class _FakeNotesController implements NotesApplicationController {
 
   final List<NoteDto> notes;
   final List<NoteDto> createdNotes = <NoteDto>[];
+  NoteDto? summarizedSnapshot;
   int _nextId = 0;
 
   @override
@@ -570,5 +721,15 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async => 'summary';
+  SummaryConsentAppService? get summaryConsent => null;
+
+  @override
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
+    summarizedSnapshot = selectedSnapshot;
+    return 'summary';
+  }
 }

@@ -1,8 +1,13 @@
+import '../../application/labels/note_query.dart';
+import '../labels/label_catalog_scope.dart';
+
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
+import '../common/note_flow_primitives.dart';
 import '../notes/notes_application_controller.dart';
 import '../notes/note_detail_route_result.dart';
 import '../notes/notes_theme_tokens.dart';
@@ -10,6 +15,8 @@ import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_content.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_localizations.dart';
+import 'dashboard_search_dock.dart';
+import 'dashboard_search_dialog.dart';
 import 'dashboard_state.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
@@ -33,6 +40,7 @@ final class DashboardPage extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenDiagnostics,
     this.onSearchVisibilityChanged,
+    this.noteChanges,
   });
 
   /// Controller for M5.1/M5.2 overview state.
@@ -64,6 +72,9 @@ final class DashboardPage extends StatefulWidget {
 
   /// Reports the existing search visibility state to a compact host shell.
   final ValueChanged<bool>? onSearchVisibilityChanged;
+
+  /// Account-scoped notifications after durable note/security sync changes.
+  final Listenable? noteChanges;
 
   static const Key searchFieldKey = ValueKey<String>('dashboard-search-field');
   static const Key searchToggleKey = ValueKey<String>(
@@ -117,21 +128,43 @@ final class DashboardPageState extends State<DashboardPage> {
   bool _searchOpen = false;
   bool _desktopSearchDialogOpen = false;
   String _searchText = '';
-  DashboardLayout? _layoutOverride;
+  Set<LabelSelection> _selectedLabels = {};
+  String? _labelActor;
+  DashboardLayout _layout = DashboardLayout.grid;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
   Future<void>? _loadInFlight;
+  bool _reloadAfterCurrent = false;
 
   @override
   void initState() {
     super.initState();
     widget.dashboardController.addListener(_onOverviewStateChanged);
+    widget.noteChanges?.addListener(_notesChanged);
     unawaited(reload());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final actor = LabelCatalogScope.maybeOf(context)?.application
+        ?.currentActor();
+    if (_labelActor != actor) {
+      _labelActor = actor;
+      _selectedLabels = {};
+      _searchText = '';
+      _searchController.clear();
+    }
   }
 
   @override
   void didUpdateWidget(covariant DashboardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.noteChanges != widget.noteChanges) {
+      oldWidget.noteChanges?.removeListener(_notesChanged);
+      widget.noteChanges?.addListener(_notesChanged);
+      _notesChanged();
+    }
     if (oldWidget.dashboardController != widget.dashboardController) {
       oldWidget.dashboardController.removeListener(_onOverviewStateChanged);
       widget.dashboardController.addListener(_onOverviewStateChanged);
@@ -156,7 +189,20 @@ final class DashboardPageState extends State<DashboardPage> {
     } finally {
       if (identical(_loadInFlight, operation)) {
         _loadInFlight = null;
+        if (_reloadAfterCurrent && mounted) {
+          _reloadAfterCurrent = false;
+          unawaited(reload());
+        }
       }
+    }
+  }
+
+  void _notesChanged() {
+    if (!mounted) return;
+    if (_loadInFlight != null) {
+      _reloadAfterCurrent = true;
+    } else {
+      unawaited(reload());
     }
   }
 
@@ -173,6 +219,7 @@ final class DashboardPageState extends State<DashboardPage> {
         <Future<dynamic>>[
           widget.notesController.listNotes(),
           widget.dashboardController.load(),
+          _readSavedLayout(),
         ],
       );
       if (!mounted) {
@@ -182,6 +229,7 @@ final class DashboardPageState extends State<DashboardPage> {
         _notes = List<NoteDto>.unmodifiable(results.first as List<NoteDto>);
         _loadingNotes = false;
         _notesError = null;
+        _layout = results[2] as DashboardLayout;
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -191,6 +239,64 @@ final class DashboardPageState extends State<DashboardPage> {
         _loadingNotes = false;
         _notesError = error;
       });
+    }
+  }
+
+  Future<DashboardLayout> _readSavedLayout() async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return DashboardLayout.grid;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      return await module02Controller.getNoteLayout() ==
+              NoteLayoutPreference.list
+          ? DashboardLayout.list
+          : DashboardLayout.grid;
+    } on Object {
+      return _layout;
+    }
+  }
+
+  Future<void> _saveLayout(DashboardLayout layout) async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      await module02Controller.setNoteLayout(
+        layout == DashboardLayout.list
+            ? NoteLayoutPreference.list
+            : NoteLayoutPreference.grid,
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DashboardCopy.of(context).layoutSaveError)),
+      );
+    }
+  }
+
+  Future<void> _togglePin(NoteDto note) async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
+    try {
+      final NoteDto updated = await module02Controller.setPinned(
+        noteId: note.id,
+        pinned: note.pinnedAt == null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _notes = List<NoteDto>.unmodifiable(
+          _notes.map((NoteDto item) => item.id == updated.id ? updated : item),
+        );
+      });
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DashboardCopy.of(context).pinSaveError)),
+      );
     }
   }
 
@@ -213,9 +319,11 @@ final class DashboardPageState extends State<DashboardPage> {
     if (_searchOpen) {
       return;
     }
+    // Web keeps its modal Search UX even when opened from a narrow window.
+    // Native phones retain the bottom-docked Search presentation.
     final bool showDesktopDialog =
         widget.embeddedInWorkspace &&
-        MediaQuery.sizeOf(context).width >= NoteFlowLayout.compactBreakpoint;
+        (kIsWeb || !NoteFlowLayout.isCompact(context));
     setState(() {
       _searchOpen = true;
       _desktopSearchDialogOpen = showDesktopDialog;
@@ -247,41 +355,24 @@ final class DashboardPageState extends State<DashboardPage> {
   Future<void> _showDesktopSearchDialog() async {
     await showDialog<void>(
       context: context,
+      animationStyle: NoteFlowMotion.dialogStyle(context),
       useRootNavigator: true,
       barrierDismissible: true,
       barrierColor: const Color(0x26000000),
       builder: (BuildContext _) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) {
-          final double verticalShift = MediaQuery.sizeOf(context).height >= 880
-              ? -33
-              : 0;
-          return Transform.translate(
-            offset: Offset(0, verticalShift),
-            child: Dialog(
-              key: DashboardPage.desktopSearchOverlayKey,
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: NoteFlowSpacing.xl,
-                vertical: NoteFlowSpacing.xxxl,
-              ),
-              constraints: const BoxConstraints(maxWidth: 1008, maxHeight: 704),
-              clipBehavior: Clip.antiAlias,
-              child: SizedBox(
-                key: DashboardPage.desktopSearchSurfaceKey,
-                width: 1008,
-                height: 704,
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) =>
-                      _buildBody(
-                        context,
-                        constraints,
-                        DashboardCopy.of(context),
-                        searchOpenOverride: true,
-                        searchOverlay: true,
-                        dialogSetState: setDialogState,
-                      ),
+          return DashboardSearchDialog(
+            key: DashboardPage.desktopSearchOverlayKey,
+            surfaceKey: DashboardPage.desktopSearchSurfaceKey,
+            builder: (BuildContext context, BoxConstraints constraints) =>
+                _buildBody(
+                  context,
+                  constraints,
+                  DashboardCopy.of(context),
+                  searchOpenOverride: true,
+                  searchOverlay: true,
+                  dialogSetState: setDialogState,
                 ),
-              ),
-            ),
           );
         },
       ),
@@ -338,12 +429,18 @@ final class DashboardPageState extends State<DashboardPage> {
     final DashboardCopy copy = DashboardCopy.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final double width = MediaQuery.sizeOf(context).width;
-    final bool compact = width < 600;
+    final bool compact = NoteFlowLayout.isCompact(context);
     final bool wide = width >= 840;
     final bool expanded = width >= 840 && widget.embeddedInWorkspace;
     return Scaffold(
-      backgroundColor: colors.surface,
-      bottomNavigationBar: compact && widget.embeddedInWorkspace && _searchOpen
+      backgroundColor: compact && (!_searchOpen || !kIsWeb)
+          ? NoteFlowWorkspaceTokens.of(context).compactHomeSurface
+          : colors.surface,
+      bottomNavigationBar:
+          compact &&
+              widget.embeddedInWorkspace &&
+              _searchOpen &&
+              !_desktopSearchDialogOpen
           ? _buildCompactSearchDock(context, copy)
           : null,
       appBar: compact && widget.embeddedInWorkspace
@@ -386,12 +483,14 @@ final class DashboardPageState extends State<DashboardPage> {
             ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          return _buildBody(
-            context,
-            constraints,
-            copy,
-            searchOpenOverride: _desktopSearchDialogOpen ? false : null,
-            searchTextOverride: _desktopSearchDialogOpen ? '' : null,
+          return NoteFlowStateTransition(
+            child: _buildBody(
+              context,
+              constraints,
+              copy,
+              searchOpenOverride: _desktopSearchDialogOpen ? false : null,
+              searchTextOverride: _desktopSearchDialogOpen ? '' : null,
+            ),
           );
         },
       ),
@@ -409,8 +508,11 @@ final class DashboardPageState extends State<DashboardPage> {
   }) {
     final bool searchOpen = searchOpenOverride ?? _searchOpen;
     final String searchText = searchTextOverride ?? _searchText;
-    final bool compact =
-        constraints.maxWidth < NoteFlowLayout.compactBreakpoint;
+    // Match the scaffold's phone classification when a phone rotates.
+    final bool compact = NoteFlowLayout.isCompact(
+      context,
+      availableWidth: constraints.maxWidth,
+    );
     if (_isLoading && _notes.isEmpty && !searchOpen) {
       return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
     }
@@ -430,6 +532,16 @@ final class DashboardPageState extends State<DashboardPage> {
     }
 
     return DashboardContent(
+      selectedLabels: _selectedLabels,
+      onLabelsChanged: (next) {
+        setState(() => _selectedLabels = next);
+        dialogSetState?.call(() {});
+      },
+      readable: (note) => widget.notesController is SecuredNotesController
+          ? (widget.notesController as SecuredNotesController)
+                .capabilitiesFor(note)
+                .canRead
+          : !note.isProtected && note.contentAvailable,
       notes: _notes,
       overview: widget.dashboardController.state.overview,
       copy: copy,
@@ -437,11 +549,7 @@ final class DashboardPageState extends State<DashboardPage> {
       searchOpen: searchOpen,
       searchText: searchText,
       onCloseSearch: _toggleSearch,
-      layout:
-          _layoutOverride ??
-          (constraints.maxWidth >= NoteFlowLayout.expandedBreakpoint
-              ? DashboardLayout.grid
-              : DashboardLayout.list),
+      layout: _layout,
       sort: _sort,
       selectedNoteId: _selectedNoteId,
       hasError: _hasError,
@@ -458,116 +566,40 @@ final class DashboardPageState extends State<DashboardPage> {
         dialogSetState?.call(() {});
       },
       onLayoutChanged: (DashboardLayout value) {
-        setState(() => _layoutOverride = value);
+        setState(() => _layout = value);
+        unawaited(_saveLayout(value));
         dialogSetState?.call(() {});
       },
       onOpenNote: (NoteDto note) => unawaited(_openNote(note)),
+      onTogglePin: (NoteDto note) => unawaited(_togglePin(note)),
       onCreateNote: _createNote,
       onRetry: reload,
       onRefresh: reload,
       embeddedInWorkspace: widget.embeddedInWorkspace,
-      dockCompactSearch: compact && widget.embeddedInWorkspace,
+      dockCompactSearch:
+          !searchOverlay && compact && widget.embeddedInWorkspace,
       searchOverlay: searchOverlay,
     );
   }
 
-  Widget _buildCompactSearchDock(BuildContext context, DashboardCopy copy) {
-    final NoteFlowWorkspaceTokens tokens = NoteFlowWorkspaceTokens.of(context);
-    final OutlineInputBorder border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(28),
-      borderSide: BorderSide(color: tokens.divider),
-    );
-    return KeyedSubtree(
-      key: DashboardPage.searchDockKey,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            NoteFlowSpacing.md,
-            NoteFlowSpacing.sm,
-            NoteFlowSpacing.xs,
-            NoteFlowSpacing.sm,
-          ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  key: DashboardPage.searchFieldKey,
-                  controller: _searchController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (String value) =>
-                      setState(() => _searchText = value),
-                  decoration: InputDecoration(
-                    hintText: copy.searchNotes,
-                    isDense: true,
-                    filled: true,
-                    fillColor: tokens.subtleSurface,
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: _searchText.isEmpty
-                        ? null
-                        : IconButton(
-                            key: const ValueKey<String>(
-                              'dashboard-clear-search-field',
-                            ),
-                            tooltip: copy.clearSearch,
-                            icon: const Icon(Icons.clear),
-                            onPressed: _clearSearch,
-                          ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: NoteFlowSpacing.md,
-                      vertical: NoteFlowSpacing.sm,
-                    ),
-                    border: border,
-                    enabledBorder: border.copyWith(
-                      borderSide: BorderSide(color: tokens.divider),
-                    ),
-                    focusedBorder: border.copyWith(
-                      borderSide: BorderSide(color: tokens.focusRing),
-                    ),
-                  ),
-                ),
-              ),
-              PopupMenuButton<DashboardSort>(
-                key: DashboardPage.searchDockSortKey,
-                tooltip: copy.sort,
-                initialValue: _sort,
-                onSelected: (DashboardSort value) =>
-                    setState(() => _sort = value),
-                itemBuilder: (BuildContext context) =>
-                    <PopupMenuEntry<DashboardSort>>[
-                      PopupMenuItem<DashboardSort>(
-                        value: DashboardSort.updated,
-                        child: Text(copy.sortUpdated),
-                      ),
-                      PopupMenuItem<DashboardSort>(
-                        value: DashboardSort.created,
-                        child: Text(copy.sortCreated),
-                      ),
-                    ],
-                child: SizedBox.square(
-                  dimension: 48,
-                  child: Tooltip(
-                    message: copy.sort,
-                    child: Icon(Icons.sort, color: tokens.textSecondary),
-                  ),
-                ),
-              ),
-              IconButton(
-                key: DashboardPage.searchDockCloseKey,
-                tooltip: copy.closeSearch,
-                onPressed: closeSearch,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildCompactSearchDock(BuildContext context, DashboardCopy copy) =>
+      DashboardSearchDock(
+        key: DashboardPage.searchDockKey,
+        copy: copy,
+        controller: _searchController,
+        sort: _sort,
+        onChanged: (value) => setState(() => _searchText = value),
+        onClear: _clearSearch,
+        onSortChanged: (value) => setState(() => _sort = value),
+        onClose: closeSearch,
+        fieldKey: DashboardPage.searchFieldKey,
+        sortKey: DashboardPage.searchDockSortKey,
+        closeKey: DashboardPage.searchDockCloseKey,
+      );
 
   @override
   void dispose() {
+    widget.noteChanges?.removeListener(_notesChanged);
     widget.dashboardController.removeListener(_onOverviewStateChanged);
     _searchController.dispose();
     super.dispose();

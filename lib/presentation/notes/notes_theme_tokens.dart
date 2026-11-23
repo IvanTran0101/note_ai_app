@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 /// Product-specific semantic colors that are not part of Material's core
@@ -71,6 +72,31 @@ abstract final class NoteFlowLayout {
   static const double compactBreakpoint = 600;
   static const double expandedBreakpoint = 840;
 
+  /// A phone stays in its mobile layout when rotated or when its IME opens.
+  static bool isNativePhone(BuildContext context) =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) &&
+      MediaQuery.sizeOf(context).shortestSide > 0 &&
+      MediaQuery.sizeOf(context).shortestSide < compactBreakpoint;
+
+  static bool isCompact(BuildContext context, {double? availableWidth}) =>
+      (availableWidth ?? MediaQuery.sizeOf(context).width) <
+          compactBreakpoint ||
+      isNativePhone(context);
+
+  static bool isShortEditor(BuildContext context) =>
+      isNativePhone(context) && MediaQuery.sizeOf(context).height < 500;
+
+  /// Scaffold removes the consumed IME inset from its body's MediaQuery.
+  /// Keep the physical view inset when arranging controls inside that body.
+  static double keyboardInset(BuildContext context) {
+    final view = View.of(context);
+    final physical = view.viewInsets.bottom / view.devicePixelRatio;
+    final inherited = MediaQuery.viewInsetsOf(context).bottom;
+    return physical > inherited ? physical : inherited;
+  }
+
   /// Compact pages use a normal mobile reading gutter. The previous 96dp
   /// value left the phone layout looking like a desktop canvas with the
   /// content stranded in the middle.
@@ -99,8 +125,12 @@ abstract final class NoteFlowLayout {
   static const double compactWebEditorPhoneTitleGlyphAdjustment = 68;
   static const double compactWebEditorWideTitleGlyphAdjustment = 12;
   static const double compactWebEditorTitleLeadingInset = 8;
-  static const double editorMaxWidth = 720;
-  static const double editorTextMaxWidth = 708;
+  static const double editorMaxWidth = 704;
+  static const double editorTextMaxWidth = 692;
+
+  /// Direct Notion Web title-column measurement, 19 October 2026.
+  /// Native/tablet geometry is reviewed separately against the native app.
+  static const double webDocumentMaxWidth = 720;
   static const double wideWebEditorMaxWidth = 1200;
   static const double dashboardContentMaxWidth = 768;
   static const double dashboardTopPadding = 72;
@@ -206,6 +236,16 @@ abstract final class NoteFlowRadius {
 abstract final class NoteFlowMotion {
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration standard = Duration(milliseconds: 200);
+
+  static Duration duration(BuildContext context, [Duration value = standard]) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : value;
+
+  static AnimationStyle dialogStyle(BuildContext context) => AnimationStyle(
+    duration: duration(context),
+    reverseDuration: duration(context, fast),
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
 }
 
 /// Notion-inspired surface/text/line tokens for both brightnesses.
@@ -237,15 +277,15 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       pageSurface: Color(0xFFFFFFFF),
       sidebarSurface: Color(0xFFF7F7F5),
       elevatedSurface: Color(0xFFFFFFFF),
-      subtleSurface: Color(0xFFF4F6F4),
-      selectedSurface: Color(0xFFE4F2EF),
+      subtleSurface: Color(0xFFF5F5F4),
+      selectedSurface: Color(0xFFE8F1FA),
       textPrimary: Color(0xFF252525),
-      textSecondary: Color(0xFF5D625F),
-      textMuted: Color(0xFF777C78),
-      divider: Color(0xFFE5E8E5),
-      link: Color(0xFF0F766E),
-      focusRing: Color(0xFF0F766E),
-      error: Color(0xFFEB5757),
+      textSecondary: Color(0xFF60605E),
+      textMuted: Color(0xFF70706C),
+      divider: Color(0xFFE7E7E5),
+      link: Color(0xFF236BB3),
+      focusRing: Color(0xFF236BB3),
+      error: Color(0xFFC03434),
       success: Color(0xFF2F7D5B),
       onDestructive: Color(0xFFFFFFFF),
     );
@@ -257,14 +297,14 @@ final class NoteFlowUiTokens extends ThemeExtension<NoteFlowUiTokens> {
       sidebarSurface: Color(0xFF202020),
       elevatedSurface: Color(0xFF2F2F2F),
       subtleSurface: Color(0xFF252525),
-      selectedSurface: Color(0xFF24413D),
+      selectedSurface: Color(0xFF253D56),
       textPrimary: Color(0xFFF4F4F1),
-      textSecondary: Color(0xFFC0C5C1),
-      textMuted: Color(0xFF969C98),
-      divider: Color(0xFF353A37),
-      link: Color(0xFF5EEAD4),
-      focusRing: Color(0xFF5EEAD4),
-      error: Color(0xFFE06A6A),
+      textSecondary: Color(0xFFC4C4C0),
+      textMuted: Color(0xFF999995),
+      divider: Color(0xFF383836),
+      link: Color(0xFF8CC8FF),
+      focusRing: Color(0xFF8CC8FF),
+      error: Color(0xFFEE8888),
       success: Color(0xFF5FA784),
       onDestructive: Color(0xFF191919),
     );

@@ -57,6 +57,10 @@ final class AuthCopy {
   String get registerEmailHint => _isVietnamese
       ? 'Bạn cần truy cập email này để xác nhận tài khoản.'
       : 'You will need access to this email to verify your account.';
+  String get displayNameTooLong => _isVietnamese
+      ? 'Tên hiển thị tối đa 100 ký tự.'
+      : 'Display name must be at most 100 characters.';
+
   String get displayNameHint =>
       _isVietnamese ? 'Nhập tên hiển thị' : 'Enter your name';
   String get passwordHint =>

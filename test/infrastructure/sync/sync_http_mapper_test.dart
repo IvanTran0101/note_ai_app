@@ -20,6 +20,7 @@ const String _noteId = 'note-1';
 const String _content = 'Private note content';
 const String _createdAt = '2026-09-24T10:00:00.000Z';
 const String _serverUpdatedAt = '2026-09-24T11:00:00.000Z';
+const String _pinnedAt = '2026-09-24T12:00:00.000Z';
 
 SyncMutation _mutation({
   SyncMutationOperation operation = SyncMutationOperation.create,
@@ -47,6 +48,7 @@ Map<String, Object?> _noteJson({
     'createdAt': _createdAt,
     'serverUpdatedAt': _serverUpdatedAt,
     'revision': 1,
+    'pinnedAt': null,
     'deletedAt': null,
   }..addAll(overrides);
 }
@@ -116,6 +118,27 @@ void main() {
       });
     });
 
+    test('encodes an explicit pin state for a new client mutation', () {
+      final SyncMutation mutation = SyncMutation(
+        mutationId: _mutationId,
+        noteId: _noteId,
+        operation: SyncMutationOperation.update,
+        baseRevision: 4,
+        payload: SyncNotePayload(
+          title: 'Title',
+          content: _content,
+          pinnedAt: DateTime.utc(2026, 9, 24, 12),
+          includesPinnedAt: true,
+        ),
+      );
+
+      expect(encodeSyncMutation(mutation)['payload'], <String, Object?>{
+        'title': 'Title',
+        'content': _content,
+        'pinnedAt': _pinnedAt,
+      });
+    });
+
     test('omits the payload key for a delete mutation', () {
       final Map<String, Object?> body = encodeSyncMutation(
         _mutation(operation: SyncMutationOperation.delete, baseRevision: 4),
@@ -158,6 +181,7 @@ void main() {
       expect(result.note?.id, _noteId);
       expect(result.note?.title, 'Title');
       expect(result.note?.content, _content);
+      expect(result.note?.pinnedAt, isNull);
       expect(result.note?.revision, 1);
       expect(result.note?.createdAt, DateTime.utc(2026, 9, 24, 10));
       expect(result.note?.serverUpdatedAt, DateTime.utc(2026, 9, 24, 11));
@@ -174,6 +198,21 @@ void main() {
 
       expect(result.isApplied, isTrue);
       expect(result.note?.content, _content);
+    });
+
+    test('decodes pinnedAt and tolerates a legacy response without it', () {
+      final SyncMutationResult pinned = decodeSyncMutationResponse(
+        statusCode: 200,
+        body: _appliedJson(note: _noteJson(overrides: {'pinnedAt': _pinnedAt})),
+      );
+      expect(pinned.note?.pinnedAt, DateTime.utc(2026, 9, 24, 12));
+
+      final Map<String, Object?> oldNote = _noteJson()..remove('pinnedAt');
+      final SyncMutationResult legacy = decodeSyncMutationResponse(
+        statusCode: 200,
+        body: _appliedJson(note: oldNote),
+      );
+      expect(legacy.note?.pinnedAt, isNull);
     });
 
     test('treats any 2xx status as applied', () {
@@ -475,6 +514,28 @@ void main() {
           ),
           _throwsFormatException(),
           reason: 'deletedAt $value must be rejected',
+        );
+      }
+    });
+
+    test('rejects a malformed pinnedAt timestamp', () {
+      for (final Object? value in <Object?>[
+        '',
+        'not-a-date',
+        '2026-09-25T10:30:00+00:00',
+        '2026-02-30T10:30:00Z',
+        42,
+        true,
+      ]) {
+        expect(
+          () => decodeSyncMutationResponse(
+            statusCode: 200,
+            body: _appliedJson(
+              note: _noteJson(overrides: <String, Object?>{'pinnedAt': value}),
+            ),
+          ),
+          _throwsFormatException(),
+          reason: 'pinnedAt $value must be rejected',
         );
       }
     });

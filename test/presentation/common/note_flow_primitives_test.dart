@@ -148,8 +148,12 @@ void main() {
             tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
         expect((decoration.border! as Border).top.color, Colors.transparent);
 
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
+        // Start inside the row: the browser may initially focus its own chrome
+        // or retain a previous route's traversal position.
+        final FocusNode rowFocus = Focus.of(tester.element(find.text('Notes')));
+        rowFocus.requestFocus();
+        await tester.pumpAndSettle();
+        expect(rowFocus.hasPrimaryFocus, isTrue);
 
         decoration =
             tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
@@ -161,10 +165,12 @@ void main() {
         );
 
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
+        await tester.pumpAndSettle();
         decoration =
             tester.widget<DecoratedBox>(focusRing).decoration as BoxDecoration;
         expect((decoration.border! as Border).top.color, Colors.transparent);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
       }
     });
 

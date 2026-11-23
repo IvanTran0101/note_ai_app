@@ -5,11 +5,15 @@ import 'local_note_state.dart';
 import 'pending_mutation.dart';
 import 'sync_conflict.dart';
 import 'sync_cursor.dart';
+import 'sync_mutation.dart';
+import '../../domain/notes/note_role.dart';
+import '../../domain/users/user_preferences.dart';
+import '../labels/local_label_state.dart';
 
 /// Immutable snapshot of everything the local store holds for one account.
 ///
 /// The state is account-scoped and self-consistent: [accountUserId] must not be
-/// blank, every note must belong to that account, and note ids and mutation ids
+/// blank, every projection must authorize that actor, and canonical keys/mutation ids
 /// must each be unique. The three collections are copied and exposed
 /// read-only, so a caller cannot mutate a state that a store already accepted.
 ///
@@ -23,12 +27,36 @@ final class LocalSyncState {
     Iterable<PendingMutation> outbox = const <PendingMutation>[],
     Iterable<SyncConflict> conflicts = const <SyncConflict>[],
     this.cursor,
+    UserPreferences? userPreferences,
+    Iterable<LocalLabelState> labels = const [],
+    this.syncWireVersion = 2,
   }) : accountUserId = _requireNonBlank(accountUserId, 'accountUserId'),
+       _userPreferences =
+           (userPreferences ??
+                   UserPreferences.create(
+                     userId: accountUserId,
+                     theme: AppThemePreference.system,
+                     noteFontSize: NoteFontSizePreference.medium,
+                   ))
+               .copy(),
        notes = List<LocalNoteState>.unmodifiable(notes),
        outbox = List<PendingMutation>.unmodifiable(outbox),
-       conflicts = List<SyncConflict>.unmodifiable(conflicts) {
+       conflicts = List<SyncConflict>.unmodifiable(conflicts),
+       labels = List<LocalLabelState>.unmodifiable(labels) {
+    if (syncWireVersion != 1 && syncWireVersion != 2 && syncWireVersion != 3 ||
+        this.labels.any((l) => l.ownerId != accountUserId)) {
+      throw ArgumentError('Catalog and wire version must belong to the actor.');
+    }
+    _requireUniqueIds(this.labels.map((l) => l.id), 'labels', 'label id');
+    if (_userPreferences.userId != this.accountUserId) {
+      throw ArgumentError.value(
+        _userPreferences.userId,
+        'userPreferences',
+        'must belong to the state account',
+      );
+    }
     _requireUniqueIds(
-      this.notes.map((LocalNoteState note) => note.id),
+      this.notes.map((LocalNoteState note) => note.identity.key),
       'notes',
       'note id',
     );
@@ -38,18 +66,45 @@ final class LocalSyncState {
       'mutationId',
     );
     for (final LocalNoteState note in this.notes) {
-      if (note.ownerId != this.accountUserId) {
-        throw ArgumentError.value(
-          note.ownerId,
-          'notes',
-          'note ${note.id} belongs to another account',
-        );
-      }
+      _requireAccountProjection(note, this.accountUserId);
+    }
+    for (final entry in this.outbox) {
+      _requireActorMutation(entry);
+    }
+    for (final conflict in this.conflicts) {
+      _requireAccountProjection(conflict.local, this.accountUserId);
+    }
+  }
+
+  void _requireActorMutation(PendingMutation entry) {
+    if (entry.isLabel) return;
+    final identity = entry.mutation.identityFor(accountUserId);
+    if (identity.ownerId == accountUserId) return;
+    final note = notes.where((n) => n.identity == identity).firstOrNull;
+    final share = note?.share;
+    if (share == null ||
+        entry.accessRevision == null ||
+        entry.operation != SyncMutationOperation.update ||
+        !entry.blocked &&
+            (!share.isActive ||
+                share.role != NoteRole.editor ||
+                share.accessRevision != entry.accessRevision)) {
+      throw ArgumentError(
+        'Foreign mutation requires its canonical editor epoch.',
+      );
     }
   }
 
   /// The account this state belongs to.
   final String accountUserId;
+  final List<LocalLabelState> labels;
+  final int syncWireVersion;
+
+  final UserPreferences _userPreferences;
+
+  /// Detached account preference values, so callers cannot mutate a stored
+  /// snapshot without going through its transaction.
+  UserPreferences get userPreferences => _userPreferences.copy();
 
   /// Every stored note of the account, including local tombstones.
   final List<LocalNoteState> notes;
@@ -64,12 +119,16 @@ final class LocalSyncState {
   final SyncCursor? cursor;
 
   /// True when the account has no notes, no outbox entries, and no conflicts.
-  bool get isEmpty => notes.isEmpty && outbox.isEmpty && conflicts.isEmpty;
+  bool get isEmpty =>
+      notes.isEmpty && outbox.isEmpty && conflicts.isEmpty && labels.isEmpty;
 
   @override
   bool operator ==(Object other) {
     return other is LocalSyncState &&
         other.accountUserId == accountUserId &&
+        other._userPreferences == _userPreferences &&
+        _listEquals(other.labels, labels) &&
+        other.syncWireVersion == syncWireVersion &&
         _listEquals(other.notes, notes) &&
         _listEquals(other.outbox, outbox) &&
         _listEquals(other.conflicts, conflicts) &&
@@ -79,10 +138,13 @@ final class LocalSyncState {
   @override
   int get hashCode => Object.hash(
     accountUserId,
+    _userPreferences,
     Object.hashAll(notes),
     Object.hashAll(outbox),
     Object.hashAll(conflicts),
     cursor,
+    Object.hashAll(labels),
+    syncWireVersion,
   );
 
   @override
@@ -123,4 +185,27 @@ bool _listEquals<T>(List<T> left, List<T> right) {
     }
   }
   return true;
+}
+
+void _requireAccountProjection(LocalNoteState note, String actorId) {
+  if (note.ownerId == actorId) {
+    if (note.share != null) {
+      throw ArgumentError('Owned projections must not carry recipient access.');
+    }
+    return;
+  }
+  final share = note.share;
+  if (share == null ||
+      share.recipientId != actorId ||
+      share.note != note.identity ||
+      (!share.isActive &&
+          (note.contentAvailable ||
+              note.title.isNotEmpty ||
+              note.content.isNotEmpty))) {
+    throw ArgumentError.value(
+      note.ownerId,
+      'notes',
+      'Foreign projection needs matching actor access.',
+    );
+  }
 }

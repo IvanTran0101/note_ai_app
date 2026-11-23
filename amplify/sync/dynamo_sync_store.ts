@@ -1,556 +1,112 @@
+import { protectionWrite } from './sync_protection_change';
+import { labelSnapshot } from '../labels/label_models';
+import { projectNoteLabels } from '../labels/note_label_projection';
+import { stableDigest } from './cursor';
+import { ActorFeed } from '../sharing/actor_feed';
+import { aclCondition, DynamoNoteAcl } from '../sharing/dynamo_note_acl';
+import { recipientProjection } from '../sharing/feed_projection';
 import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  QueryCommand,
-  TransactWriteCommand,
-  type TransactWriteCommandInput,
-} from '@aws-sdk/lib-dynamodb';
-
-import { decodeChangeCursor, encodeChangeCursor, stableDigest } from './cursor';
-
-/**
- * DynamoDB persistence for the NoteFlow sync routes (M1.2 persistence slice A).
- *
- * Storage layout (the table and its index are `amplify/sync/notes_table.ts`):
- *
- * ```text
- * OWNER#<sub> | META#SYNC          { lastSequence }        one per account
- * OWNER#<sub> | NOTE#<noteId>      current snapshot, or its tombstone
- * OWNER#<sub> | MUTATION#<id>      idempotency record of one applied mutation
- * OWNER#<sub> | CHANGE#<sequence>  feed row, snapshot/tombstone + index keys
- * ```
- *
- * `applyMutation` is one `TransactWriteItems` that advances the sequence (under
- * a condition on the value it read, which is what makes a sequence number
- * exclusive), writes the note, writes the feed row, and records the
- * `mutationId` - all or nothing. When a condition fails, nothing is applied and
- * the store re-reads and tries again, at most `MAX_ATTEMPTS` times, because the
- * usual cause is a concurrent writer rather than a bad request. A
- * `baseRevision` that does not match the stored revision is reported as a
- * `conflict` result carrying the remote snapshot, never as an exception: that
- * is a normal sync outcome, not a fault.
- *
- * Rules this slice settles (the HTTP contract leaves them open):
- *
- * - `create` needs `baseRevision` 0 and no stored note. A tombstone counts as
- *   stored: resurrection is not supported here.
- * - `update` and `delete` need a live stored note whose `revision` equals
- *   `baseRevision`. A tombstone, or a note the account never stored, is a
- *   conflict whose `remoteNote` is that snapshot (`null` when there is none).
- * - `delete` writes a payload-free tombstone into both the note item and the
- *   feed row: identity, revision, and timestamps survive, deleted content does
- *   not.
- * - Repeating a `mutationId` with the same request returns the stored original
- *   result; repeating it with a different request throws
- *   `SyncInvalidMutationError` with reason `MUTATION_ID_REUSED`.
- * - Only applied mutations are recorded, so a conflicted `mutationId` can be
- *   retried - with a new `mutationId` as soon as any field changes.
- *
- * `listChanges` reads the `ChangesByOwnerSequence` index for the account in
- * ascending sequence order, above the sequence the caller's cursor covers. A
- * GSI is eventually consistent, so a later sequence can become visible before
- * an earlier one. The feed therefore returns and advances only across a
- * contiguous sequence prefix; it stops at a gap and a later poll retries from
- * that cursor. `CHANGE#` retention and TTLs remain a later concern.
- */
-
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { decodeChangeCursor, encodeChangeCursor } from './cursor';
+import {boundedChangeRows} from './bounded_change_rows';
+import { SyncInvalidMutationError, SyncStorageError } from './sync_store_models';
+import type { SyncStore, DynamoSyncStoreOptions, NoteSnapshot, ApplyMutationResult, ChangesPage,
+  NormalizedMutation, CommitOutcome, StoredMutation, SyncMutation } from './sync_store_models';
+import { MAX_ATTEMPTS, META_SORT_KEY, NOTE_SORT_KEY_PREFIX, MUTATION_SORT_KEY_PREFIX, CHANGES_INDEX_NAME,
+  ownerKeyOf, itemKey, normalizeMutation, checkConflict, nextSnapshot, transactItemsFor,
+  isRetryableCancellation, toStorageError, toNoteSnapshot, sequenceOf, pageSizeOf, corruptData, isRecord } from './sync_store_codec';
+export * from './sync_store_models';
 export { SyncInvalidCursorError } from './cursor';
-
-/** Sort-key prefixes; `notes_table.ts` documents the item roles they select. */
-const OWNER_KEY_PREFIX = 'OWNER#';
-const META_SORT_KEY = 'META#SYNC';
-const NOTE_SORT_KEY_PREFIX = 'NOTE#';
-const MUTATION_SORT_KEY_PREFIX = 'MUTATION#';
-const CHANGE_SORT_KEY_PREFIX = 'CHANGE#';
-
-/**
- * The change-feed index name. Repeated as a runtime literal because the Lambda
- * bundle cannot import CDK code; keep it in step with `notes_table.ts`.
- */
-const CHANGES_INDEX_NAME = 'ChangesByOwnerSequence';
-
-/** Contract default for `GET /sync/changes` and the page cap the contract fixes. */
-const DEFAULT_CHANGE_LIMIT = 50;
-const MAX_CHANGE_LIMIT = 100;
-
-/** One initial attempt plus at most three retries: contention, not throughput, is the cause. */
-const MAX_ATTEMPTS = 4;
-
-/** One copy of a snapshot must stay well inside DynamoDB's 400 KB item limit. */
-const MAX_PAYLOAD_BYTES = 300_000;
-const MAX_IDENTIFIER_LENGTH = 128;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
-const UTF8 = new TextEncoder();
-
-/** Provider-neutral note state; `deletedAt` set means a tombstone. */
-export type NoteSnapshot = Readonly<{
-  id: string;
-  title: string;
-  content: string;
-  revision: number;
-  createdAt: string;
-  serverUpdatedAt: string;
-  deletedAt: string | null;
-}>;
-
-export type SyncOperation = 'create' | 'update' | 'delete';
-
-/** `create` and `update` require this; `delete` ignores it. */
-export type MutationPayload = Readonly<{ title: string; content: string }>;
-
-/** One client mutation, already stripped of transport concerns. */
-export type SyncMutation = Readonly<{
-  mutationId: string;
-  noteId: string;
-  operation: SyncOperation;
-  baseRevision: number;
-  payload?: MutationPayload;
-}>;
-
-export type AppliedMutation = Readonly<{
-  status: 'applied';
-  mutationId: string;
-  note: NoteSnapshot;
-  /** True when the stored result of an earlier identical mutation was replayed. */
-  replayed: boolean;
-}>;
-
-export type ConflictedMutation = Readonly<{
-  status: 'conflict';
-  mutationId: string;
-  /** The stored note at decision time, or `null` when the account has none. */
-  remoteNote: NoteSnapshot | null;
-}>;
-
-export type ApplyMutationResult = AppliedMutation | ConflictedMutation;
-
-export type ChangesPage = Readonly<{
-  items: readonly NoteSnapshot[];
-  /** Always minted: the caller stores it and sends it back on the next poll. */
-  nextCursor: string;
-  hasMore: boolean;
-}>;
-
-/** The port `handler.ts` codes against; nothing here knows about HTTP. */
-export interface SyncStore {
-  /**
-   * Applies one mutation for `ownerId` (the verified JWT `sub`).
-   *
-   * @throws SyncInvalidMutationError when the request cannot be applied as sent.
-   * @throws SyncStorageError when storage failed; `retryable` says whether the
-   *         same request may be sent again.
-   */
-  applyMutation(ownerId: string, mutation: SyncMutation): Promise<ApplyMutationResult>;
-
-  /**
-   * Lists changes above `cursor` in ascending sequence order. A missing cursor
-   * starts from the beginning; `limit` is clamped to 1..100 (default 50). The
-   * cursor advances only across contiguous sequence numbers, so an eventually
-   * consistent GSI gap is retried on a later poll instead of being skipped.
-   *
-   * @throws SyncInvalidCursorError when the cursor is not this account's.
-   * @throws SyncStorageError when storage failed.
-   */
-  listChanges(ownerId: string, cursor?: string | null, limit?: number): Promise<ChangesPage>;
-}
-
-export type InvalidMutationReason =
-  | 'MUTATION_ID_INVALID'
-  | 'MUTATION_ID_REUSED'
-  | 'NOTE_ID_INVALID'
-  | 'OPERATION_UNSUPPORTED'
-  | 'BASE_REVISION_INVALID'
-  | 'PAYLOAD_REQUIRED'
-  | 'PAYLOAD_INVALID'
-  | 'PAYLOAD_TOO_LARGE';
-
-/** The request is not applicable as sent; the handler maps this to a client error. */
-export class SyncInvalidMutationError extends Error {
-  readonly code = 'INVALID_MUTATION';
-  readonly reason: InvalidMutationReason;
-
-  constructor(reason: InvalidMutationReason, message: string) {
-    super(message);
-    this.name = 'SyncInvalidMutationError';
-    this.reason = reason;
-  }
-}
-
-/** Storage failed. `retryable` distinguishes "send it again" from "do not". */
-export class SyncStorageError extends Error {
-  readonly code = 'STORAGE_FAILURE';
-  readonly retryable: boolean;
-
-  /** `cause` carries the provider error for server-side logs only; never serialize it. */
-  constructor(message: string, options?: Readonly<{ retryable?: boolean; cause?: unknown }>) {
-    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
-    this.name = 'SyncStorageError';
-    this.retryable = options?.retryable !== false;
-  }
-}
-
-export type DynamoSyncStoreOptions = Readonly<{
-  tableName: string;
-  /** Defaults to the client's own chain, which resolves `AWS_REGION` in Lambda. */
-  region?: string;
-  /** Injection seam: a warmer path or a test can supply its own document client. */
-  documentClient?: DynamoDBDocumentClient;
-}>;
-
-type NormalizedMutation = Readonly<{
-  mutationId: string;
-  noteId: string;
-  operation: SyncOperation;
-  baseRevision: number;
-  payload: MutationPayload | null;
-  fingerprint: string;
-}>;
-
-type StoredMutation = Readonly<{ fingerprint: string; note: NoteSnapshot }>;
-
-type ConflictCheck =
-  | Readonly<{ kind: 'apply' }>
-  | Readonly<{ kind: 'conflict'; remoteNote: NoteSnapshot | null }>;
-
-type CommitOutcome = Readonly<{ kind: 'committed'; note: NoteSnapshot }> | Readonly<{ kind: 'retry' }>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const errorNameOf = (error: unknown): string =>
-  isRecord(error) && typeof error.name === 'string' ? error.name : 'UnknownError';
-
-/**
- * An SDK error the retry loop cannot fix: a bad request, a missing table, or a
- * denied call would fail identically on a second attempt, and reporting it as
- * retryable would only multiply the load.
- */
-const NON_RETRYABLE_ERRORS = new Set([
-  'AccessDeniedException',
-  'ConditionalCheckFailedException',
-  'ItemCollectionSizeLimitExceededException',
-  'ResourceNotFoundException',
-  'TransactionCanceledException',
-  'ValidationException',
-]);
-
-const toStorageError = (error: unknown): SyncStorageError =>
-  new SyncStorageError(`DynamoDB ${errorNameOf(error)} while serving the sync request.`, {
-    retryable: !NON_RETRYABLE_ERRORS.has(errorNameOf(error)),
-    cause: error,
-  });
-
-/** Stored data that this slice cannot read: retrying would fail the same way. */
-const corruptData = (): SyncStorageError =>
-  new SyncStorageError('Stored sync data is not readable.', { retryable: false });
-
-const ownerKeyOf = (ownerId: string): string => {
-  if (typeof ownerId !== 'string' || ownerId.trim().length === 0) {
-    // Unreachable through the handler, which derives the owner from the JWT.
-    throw new SyncStorageError('The sync request has no account owner.', { retryable: false });
-  }
-  return `${OWNER_KEY_PREFIX}${ownerId}`;
-};
-
-const itemKey = (ownerKey: string, sortKey: string): Record<string, string> => ({
-  ownerId: ownerKey,
-  noteId: sortKey,
-});
-
-const cleanIdentifier = (
-  value: unknown,
-  reason: InvalidMutationReason,
-  message: string,
-): string => {
-  if (
-    typeof value !== 'string' ||
-    value.trim().length === 0 ||
-    value.length > MAX_IDENTIFIER_LENGTH ||
-    CONTROL_CHARACTERS.test(value)
-  ) {
-    throw new SyncInvalidMutationError(reason, message);
-  }
-  return value;
-};
-
-const normalizePayload = (operation: SyncOperation, payload: unknown): MutationPayload | null => {
-  if (operation === 'delete') {
-    return null;
-  }
-  if (!isRecord(payload)) {
-    throw new SyncInvalidMutationError('PAYLOAD_REQUIRED', 'create and update need a title and content payload.');
-  }
-  const { title, content } = payload;
-  if (typeof title !== 'string' || typeof content !== 'string') {
-    throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'A payload needs a string title and content.');
-  }
-  if (UTF8.encode(title).length + UTF8.encode(content).length > MAX_PAYLOAD_BYTES) {
-    throw new SyncInvalidMutationError('PAYLOAD_TOO_LARGE', 'The note payload is too large to store.');
-  }
-  return { title, content };
-};
-
-/**
- * Normalizes and validates one mutation. Every field of the request takes part
- * except the `mutationId` itself, so the fingerprint changes the moment the
- * request does - which is how a reused id is caught.
- */
-const normalizeMutation = (mutation: SyncMutation): NormalizedMutation => {
-  const mutationId = cleanIdentifier(
-    mutation?.mutationId,
-    'MUTATION_ID_INVALID',
-    'A mutation needs a non-empty mutationId of at most 128 characters.',
-  );
-  const noteId = cleanIdentifier(
-    mutation?.noteId,
-    'NOTE_ID_INVALID',
-    'A mutation needs a non-empty noteId of at most 128 characters.',
-  );
-  const operation = mutation?.operation;
-  if (operation !== 'create' && operation !== 'update' && operation !== 'delete') {
-    throw new SyncInvalidMutationError('OPERATION_UNSUPPORTED', 'The mutation operation is not supported.');
-  }
-  const baseRevision = mutation?.baseRevision;
-  if (typeof baseRevision !== 'number' || !Number.isSafeInteger(baseRevision) || baseRevision < 0) {
-    throw new SyncInvalidMutationError('BASE_REVISION_INVALID', 'baseRevision must be a non-negative whole number.');
-  }
-  const payload = normalizePayload(operation, mutation?.payload);
-
-  return {
-    mutationId,
-    noteId,
-    operation,
-    baseRevision,
-    payload,
-    fingerprint: stableDigest(
-      `mutation:${JSON.stringify([
-        operation,
-        noteId,
-        baseRevision,
-        payload?.title ?? null,
-        payload?.content ?? null,
-      ])}`,
-    ),
-  };
-};
-
-/** The shared body of a note item and of the feed row written with it. */
-const snapshotAttributes = (snapshot: NoteSnapshot): Record<string, unknown> => ({
-  id: snapshot.id,
-  title: snapshot.title,
-  content: snapshot.content,
-  revision: snapshot.revision,
-  createdAt: snapshot.createdAt,
-  serverUpdatedAt: snapshot.serverUpdatedAt,
-  deletedAt: snapshot.deletedAt,
-});
-
-const stringFieldOf = (item: Record<string, unknown>, name: string): string => {
-  const value = item[name];
-  if (typeof value !== 'string') {
-    throw corruptData();
-  }
-  return value;
-};
-
-const toNoteSnapshot = (item: Record<string, unknown>): NoteSnapshot => {
-  const revision = item.revision;
-  const deletedAt = item.deletedAt;
-  if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1) {
-    throw corruptData();
-  }
-  if (deletedAt !== undefined && deletedAt !== null && typeof deletedAt !== 'string') {
-    throw corruptData();
-  }
-  return {
-    id: stringFieldOf(item, 'id'),
-    title: stringFieldOf(item, 'title'),
-    content: stringFieldOf(item, 'content'),
-    revision,
-    createdAt: stringFieldOf(item, 'createdAt'),
-    serverUpdatedAt: stringFieldOf(item, 'serverUpdatedAt'),
-    deletedAt: deletedAt === undefined ? null : deletedAt,
-  };
-};
-
-const sequenceOf = (item: Record<string, unknown>): number => {
-  const sequence = item.changeSequence;
-  if (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 1) {
-    throw corruptData();
-  }
-  return sequence;
-};
-
-const pageSizeOf = (limit: number | undefined): number => {
-  if (typeof limit !== 'number' || !Number.isFinite(limit)) {
-    return DEFAULT_CHANGE_LIMIT;
-  }
-  return Math.min(Math.max(Math.trunc(limit), 1), MAX_CHANGE_LIMIT);
-};
-
-/**
- * Whether the request may be applied at all, and if so against which stored
- * note. Shape and state are separate questions on purpose: a client that is
- * merely out of date gets a conflict with the remote snapshot, not an error.
- */
-const checkConflict = (request: NormalizedMutation, remote: NoteSnapshot | null): ConflictCheck => {
-  const remoteRevision = remote?.revision ?? 0;
-  if (request.baseRevision !== remoteRevision) {
-    return { kind: 'conflict', remoteNote: remote };
-  }
-  if (request.operation === 'create') {
-    // A stored note at revision 0 cannot exist, so this is only reachable when
-    // the account already has the note - live or as a tombstone.
-    return remote === null ? { kind: 'apply' } : { kind: 'conflict', remoteNote: remote };
-  }
-  if (remote === null || remote.deletedAt !== null) {
-    return { kind: 'conflict', remoteNote: remote };
-  }
-  return { kind: 'apply' };
-};
-
-/**
- * A cancelled transaction tells us which item refused. Conditional failures and
- * transaction conflicts mean "the world moved"; throttling means "try again
- * shortly". Everything else - a validation error, a size limit - is permanent.
- */
-const isRetryableCancellation = (error: TransactionCanceledException): boolean => {
-  const codes = (error.CancellationReasons ?? [])
-    .map((reason) => reason.Code)
-    .filter((code): code is string => typeof code === 'string' && code !== 'None');
-  if (codes.length === 0) {
-    return true;
-  }
-  return codes.every(
-    (code) =>
-      code === 'ConditionalCheckFailed' ||
-      code === 'TransactionConflict' ||
-      code === 'ThrottlingError' ||
-      code === 'ProvisionedThroughputExceeded',
-  );
-};
-
-/** The state transition one applied mutation performs, in one place. */
-const nextSnapshot = (
-  request: NormalizedMutation,
-  remote: NoteSnapshot | null,
-  now: string,
-): NoteSnapshot => ({
-  id: request.noteId,
-  title: request.payload?.title ?? '',
-  content: request.payload?.content ?? '',
-  revision: request.baseRevision + 1,
-  createdAt: remote?.createdAt ?? now,
-  serverUpdatedAt: now,
-  deletedAt: request.operation === 'delete' ? now : null,
-});
-
-/**
- * The four writes of one applied mutation. Every guard lives here, so this is
- * the only place that decides whether a mutation may land.
- */
-const transactItemsFor = (
-  tableName: string,
-  ownerKey: string,
-  request: NormalizedMutation,
-  remote: NoteSnapshot | null,
-  note: NoteSnapshot,
-  lastSequence: number,
-  now: string,
-): TransactWriteCommandInput['TransactItems'] => {
-  const sequence = lastSequence + 1;
-  const attributes = snapshotAttributes(note);
-  // Unused expression attribute values are a DynamoDB validation error, so the
-  // revision guard only appears when a stored note has a revision to match.
-  const noteGuard =
-    remote === null
-      ? { ConditionExpression: 'attribute_not_exists(noteId)' }
-      : {
-          ConditionExpression: 'attribute_exists(noteId) AND revision = :revision',
-          ExpressionAttributeValues: { ':revision': remote.revision },
-        };
-
-  return [
-    {
-      Update: {
-        TableName: tableName,
-        Key: itemKey(ownerKey, META_SORT_KEY),
-        UpdateExpression: 'SET lastSequence = :nextSequence',
-        ConditionExpression: 'attribute_not_exists(lastSequence) OR lastSequence = :sequence',
-        ExpressionAttributeValues: { ':nextSequence': sequence, ':sequence': lastSequence },
-      },
-    },
-    {
-      Put: {
-        TableName: tableName,
-        Item: { ownerId: ownerKey, noteId: `${NOTE_SORT_KEY_PREFIX}${note.id}`, ...attributes },
-        ...noteGuard,
-      },
-    },
-    {
-      Put: {
-        TableName: tableName,
-        // No condition: the meta guard above already made this sequence
-        // exclusive, and only `CHANGE#` rows carry the index keys.
-        Item: {
-          ownerId: ownerKey,
-          noteId: `${CHANGE_SORT_KEY_PREFIX}${sequence}`,
-          ...attributes,
-          changeOwnerId: ownerKey,
-          changeSequence: sequence,
-        },
-      },
-    },
-    {
-      Put: {
-        TableName: tableName,
-        Item: {
-          ownerId: ownerKey,
-          noteId: `${MUTATION_SORT_KEY_PREFIX}${request.mutationId}`,
-          mutationId: request.mutationId,
-          targetNoteId: request.noteId,
-          operation: request.operation,
-          fingerprint: request.fingerprint,
-          sequence,
-          resultNote: attributes,
-          serverUpdatedAt: now,
-        },
-        // A concurrent duplicate of the same mutationId must not overwrite the
-        // recorded result; it loses here and replays on the next attempt.
-        ConditionExpression: 'attribute_not_exists(noteId)',
-      },
-    },
-  ];
-};
+import { NoteSecurityError } from '../protection/protection_store';
+import { AttachmentError } from '../attachments/models';
+import type { AttachmentAttemptStore } from '../attachments/attempt_store';
+import type { NoteSecurityAuthority, ProtectionMetadata, SecurityAuthorization } from '../protection/protection_store';
 
 export class DynamoSyncStore implements SyncStore {
   private readonly tableName: string;
   private readonly documentClient: DynamoDBDocumentClient;
+  private readonly security?: NoteSecurityAuthority;
+  private readonly feed?: ActorFeed;
+  private readonly acl?: DynamoNoteAcl;
+  private readonly attachments?: AttachmentAttemptStore;
 
   constructor(options: DynamoSyncStoreOptions) {
     if (typeof options?.tableName !== 'string' || options.tableName.length === 0) {
       throw new SyncStorageError('The sync store was created without a table name.', { retryable: false });
     }
     this.tableName = options.tableName;
+    this.security = options.security;
+    this.attachments = options.attachments;
     this.documentClient =
       options.documentClient ??
       DynamoDBDocumentClient.from(
         new DynamoDBClient(options.region === undefined ? {} : { region: options.region }),
         { marshallOptions: { removeUndefinedValues: true } },
       );
+    if (options.sharing) {
+      this.feed = new ActorFeed(this.tableName, this.documentClient);
+      this.acl = new DynamoNoteAcl(this.tableName, this.documentClient);
+    }
   }
 
-  async applyMutation(ownerId: string, mutation: SyncMutation): Promise<ApplyMutationResult> {
+  async applyMutation(ownerId: string, mutation: SyncMutation,
+    authorization?: Readonly<{ actorId: string; grant?: string; inspectOnly?: boolean }>): Promise<ApplyMutationResult> {
     const request = normalizeMutation(mutation);
+    if (request.payload?.attachments !== undefined && (!this.attachments || !this.security)) {
+      throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified-object backend required.');
+    }
     const ownerKey = ownerKeyOf(ownerId);
+    const actor = authorization?.actorId ?? ownerId;
+    if (actor !== ownerId && (!this.security || !this.feed || request.ownerId !== ownerId ||
+        !request.accessRevision || request.operation !== 'update')) throw new NoteSecurityError('denied');
+    if (actor === ownerId && request.ownerId) throw new NoteSecurityError('denied');
+    const receiptKey = ownerKeyOf(actor);
+    const receiptId = actor === ownerId ? request.mutationId : stableDigest(JSON.stringify([ownerId, request.noteId, request.mutationId]));
+    if (authorization?.inspectOnly) return this.inspectPredecessor(ownerId, ownerKey, request, authorization.actorId);
+    const authorize = async () => {
+      const a = await this.security?.authorize(actor, ownerId, request.noteId,
+        request.protectionChange || request.payload && 'pinnedAt' in request.payload
+          ? 'manage' : request.operation === 'delete' ? 'delete' : 'edit', authorization?.grant);
+      if (request.payload?.attachments !== undefined) {
+        await this.security?.authorize(actor, ownerId, request.noteId, 'attachmentWrite', authorization?.grant);
+      }
+      if (actor !== ownerId && a?.access?.accessRevision !== request.accessRevision) throw new NoteSecurityError('denied');
+      return a;
+    };
+    const project = async (n: NoteSnapshot, a?: ProtectionMetadata) => {
+      const projected = actor !== ownerId
+        ? await recipientProjection(actor, ownerId, n, this.acl!, this.security!) : this.metadataProjection(n, a);
+      if (request.wireVersion !== 2 && request.wireVersion !== 3) return projected;
+      const labeled = await projectNoteLabels(this.documentClient, this.tableName, ownerId, projected, actor !== ownerId);
+      if (actor !== ownerId) return recipientProjection(actor, ownerId, labeled, this.acl!, this.security!);
+      const live = await authorize();
+      return this.metadataProjection(labeled, live);
+    };
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      // A compound replay acknowledges a prior owner write with metadata only.
+      // The old grant was invalidated by that very commit; fresh ACL still applies.
+      if (request.protectionChange) {
+        if (!this.security || (authorization?.actorId ?? ownerId) !== ownerId) throw new NoteSecurityError('denied');
+        const recorded = await this.readMutationRecord(ownerKey, request.mutationId);
+        if (recorded) {
+          const live = await this.security.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
+          if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
+          return { status: 'applied', mutationId: request.mutationId,
+            note: { ...this.metadataProjection(recorded.note, live), title: '', content: '', ...(recorded.note.document !== undefined ? {document: null} : {}), contentAvailable: false }, replayed: true };
+        }
+      }
+      let authority = await authorize();
+      if (request.protectionChange && (!authority || authority.enabled !== request.protectionChange.before.enabled ||
+          authority.revision !== request.protectionChange.before.revision)) throw new NoteSecurityError('staleRevision');
       const [meta, remote, recorded] = await Promise.all([
         this.readMeta(ownerKey),
         this.readNote(ownerKey, request.noteId),
-        this.readMutationRecord(ownerKey, request.mutationId),
+        this.readMutationRecord(receiptKey, receiptId),
       ]);
+      if (remote?.protected && !this.security) throw new NoteSecurityError('locked');
+      if (remote?.protected && authority && (!authority.enabled ||
+          authority.revision < (remote.protectionRevision ?? 0))) throw new NoteSecurityError('unavailable');
 
       if (recorded !== null) {
         if (recorded.fingerprint !== request.fingerprint) {
@@ -559,17 +115,29 @@ export class DynamoSyncStore implements SyncStore {
             `${request.mutationId} was already applied with a different request.`,
           );
         }
-        return { status: 'applied', mutationId: request.mutationId, note: recorded.note, replayed: true };
+        authority = await authorize();
+        return { status: 'applied', mutationId: request.mutationId,
+          note: await project(recorded.note, authority), replayed: true };
       }
 
       const check = checkConflict(request, remote);
       if (check.kind === 'conflict') {
-        return { status: 'conflict', mutationId: request.mutationId, remoteNote: check.remoteNote };
+        authority = await authorize();
+        return { status: 'conflict', mutationId: request.mutationId,
+          remoteNote: check.remoteNote ? await project(check.remoteNote, authority) : null };
       }
 
-      const outcome = await this.commit(ownerKey, request, remote, meta.lastSequence);
+      authority = await authorize();
+      const outcome = await this.commit(ownerKey, request, remote, meta.lastSequence, authority, receiptKey, receiptId);
       if (outcome.kind === 'committed') {
-        return { status: 'applied', mutationId: request.mutationId, note: outcome.note, replayed: false };
+        if (request.protectionChange) {
+          const live = await this.security!.metadata(authorization?.actorId ?? ownerId, ownerId, request.noteId);
+          return { status: 'applied', mutationId: request.mutationId,
+            note: { ...this.metadataProjection(outcome.note, live), title: '', content: '', ...(outcome.note.document !== undefined ? {document: null} : {}), contentAvailable: false }, replayed: false };
+        }
+        authority = await authorize();
+        return { status: 'applied', mutationId: request.mutationId,
+          note: await project(outcome.note, authority), replayed: false };
       }
     }
 
@@ -578,7 +146,24 @@ export class DynamoSyncStore implements SyncStore {
     });
   }
 
-  async listChanges(ownerId: string, cursor?: string | null, limit?: number): Promise<ChangesPage> {
+  /** Resolve unknown delivery without replaying an unprotected write. No writes. */
+  private async inspectPredecessor(ownerId: string, ownerKey: string,
+      request: NormalizedMutation, actor: string): Promise<ApplyMutationResult> {
+    if (!this.security || actor !== ownerId || request.protectionChange) throw new NoteSecurityError('denied');
+    await this.security.metadata(actor, ownerId, request.noteId, true);
+    const recorded = await this.readMutationRecord(ownerKey, request.mutationId);
+    const remote = recorded ? recorded.note : await this.readNote(ownerKey, request.noteId);
+    const live = await this.security.metadata(actor, ownerId, request.noteId, true);
+    const projection = remote ? { ...this.metadataProjection(remote, live),
+      title: '', content: '', ...(remote.document !== undefined ? {document: null} : {}), contentAvailable: false } : null;
+    if (recorded) {
+      if (recorded.fingerprint !== request.fingerprint) throw new SyncInvalidMutationError('MUTATION_ID_REUSED', 'Mutation identity reused.');
+      return { status: 'applied', mutationId: request.mutationId, note: projection!, replayed: true };
+    }
+    return { status: 'conflict', mutationId: request.mutationId, remoteNote: projection };
+  }
+
+  async listChanges(ownerId: string, cursor?: string | null, limit?: number, wireVersion: 1 | 2 | 3 = 1): Promise<ChangesPage> {
     const after = decodeChangeCursor(cursor, ownerId);
     const pageSize = pageSizeOf(limit);
     const ownerKey = ownerKeyOf(ownerId);
@@ -602,13 +187,32 @@ export class DynamoSyncStore implements SyncStore {
       contiguousRows.push(row);
       expectedSequence++;
     }
-    const hasMore = !foundGap && contiguousRows.length > pageSize;
-    const page = contiguousRows.slice(0, pageSize);
+    const page = wireVersion === 3 ? boundedChangeRows(contiguousRows, pageSize)
+      : contiguousRows.slice(0, pageSize);
+    const hasMore = page.length < Math.min(contiguousRows.length, pageSize) ||
+      !foundGap && contiguousRows.length > pageSize;
+    const lastVisible = page.length === 0 ? after : sequenceOf(page[page.length - 1]);
+    const committed = this.feed && !hasMore ? await this.feed.item(ownerId, META_SORT_KEY) : null;
+    if (committed && (!Number.isSafeInteger(committed.lastSequence) || committed.lastSequence < 0)) throw corruptData();
+    const catchUpPending = foundGap || Boolean(committed && committed.lastSequence > lastVisible);
 
     return {
-      items: page.map((row) => toNoteSnapshot(row)),
+      items: await Promise.all(page.filter(row => row.entityType !== 'label').map(async (row) => {
+        const snapshot = toNoteSnapshot(row);
+        if (snapshot.ownerId && snapshot.ownerId !== ownerId) {
+          if (!this.acl || !this.security) throw new NoteSecurityError('denied');
+          const projected = await recipientProjection(ownerId, snapshot.ownerId, snapshot, this.acl, this.security);
+          const labeled = wireVersion >= 2 ? await projectNoteLabels(this.documentClient, this.tableName, snapshot.ownerId, projected, true) : projected;
+          return recipientProjection(ownerId, snapshot.ownerId, labeled, this.acl, this.security);
+        }
+        const protection = await this.security?.metadata(ownerId, ownerId, snapshot.id);
+        const projected = this.metadataProjection(snapshot, protection);
+        return wireVersion >= 2 ? projectNoteLabels(this.documentClient, this.tableName, ownerId, projected) : projected;
+      })),
       nextCursor: encodeChangeCursor(ownerId, page.length === 0 ? after : sequenceOf(page[page.length - 1])),
       hasMore,
+      ...(catchUpPending ? { catchUpPending: true } : {}),
+      ...(wireVersion >= 2 ? {wireVersion: wireVersion as 2 | 3, labels: page.filter(row => row.entityType === 'label').map(row => labelSnapshot(row, ownerId))} : {}),
     };
   }
 
@@ -617,10 +221,56 @@ export class DynamoSyncStore implements SyncStore {
     request: NormalizedMutation,
     remote: NoteSnapshot | null,
     lastSequence: number,
+    authority?: SecurityAuthorization,
+    receiptKey = ownerKey,
+    receiptId = request.mutationId,
   ): Promise<CommitOutcome> {
     const now = new Date().toISOString();
-    const note = nextSnapshot(request, remote, now);
+    const next = nextSnapshot(request, remote, now);
+    const projection = request.protectionChange?.after ?? authority;
+    const note = projection ? { ...next, protected: projection.enabled,
+      protectionRevision: projection.revision } : next;
     const transactItems = transactItemsFor(this.tableName, ownerKey, request, remote, note, lastSequence, now);
+    if (remote?.attachments?.length || request.payload?.attachments?.length) {
+      if (!this.attachments || !authority) throw new SyncInvalidMutationError('ATTACHMENTS_UNSUPPORTED', 'Verified-object backend required.');
+      try {
+        transactItems?.push(...await this.attachments.associationWrites(ownerKey.slice('OWNER#'.length),
+          request.noteId, remote?.attachments ?? [], note.attachments ?? [], authority.revision));
+      } catch (e) {
+        if (e instanceof AttachmentError) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Attachment association refused.');
+        throw e;
+      }
+    }
+    const addedLabels = (request.payload?.labelIds ?? []).filter(id => !(remote?.labelIds ?? []).includes(id));
+    for (const id of addedLabels) {
+      const row = await this.readItem(ownerKey, `LABEL#${id}`);
+      if (!row || row.deletedAt !== null) throw new SyncInvalidMutationError('PAYLOAD_INVALID', 'Label is not active.');
+      const label = labelSnapshot(row, ownerKey.slice('OWNER#'.length));
+      transactItems?.push({ConditionCheck: {TableName: this.tableName,
+        Key: itemKey(ownerKey, `LABEL#${id}`),
+        ConditionExpression: 'revision = :revision AND deletedAt = :active',
+        ExpressionAttributeValues: {':revision': label.revision, ':active': null}}});
+    }
+    if (receiptKey !== ownerKey && transactItems?.[3]?.Put) {
+      transactItems[3].Put.Item = { ...transactItems[3].Put.Item, ...itemKey(receiptKey, `MUTATION#${receiptId}`) };
+    }
+    if (authority) transactItems?.push(...aclCondition(this.tableName, authority));
+    if (this.feed) transactItems?.push(...await this.feed.fanout(ownerKey.slice('OWNER#'.length), note));
+    if (authority) {
+      if (request.protectionChange) transactItems?.push(protectionWrite(this.tableName, ownerKey, request.noteId, request.protectionChange, authority));
+      else transactItems?.push({ ConditionCheck: { TableName: this.tableName,
+        Key: itemKey(ownerKey, `PROTECTION#${request.noteId}`),
+        ConditionExpression: authority.revision === 0 ? 'attribute_not_exists(noteId)' : 'revision = :epoch AND enabled = :enabled',
+        ...(authority.revision === 0 ? {} : { ExpressionAttributeValues: {
+          ':epoch': authority.revision, ':enabled': authority.enabled } }) } });
+      if (authority.enabled) transactItems?.push({ ConditionCheck: {
+        TableName: this.tableName, Key: itemKey(ownerKey, `GRANT#${authority.grantHash}`),
+        ConditionExpression: 'expiresAt > :now AND revision = :epoch AND actorId = :actor AND targetNoteId = :note AND contains(operations, :operation)' +
+          (request.payload?.attachments !== undefined ? ' AND contains(operations, :attachmentOperation)' : ''),
+        ExpressionAttributeValues: { ':now': Date.now(), ':epoch': authority.revision,
+          ':actor': authority.actorId, ':note': request.noteId, ':operation': authority.operation,
+          ...(request.payload?.attachments !== undefined ? {':attachmentOperation': 'attachmentWrite'} : {}) } } });
+    }
 
     try {
       await this.documentClient.send(new TransactWriteCommand({ TransactItems: transactItems }));
@@ -634,6 +284,13 @@ export class DynamoSyncStore implements SyncStore {
       }
       throw toStorageError(error);
     }
+  }
+
+  private metadataProjection(note: NoteSnapshot, authority?: ProtectionMetadata): NoteSnapshot {
+    const enabled = authority?.enabled ?? note.protected ?? false;
+    return { ...note, protected: enabled,
+      protectionRevision: authority?.revision ?? note.protectionRevision ?? 0,
+      ...(enabled ? { title: '', content: '', ...(note.document !== undefined ? {document: null} : {}), ...(note.attachments !== undefined ? {attachments: []} : {}), labelIds: [], labelProjections: [], contentAvailable: false } : { contentAvailable: true }) };
   }
 
   private async readItem(ownerKey: string, sortKey: string): Promise<Record<string, unknown> | null> {

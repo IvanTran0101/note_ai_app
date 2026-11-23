@@ -4,6 +4,7 @@ library;
 import 'local_note_state.dart';
 import 'pending_mutation.dart';
 import 'sync_snapshot.dart';
+import '../../domain/notes/note_identity.dart';
 
 /// Immutable record of one mutation the server rejected with a conflict.
 ///
@@ -30,7 +31,8 @@ final class SyncConflict {
         'must describe note ${this.noteId}',
       );
     }
-    if (pending.noteId != this.noteId) {
+    if (pending.noteId != this.noteId ||
+        (pending.ownerId != null && pending.ownerId != local.ownerId)) {
       throw ArgumentError.value(
         pending.noteId,
         'pending',
@@ -38,7 +40,10 @@ final class SyncConflict {
       );
     }
     final SyncNoteSnapshot? remoteNote = remote;
-    if (remoteNote != null && remoteNote.id != this.noteId) {
+    if (remoteNote != null &&
+        (remoteNote.id != this.noteId ||
+            (remoteNote.ownerId != null &&
+                remoteNote.ownerId != local.ownerId))) {
       throw ArgumentError.value(
         remoteNote.id,
         'remote',
@@ -49,6 +54,7 @@ final class SyncConflict {
 
   /// The note both sides disagree about.
   final String noteId;
+  NoteIdentity get identity => local.identity;
 
   /// The server snapshot that won, or null when it was not returned.
   final SyncNoteSnapshot? remote;

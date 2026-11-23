@@ -43,17 +43,36 @@ final class AuthController extends ChangeNotifier {
   bool _initializationCompleted;
   StreamSubscription<AuthUserDto?>? _authStateSubscription;
 
+  /// Shared in-flight restore backing [initialize]; see [initialize].
+  Future<AuthUserDto?>? _inFlightRestore;
+
+  /// Sequence of the most recently started operation; see [_beginOperation].
+  int _operationSeq = 0;
+
+  /// Sequence of the operation currently in flight, `null` when idle.
+  ///
+  /// Tracked independently of auth-state events, which report the hub's view
+  /// without ending an in-flight operation.
+  int? _runningOperation;
+
   AuthState get state => _state;
+
+  String? pendingProfileDisplayName;
 
   void _onAuthStateChanged(AuthUserDto? user) {
     if (_disposed) {
       return;
     }
+    if (user?.userId != _state.user?.userId) pendingProfileDisplayName = null;
     _initializationCompleted = true;
+    // An in-flight operation owns the busy flag: the hub event reports the
+    // user it saw without ending the operation, so a second operation stays
+    // rejected until the running one completes or fails.
+    final bool isBusy = _runningOperation != null;
     _emit(
       user == null
-          ? const AuthState.unauthenticated()
-          : AuthState.authenticated(user: user),
+          ? AuthState.unauthenticated(isBusy: isBusy)
+          : AuthState.authenticated(user: user, isBusy: isBusy),
     );
   }
 
@@ -72,26 +91,75 @@ final class AuthController extends ChangeNotifier {
     return service;
   }
 
-  /// Restores the provider session once. A failed initialization can be
-  /// retried; a completed initialization is idempotent.
+  /// Restores the provider session once, coalescing concurrent callers.
+  ///
+  /// Concurrent calls share one in-flight restore:
+  /// [IAuthenticationAppService.restoreSession] runs a single time and every
+  /// caller awaits the same future with the same terminal state. The shared
+  /// future is cleared once it settles, so a failed or superseded restore
+  /// stays retryable, while a completed initialization short-circuits
+  /// idempotently.
+  ///
+  /// The restore participates in the operation fence like every other
+  /// operation. Before starting a new restore it obeys the same busy admission
+  /// as every other operation: a pending login or registration is never
+  /// superseded by initialization. A caller that joins an already-running
+  /// shared restore is not blocked by that shared operation, and a completed
+  /// initialization stays an idempotent no-op.
+  ///
+  /// When a newer operation — a logout, for example — supersedes a pending
+  /// restore, the late result or error still returns or throws to its own
+  /// caller, but it no longer overwrites the state the newer operation
+  /// published, and initialization stays retryable.
   Future<AuthUserDto?> initialize() async {
     _ensureActive();
     if (_initializationCompleted) {
       return _state.user;
     }
+    final Future<AuthUserDto?>? pending = _inFlightRestore;
+    if (pending != null) {
+      return pending;
+    }
+    // A completed initialization short-circuits above and coalesced callers
+    // join their own in-flight restore above, so only a genuinely new restore
+    // reaches this admission check.
+    _ensureNotBusy();
+    return _inFlightRestore = _startSharedRestore();
+  }
+
+  /// Runs the fenced restore shared by every coalesced [initialize] caller.
+  ///
+  /// Exactly one operation is begun for the shared run, so coalesced callers
+  /// neither emit nor fence against each other. Terminal emits and the
+  /// completion flag are gated on that sequence; the memo is cleared in
+  /// [finally] so both failed and superseded runs leave [initialize]
+  /// retryable.
+  Future<AuthUserDto?> _startSharedRestore() async {
+    final int sequence = _beginOperation();
     _emit(const AuthState.initializing(isBusy: true));
     try {
       final AuthUserDto? user = await _service.restoreSession();
-      _initializationCompleted = true;
-      _emit(
-        user == null
-            ? const AuthState.unauthenticated()
-            : AuthState.authenticated(user: user),
-      );
+      if (_isCurrentOperation(sequence)) {
+        _initializationCompleted = true;
+        _emit(
+          user == null
+              ? const AuthState.unauthenticated()
+              : AuthState.authenticated(user: user),
+        );
+      }
       return user;
     } on Object catch (error, stackTrace) {
-      _emit(AuthState.initializing(error: _mapError(error)));
+      if (_isCurrentOperation(sequence)) {
+        // A Hub event may mark completion before this restore fails; keep Retry usable.
+        _initializationCompleted = false;
+        _emit(AuthState.initializing(error: _mapError(error)));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
+      // Only this shared future can be memoized while it is in flight, so
+      // an unconditional clear keeps failures and superseded runs retryable.
+      _inFlightRestore = null;
     }
   }
 
@@ -109,6 +177,9 @@ final class AuthController extends ChangeNotifier {
     return _execute(
       operation: () => _service.register(input),
       onSuccess: (RegistrationResult result) {
+        pendingProfileDisplayName = result.profileSetupPending
+            ? input.displayName.trim()
+            : null;
         _initializationCompleted = true;
         return AuthState.authenticated(user: result.user);
       },
@@ -116,21 +187,31 @@ final class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    pendingProfileDisplayName = null;
     _ensureActive();
-    _ensureNotBusy();
+    // Sign-out is never blocked by an in-flight operation: it supersedes it,
+    // and the superseded operation's completion no longer emits state.
+    final int sequence = _beginOperation();
     if (authenticationAppService == null) {
       _emit(const AuthState.unauthenticated());
+      _endOperation(sequence);
       return;
     }
     _emit(_busyState());
     try {
       await _service.logout();
-      _emit(const AuthState.unauthenticated());
+      if (_isCurrentOperation(sequence)) {
+        _emit(const AuthState.unauthenticated());
+      }
     } on Object catch (error, stackTrace) {
       // AuthenticationAppService clears its local session in finally, even
       // when the provider sign-out fails.
-      _emit(AuthState.unauthenticated(error: _mapError(error)));
+      if (_isCurrentOperation(sequence)) {
+        _emit(AuthState.unauthenticated(error: _mapError(error)));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
@@ -192,27 +273,41 @@ final class AuthController extends ChangeNotifier {
   }) async {
     _ensureActive();
     _ensureNotBusy();
+    final int sequence = _beginOperation();
     _emit(_busyState());
     try {
       final T result = await operation();
-      _emit(onSuccess(result));
+      if (_isCurrentOperation(sequence)) {
+        _emit(onSuccess(result));
+      }
       return result;
     } on Object catch (error, stackTrace) {
-      _emit(_failureState(error));
+      if (_isCurrentOperation(sequence)) {
+        _emit(_failureState(error));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
   Future<void> _executeVoid(Future<void> Function() operation) async {
     _ensureActive();
     _ensureNotBusy();
+    final int sequence = _beginOperation();
     _emit(_busyState());
     try {
       await operation();
-      _emit(_stableState());
+      if (_isCurrentOperation(sequence)) {
+        _emit(_stableState());
+      }
     } on Object catch (error, stackTrace) {
-      _emit(_failureState(error));
+      if (_isCurrentOperation(sequence)) {
+        _emit(_failureState(error));
+      }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      _endOperation(sequence);
     }
   }
 
@@ -307,8 +402,28 @@ final class AuthController extends ChangeNotifier {
   }
 
   void _ensureNotBusy() {
-    if (_state.isBusy) {
+    if (_runningOperation != null) {
       throw StateError('Authentication operation already in progress.');
+    }
+  }
+
+  /// Starts an operation: advances the sequence and marks it in flight.
+  ///
+  /// Only the latest sequence may emit state on completion or error, so a
+  /// superseded operation — for example a login that a logout overtook —
+  /// returns or throws to its own caller without overwriting the state the
+  /// newer operation published.
+  int _beginOperation() {
+    _operationSeq++;
+    _runningOperation = _operationSeq;
+    return _operationSeq;
+  }
+
+  bool _isCurrentOperation(int sequence) => sequence == _operationSeq;
+
+  void _endOperation(int sequence) {
+    if (_runningOperation == sequence) {
+      _runningOperation = null;
     }
   }
 

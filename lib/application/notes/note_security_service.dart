@@ -1,0 +1,399 @@
+import 'dart:async';
+
+import '../../domain/notes/note_protection.dart';
+import '../../domain/notes/note_document.dart';
+import '../../domain/notes/note_identity.dart';
+import '../../domain/notes/note_share_grant.dart';
+import '../../domain/notes/note_access_policy.dart';
+import '../auth/current_user.dart';
+import '../auth/current_user_session.dart';
+import '../sync/local_note_state.dart';
+import '../sync/local_sync_state.dart';
+import '../sync/local_sync_store.dart';
+import '../sync/sync_snapshot.dart';
+import '../sync/pending_mutation.dart';
+import '../sync/sync_failure.dart';
+import 'local_note_vault.dart';
+import 'local_draft_vault.dart';
+import 'note_dto.dart';
+import 'local_first_note_vault.dart';
+import 'note_access.dart';
+import 'note_security_gateway.dart';
+
+part 'note_security_actions.dart';
+part 'note_security_local_actions.dart';
+
+typedef _LocalAccess = ({
+  NoteProtection protection,
+  Set<NoteOperation> operations,
+  DateTime expiresAt,
+  int session,
+  bool online,
+});
+
+/// Owns unlock/session/expiry policy. No Flutter, storage SDK or crypto types.
+final class NoteSecurityService implements INoteAccessGuard {
+  NoteSecurityService({
+    required this.accountId,
+    required this.currentUser,
+    required this.session,
+    required this.store,
+    required this.vault,
+    required this.gateway,
+    this.syncNow,
+    this.localFirst = false,
+    this.cancelSummaries,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
+  final String accountId;
+  final ICurrentUser currentUser;
+  final SessionGenerationSource session;
+  final ILocalSyncStore store;
+  final ILocalNoteVault vault;
+  final INoteSecurityGateway gateway;
+  final bool localFirst;
+  final Future<void> Function()? syncNow;
+  final void Function()? cancelSummaries;
+  final DateTime Function() _now;
+  final _knownProtection = <String, NoteProtection>{};
+  final _knownShares = <String, NoteShareGrant>{};
+  final _access = <String, _LocalAccess>{};
+  final _timers = <String, Timer>{};
+  final _changes = StreamController<void>.broadcast(sync: true);
+  int _generation = 0;
+  bool _disposed = false;
+  Stream<void> get changes => _changes.stream;
+  @override
+  int get accessGeneration => _generation;
+
+  int _capture() {
+    if (_disposed || currentUser.userId != accountId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    return session.sessionGeneration;
+  }
+
+  void _live(int captured, int generation) {
+    if (_capture() != captured || generation != _generation) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+  }
+
+  Future<LocalNoteState> _note(String id) async {
+    final note = (await store.read()).notes
+        .where((n) => n.referenceFor(accountId) == id && !n.isDeleted)
+        .firstOrNull;
+    if (note == null ||
+        !const NoteAccessPolicy().allows(
+          actorId: accountId,
+          note: note.identity,
+          share: note.share,
+          operation: NoteOperation.read,
+        )) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+    if (note.share != null) _knownShares[id] = note.share!;
+    return note;
+  }
+
+  Future<void> _ownerAction(String id) async {
+    if ((await _note(id)).ownerId != accountId) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.denied);
+    }
+  }
+
+  @override
+  bool allows({
+    required String ownerId,
+    required String noteId,
+    required NoteProtection protection,
+    required NoteOperation operation,
+  }) {
+    if (_disposed || currentUser.userId != accountId) {
+      return false;
+    }
+    final reference = NoteIdentity(ownerId, noteId).referenceFor(accountId);
+    final share = _knownShares[reference];
+    if (share != null &&
+        !const NoteAccessPolicy().allows(
+          actorId: accountId,
+          note: NoteIdentity(ownerId, noteId),
+          share: share,
+          operation: operation,
+        )) {
+      return false;
+    }
+    noteId = reference;
+    if (_knownProtection[noteId] != null &&
+        _knownProtection[noteId] != protection) {
+      return false;
+    }
+    if (!protection.enabled) return true;
+    final active = _access[noteId];
+    return active != null &&
+        active.protection == protection &&
+        active.session == session.sessionGeneration &&
+        active.expiresAt.isAfter(_now()) &&
+        active.operations.contains(operation) &&
+        vault.isLocallyUnlocked(noteId, protection) &&
+        !(operation == NoteOperation.edit &&
+            vault.hasRetainedCiphertext(noteId));
+  }
+
+  @override
+  void requireAccess({
+    required String ownerId,
+    required String noteId,
+    required NoteProtection protection,
+    required NoteOperation operation,
+  }) {
+    if (!allows(
+      ownerId: ownerId,
+      noteId: noteId,
+      protection: protection,
+      operation: operation,
+    )) {
+      final id = NoteIdentity(ownerId, noteId).referenceFor(accountId);
+      if (_access[id]?.expiresAt.isAfter(_now()) == false) lock(id);
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+  }
+
+  void requireRemote(String id, NoteProtection p, NoteOperation operation) {
+    _capture();
+    if (p.enabled && !gateway.hasAuthority(id, p, operation)) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.locked);
+    }
+  }
+
+  Future<NoteProtection> refreshProtection(String id) async {
+    if (localFirst && await hasPendingProtection(id)) {
+      return (await _note(id)).protection;
+    }
+    final captured = _capture(), generation = _generation;
+    final p = await gateway.metadata(id);
+    _live(captured, generation);
+    final previous = (await _note(id)).protection;
+    _live(captured, generation);
+    _knownProtection[id] = p;
+    if (previous != p) lock(id);
+    final observedGeneration = _generation;
+    await vault.observeProtection(id, p);
+    _live(captured, observedGeneration);
+    return p;
+  }
+
+  Future<void> _hydrateAuthorized(String id, NoteProtection p) async {
+    requireRemote(id, p, NoteOperation.read);
+    final content = await gateway.content(id);
+    requireRemote(id, p, NoteOperation.read);
+    if (content.protection != p) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+    }
+    final note = await _note(id);
+    if (content.id != note.id) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.staleRevision);
+    }
+    await vault.hydrate(
+      SyncNoteSnapshot(
+        id: content.id,
+        pinnedAt: content.pinnedAt,
+        attachments: content.attachments,
+        includesAttachments: content.includesAttachments,
+        labelIds: content.labelIds,
+        labelProjections: content.labelProjections,
+        includesLabels: content.includesLabels,
+        ownerId: note.ownerId,
+        share: note.share,
+        title: content.title,
+        content: content.content,
+        document: content.document,
+        includesDocument: content.includesDocument,
+        createdAt: content.createdAt,
+        serverUpdatedAt: content.serverUpdatedAt,
+        revision: content.revision,
+        deletedAt: content.deletedAt,
+        protection: content.protection,
+        contentAvailable: content.contentAvailable,
+      ),
+    );
+  }
+
+  Future<void> observeSnapshot(SyncNoteSnapshot snapshot) async {
+    final captured = _capture();
+    final state = await store.read();
+    final note = state.notes
+        .where((n) => n.identity == snapshot.identityFor(accountId))
+        .firstOrNull;
+    if (note == null) return;
+    final id = note.referenceFor(accountId);
+    if (snapshot.share != null &&
+        (snapshot.share!.accessRevision >= (note.share?.accessRevision ?? 0))) {
+      _knownShares[id] = snapshot.share!;
+      if (snapshot.share != note.share) lock(id);
+    }
+    if (state.outbox.any(
+          (m) =>
+              !m.isLabel &&
+              m.mutation.identityFor(accountId) == note.identity &&
+              m.protectionChange != null,
+        ) ||
+        snapshot.protection.revision < note.protection.revision) {
+      return;
+    }
+    if (_capture() != captured) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.sessionChanged);
+    }
+    _knownProtection[id] = snapshot.protection;
+    if (note.protection != snapshot.protection) lock(id);
+    await vault.observeProtection(id, snapshot.protection);
+  }
+
+  /// Pull remains metadata-only; hydrate only a currently authorized note.
+  Future<void> hydrateSnapshot(SyncNoteSnapshot snapshot) async {
+    final id = snapshot.identityFor(accountId).referenceFor(accountId);
+    if (localFirst && await hasPendingProtection(id)) return;
+    final captured = _capture(), generation = _generation;
+    if (!snapshot.protection.enabled ||
+        snapshot.isDeleted ||
+        !gateway.hasAuthority(id, snapshot.protection, NoteOperation.read)) {
+      return;
+    }
+    try {
+      await _hydrateAuthorized(id, snapshot.protection);
+      _live(captured, generation);
+    } on NoteSecurityFailure catch (failure) {
+      lock(id);
+      if (failure.code == NoteSecurityFailureCode.sessionChanged) rethrow;
+    }
+  }
+
+  Future<void> _unblock(String id, {bool retryProtectionWire = false}) async {
+    if (vault.hasRetainedCiphertext(id)) return;
+    await store.update(
+      (state) => LocalSyncState(
+        accountUserId: state.accountUserId,
+        labels: state.labels,
+        syncWireVersion: state.syncWireVersion,
+        userPreferences: state.userPreferences,
+        notes: state.notes,
+        conflicts: state.conflicts,
+        cursor: state.cursor,
+        outbox: state.outbox.map(
+          (m) =>
+              !m.isLabel &&
+                  m.mutation.identityFor(accountId).referenceFor(accountId) ==
+                      id &&
+                  (m.accessRevision == null ||
+                      m.accessRevision == _knownShares[id]?.accessRevision) &&
+                  (_knownShares[id] == null ||
+                      _knownShares[id]!.role.name == 'editor' &&
+                          _knownShares[id]!.isActive) &&
+                  m.blocked &&
+                  (m.lastError == null ||
+                      m.lastError == SyncErrorCode.forbidden ||
+                      retryProtectionWire &&
+                          m.lastError == SyncErrorCode.invalidMutation &&
+                          m.mutation.identityFor(accountId).ownerId ==
+                              accountId &&
+                          m.protectionChange != null &&
+                          m.payload?.includesAttachments == true)
+              ? _unblocked(m)
+              : m,
+        ),
+      ),
+    );
+  }
+
+  void _activate(String id, NoteUnlockLease lease, {required bool online}) {
+    if (!lease.expiresAt.isAfter(_now())) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.expired);
+    }
+    _knownProtection[id] = lease.protection;
+    _access[id] = (
+      protection: lease.protection,
+      operations: lease.operations,
+      expiresAt: lease.expiresAt,
+      session: _capture(),
+      online: online,
+    );
+    _timers.remove(id)?.cancel();
+    _timers[id] = Timer(lease.expiresAt.difference(_now()), () => lock(id));
+    if (!_changes.isClosed) _changes.add(null);
+  }
+
+  void lock(String? id) {
+    _generation++;
+    if (id == null) {
+      for (final timer in _timers.values) {
+        timer.cancel();
+      }
+      _timers.clear();
+      _access.clear();
+    } else {
+      _timers.remove(id)?.cancel();
+      _access.remove(id);
+    }
+    gateway.invalidate(id);
+    vault.lock(id);
+    cancelSummaries?.call();
+    if (!_changes.isClosed) _changes.add(null);
+  }
+
+  bool retainedPending(String id) => vault.hasRetainedCiphertext(id);
+  Future<void> retainDocumentDraft(
+    NoteDto selected,
+    String title,
+    NoteDocument document,
+  ) async {
+    final captured = _capture(), generation = _generation;
+    final Object adapter = vault;
+    if (adapter is! IRichLocalDraftVault) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
+    }
+    await adapter.retainDocumentDraft(selected, title, document);
+    _live(captured, generation);
+  }
+
+  Future<void> retainEditorDraft(
+    NoteDto selected,
+    String title,
+    String content,
+  ) async {
+    _capture();
+    final Object adapter = vault;
+    if (adapter is! ILocalDraftVault) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.storage);
+    }
+    await adapter.retainEditorDraft(selected, title, content);
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    lock(null);
+    _disposed = true;
+    unawaited(_changes.close());
+  }
+
+  static void _confirm(String password, String confirmation) {
+    if (password != confirmation ||
+        password.length < 8 ||
+        password.length > 512) {
+      throw const NoteSecurityFailure(NoteSecurityFailureCode.invalidInput);
+    }
+  }
+
+  static PendingMutation _unblocked(PendingMutation m) => PendingMutation(
+    mutationId: m.mutationId,
+    noteId: m.noteId,
+    ownerId: m.ownerId,
+    accessRevision: m.accessRevision,
+    protectionChange: m.protectionChange,
+    operation: m.operation,
+    baseRevision: m.baseRevision,
+    payload: m.payload,
+    createdAt: m.createdAt,
+    retryCount: m.retryCount,
+    blocked: false,
+  );
+}

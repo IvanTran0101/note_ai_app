@@ -4,6 +4,11 @@
 /// this policy uses a configurable character-per-token estimate and reserves
 /// room for instructions plus generated output. It never silently truncates a
 /// note: long content is split into ordered, non-empty chunks.
+///
+/// The pure boundary helpers at the end of this file are shared with the remote
+/// Summary splitter, which needs the same newline-then-whitespace preference
+/// over UTF-16 code units instead of runes. The local policy's own defaults and
+/// results are unchanged by that reuse.
 library;
 
 /// A bounded failure raised when a note cannot be processed within policy.
@@ -154,23 +159,13 @@ final class NoteSummaryResourcePolicy {
     var start = 0;
     while (start < runes.length) {
       final int proposedEnd = _min(start + maxInputCharacters, runes.length);
-      int end = proposedEnd;
-      if (proposedEnd < runes.length) {
-        int? lastWhitespace;
-        for (var index = proposedEnd; index > start; index--) {
-          final int rune = runes[index - 1];
-          if (rune == 10 || rune == 13) {
-            end = index;
-            break;
-          }
-          if (lastWhitespace == null && _isWhitespace(rune)) {
-            lastWhitespace = index;
-          }
-        }
-        if (end == proposedEnd && lastWhitespace != null) {
-          end = lastWhitespace;
-        }
-      }
+      final int end = proposedEnd < runes.length
+          ? chooseSummaryChunkBoundary(
+              start: start,
+              end: proposedEnd,
+              unitAt: (int index) => runes[index],
+            )
+          : proposedEnd;
 
       final String chunk = String.fromCharCodes(runes.sublist(start, end))
           .trim();
@@ -183,7 +178,7 @@ final class NoteSummaryResourcePolicy {
         }
       }
       start = end;
-      while (start < runes.length && _isWhitespace(runes[start])) {
+      while (start < runes.length && isSummaryChunkWhitespace(runes[start])) {
         start++;
       }
     }
@@ -191,8 +186,43 @@ final class NoteSummaryResourcePolicy {
   }
 
   static int _min(int a, int b) => a < b ? a : b;
+}
 
-  static bool _isWhitespace(int rune) {
-    return rune == 9 || rune == 10 || rune == 13 || rune == 32;
+/// Whether [unit] is a line break for summary chunk boundaries.
+///
+/// Shared by the local splitter (rune indices) and the remote splitter (UTF-16
+/// code-unit indices) so both prefer the same boundary shape.
+bool isSummaryChunkNewline(int unit) => unit == 10 || unit == 13;
+
+/// Whether [unit] is whitespace for summary chunk boundaries.
+///
+/// Keeps the legacy local boundary set: tab, line feed, carriage return, space.
+/// The remote policy separately uses ECMAScript whitespace for edge trimming
+/// and blank-input detection; boundary preference does not define trim rules.
+bool isSummaryChunkWhitespace(int unit) =>
+    unit == 9 || unit == 10 || unit == 13 || unit == 32;
+
+/// Chooses where a chunk that starts at [start] ends, inside `[start, end)`.
+///
+/// Walks down from [end] and returns `position + 1` for the highest newline,
+/// then for the highest whitespace, and [end] itself when neither exists -
+/// which is the caller's signal to hard-split there. [unitAt] reads one unit at
+/// a 0-based index in the caller's own coordinate space, so the local splitter
+/// passes runes and the remote splitter passes UTF-16 code units.
+int chooseSummaryChunkBoundary({
+  required int start,
+  required int end,
+  required int Function(int index) unitAt,
+}) {
+  for (int index = end; index > start; index--) {
+    if (isSummaryChunkNewline(unitAt(index - 1))) {
+      return index;
+    }
   }
+  for (int index = end; index > start; index--) {
+    if (isSummaryChunkWhitespace(unitAt(index - 1))) {
+      return index;
+    }
+  }
+  return end;
 }

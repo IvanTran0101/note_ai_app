@@ -187,6 +187,15 @@ final class _FakeNoteRepository implements INoteRepository {
   Future<Note?> findById(String id) async => throw UnimplementedError();
 
   @override
+  Future<Note> updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required NoteChange change,
+    required NoteCommitFence canCommit,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<List<Note>> findByOwnerId(String ownerId) async {
     findByOwnerIdCalls++;
     lastOwnerId = ownerId;

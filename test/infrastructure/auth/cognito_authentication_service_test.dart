@@ -1,3 +1,8 @@
+import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
+
+import 'dart:async';
+
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +15,44 @@ import 'package:note_ai_app/infrastructure/auth/cognito_authentication_service.d
 /// challenge" are exercised here. Everything else in the adapter is covered by
 /// the mapper tests plus the manual smoke checklist reported with this change.
 void main() {
+  test(
+    'late signed-in identity cannot republish an account after sign-out',
+    () async {
+      final hub = StreamController<AuthHubEvent>.broadcast();
+      Amplify.Hub.addChannel(HubChannel.Auth, hub.stream);
+      addTearDown(hub.close);
+      final pending = Completer<AuthIdentity?>();
+      final service = CognitoAuthenticationService(
+        observedIdentityReader: () => pending.future,
+      );
+      final events = <AuthIdentity?>[];
+      final subscription = service.observeAuthState().listen(events.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      hub.add(
+        AuthHubEvent.signedIn(
+          const AuthUser(
+            userId: 'actor',
+            username: 'test',
+            signInDetails: CognitoSignInDetails.apiBased(username: 'test'),
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      hub.add(AuthHubEvent.signedOut());
+      await pumpEventQueue();
+      pending.complete(
+        AuthIdentity(
+          userId: 'actor',
+          email: 'test@example.invalid',
+          isEmailVerified: false,
+        ),
+      );
+      await pumpEventQueue();
+      expect(events, <AuthIdentity?>[null]);
+    },
+  );
+
   group('CognitoAuthenticationService.isRegistrationComplete', () {
     test('accepts a sign-up that Cognito completed', () {
       expect(

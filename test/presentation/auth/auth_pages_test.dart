@@ -855,9 +855,7 @@ void main() {
       find.byKey(const ValueKey<String>('auth-register-desktop-panel')),
       findsNothing,
     );
-    final Rect loginField = tester.getRect(
-      find.byKey(LoginPage.emailFieldKey),
-    );
+    final Rect loginField = tester.getRect(find.byKey(LoginPage.emailFieldKey));
     expect(loginField.width, 360);
     expect(loginField.center.dx, 640);
 
@@ -880,10 +878,7 @@ void main() {
     final Rect panelRect = tester.getRect(registerPanel);
     final Rect loginLink = tester.getRect(find.text('Log in'));
     final Rect footerRect = tester.getRect(
-      find.ancestor(
-        of: find.text('Log in'),
-        matching: find.byType(Wrap),
-      ),
+      find.ancestor(of: find.text('Log in'), matching: find.byType(Wrap)),
     );
     expect(panelRect.width, 496);
     expect(panelRect.center.dx, 640);

@@ -1,9 +1,9 @@
 const amplifyConfig = r'''{
   "auth": {
-    "user_pool_id": "ap-southeast-1_WnOTzVsLd",
+    "user_pool_id": "ap-southeast-1_9ymYSLiGJ",
     "aws_region": "ap-southeast-1",
-    "user_pool_client_id": "6n4k7jpaoq6482aohl4grnondn",
-    "identity_pool_id": "ap-southeast-1:2a7a181c-a10d-469f-af5c-24a6514fa167",
+    "user_pool_client_id": "65ivm4v617ruists4hvusaq954",
+    "identity_pool_id": "ap-southeast-1:d6ad5a32-bbee-443f-9757-4ceb93ffa051",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email"
@@ -27,6 +27,12 @@ const amplifyConfig = r'''{
   },
   "version": "1.5",
   "custom": {
-    "syncApiEndpoint": "https://gx25uupkri.execute-api.ap-southeast-1.amazonaws.com"
+    "syncApiEndpoint": "https://eu4ap50sx7.execute-api.ap-southeast-1.amazonaws.com",
+    "attachmentApiEndpoint": "https://eu4ap50sx7.execute-api.ap-southeast-1.amazonaws.com",
+    "attachmentProtocolVersion": 1,
+    "aiApiEndpoint": "https://8q241n6o63.execute-api.ap-southeast-1.amazonaws.com",
+    "ragApiEndpoint": "https://jsv55ime20.execute-api.ap-southeast-1.amazonaws.com",
+    "eventHttpEndpoint": "https://x5mkm4svtzcjhg6hpjuct56ctu.appsync-api.ap-southeast-1.amazonaws.com/event",
+    "eventSocketEndpoint": "wss://x5mkm4svtzcjhg6hpjuct56ctu.appsync-realtime-api.ap-southeast-1.amazonaws.com/event/realtime"
   }
 }''';

@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/test/m05_browser_suite.generated.dart
 
 # Symbolication related
 app.*.symbols
@@ -58,6 +59,7 @@ AGENTS.md
 /.agents
 skills-lock.json
 /.claude
+/.pack/
 
 # Local secrets, credentials, and signing material
 .env
@@ -90,3 +92,31 @@ GoogleService-Info.plist
 /output/
 /plan.md
 /ui-audit-scorecard.md
+/docs/
+/docs/rag/
+
+# Publish only the Phase4 contract/manifests; raw cloud receipts remain in ignored output.
+!/docs/
+/docs/*
+!/docs/rag/
+/docs/rag/*
+!/docs/rag/deepseek_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_profile_v1.json
+!/docs/rag/policy_v2.json
+!/docs/rag/EMBEDDING_MIGRATION.md
+!/docs/rag/PHASE4_HANDOFF.md
+!/docs/rag/phase4_policy_v1.json
+!/docs/rag/phase4_receipt.json
+!/docs/rag/phase4_remediation_v2.md
+!/docs/rag/phase4_calibration_review.md
+
+!/docs/rag/phase4_hanh_recalibration.json
+!/docs/rag/phase4_hanh_recalibration.md
+
+# Required RAG inputs and reviewable M09 implementation records.
+!/docs/rag/tokenizer_manifest.json
+!/docs/rag/index_job_policy_v1.json
+!/docs/m09/
+/docs/m09/*
+!/docs/m09/*.md

@@ -115,6 +115,10 @@ final class SyncCopy {
         _isVietnamese
             ? 'Máy chủ từ chối thay đổi của ghi chú.'
             : 'The server rejected a note change.',
+      SyncErrorCode.documentRequiresUpgrade =>
+        _isVietnamese
+            ? 'Máy chủ cần cập nhật để đồng bộ định dạng. Thay đổi đã lưu trên thiết bị.'
+            : 'The server needs an update to sync formatting. Changes are saved on this device.',
       SyncErrorCode.unexpected => failed,
     };
   }
