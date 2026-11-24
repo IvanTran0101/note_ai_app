@@ -17,7 +17,7 @@ import 'infrastructure/attachments/flutter_attachment_picker.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' hide Summary;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -31,11 +31,8 @@ import 'application/sync/sync_conflict_resolver.dart';
 import 'application/sync/account_realtime_service.dart';
 import 'infrastructure/sync/appsync_revision_source.dart';
 import 'infrastructure/sync/cognito_id_token_provider.dart';
-import 'application/note_intelligence/model_provisioning/model_provisioning_runtime_load.dart';
-import 'application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'application/note_intelligence/summary_run_context.dart';
 import 'application/note_intelligence/summary_consent_app_service.dart';
-import 'application/note_intelligence/note_summary_app_service.dart';
 import 'application/note_intelligence/rag_app_service.dart';
 import 'application/note_intelligence/rag_state.dart';
 import 'application/notes/note_application.dart';
@@ -45,28 +42,14 @@ import 'infrastructure/sync/cognito_access_token_provider.dart';
 import 'application/notes/local_note_vault.dart';
 import 'application/dashboard/get_dashboard_overview.dart';
 import 'domain/auth/auth_identity.dart';
-import 'domain/note_intelligence/summary.dart';
 import 'domain/note_intelligence/i_rag_gateway.dart';
 import 'domain/note_intelligence/rag_models.dart';
 import 'domain/notes/note_repository.dart';
 import 'domain/users/user_preferences_repository.dart';
-import 'infrastructure/ai/llm_worker_client.dart';
-import 'infrastructure/ai/model_catalog.dart';
-import 'infrastructure/ai/model_downloader.dart';
-import 'infrastructure/ai/model_integrity_verifier.dart';
-import 'infrastructure/ai/model_manager.dart';
-import 'infrastructure/ai/model_provisioning_contract.dart';
-import 'infrastructure/ai/model_selection.dart';
-import 'infrastructure/ai/model_storage.dart';
 import 'infrastructure/auth/amplify_auth_initializer.dart';
 import 'infrastructure/auth/cognito_authentication_service.dart';
-import 'infrastructure/configuration/ai_configuration.dart';
-import 'infrastructure/configuration/ai_configuration_store.dart';
 import 'infrastructure/configuration/note_connection.dart';
-import 'infrastructure/device/device_info_plus_hardware_detection.dart';
-import 'infrastructure/note_intelligence/local_summarization_service.dart';
 import 'infrastructure/note_intelligence/summary_run_runtime.dart';
-import 'infrastructure/note_intelligence/summary_failure_mapper.dart';
 import 'infrastructure/notes/note_repository.dart' as note_infrastructure;
 import 'infrastructure/note_intelligence/rag_http_gateway.dart';
 import 'infrastructure/sync/account_sync_runtime.dart';
@@ -75,7 +58,6 @@ import 'infrastructure/users/user_profile_repository.dart'
     as user_profile_infrastructure;
 import 'infrastructure/users/local_user_preferences_repository.dart'
     as user_preferences_infrastructure;
-import 'presentation/debug/local_llm_debug_page.dart';
 import 'presentation/auth/auth_localizations.dart';
 import 'presentation/auth/auth_pages.dart';
 import 'presentation/auth/controllers/auth_controller.dart';
@@ -602,11 +584,7 @@ _bootstrapAuth() async {
   );
 }
 
-/// Root composition for the local-LLM summarization proof.
-///
-/// Infrastructure is assembled here, while the Application service only sees
-/// its Domain summarization contract and the debug page only receives a
-/// summarization function.
+/// Root composition for the signed-in app and its cloud services.
 class NoteFlowApp extends StatefulWidget {
   const NoteFlowApp({
     super.key,
@@ -614,7 +592,6 @@ class NoteFlowApp extends StatefulWidget {
     required this.currentUserSession,
     this.summaryRuntime,
     this.localSyncStoreFactory,
-    this.localSummarizer,
     this.enableSync = true,
     this.enableLabels = const bool.fromEnvironment('NOTEFLOW_LABELS_ENABLED'),
     this.connection,
@@ -637,7 +614,6 @@ class NoteFlowApp extends StatefulWidget {
   final SummaryRunRuntime? summaryRuntime;
   final ILocalSyncStore Function({required String accountUserId})?
   localSyncStoreFactory;
-  final SummarizeNoteContent? localSummarizer;
 
   /// Offline acceptance roots disable unrelated background synchronization.
   final bool enableSync;
@@ -660,14 +636,7 @@ class NoteFlowApp extends StatefulWidget {
 class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.system;
   _NoteFlowLanguageChoice _languageChoice = _NoteFlowLanguageChoice.system;
-  LlmWorkerClient? _workerClient;
-  NoteSummaryAppService? _appService;
-  Future<NoteSummaryAppService>? _serviceStart;
   int _noteIdSequence = 0;
-  late final AiConfiguration _aiConfiguration =
-      AiConfiguration.fromEnvironment();
-  late final AiConfigurationStore _aiConfigurationStore =
-      createAiConfigurationStore();
   late final CurrentUserSession _currentUserSession = widget.currentUserSession;
   SummaryRunRuntime? _summaryRuntime;
   int? _lastSummarySessionGeneration;
@@ -752,11 +721,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         currentUser: _currentUserSession,
         generateId: _generateNoteId,
         now: _nowUtc,
-        summarizeContent: (String content) =>
-            withSummaryFailureBoundary(() => _summarize(content)),
-        summarizeRun: _summaryRunRuntime.dispatchesSummary
-            ? _summaryRunRuntime.summarize
-            : null,
+        summarizeContent: (_) async => throw const SummaryRunFailure(
+          SummaryRunFailureCode.runtimeUnavailable,
+        ),
+        summarizeRun: _summaryRunRuntime.summarize,
         cloudConsent: _summaryRunRuntime.consent,
         sessionGeneration: () => _currentUserSession.sessionGeneration,
         requestSync: _requestSyncForAccount,
@@ -805,15 +773,10 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
         currentUser: _currentUserSession,
         session: _currentUserSession,
         consent: _summaryRunRuntime.consent,
-        requiresCloudConsent: _summaryRunRuntime.dispatchesSummary,
         isAvailable: () =>
             !_disposed &&
-            (_summaryRunRuntime.configuration.isLocal
-                ? !kIsWeb
-                : _summaryRunRuntime.configuration.isRemote &&
-                      _summaryRunRuntime.configuration.canSummarize &&
-                      widget.connection == null &&
-                      _noteFlowAuthMode == 'cognito'),
+            _summaryRunRuntime.configuration.canSummarize &&
+            _summaryRunRuntime.cognitoMode,
         cancelActiveRuns: () => _summaryRunRuntime.cancelActive(
           reason: SummaryRunFailureCode.consentRequired,
         ),
@@ -857,27 +820,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
   /// so a session that never touches ask-notes never constructs it.
   _RagRoot? _ragRootInstance;
   _RagRoot get _ragRoot => _ragRootInstance ??= _RagRoot(this);
-  late final IModelStorage _modelStorage = createModelStorage(
-    overrideModelPath: _aiConfiguration.modelPathOverride,
-  );
-  // Shared provisioning state holder (M4.5.a). ModelManager and the
-  // runtime-load composition publish into it; a later Presentation slice
-  // subscribes through the same instance. UI is not wired in this slice.
-  late final ModelProvisioningStatusHolder _modelProvisioningStatus =
-      ModelProvisioningStatusHolder();
-  late final ModelManager _modelManager = ModelManager(
-    hardwareDetectionService: createHardwareDetectionService(),
-    modelCatalog: const ModelCatalog(),
-    modelSelectionPolicy: const ModelSelectionPolicy(),
-    modelStorage: _modelStorage,
-    modelDownloader: createModelDownloader(
-      maxRedirects: _aiConfiguration.maxRedirects,
-      requestTimeout: _aiConfiguration.downloadTimeout,
-    ),
-    integrityVerifier: createModelIntegrityVerifier(),
-    aiConfigurationStore: _aiConfigurationStore,
-    modelProvisioningReporter: _modelProvisioningStatus,
-  );
   late final GoRouter _router;
   ProfileAppService? _profileService;
   ProfileAppService? _profilePageService;
@@ -1041,9 +983,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
       ],
     );
   }
-
-  // ponytail: one local model worker; per-model latches if multiple runtimes exist.
-  bool _localSummaryRunning = false;
 
   @override
   void initState() {
@@ -1279,25 +1218,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     );
   }
 
-  Future<Summary> _summarize(String content) async {
-    if (_localSummaryRunning) {
-      throw const SummaryRunFailure(SummaryRunFailureCode.alreadyRunning);
-    }
-    _localSummaryRunning = true;
-    try {
-      final SummarizeNoteContent? supplied = widget.localSummarizer;
-      if (supplied != null) return await supplied(content);
-      final NoteSummaryAppService service = await _ensureService();
-      return await service.summarize(content);
-    } finally {
-      _localSummaryRunning = false;
-    }
-  }
-
-  void _cancelModelProvisioning() {
-    _modelManager.cancelProvisioning();
-  }
-
   Future<NoteDetailRouteResult?> _openNoteDetail(
     BuildContext context,
     NoteDto? note,
@@ -1308,12 +1228,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           notesController: _notesController,
           note: note,
           syncController: _syncPresentationControllerForCurrentAccount(),
-          provisioningReader: _summaryRunRuntime.configuration.isLocal
-              ? _modelProvisioningStatus
-              : null,
-          onProvisioningCancel: _summaryRunRuntime.configuration.isLocal
-              ? _cancelModelProvisioning
-              : null,
           showAppBar: false,
         ),
       ),
@@ -1350,187 +1264,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
 
   DateTime _nowUtc() => DateTime.now().toUtc();
 
-  Future<String?> _loadModelReadiness() async {
-    try {
-      final AiReadinessSnapshot? snapshot = await _aiConfigurationStore.read();
-      if (snapshot == null) {
-        return null;
-      }
-      return switch (snapshot.runtimeStatus) {
-        RuntimeReadinessStatus.loading =>
-          'runtime-loading · ${snapshot.modelId}',
-        RuntimeReadinessStatus.failed => 'runtime-failed · ${snapshot.modelId}',
-        RuntimeReadinessStatus.ready => 'ready · ${snapshot.modelId}',
-        RuntimeReadinessStatus.unknown => switch (snapshot.status) {
-          ModelReadinessStatus.preparing => 'preparing · ${snapshot.modelId}',
-          ModelReadinessStatus.ready => 'ready · ${snapshot.modelId}',
-          ModelReadinessStatus.failed => 'failed · ${snapshot.modelId}',
-          ModelReadinessStatus.cancelled => 'cancelled · ${snapshot.modelId}',
-        },
-      };
-    } on Object {
-      // Diagnostics must remain usable when advisory state is unavailable or
-      // unsupported on the current platform.
-      return 'unavailable';
-    }
-  }
-
-  Future<NoteSummaryAppService> _ensureService() async {
-    final NoteSummaryAppService? existing = _appService;
-    if (existing != null) {
-      return existing;
-    }
-
-    final Future<NoteSummaryAppService>? pending = _serviceStart;
-    if (pending != null) {
-      return pending;
-    }
-
-    final Future<NoteSummaryAppService> start = _startService();
-    _serviceStart = start;
-    try {
-      final NoteSummaryAppService service = await start;
-      _appService ??= service;
-      return service;
-    } finally {
-      if (identical(_serviceStart, start)) {
-        _serviceStart = null;
-      }
-    }
-  }
-
-  Future<NoteSummaryAppService> _startService() async {
-    if (_disposed) {
-      throw StateError('NoteFlowApp was disposed while preparing local AI');
-    }
-
-    final String modelPath;
-    final int contextSize;
-    final int maxOutputTokens;
-    PreparedModel? preparedModel;
-    String? modelId;
-    String? modelName;
-    if (_usesAutomaticModelProvisioning) {
-      preparedModel = await _modelManager.ensureModelReady();
-      modelPath = preparedModel.path;
-      contextSize = preparedModel.model.contextSize;
-      maxOutputTokens = preparedModel.model.maxOutputTokens;
-      modelId = preparedModel.model.id;
-      modelName = preparedModel.model.fileName;
-    } else {
-      // Preserve the existing explicit-path/macOS/Web fallback. Automatic
-      // provisioning is only enabled for mobile targets without an explicit
-      // LOCAL_LLM_MODEL_PATH override.
-      modelPath = await _modelStorage.resolveModelPath();
-      contextSize = _aiConfiguration.defaultContextSize;
-      maxOutputTokens = _aiConfiguration.defaultMaxOutputTokens;
-    }
-
-    if (_disposed) {
-      throw StateError('NoteFlowApp was disposed while preparing local AI');
-    }
-
-    if (preparedModel != null) {
-      await _persistRuntimeReadiness(
-        preparedModel: preparedModel,
-        status: RuntimeReadinessStatus.loading,
-      );
-    }
-
-    // Publish loadingRuntime before the worker starts, ready only after the
-    // summarization service is constructed, and failed (runtimeLoadFailed for
-    // worker failures) when startup throws. ModelManager never publishes these
-    // runtime phases itself.
-    try {
-      final NoteSummaryAppService service =
-          await runModelProvisioningRuntimeLoad<NoteSummaryAppService>(
-            reporter: _modelProvisioningStatus,
-            modelId: modelId,
-            modelName: modelName,
-            mapFailure: mapModelProvisioningFailure,
-            load: () async {
-              final LlmWorkerClient client = await startLlmWorkerClient(
-                modelPath: modelPath,
-                contextSize: contextSize,
-                threads: _aiConfiguration.workerThreads,
-              );
-              if (_disposed) {
-                await client.dispose();
-                throw StateError(
-                  'NoteFlowApp was disposed while starting local AI',
-                );
-              }
-
-              try {
-                final LocalSummarizationService infrastructureService =
-                    LocalSummarizationService(
-                      workerClient: client,
-                      maxTokens: maxOutputTokens,
-                      contextSize: contextSize,
-                    );
-                _workerClient = client;
-                return NoteSummaryAppService(
-                  summarizationService: infrastructureService,
-                );
-              } on Object {
-                await client.dispose();
-                rethrow;
-              }
-            },
-          );
-      if (preparedModel != null) {
-        await _persistRuntimeReadiness(
-          preparedModel: preparedModel,
-          status: RuntimeReadinessStatus.ready,
-        );
-      }
-      return service;
-    } on Object catch (error, stackTrace) {
-      if (preparedModel != null) {
-        await _persistRuntimeReadiness(
-          preparedModel: preparedModel,
-          status: RuntimeReadinessStatus.failed,
-          runtimeError: mapModelProvisioningFailure(error).detail,
-        );
-      }
-      Error.throwWithStackTrace(error, stackTrace);
-    }
-  }
-
-  Future<void> _persistRuntimeReadiness({
-    required PreparedModel preparedModel,
-    required RuntimeReadinessStatus status,
-    String? runtimeError,
-  }) async {
-    try {
-      final AiReadinessSnapshot? snapshot = await _aiConfigurationStore.read();
-      if (snapshot == null ||
-          snapshot.modelId != preparedModel.model.id ||
-          snapshot.modelVersion != preparedModel.model.version ||
-          snapshot.modelSha256 != preparedModel.model.sha256) {
-        return;
-      }
-      await _aiConfigurationStore.save(
-        snapshot.withRuntimeStatus(
-          status,
-          runtimeError: runtimeError,
-          updatedAt: DateTime.now().toUtc(),
-        ),
-      );
-    } on Object {
-      // Runtime readiness is advisory bookkeeping. A store failure must never
-      // mask a usable runtime or its original startup failure.
-    }
-  }
-
-  bool get _usesAutomaticModelProvisioning {
-    if (kIsWeb || _aiConfiguration.modelPathOverride != null) {
-      return false;
-    }
-    return defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.android;
-  }
-
   Locale? get _selectedLocale {
     return switch (_languageChoice) {
       _NoteFlowLanguageChoice.system => null,
@@ -1562,20 +1295,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
           unawaited(page.reload());
         }
     }
-  }
-
-  void _openLocalDiagnostics(BuildContext context) {
-    if (!_summaryRunRuntime.configuration.isLocal) return;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LocalLlmDebugPage(
-          summarize: _summarize,
-          loadModelReadiness: _loadModelReadiness,
-          provisioningReader: _modelProvisioningStatus,
-          onProvisioningCancel: _cancelModelProvisioning,
-        ),
-      ),
-    );
   }
 
   Future<void> _showAppearanceSettings(BuildContext context) async {
@@ -1757,9 +1476,7 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                     setState(() => _languageChoice = value);
                   },
                 ),
-                if (webPreferences &&
-                    (_summaryConsentService.requiresCloudConsent ||
-                        ragService != null)) ...[
+                if (webPreferences) ...[
                   const SizedBox(height: 24),
                   NoteFlowSettingsSectionTitle(
                     vi ? 'Tính năng AI' : 'AI features',
@@ -1767,10 +1484,8 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   const SizedBox(height: 16),
                 ] else
                   const Divider(height: 32),
-                if (_summaryConsentService.requiresCloudConsent) ...<Widget>[
-                  SummaryCloudSettingsTile(service: _summaryConsentService),
-                  const SizedBox(height: 24),
-                ],
+                SummaryCloudSettingsTile(service: _summaryConsentService),
+                const SizedBox(height: 24),
                 if (ragService != null) ...<Widget>[
                   RagConsentSettingsTile(
                     key: const ValueKey<String>('settings-rag-consent'),
@@ -1874,9 +1589,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
             onOpenRag: _ragRoot.available
                 ? () => _ragRoot.openAccountScope(context)
                 : null,
-            onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
-                ? () => _openLocalDiagnostics(context)
-                : null,
             dashboard: DashboardPage(
               key: _dashboardPageKey,
               noteChanges: _syncPresentationControllerForCurrentAccount(),
@@ -1887,9 +1599,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   _openNoteInWorkspace(context, note: note),
               onCreateNote: () => _openNoteInWorkspace(context),
               onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
-                  ? () => _openLocalDiagnostics(context)
-                  : null,
               onSearchVisibilityChanged: (bool active) {
                 _workspaceShellKey.currentState?.setCompactSearchActive(active);
               },
@@ -1900,21 +1609,12 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
                   _workspaceShellKey.currentState?.setNoteEditorActive(visible),
               embeddedInWorkspace: true,
               controller: _notesController,
-              provisioningReader: _summaryRunRuntime.configuration.isLocal
-                  ? _modelProvisioningStatus
-                  : null,
-              onProvisioningCancel: _summaryRunRuntime.configuration.isLocal
-                  ? _cancelModelProvisioning
-                  : null,
               syncController: _syncPresentationControllerForCurrentAccount(),
               onNoteEdited: _ragRoot.onNoteEdited,
               onOpenNoteRag: _ragRoot.available
                   ? (NoteDto note) => _ragRoot.openNoteScope(context, note)
                   : null,
               onOpenSettings: () => _showAppearanceSettings(context),
-              onOpenDiagnostics: _summaryRunRuntime.configuration.isLocal
-                  ? () => _openLocalDiagnostics(context)
-                  : null,
             ),
           ),
         ),
@@ -1947,10 +1647,6 @@ class _NoteFlowAppState extends State<NoteFlowApp> with WidgetsBindingObserver {
     _router.dispose();
     if (widget.ownsAuthController) {
       widget.authController.dispose();
-    }
-    final LlmWorkerClient? client = _workerClient;
-    if (client != null) {
-      unawaited(client.dispose());
     }
     final AccountSyncRuntime? syncRuntime = _syncRuntime;
     if (syncRuntime != null) {

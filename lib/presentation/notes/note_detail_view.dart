@@ -211,7 +211,6 @@ extension _NoteDetailView on NoteDetailPageState {
     final NoteSummaryFailureCopy? summaryFailure = noteSummaryFailureCopy(
       copy: copy,
       controller: _summaryController,
-      suppressed: _provisioningFailed,
       retryEnabled: _canSummarize,
     );
     final Widget editor = NoteDetailSurface(
@@ -242,9 +241,6 @@ extension _NoteDetailView on NoteDetailPageState {
               primaryOnly: NoteFlowLayout.isCompact(context),
             ),
       syncController: widget.syncController,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningRetry: _note == null ? null : _summarize,
-      onProvisioningCancel: widget.onProvisioningCancel,
       summary: _summaryController.summary,
       summaryStale: _summaryController.isStale,
       onCopySummary: !_canExport || _summaryController.summary == null
@@ -263,8 +259,6 @@ extension _NoteDetailView on NoteDetailPageState {
           ? !_actionBusy
           : summaryFailure?.retryEnabled ?? false,
       summaryAvailability: _summaryAvailability,
-      summaryCloud:
-          widget.notesController.summaryConsent?.requiresCloudConsent ?? false,
       onCancelSummary: _summaryController.isRunning ? _cancelSummary : null,
       isSaving: _saving,
       isSummarizing: _summaryController.isRunning,

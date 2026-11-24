@@ -1,4 +1,3 @@
-import 'note_summary_resource_policy.dart';
 import 'summary_api_failure.dart';
 import 'summary_request_policy.dart';
 
@@ -18,8 +17,7 @@ import 'summary_request_policy.dart';
 /// a request the backend rejects.
 ///
 /// Sizing uses the policy's own fully rendered `section` estimate - messages
-/// JSON, escaping, and UTF-8 bytes included - never a character or token ratio,
-/// and never the local model's 2-character heuristic.
+/// JSON, escaping, and UTF-8 bytes included.
 final class SummaryChunkSplitter {
   /// Creates a splitter over [policy].
   const SummaryChunkSplitter(this._policy);
@@ -80,11 +78,7 @@ final class SummaryChunkSplitter {
           start,
           _largestFittingEnd(normalized, start, floor, length),
         );
-        final int boundary = chooseSummaryChunkBoundary(
-          start: start,
-          end: end,
-          unitAt: normalized.codeUnitAt,
-        );
+        final int boundary = _preferredBoundary(normalized, start, end);
         // A boundary that leaves a blank chunk fails this fit check, because
         // the policy refuses an input that is empty after its trim.
         if (_fitsSection(normalized.substring(start, boundary))) {
@@ -108,6 +102,23 @@ final class SummaryChunkSplitter {
       throw _pipelineTooLarge;
     }
     return List<String>.unmodifiable(chunks);
+  }
+
+  /// Prefers the last newline, then the last tab or space before [end].
+  static int _preferredBoundary(String note, int start, int end) {
+    for (int index = end; index > start; index--) {
+      final int unit = note.codeUnitAt(index - 1);
+      if (unit == 10 || unit == 13) {
+        return index;
+      }
+    }
+    for (int index = end; index > start; index--) {
+      final int unit = note.codeUnitAt(index - 1);
+      if (unit == 9 || unit == 32) {
+        return index;
+      }
+    }
+    return end;
   }
 
   /// The largest end in `[floor, length - 1]` whose chunk fits a section call.

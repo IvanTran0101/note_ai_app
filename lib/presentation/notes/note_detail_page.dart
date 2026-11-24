@@ -23,8 +23,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
-import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
 import '../../application/note_intelligence/summary_run_context.dart';
 import '../../application/sync/sync_conflict.dart';
@@ -71,8 +69,6 @@ final class NoteDetailPage extends StatefulWidget {
     super.key,
     required this.notesController,
     this.note,
-    this.provisioningReader,
-    this.onProvisioningCancel,
     this.showAppBar = true,
     this.onEmbeddedExit,
     this.onDirtyChanged,
@@ -84,8 +80,6 @@ final class NoteDetailPage extends StatefulWidget {
 
   final NotesApplicationController notesController;
   final NoteDto? note;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningCancel;
   final bool showAppBar;
   final ValueChanged<NoteDetailRouteResult>? onEmbeddedExit;
   final ValueChanged<bool>? onDirtyChanged;

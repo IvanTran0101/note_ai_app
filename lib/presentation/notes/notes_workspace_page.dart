@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/notes/note_application.dart';
 import 'note_ordering.dart';
 import '../../application/notes/note_page.dart';
@@ -38,9 +37,6 @@ final class NotesWorkspacePage extends StatefulWidget {
     this.controller,
     this.embeddedInWorkspace = false,
     this.onOpenSettings,
-    this.onOpenDiagnostics,
-    this.provisioningReader,
-    this.onProvisioningCancel,
     this.syncController,
     this.onNoteEdited,
     this.onOpenNoteRag,
@@ -54,9 +50,6 @@ final class NotesWorkspacePage extends StatefulWidget {
   final NotesApplicationController? controller;
   final bool embeddedInWorkspace;
   final VoidCallback? onOpenSettings;
-  final VoidCallback? onOpenDiagnostics;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningCancel;
   final SyncPresentationController? syncController;
 
   /// Forwards a real saved-note edit from the embedded editor to the host, so

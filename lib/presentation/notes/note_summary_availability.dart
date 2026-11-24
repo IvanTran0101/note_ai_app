@@ -59,8 +59,7 @@ final class NoteSummaryEditorFacts {
 /// The editor facts win over the runtime: an unsaved or conflicted revision is
 /// reported as such even when consent would also be required, because saving or
 /// resolving is the action the user can take immediately. A null [consent]
-/// service is the legacy/local seam: it never opens a dialog, but a local
-/// runtime that is unavailable on this build is still reported as such.
+/// service is used by standalone editors with an injected summary callback.
 NoteSummaryAvailability noteSummaryAvailability({
   required SummaryConsentAppService? consent,
   required bool hasSavedNote,
@@ -82,11 +81,6 @@ NoteSummaryAvailability noteSummaryAvailability({
   final SummaryRunFailureCode? reason = consent.unavailableReason;
   if (reason == SummaryRunFailureCode.unauthorized) {
     return NoteSummaryAvailability.signInRequired;
-  }
-  if (!consent.requiresCloudConsent) {
-    return reason == null
-        ? NoteSummaryAvailability.ready
-        : NoteSummaryAvailability.unavailable;
   }
   if (reason != null) {
     return NoteSummaryAvailability.unavailable;

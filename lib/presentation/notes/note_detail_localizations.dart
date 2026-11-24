@@ -152,11 +152,6 @@ final class NoteDetailCopy {
       ? 'Hãy đăng nhập lại để tóm tắt.'
       : 'Sign in again to summarize.';
 
-  /// Local summarization is unavailable on this device or build.
-  String get summaryLocalUnavailable => _isVietnamese
-      ? 'Tóm tắt cục bộ không khả dụng trên thiết bị này.'
-      : 'Local summaries are not available on this device.';
-
   /// Explains how far a cancellation reaches.
   ///
   /// [cloud] is true only for a run that may already have sent the chosen note:

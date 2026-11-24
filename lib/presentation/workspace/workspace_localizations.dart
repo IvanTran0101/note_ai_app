@@ -71,9 +71,6 @@ final class WorkspaceCopy {
 
   /// Tooltip for the appearance/settings action.
   String get settings => _isVietnamese ? 'Cài đặt' : 'Settings';
-
-  /// Tooltip for the local-AI diagnostics action.
-  String get diagnostics => _isVietnamese ? 'Chẩn đoán' : 'Diagnostics';
 }
 
 /// Alias matching the file name; [WorkspaceCopy] remains the canonical name.

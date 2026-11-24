@@ -92,7 +92,7 @@ final class NoteSummaryController extends ChangeNotifier {
     }
 
     final SummaryConsentAppService? consent = notes.summaryConsent;
-    final bool cloud = consent != null && consent.requiresCloudConsent;
+    final bool cloud = consent != null;
     SummaryConsentRequest? request;
     if (cloud) {
       final SummaryConsentStatus status = consent.state;

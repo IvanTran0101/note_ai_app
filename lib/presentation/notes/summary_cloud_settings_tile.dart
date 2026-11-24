@@ -41,10 +41,6 @@ final class _SummaryCloudSettingsTileState
   @override
   Widget build(BuildContext context) {
     final SummaryConsentAppService service = widget.service;
-    if (!service.requiresCloudConsent) {
-      return const SizedBox.shrink();
-    }
-
     final NoteDetailCopy copy = NoteDetailCopy.of(context);
     final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
     final SummaryConsentStatus status = service.state;

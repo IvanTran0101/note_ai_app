@@ -1,9 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_failure.dart';
-import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
-
 /// Presentation-only copy helper for the Notes feature, backed by a
 /// [LocalizationsDelegate] so it follows the locale resolved by MaterialApp
 /// (en / vi).
@@ -44,7 +41,6 @@ final class NotesCopy {
       _isVietnamese ? 'Đang tải ghi chú' : 'Loading notes';
   String get actionInProgress =>
       _isVietnamese ? 'Đang xử lý' : 'Action in progress';
-  String get diagnostics => _isVietnamese ? 'Chẩn đoán' : 'Diagnostics';
   String get editor => _isVietnamese ? 'Trình soạn thảo' : 'Note editor';
   String get save => _isVietnamese ? 'Lưu ghi chú' : 'Save note';
   String get delete => _isVietnamese ? 'Xóa ghi chú' : 'Delete note';
@@ -92,119 +88,6 @@ final class NotesCopy {
   String get languageSystem => _isVietnamese ? 'Theo hệ thống' : 'System';
   String get languageVietnamese => _isVietnamese ? 'Tiếng Việt' : 'Vietnamese';
   String get languageEnglish => _isVietnamese ? 'Tiếng Anh' : 'English';
-
-  String get debugTitle => _isVietnamese
-      ? 'NoteFlow · Chẩn đoán AI cục bộ'
-      : 'NoteFlow · Local AI diagnostics';
-  String get debugDescription => _isVietnamese
-      ? 'Kiểm thử tóm tắt trên thiết bị. Nền tảng di động dùng mô hình trong bộ nhớ riêng của ứng dụng; macOS Debug cũng hỗ trợ đường dẫn LOCAL_LLM_MODEL_PATH.'
-      : 'On-device summarization proof. Mobile platforms use the model in app-private storage; macOS Debug also accepts the LOCAL_LLM_MODEL_PATH override.';
-  String get modelStatus =>
-      _isVietnamese ? 'Trạng thái mô hình' : 'Model status';
-  String get modelStatusLoading => _isVietnamese ? 'đang tải…' : 'loading…';
-  String get modelStatusUnavailable =>
-      _isVietnamese ? 'không khả dụng' : 'unavailable';
-  String get modelNotProvisioned =>
-      _isVietnamese ? 'chưa được thiết lập' : 'not provisioned';
-  String get debugNoteLabel => _isVietnamese
-      ? 'Dán nội dung ghi chú để kiểm thử'
-      : 'Paste note content here';
-  String get debugError => _isVietnamese
-      ? 'Không thể tạo tóm tắt. Vui lòng thử lại.'
-      : 'Couldn’t create a summary. Please try again.';
-  String get debugSummary =>
-      _isVietnamese ? 'Kết quả tóm tắt' : 'Summary result';
-
-  String get provisioningStatus =>
-      _isVietnamese ? 'Trạng thái thiết lập mô hình' : 'Model setup status';
-  String get provisioningModel => _isVietnamese ? 'Mô hình' : 'Model';
-  String get provisioningDownloadHint => _isVietnamese
-      ? 'Mô hình sẽ được tải một lần vào bộ nhớ riêng của ứng dụng. Nên dùng Wi-Fi.'
-      : 'The model is downloaded once into app storage. Wi-Fi is recommended.';
-  String get provisioningDownloaded => _isVietnamese ? 'Đã tải' : 'Downloaded';
-  String get provisioningRetry => _isVietnamese ? 'Thử tải lại' : 'Retry setup';
-  String get provisioningCancel =>
-      _isVietnamese ? 'Hủy tải' : 'Cancel download';
-  String get provisioningCancelled => _isVietnamese
-      ? 'Đã hủy thiết lập mô hình.'
-      : 'Model setup was cancelled.';
-  String get provisioningNoDetail => _isVietnamese
-      ? 'Vui lòng thử lại hoặc mở Chẩn đoán.'
-      : 'Please try again or open Diagnostics.';
-
-  String provisioningPhase(ModelProvisioningPhase phase) {
-    return switch (phase) {
-      ModelProvisioningPhase.idle => _isVietnamese ? 'Sẵn sàng' : 'Ready',
-      ModelProvisioningPhase.detectingDevice =>
-        _isVietnamese ? 'Đang kiểm tra thiết bị…' : 'Checking device…',
-      ModelProvisioningPhase.selectingModel =>
-        _isVietnamese
-            ? 'Đang chọn mô hình phù hợp…'
-            : 'Selecting a compatible model…',
-      ModelProvisioningPhase.checkingExistingModel =>
-        _isVietnamese
-            ? 'Đang kiểm tra mô hình đã có…'
-            : 'Checking for an existing model…',
-      ModelProvisioningPhase.downloading =>
-        _isVietnamese ? 'Đang tải mô hình…' : 'Downloading model…',
-      ModelProvisioningPhase.verifying =>
-        _isVietnamese ? 'Đang xác minh mô hình…' : 'Verifying model…',
-      ModelProvisioningPhase.committing =>
-        _isVietnamese ? 'Đang lưu mô hình…' : 'Saving model…',
-      ModelProvisioningPhase.artifactReady =>
-        _isVietnamese ? 'Mô hình đã sẵn sàng…' : 'Model artifact ready…',
-      ModelProvisioningPhase.loadingRuntime =>
-        _isVietnamese ? 'Đang khởi động AI cục bộ…' : 'Starting local AI…',
-      ModelProvisioningPhase.ready =>
-        _isVietnamese ? 'AI cục bộ đã sẵn sàng' : 'Local AI is ready',
-      ModelProvisioningPhase.failed =>
-        _isVietnamese ? 'Thiết lập mô hình thất bại' : 'Model setup failed',
-      ModelProvisioningPhase.cancelled => provisioningCancelled,
-    };
-  }
-
-  String provisioningFailure(ModelProvisioningFailureCode code) {
-    return switch (code) {
-      ModelProvisioningFailureCode.hardwareDetectionFailed =>
-        _isVietnamese
-            ? 'Không thể đọc thông tin thiết bị.'
-            : 'Could not read device capabilities.',
-      ModelProvisioningFailureCode.noCompatibleModel =>
-        _isVietnamese
-            ? 'Thiết bị chưa có mô hình tương thích.'
-            : 'No compatible model is available for this device.',
-      ModelProvisioningFailureCode.storageFailed =>
-        _isVietnamese
-            ? 'Không thể lưu mô hình vào thiết bị.'
-            : 'Could not store the model on this device.',
-      ModelProvisioningFailureCode.downloadFailed =>
-        _isVietnamese
-            ? 'Không thể tải mô hình. Hãy kiểm tra mạng rồi thử lại.'
-            : 'The model download failed. Check your connection and try again.',
-      ModelProvisioningFailureCode.integrityMismatch =>
-        _isVietnamese
-            ? 'Mô hình tải xuống không hợp lệ. Hãy thử tải lại.'
-            : 'The downloaded model is invalid. Please try downloading again.',
-      ModelProvisioningFailureCode.runtimeLoadFailed =>
-        _isVietnamese
-            ? 'Không thể khởi động AI cục bộ.'
-            : 'The local AI runtime could not start.',
-      ModelProvisioningFailureCode.unsupportedPlatform =>
-        _isVietnamese
-            ? 'Nền tảng này chưa hỗ trợ mô hình cục bộ.'
-            : 'Local models are not supported on this platform.',
-      ModelProvisioningFailureCode.unexpected =>
-        _isVietnamese
-            ? 'Thiết lập mô hình gặp lỗi không xác định.'
-            : 'Model setup failed unexpectedly.',
-    };
-  }
-
-  String provisioningBytes(String downloaded, String total) {
-    return _isVietnamese
-        ? '$provisioningDownloaded $downloaded / $total'
-        : '$provisioningDownloaded $downloaded of $total';
-  }
 }
 
 final class _NotesCopyLocalizationsDelegate

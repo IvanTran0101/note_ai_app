@@ -89,14 +89,9 @@ final class SummaryRunRuntime {
   Future<SummaryRequestPolicy>? _policy;
   http.Client? _ownedClient;
 
-  /// True when a remote summary callback should be wired into Application.
-  bool get dispatchesSummary => configuration.mode != SummaryRuntimeMode.local;
-
   /// Runs one remote summary for a validated saved-note snapshot.
   Future<Summary> summarize(SummaryRunContext context) async {
-    if (!configuration.canSummarize ||
-        !configuration.isRemote ||
-        !cognitoMode) {
+    if (!configuration.canSummarize || !cognitoMode) {
       throw const SummaryRunFailure(SummaryRunFailureCode.runtimeUnavailable);
     }
     _scopes.removeWhere(

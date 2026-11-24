@@ -44,19 +44,8 @@ dependencies:
   # temp, cache dirs).
   path_provider: ^2.1.6
 
-  # Cross-platform device/hardware capability detection (M3.1). Provides
-  # physical-device, OS version, ABI, memory, and storage facts that feed
-  # capability-based model selection. Only the hardware-detection adapter
-  # imports this plugin; contract types never do.
-  device_info_plus: ^13.2.0
-
-  # Streaming SHA-256 verification for downloaded GGUF artifacts (M3.3b).
+  # SHA-256 for account namespaces and attachment integrity.
   crypto: ^3.0.7
-
-  # On-device llama.cpp runtime (Slice 3A package). The worker isolate owns
-  # the native runtime; the app never imports FFI directly.
-  local_llm_bridge:
-    path: packages/local_llm_bridge
 
   # AWS Cognito authentication backend. Only the Infrastructure auth adapter
   # (lib/infrastructure/auth/) imports these packages; Domain, Application, and

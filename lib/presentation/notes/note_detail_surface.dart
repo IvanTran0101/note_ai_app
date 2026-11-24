@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../common/note_flow_primitives.dart';
 import 'note_detail_action_bar.dart';
 import 'note_detail_editor_form.dart';
@@ -48,9 +47,6 @@ final class NoteDetailSurface extends StatelessWidget {
     this.richEditorBuilder,
     this.headerActions = const [],
     this.syncController,
-    required this.provisioningReader,
-    required this.onProvisioningRetry,
-    required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
     this.onCopySummary,
@@ -61,7 +57,6 @@ final class NoteDetailSurface extends StatelessWidget {
     this.errorRetryLabel,
     this.errorRetryEnabled = true,
     this.summaryAvailability,
-    this.summaryCloud = false,
     this.onCancelSummary,
     required this.isSaving,
     required this.isSummarizing,
@@ -102,9 +97,6 @@ final class NoteDetailSurface extends StatelessWidget {
   final Widget Function(Widget header, Widget footer)? richEditorBuilder;
   final List<Widget> headerActions;
   final SyncPresentationController? syncController;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningRetry;
-  final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
   final VoidCallback? onCopySummary;
@@ -121,7 +113,6 @@ final class NoteDetailSurface extends StatelessWidget {
   final NoteSummaryAvailability? summaryAvailability;
 
   /// Whether the active runtime is the cloud one, for unavailable copy.
-  final bool summaryCloud;
 
   /// Cancels the in-flight generation; visible for the whole run.
   final VoidCallback? onCancelSummary;
@@ -331,9 +322,6 @@ final class NoteDetailSurface extends StatelessWidget {
     includeFeedback: includeFeedback,
     isSummarizing: isSummarizing,
     showBusyIndicator: showBusyIndicator,
-    provisioningReader: provisioningReader,
-    onProvisioningRetry: onProvisioningRetry,
-    onProvisioningCancel: onProvisioningCancel,
     summary: summary,
     summaryStale: summaryStale,
     onCopySummary: onCopySummary,
@@ -344,7 +332,6 @@ final class NoteDetailSurface extends StatelessWidget {
     errorRetryLabel: errorRetryLabel,
     errorRetryEnabled: errorRetryEnabled,
     summaryAvailability: summaryAvailability,
-    summaryCloud: summaryCloud,
     onCancelSummary: onCancelSummary,
   );
 }

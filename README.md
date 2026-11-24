@@ -1,4 +1,37 @@
-Cross-Platform Note AI
+# NoteFlow
+
+NoteFlow is a Flutter note-management app with cloud Summary and Ask My Notes.
+Notes and pending edits are cached on the device for offline use. AI requests
+need internet access, a signed-in account, and consent.
+
+## Run the app
+
+Use Flutter 3.47.1. Install the Android SDK for Android builds or Xcode for
+macOS builds.
+
+~~~bash
+flutter pub get --enforce-lockfile
+flutter run -d chrome
+~~~
+
+The default Cognito configuration uses the public Amplify outputs in
+`lib/amplify_outputs.dart`. To use a different deployment, pass the JSON as
+`--dart-define="NOTEFLOW_AMPLIFY_OUTPUTS=$(cat amplify_outputs.json)"`.
+Summary uses `custom.aiApiEndpoint` or an HTTPS `NOTEFLOW_AI_API` override.
+Ask My Notes uses `custom.ragApiEndpoint`. Set `NOTEFLOW_AI_MODE` to
+`remote` or leave it unset. Provider credentials stay on the backend.
+
+## Verify and build
+
+~~~bash
+flutter analyze lib test
+flutter test
+flutter test integration_test/m05_local_first_test.dart -d macos
+flutter build web --release
+flutter build apk --release
+~~~
+
+## Project background
 
 Cross-Platform Note AI is a Flutter/Dart note-management application developed in
 two connected phases:
@@ -8,9 +41,8 @@ two connected phases:
 2. **Final Project:** a full cross-platform note product with account management,
    note organization, protection, sharing, offline synchronization, and AI.
 
-This README describes the approved target architecture and roadmap. It does **not**
-claim that every planned feature, provider, benchmark, or platform is already
-implemented. Update it as the codebase becomes runnable.
+The following sections record the project requirements and Midterm research.
+The commands above apply to the current application.
 
 ## Goals
 
@@ -28,9 +60,9 @@ mobile and Web clients.
 | Phase | Primary outcome | AI implementation |
 | --- | --- | --- |
 | Midterm / Essay | Research-quality Flutter demo with technical evidence | Local, offline inference using llama.cpp and GGUF models |
-| Final Project | Complete note-management product on Web plus native | DeepSeek via secure backend; local Midterm path remains on-device evidence |
+| Final Project | Complete note-management product on Web plus native | DeepSeek via a secure backend |
 
-### Midterm: local AI investigation
+### Midterm: historical on-device AI investigation
 
 The Midterm is focused on:
 
@@ -144,53 +176,13 @@ Summary is a value object. It does not contain runtime paths or model metadata.
 AI contracts describe what the application needs; Infrastructure chooses how to
 perform it.
 
-#### Local AI infrastructure
+#### Cloud AI infrastructure
 
-~~~text
-First launch / re-provision
-  DeviceCapabilityService
-    -> ModelSelectionPolicy
-    -> ModelProvisioningService
-    -> download, verify, store, warm-up
-    -> AIConfigurationStore
-    -> Ready / downgrade / failure
-
-Normal summary
-  NoteSummaryAppService
-    -> INoteSummarizationService
-    -> LocalSummarizationService
-    -> LocalLLMRuntime / LlamaCppAdapter
-    -> selected GGUF model
-~~~
-
-The runtime loads a model, generates output, and releases memory. It does not know
-Note, Summary, DTOs, or device-selection policy. Hardware data, native APIs,
-selected model, downloads, file paths, and runtime configuration all belong to
-Infrastructure.
-
-Persist model/version/path, device tier, and initialization state using
-**AIConfigurationStore**. Handle insufficient storage, interrupted/corrupt
-downloads, missing/incompatible models, memory pressure, cancellation, and
-unsupported devices.
-
-### Final AI evolution
-
-The AI capability remains stable while the implementation changes:
-
-~~~text
-                    Domain/application AI contract
-                                  ^
-                                  |
-Midterm: LocalAiProvider --------+------> llama.cpp + GGUF on native device
-
-Final:   RemoteAiProvider -------+------> Backend API -> DeepSeek
-~~~
-
-The backend holds the DeepSeek credential, performs server-side validation/rate
-limits, and returns safe application responses. Provider keys never enter Flutter.
-This backend route is the compatible Final AI strategy for Flutter Web. The local
-GGUF route remains Midterm evidence for on-device/offline AI and must not be
-silently claimed as equivalent in every browser.
+The Summary runtime validates the signed-in session, the saved note, and
+consent before sending a request. Ask My Notes uses a separate consent flow
+and returns references to notes the account can access. The backend holds
+the DeepSeek credential, applies validation and rate limits, and returns
+application responses.
 
 ## Folder structure
 
@@ -312,36 +304,6 @@ attachments, search, labels, pinning, accessible UI states, offline edit ->
 reconnect -> sync, locked-note/security enforcement, and sharing permissions.
 Demonstrate at least one AI workflow on both submitted platforms. QA demonstrations
 must include source navigation.
-
-## Setup and release checklist
-
-The actual Flutter/Dart version, backend technology, model assets, environment
-variables, supported platforms, deployed URL, and native artifact name are
-implementation-dependent. Add exact tested values here before delivery; do not
-guess them.
-
-The Final README must include verified commands equivalent to:
-
-~~~bash
-flutter pub get
-flutter analyze
-flutter test
-flutter test integration_test
-flutter run -d chrome
-flutter build web
-flutter build <selected-native-target>
-~~~
-
-Also document:
-
-- Flutter/Dart versions and required native toolchains.
-- Environment template and backend setup without secrets.
-- Supported platforms and real platform-specific fallbacks/limitations.
-- Backend/hosting, security rules/server-side authorization, migrations/indexes,
-  local-persistence, and synchronization strategy.
-- Midterm model acquisition/licence/storage steps.
-- Public Web URL, native artifact, grading accounts/sample data, and repeatable
-  test/build commands.
 
 ## Sources and decision authority
 

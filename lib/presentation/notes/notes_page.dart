@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
-import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
 import 'note_ordering.dart';
 import 'note_flow_snackbar.dart';
@@ -27,9 +25,6 @@ class NotesPage extends StatefulWidget {
     this.applicationService,
     this.controller,
     this.onOpenSettings,
-    this.onOpenDiagnostics,
-    this.provisioningReader,
-    this.onProvisioningCancel,
   }) : assert(
          applicationService != null || controller != null,
          'Provide applicationService or controller.',
@@ -38,9 +33,6 @@ class NotesPage extends StatefulWidget {
   final NoteApplicationService? applicationService;
   final NotesApplicationController? controller;
   final VoidCallback? onOpenSettings;
-  final VoidCallback? onOpenDiagnostics;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningCancel;
 
   @override
   State<NotesPage> createState() => _NotesPageState();
@@ -339,15 +331,9 @@ class _NotesPageState extends State<NotesPage> {
       if (!mounted) {
         return;
       }
-      final ModelProvisioningState? provisioningState =
-          widget.provisioningReader?.current;
-      final bool provisioningFailed =
-          provisioningState?.phase == ModelProvisioningPhase.failed ||
-          provisioningState?.phase == ModelProvisioningPhase.cancelled;
       setState(
-        () => _error = provisioningFailed
-            ? null
-            : _formatError(error, NotesCopy.of(context).summarizeError),
+        () =>
+            _error = _formatError(error, NotesCopy.of(context).summarizeError),
       );
     } finally {
       if (mounted) {
@@ -469,18 +455,7 @@ class _NotesPageState extends State<NotesPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(copy.title),
-        actions:
-            widget.onOpenSettings == null && widget.onOpenDiagnostics == null
-            ? null
-            : <Widget>[
-                if (widget.onOpenSettings != null) _settingsAction(),
-                if (widget.onOpenDiagnostics != null)
-                  TextButton(
-                    key: const ValueKey<String>('open-diagnostics'),
-                    onPressed: widget.onOpenDiagnostics,
-                    child: Text(copy.diagnostics),
-                  ),
-              ],
+        actions: widget.onOpenSettings == null ? null : [_settingsAction()],
       ),
       body: _loading
           ? Center(
@@ -515,9 +490,6 @@ class _NotesPageState extends State<NotesPage> {
       isDirty: _editorDirty,
       summaryBusy: _summarizing,
       statusMessage: _statusMessage,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningRetry: _summarizeNote,
-      onProvisioningCancel: widget.onProvisioningCancel,
       onSave: _saveNote,
       onDelete: _selectedNoteId == null || _actionBusy
           ? null
