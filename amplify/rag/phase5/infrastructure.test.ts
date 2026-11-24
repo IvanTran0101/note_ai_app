@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {App,Duration,Stack} from 'aws-cdk-lib';
-import {Template} from 'aws-cdk-lib/assertions';
+import {Match,Template} from 'aws-cdk-lib/assertions';
 import {UserPool} from 'aws-cdk-lib/aws-cognito';
 import {AttributeType,StreamViewType,Table} from 'aws-cdk-lib/aws-dynamodb';
 import {Code,Function,Runtime} from 'aws-cdk-lib/aws-lambda';
@@ -187,9 +187,15 @@ test('staged verified-account API throttles only query and grants exact-pool ide
   createPhase5Infrastructure({handler:fn,notesTable:notes,stateTable:state,ownerIds:[OWNER],
     issuerUrl:ISSUER,audience:[AUDIENCE],verifiedPool,queryThrottle:{rate:2.5,burst:4}});
   const template=Template.fromStack(stack);
-  template.hasResourceProperties('AWS::ApiGatewayV2::Stage',{RouteSettings:{
-    'POST /ai/rag/query':{ThrottlingRateLimit:2.5,ThrottlingBurstLimit:4},
-  }});
+  const queryRouteId=template.getResourceId('AWS::ApiGatewayV2::Route',{
+    Properties:{RouteKey:'POST /ai/rag/query',AuthorizationType:'JWT'},
+  });
+  template.hasResource('AWS::ApiGatewayV2::Stage',{
+    DependsOn:Match.arrayWith([queryRouteId]),
+    Properties:{RouteSettings:Match.objectEquals({
+      'POST /ai/rag/query':{ThrottlingRateLimit:2.5,ThrottlingBurstLimit:4},
+    })},
+  });
   const statements=Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
     (item:any)=>item.Properties.PolicyDocument.Statement);
   const cognito=statements.filter((s:any)=>[s.Action].flat().some((action:string)=>action.startsWith('cognito-idp:')));

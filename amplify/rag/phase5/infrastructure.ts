@@ -1,6 +1,6 @@
 import {Duration,Stack} from 'aws-cdk-lib';
 import {
-  CfnIntegration,CfnStage,CorsHttpMethod,HttpApi,HttpMethod,PayloadFormatVersion,
+  CfnIntegration,CfnRoute,CfnStage,CorsHttpMethod,HttpApi,HttpMethod,PayloadFormatVersion,
 } from 'aws-cdk-lib/aws-apigatewayv2';
 import {HttpJwtAuthorizer} from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import {HttpLambdaIntegration} from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -153,11 +153,9 @@ export function createPhase5Infrastructure(props:Phase5InfrastructureProps):Phas
   });
 
   // No default authorizer and no default/ANY route: every route states its authorizer explicitly.
-  const routes=[
-    ...api.addRoutes({path:RAG_QUERY_PATH,methods:[HttpMethod.POST],integration,authorizer}),
-    ...api.addRoutes({path:CONSENT_PATH,methods:[HttpMethod.GET,HttpMethod.PUT],integration,authorizer}),
-  ];
-  const cfn=routes[0].node.findChild('RagLambdaIntegration')?.node.defaultChild;
+  const [queryRoute]=api.addRoutes({path:RAG_QUERY_PATH,methods:[HttpMethod.POST],integration,authorizer});
+  api.addRoutes({path:CONSENT_PATH,methods:[HttpMethod.GET,HttpMethod.PUT],integration,authorizer});
+  const cfn=queryRoute.node.findChild('RagLambdaIntegration')?.node.defaultChild;
   if(!(cfn instanceof CfnIntegration))throw Error('Phase5 RAG integration construct missing.');
   cfn.timeoutInMillis=30_000;
 
@@ -166,6 +164,10 @@ export function createPhase5Infrastructure(props:Phase5InfrastructureProps):Phas
     const stage=api.defaultStage?.node.defaultChild;
     if(!(stage instanceof CfnStage)||!Number.isFinite(rate)||rate<=0||!Number.isSafeInteger(burst)||burst<=0)
       throw Error('RAG query throttle needs a positive rate and integer burst');
+    const cfnQueryRoute=queryRoute.node.defaultChild;
+    if(!(cfnQueryRoute instanceof CfnRoute))throw Error('Phase5 RAG query route construct missing.');
+    // API Gateway requires the route to exist before it accepts the stage's RouteSettings.
+    stage.addResourceDependency(cfnQueryRoute);
     stage.addPropertyOverride('RouteSettings', {
       ['POST '+RAG_QUERY_PATH]:{ThrottlingRateLimit:rate,ThrottlingBurstLimit:burst},
     });

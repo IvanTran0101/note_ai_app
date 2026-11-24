@@ -8,6 +8,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONSENT_VERSION } from '../contract';
+import { beginContext } from '../authority';
+import { createQueryPorts } from '../indexing/query_ports';
 import { embeddingInputDigest, checksum, decodeSnapshot, encodeSnapshot, sha256Hex } from '../indexing/snapshot';
 import { fingerprint } from '../indexing/jobs';
 import type {
@@ -213,7 +215,8 @@ const rig = (options: RigOptions = {}) => {
   };
   const handler = createPilotWorkerHandler({
     readConfig,
-    accountAccess: options.accountAccess,
+    readConsent: options.accountAccess?.readConsent ?? (async () => store.state.consent),
+    verifyOwner: options.accountAccess?.verifyOwner,
     runtime: () => ({ store, artifacts, embedding, log: (metadata) => logs.push({ ...metadata }) }),
     budget: {
       async acquireEmbedding(): Promise<void> {
@@ -273,11 +276,12 @@ test('the pilot log sanitizer hashes identities and drops everything unsafe', ()
 });
 
 test('an ARN or eventSource mismatch rejects the whole batch before any load', async () => {
-  const badArn = rig();
+  const badArn = rig({ config: dynamicConfig() });
   await assert.rejects(
-    badArn.handler(stream(recordFor(ACTOR, 'NOTE#n1', '1', 'MODIFY', { eventSourceARN: 'arn:other' }))),
+    badArn.handler(stream(recordFor(ACTOR, 'META#SYNC', '1', 'MODIFY', { eventSourceARN: 'arn:other' }))),
     isFailure('UNTRUSTED_STREAM', false),
   );
+  assert.equal(badArn.reads, 0);
   assert.equal(badArn.store.loads, 0);
   assert.equal(badArn.embedding.calls.length, 0);
 
@@ -295,7 +299,7 @@ test('a mixed batch loads only listed/approved rows and never reads non-pilot bo
     recordFor(ACTOR, 'NOTE#n1', '1'),
     recordFor(OTHER, 'NOTE#n1', '2'),
     recordFor(ACTOR, 'NOTE#n2', '3'),
-    recordFor(ACTOR, 'META#x', '4'),
+    recordFor(ACTOR, 'META#SYNC', '4'),
     recordFor(ACTOR, 'RAG#RETIRE#v1', '5'),
   ));
   assert.deepEqual(failuresOf(result), []);
@@ -321,6 +325,105 @@ test('dynamic mode admits a new exact-owner note and ignores foreign, malformed 
   assert.equal(h.store.manifests.length, 1);
   assert.equal(h.store.manifests[0]?.status, 'READY');
   assert.equal(h.embedding.calls.length, 1);
+});
+
+test('a verified recipient recovers query readiness after a share and a label-only change', async () => {
+  let consentReads = 0;
+  const h = rig({
+    config: dynamicConfig({ verifiedAccountsEnabled: true }),
+    state: state({ ownerId: OTHER, accountEpoch: 68, notes: [note({ ownerId: OTHER })] }),
+    accountAccess: {
+      readConsent: async () => { consentReads += 1; return consent(true); },
+      verifyOwner: async (ownerId) => ownerId === OTHER,
+    },
+  });
+  const { authority, retrieval } = createQueryPorts(h);
+  const query = () => beginContext(OTHER, {
+    wireVersion: 1, question: 'Approved synthetic body', scope: { type: 'account' },
+  }, authority, new AbortController().signal);
+  await h.handler(stream(recordFor(OTHER, 'NOTE#n1', '68')));
+  assert.equal(h.store.state.manifest?.accountEpoch, 68);
+  await query();
+
+  h.store.state = { ...h.store.state, accountEpoch: 69 };
+  await assert.rejects(query(), (error) => error instanceof RagFailure && error.code === 'INDEX_NOT_READY');
+  const share = stream(
+    recordFor(OTHER, 'SHARED#foreign-note', '69'),
+    recordFor(OTHER, 'CHANGE#69', '70'),
+    recordFor(OTHER, 'META#SYNC', '71'),
+    recordFor(OTHER, 'META#SYNC', '71'),
+  );
+  assert.deepEqual(failuresOf(await h.handler(share)), []);
+  assert.equal(h.store.state.manifest?.accountEpoch, 69);
+  assert.equal(h.store.state.manifest?.status, 'READY');
+  const recovered = await query();
+  assert.deepEqual(recovered.notes.map(({ noteId }) => noteId), ['n1']);
+  assert.deepEqual((await retrieval.keywordSearch('Approved', recovered)).map(({ chunk }) => chunk.noteId), ['n1']);
+  assert.deepEqual(failuresOf(await h.handler(share)), []);
+  assert.equal(h.store.publishes, 2, 'a replay acknowledges the existing current index');
+
+  h.store.state = { ...h.store.state, accountEpoch: 70 };
+  assert.deepEqual(failuresOf(await h.handler(stream(
+    recordFor(OTHER, 'LABEL#lecture', '72', 'INSERT'),
+    recordFor(OTHER, 'META#SYNC', '73'),
+  ))), []);
+  assert.equal(h.store.state.manifest?.accountEpoch, 70);
+  await query();
+  assert.equal(h.store.publishes, 3);
+  assert.equal(h.embedding.calls.length, 1, 'epoch-only refreshes reuse the existing embedding');
+  assert.equal(consentReads, 4, 'admission reads consent once per owner in each batch');
+});
+
+test('sync marker admission requires an enabled dynamic rollout and current listed or verified consent', async () => {
+  const marker = (ownerId: string, type = 'MODIFY') => stream(recordFor(ownerId, 'META#SYNC', '1', type));
+  const listed = rig({ config: dynamicConfig(), state: state({ consent: consent(false) }) });
+  const disabled = rig({ config: dynamicConfig({ policy: policyRaw(false) }) });
+  const unverified = rig({
+    config: dynamicConfig({ verifiedAccountsEnabled: true }),
+    accountAccess: { readConsent: async () => consent(true), verifyOwner: async () => false },
+  });
+  const verifiedRevoked = rig({
+    config: dynamicConfig({ verifiedAccountsEnabled: true }),
+    state: state({ ownerId: OTHER, notes: [], consent: consent(false) }),
+    accountAccess: { readConsent: async () => consent(false), verifyOwner: async () => true },
+  });
+  const rejects = [
+    [rig(), marker(ACTOR)], [listed, marker(ACTOR)], [disabled, marker(ACTOR)],
+    [unverified, marker(OTHER)], [verifiedRevoked, marker(OTHER)],
+    [rig({ config: dynamicConfig() }), marker(OTHER)],
+    [rig({ config: dynamicConfig() }), marker(ACTOR, 'REMOVE')],
+  ] as const;
+  for (const [fixture, event] of rejects) {
+    assert.deepEqual(failuresOf(await fixture.handler(event)), []);
+    assert.equal(fixture.store.loads, 0);
+  }
+  await verifiedRevoked.handler(stream(recordFor(OTHER, 'META#SYNC', '1'), recordFor(OTHER, 'RAG#CONSENT', '2')));
+  assert.ok(verifiedRevoked.logs.some(({ event, selected }) => event === 'pilot.stream.selected' && selected === 1));
+  assert.equal(verifiedRevoked.store.state.manifest?.status, 'BLOCKED');
+});
+
+test('a listed sync job coalesces note work and replays a busy lease or canonical edit before publish', async () => {
+  const h = rig({ config: dynamicConfig(), state: state({ accountEpoch: 69 }) });
+  const batch = stream(recordFor(ACTOR, 'META#SYNC', '10'), recordFor(ACTOR, 'NOTE#n1', '8'));
+  h.store.lease = { token: 'busy', fingerprint: fingerprint(h.store.state), expiresAt: Date.now() + LEASE_MS };
+  assert.deepEqual(failuresOf(await h.handler(batch)), [{ itemIdentifier: '8' }]);
+  h.store.lease = null;
+
+  const originalPut = h.artifacts.put.bind(h.artifacts);
+  h.artifacts.put = async (snapshot) => {
+    h.store.state = { ...h.store.state, accountEpoch: 70, notes: [note({ revision: 2, content: 'Edited note' })] };
+    h.artifacts.put = originalPut;
+    return originalPut(snapshot);
+  };
+  assert.deepEqual(failuresOf(await h.handler(batch)), [{ itemIdentifier: '8' }]);
+  assert.equal(h.store.publishes, 0);
+  assert.deepEqual(failuresOf(await h.handler(batch)), []);
+  assert.equal(h.store.publishes, 1);
+  assert.equal(h.store.state.manifest?.accountEpoch, 70);
+  assert.deepEqual(h.logs.filter(({ event }) => event === 'index.stream.replay').map(({ code }) => code),
+    ['LEASE_BUSY', 'SOURCE_CHANGED']);
+  assert.ok(h.logs.filter(({ event }) => event === 'index.started').every(({ kind }) => kind === 'RECONCILE_ACCOUNT'));
+  assert.match(h.embedding.calls.flat().at(-1) ?? '', /Edited note/);
 });
 
 test('dynamic mode never embeds foreign, shared, deleted, protected or unsynced notes', async () => {
@@ -621,6 +724,7 @@ test('an untrusted provider error string is normalized away from the logs', asyn
 test('construction validates the injected dependencies', () => {
   const base = {
     readConfig: async (): Promise<RuntimeConfig> => parseRuntimeConfig(rawConfig()),
+    readConsent: async () => consent(true),
     runtime: () => ({ store: new MemoryStore(state()) }) as never,
     budget: { async acquireEmbedding(): Promise<void> {} },
     recover: async () => ({}),

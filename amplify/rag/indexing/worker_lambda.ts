@@ -57,13 +57,9 @@ const composePilot=(deps:ReturnType<typeof runtime>,streamArn:string):Handler=>{
   const configReader=createRuntimeConfigReader({region:deps.region,stateTable:deps.stateTable});
   const budget=createPilotBudget(deps.region,deps.stateTable);
   const poolId=process.env['RAG_VERIFIED_USER_POOL_ID'];
-  const notesTable=process.env['RAG_NOTES_TABLE'];
-  const accountAccess=poolId&&notesTable?{
-    readConsent:createConsentStore(deps.region,notesTable).read,
-    verifyOwner:createVerifiedOwnerReader(poolId),
-  }:undefined;
   const pilot=createPilotWorkerHandler({
-    accountAccess,
+    readConsent:createConsentStore(deps.region,deps.notesTable).read,
+    verifyOwner:poolId?createVerifiedOwnerReader(poolId):undefined,
     readConfig:(signal)=>configReader.read(signal),
     runtime:()=>deps,
     budget,

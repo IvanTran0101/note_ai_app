@@ -226,7 +226,7 @@ const templateHasRetainedFailures=(template:Template):void=>{
   template.hasResourceProperties('AWS::S3::Bucket',{LifecycleConfiguration:{Rules:[{ExpirationInDays:7,Status:'Enabled'}]}});
 };
 
-test('dynamic streamEnabled true enables the mapping without widening filters, owner or index ARN',()=>{
+test('dynamic streamEnabled true adds the exact sync marker and keeps the owner and index ARN',()=>{
   assert.equal(dynamicScope(true).streamEnabled,true);
   const app=new App({outdir:mkdtempSync(join(tmpdir(),'rag-dynamic-stream-synth-'))});
   const stack=new Stack(app,'Test',{env:{account:'864946423771',region:'ap-southeast-1'}});
@@ -240,7 +240,7 @@ test('dynamic streamEnabled true enables the mapping without widening filters, o
   const pattern=JSON.parse(mapping.Properties.FilterCriteria.Filters[0].Pattern);
   assert.deepEqual(pattern.dynamodb.Keys.ownerId.S,[`OWNER#${PILOT_OWNER}`]);
   assert.deepEqual(pattern.dynamodb.Keys.noteId.S,
-    [{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']);
+    [{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT','META#SYNC']);
   assert.ok(!JSON.stringify(pattern).includes(REVIEWED_EXISTING_NOTE),'no frozen note id');
   assert.ok(!JSON.stringify(pattern).includes('rag-smoke-'),'no legacy wildcard owner');
   const worker=workerFunction(resources);
@@ -376,7 +376,7 @@ test('pilot scope fails closed on an empty, over-cap, malformed or duplicate own
   assert.throws(()=>readRagPilotScope({owners:overCap}),/one to five/);
 });
 
-test('verified-account stream keeps the owner-row filter, consent sort key and existing mapping resource',()=>{
+test('verified-account stream includes exact sync markers in the existing mapping',()=>{
   const app=new App({outdir:mkdtempSync(join(tmpdir(),'rag-verified-synth-'))});
   const env={account:'864946423771',region:'ap-southeast-1'};
   const stack=new Stack(app,'Test',{env});
@@ -386,11 +386,12 @@ test('verified-account stream keeps the owner-row filter, consent sort key and e
     sortKey:{name:'noteId',type:AttributeType.STRING},stream:StreamViewType.NEW_IMAGE});
   const {mapping}=createRagInfrastructure(stack,notes,dynamicScope(true),undefined,pool);
   const resources=Template.fromStack(stack).toJSON().Resources as Record<string,any>;
-  const filter=eventMapping(resources).Properties.FilterCriteria.Filters[0].Pattern;
-  assert.deepEqual(JSON.parse(filter),{
+  const filters=eventMapping(resources).Properties.FilterCriteria.Filters;
+  assert.equal(filters.length,1);
+  assert.deepEqual(JSON.parse(filters[0].Pattern),{
     eventName:['INSERT','MODIFY','REMOVE'],
     dynamodb:{Keys:{ownerId:{S:[{prefix:'OWNER#'}]},
-      noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}},
+      noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT','META#SYNC']}}},
   });
   assert.match(stack.getLogicalId(mapping.node.defaultChild as CfnResource),/^RagNoteStream/);
   assert.ok(workerFunction(resources).Properties.Environment.Variables.RAG_VERIFIED_USER_POOL_ID);

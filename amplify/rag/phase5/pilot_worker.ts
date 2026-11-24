@@ -6,10 +6,10 @@
  *
  * The stream payload stays a hint, never an authority. Every record must carry the exact
  * configured `eventSourceARN` and `eventSource: 'aws:dynamodb'` before any record field is read;
- * then only the Keys of a listed Cognito owner are selected. In reviewed-pilot mode that means an
+ * then the Keys select a listed or verified Cognito owner. In reviewed-pilot mode that means an
  * approved `NOTE#`/`PROTECTION#` note id or the one `RAG#CONSENT` account row; in
- * `eligible-own-notes.v1` mode any valid identifier suffix is admitted for the exact listed owner,
- * while malformed suffixes and every other self `RAG#` row are ignored. Canonical eligibility,
+ * `eligible-own-notes.v1` mode any valid identifier suffix is admitted, along with sync marker
+ * inserts and updates when consent is current. Canonical eligibility,
  * consent and freshness still decide what is embedded and published. Original records and
  * SequenceNumbers are forwarded unchanged, so coalescing and earliest-sequence partial failures
  * keep their existing semantics. A non-member or unselected row is skipped before `store.load`, so
@@ -23,6 +23,7 @@
  * codes/counts only; the legacy logger is left untouched.
  */
 import { isValidIdentifier } from '../contract';
+import { META_SORT_KEY } from '../../sync/sync_store_codec';
 import { createIndexWorker } from '../indexing/worker';
 import type { IndexWorker } from '../indexing/worker';
 import { createStreamHandler, remainingUntil, runManualJob, WORKER_MARGIN_MS } from '../indexing/stream';
@@ -58,7 +59,8 @@ export type PilotRecover = (
 export type PilotWorkerDeps = Readonly<{
   /** Trusted server-only config reader; one strongly consistent read per invocation. */
   readConfig: (signal: AbortSignal) => Promise<RuntimeConfig>;
-  accountAccess?: AccountAccess;
+  readConsent: AccountAccess['readConsent'];
+  verifyOwner?: AccountAccess['verifyOwner'];
   /** Lazily returns the raw SDK/tokenizer index; may safely be a cached factory. */
   runtime: () => IndexDeps;
   /** Pilot budget; only the atomic generic embedding admission is reached through the guarded store. */
@@ -179,15 +181,13 @@ const approvedNotes = (config: RuntimeConfig, ownerId: string): ReadonlySet<stri
 };
 
 /**
- * Keys-only scope filter for a listed owner. Reviewed-pilot mode admits only the frozen approved
+ * Scope selection by event name and key. Reviewed-pilot mode admits only the frozen approved
  * note ids; `eligible-own-notes.v1` mode admits any syntactically valid `NOTE#`/`PROTECTION#`
- * suffix for that exact owner. Both modes admit the one `RAG#CONSENT` account row. Self-owned
- * `RAG#`/`META#`/`EVENT#`/`CHANGE#`/`MUTATION#`/`SHARED#` rows, malformed suffixes and every
- * non-member row are ignored before any body load.
+ * suffix and the exact `META#SYNC` row for an admitted owner. Both modes admit `RAG#CONSENT`.
  */
 const selectStreamRecord = (
   config: RuntimeConfig, record: unknown, publicProvisioned: boolean,
-): Readonly<{ ownerId: string; consentRow: boolean }> | null => {
+): Readonly<{ ownerId: string; sortKey: string }> | null => {
   if (!isRecord(record)) return null;
   const dynamo = record['dynamodb'];
   if (!isRecord(dynamo)) return null;
@@ -201,14 +201,19 @@ const selectStreamRecord = (
   const listed = Object.prototype.hasOwnProperty.call(config.corpus.owners, ownerId);
   const consentRow = sortKey === CONSENT_SORT_KEY;
   if (!listed && !(publicProvisioned && (consentRow || acceptsVerifiedAccounts(config)))) return null;
-  if (consentRow) return { ownerId, consentRow };
+  if (consentRow) return { ownerId, sortKey };
   const dynamic = config.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND;
+  if (sortKey === META_SORT_KEY) {
+    const eventName = record['eventName'];
+    return dynamic && config.policy.enabled && (eventName === 'INSERT' || eventName === 'MODIFY')
+      ? { ownerId, sortKey } : null;
+  }
   const approved = dynamic ? null : approvedNotes(config, ownerId);
   for (const prefix of [NOTE_KEY_PREFIX, PROTECTION_KEY_PREFIX] as const) {
     if (!sortKey.startsWith(prefix)) continue;
     const noteId = sortKey.slice(prefix.length);
     const allowed = dynamic ? isValidIdentifier(noteId) : approved !== null && approved.has(noteId);
-    return allowed ? { ownerId, consentRow } : null;
+    return allowed ? { ownerId, sortKey } : null;
   }
   return null;
 };
@@ -248,7 +253,7 @@ const buildWorker = (
     budget: deps.budget,
     readConfig: deps.readConfig,
     config,
-    verifyOwner: deps.accountAccess?.verifyOwner,
+    verifyOwner: deps.verifyOwner,
   });
   const worker = createIndexWorker({
     ...raw,
@@ -267,6 +272,8 @@ export function createPilotWorkerHandler(deps: PilotWorkerDeps): PilotWorkerHand
   if (
     !isRecord(deps) ||
     typeof deps['readConfig'] !== 'function' ||
+    typeof deps['readConsent'] !== 'function' ||
+    (deps['verifyOwner'] !== undefined && typeof deps['verifyOwner'] !== 'function') ||
     typeof deps['runtime'] !== 'function' ||
     !isRecord(deps['budget']) ||
     typeof deps['budget']['acquireEmbedding'] !== 'function' ||
@@ -313,30 +320,35 @@ export function createPilotWorkerHandler(deps: PilotWorkerDeps): PilotWorkerHand
     if (records !== null) {
       const selected: unknown[] = [];
       const publicMode = acceptsVerifiedAccounts(config);
+      const { readConsent, verifyOwner } = deps;
       const permits = new Map<string, Readonly<{ accepted: boolean; allowed: boolean }>>();
       for (const record of records) {
-        const key = selectStreamRecord(config, record, deps.accountAccess !== undefined);
+        const key = selectStreamRecord(config, record, verifyOwner !== undefined);
         if (key === null) continue;
         const listed = Object.prototype.hasOwnProperty.call(config.corpus.owners, key.ownerId);
-        if (deps.accountAccess === undefined || (!publicMode && listed)) {
+        const listedPath = verifyOwner === undefined || (!publicMode && listed);
+        if (listedPath && key.sortKey !== META_SORT_KEY) {
           selected.push(record);
           continue;
         }
         let permit = permits.get(key.ownerId);
         if (permit === undefined) {
-          const grant = await deps.accountAccess.readConsent(key.ownerId, signal);
+          const grant = await readConsent(key.ownerId, signal);
           permit = {
             accepted: grant.accepted,
-            allowed: publicMode && grant.accepted && await deps.accountAccess.verifyOwner(key.ownerId, signal),
+            allowed: grant.accepted && (listedPath || (
+              publicMode && verifyOwner !== undefined && await verifyOwner(key.ownerId, signal)
+            )),
           };
           permits.set(key.ownerId, permit);
         }
         // A revocation event must reconcile existing index state even when admission is closed.
-        if (permit.allowed || (key.consentRow && !permit.accepted)) selected.push(record);
+        if (permit.allowed || (key.sortKey === CONSENT_SORT_KEY && !permit.accepted)) selected.push(record);
       }
       liveBudget();
       safeLog({ event: 'pilot.stream.selected', selected: selected.length, dropped: records.length - selected.length });
-      const stream = createStreamHandler(worker, safeLog);
+      const stream = createStreamHandler(worker, safeLog,
+        config.policy.enabled && config.corpus.kind === RUNTIME_ELIGIBLE_OWN_NOTES_KIND);
       const original = event as Record<string, unknown>;
       return stream(
         Object.freeze({ ...original, Records: Object.freeze(selected) }) as unknown as DynamoDBStreamEvent,

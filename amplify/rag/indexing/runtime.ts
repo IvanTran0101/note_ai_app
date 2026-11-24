@@ -10,7 +10,7 @@ export function runtime(){
   // One EmbeddingGemma profile for worker, query and probe. Cloudflare Access secrets are injected
   // by the runtime (Amplify secret refs for the managed Lambda, the scoped fetcher for CDK
   // worker/probe); they are never read from the event or written to a log.
-  return {region,stateTable,snapshotBucket,
+  return {region,notesTable,stateTable,snapshotBucket,
     store:createIndexStore({region,notesTable,stateTable}),
     artifacts:createArtifacts({region,snapshotBucket,vectorIndexArn:required('RAG_VECTOR_INDEX_ARN')}),
     embedding:createSelfHostedEmbedding({

@@ -9,7 +9,8 @@
  *
  * Relevant rows are `NOTE#<noteId>` and `PROTECTION#<noteId>` (the same note job: either
  * changes the eligible text or its protection status) and `RAG#CONSENT` (one account job).
- * `META#`/`MUTATION#`/`CHANGE#`/`EVENT#`/`SHARED#` and every worker-owned `RAG#` row other
+ * Dynamic pilot streams also opt in to `META#SYNC` inserts and updates as account jobs.
+ * Other `META#`/`MUTATION#`/`CHANGE#`/`EVENT#`/`SHARED#` and every worker-owned `RAG#` row other
  * than consent are ignored, so the worker cannot re-trigger itself. Duplicate owner/note
  * jobs coalesce, and an account job supersedes the note jobs of the same owner because the
  * worker reconciles the latest canonical account either way.
@@ -22,6 +23,7 @@ import type {
 import { isValidIdentifier } from '../contract';
 import { isSafeInteger, isWellFormed } from '../chunking';
 import { embeddingInputDigest, policyIdentity, sha256Hex, validateManifest } from './snapshot';
+import { META_SORT_KEY } from '../../sync/sync_store_codec';
 
 export const OWNER_KEY_PREFIX = 'OWNER#';
 export const NOTE_KEY_PREFIX = 'NOTE#';
@@ -102,8 +104,10 @@ type Relevance =
   | Readonly<{ kind: 'MALFORMED' }>
   | null;
 
-const relevanceOf = (sortKey: string): Relevance => {
-  if (sortKey === CONSENT_SORT_KEY) return { kind: 'ACCOUNT' };
+const relevanceOf = (sortKey: string, includeSyncMarker: boolean): Relevance => {
+  if (sortKey === CONSENT_SORT_KEY || (includeSyncMarker && sortKey === META_SORT_KEY)) {
+    return { kind: 'ACCOUNT' };
+  }
   for (const prefix of [NOTE_KEY_PREFIX, PROTECTION_KEY_PREFIX] as const) {
     if (!sortKey.startsWith(prefix)) continue;
     const noteId = sortKey.slice(prefix.length);
@@ -117,7 +121,7 @@ const relevanceOf = (sortKey: string): Relevance => {
  * keys/event fields are malformed is a terminal, retry-proof failure the caller must record
  * with typed metadata only.
  */
-export function classifyRecord(record: unknown): RecordDisposition {
+export function classifyRecord(record: unknown, includeSyncMarker = false): RecordDisposition {
   if (!isRecord(record)) return EXCLUDED;
   const dynamo = record['dynamodb'];
   if (!isRecord(dynamo)) return EXCLUDED;
@@ -125,11 +129,12 @@ export function classifyRecord(record: unknown): RecordDisposition {
   if (!isRecord(keys)) return EXCLUDED;
   const sortKey = attributeString(keys['noteId']);
   if (sortKey === null) return EXCLUDED;
-  const relevance = relevanceOf(sortKey);
+  const relevance = relevanceOf(sortKey, includeSyncMarker);
   if (relevance === null) return EXCLUDED;
   if (relevance.kind === 'MALFORMED') return MALFORMED;
 
   const eventName = record['eventName'];
+  if (sortKey === META_SORT_KEY && eventName === 'REMOVE') return EXCLUDED;
   if (eventName !== 'INSERT' && eventName !== 'MODIFY' && eventName !== 'REMOVE') return MALFORMED;
   const ownerKey = attributeString(keys['ownerId']);
   if (ownerKey === null || !ownerKey.startsWith(OWNER_KEY_PREFIX)) return MALFORMED;

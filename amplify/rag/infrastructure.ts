@@ -20,6 +20,7 @@ import {CONSENT_SORT_KEY,NOTE_KEY_PREFIX,OWNER_KEY_PREFIX,PROTECTION_KEY_PREFIX}
 import {MAX_PILOT_OWNERS,isCognitoSub} from './phase5/pilot_policy';
 import {grantVerifiedOwnerLookup} from './phase5/infrastructure';
 import {RUNTIME_CORPUS_KIND,RUNTIME_ELIGIBLE_OWN_NOTES_KIND} from './phase5/runtime_config';
+import {META_SORT_KEY} from '../sync/sync_store_codec';
 
 /**
  * One compiled pilot account. Reviewed-pilot mode lists the exact note ids; the dynamic
@@ -292,30 +293,29 @@ export function createRagInfrastructure(
   // Pilot mode selects the adapter in the worker. The mapping itself defaults disabled on this
   // first dynamic deploy; enabling is a separate controlled rollout after worker proof.
   if(approved!==undefined)worker.addEnvironment('RAG_PILOT_PHASE5','synthetic-only');
-  // One filter per approved owner, never a wildcard owner and never a cross-owner OR. The
-  // dynamic `eligible-own-notes.v1` mode admits only that exact `OWNER#<sub>` partition plus
-  // `NOTE#`/`PROTECTION#` prefixes and the exact `RAG#CONSENT` row; no other `RAG#` row matches.
-  // The reviewed mode keeps its exact note/protection keys. Absent scope keeps the legacy smoke
-  // filter. Both pilot modes keep failure destinations on the retained private S3 bucket.
+  // Enabled dynamic streams use the sync marker as an account reconciliation hint. The adapter
+  // rejects marker removals while continuing to process note and consent removals.
+  const streamEnabled=approved?.kind===RUNTIME_ELIGIBLE_OWN_NOTES_KIND
+    ?approved.streamEnabled??false
+    :jobs.stream.enabledByDefault;
+  const dynamicKeys=[{prefix:NOTE_KEY_PREFIX},{prefix:PROTECTION_KEY_PREFIX},CONSENT_SORT_KEY,
+    ...(streamEnabled?[META_SORT_KEY]:[])];
+  // One filter per listed owner, or one owner-prefix filter when Cognito admission is provisioned.
   const filters=verifiedPool!==undefined
     ?[FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{
       ownerId:{S:FilterRule.beginsWith(OWNER_KEY_PREFIX)},
-      noteId:{S:[{prefix:NOTE_KEY_PREFIX},{prefix:PROTECTION_KEY_PREFIX},CONSENT_SORT_KEY]}}}})]
+      noteId:{S:dynamicKeys}}}})]
     :approved===undefined
     ?[FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{ownerId:{S:FilterRule.beginsWith('OWNER#rag-smoke-')},
       noteId:{S:[{prefix:'NOTE#'},{prefix:'PROTECTION#'},'RAG#CONSENT']}}}})]
     :approved.kind===RUNTIME_ELIGIBLE_OWN_NOTES_KIND
       ?approved.owners.map(owner=>FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{
         ownerId:{S:[`${OWNER_KEY_PREFIX}${owner.ownerId}`]},
-        noteId:{S:[{prefix:NOTE_KEY_PREFIX},{prefix:PROTECTION_KEY_PREFIX},CONSENT_SORT_KEY]}}}}))
+        noteId:{S:dynamicKeys}}}}))
       :approved.owners.map(owner=>FilterCriteria.filter({eventName:['INSERT','MODIFY','REMOVE'],dynamodb:{Keys:{
         ownerId:{S:[`${OWNER_KEY_PREFIX}${owner.ownerId}`]},
         noteId:{S:[...owner.noteIds.map(id=>`${NOTE_KEY_PREFIX}${id}`),
           ...owner.noteIds.map(id=>`${PROTECTION_KEY_PREFIX}${id}`),CONSENT_SORT_KEY]}}}}));
-  // Only the validated dynamic scope may opt in; reviewed/legacy keep the policy default false.
-  const streamEnabled=approved!==undefined&&approved.kind===RUNTIME_ELIGIBLE_OWN_NOTES_KIND
-    ?approved.streamEnabled??false
-    :jobs.stream.enabledByDefault;
   const mapping=new EventSourceMapping(scope,'RagNoteStream',{target:worker,eventSourceArn:notes.tableStreamArn!,
     enabled:streamEnabled,startingPosition:StartingPosition.TRIM_HORIZON,batchSize:jobs.stream.batchSize,maxBatchingWindow:Duration.seconds(jobs.stream.batchingWindowSeconds),
     parallelizationFactor:jobs.stream.parallelizationFactor,retryAttempts:jobs.stream.maximumRetryAttempts,maxRecordAge:Duration.seconds(jobs.stream.maximumRecordAgeSeconds),reportBatchItemFailures:true,

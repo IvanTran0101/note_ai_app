@@ -112,6 +112,7 @@ export const remainingUntil = (deadlineAt: number, now: () => number = Date.now)
 export function createStreamHandler(
   worker: IndexWorker,
   log?: StreamLog,
+  includeSyncMarker = false,
 ): (event: DynamoDBStreamEvent, deadlineAt?: number) => Promise<StreamResult> {
   if (typeof worker !== 'function') throw new TypeError('index worker is required');
   return async (event: DynamoDBStreamEvent, deadlineAt?: number): Promise<StreamResult> => {
@@ -122,7 +123,7 @@ export function createStreamHandler(
     const groups = new Map<string, Group>();
     const order: Group[] = [];
     for (const record of records) {
-      const disposition = classifyRecord(record);
+      const disposition = classifyRecord(record, includeSyncMarker);
       if (disposition.kind === 'EXCLUDED') continue;
       const sequence = sequenceOf(record);
       if (disposition.kind === 'MALFORMED') {

@@ -157,6 +157,22 @@ test('worker, status, manifest, feed and relay rows are excluded', () => {
   assert.deepEqual(jobsFromStream(undefined as never), []);
 });
 
+test('the pilot opt-in classifies only exact sync marker inserts and updates as account jobs', () => {
+  for (const eventName of ['INSERT', 'MODIFY']) {
+    assert.deepEqual(classifyRecord(record({
+      sortKey: 'META#SYNC', eventName, eventId: 'evt-sync',
+      newImage: { ownerId: av('u2'), revision: av('ignored') },
+    }), true), {
+      kind: 'JOB', job: {
+        jobVersion: 1, kind: 'RECONCILE_ACCOUNT', ownerId: 'u1', noteId: null,
+        sourceRevisionHint: null, policyVersion: JOB_POLICY_VERSION, eventId: 'evt-sync',
+      },
+    });
+  }
+  assert.deepEqual(classifyRecord(record({ sortKey: 'META#SYNC', eventName: 'REMOVE' }), true), { kind: 'EXCLUDED' });
+  assert.deepEqual(classifyRecord(record({ sortKey: 'META#SYNC#other' }), true), { kind: 'EXCLUDED' });
+});
+
 test('relevant but malformed rows are classified malformed, never normalized', () => {
   const bad = [
     record({ ownerId: 'u1' }),
