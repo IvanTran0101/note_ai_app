@@ -1,0 +1,260 @@
+/**
+ * Response shaping for the NoteFlow sync Lambda (M1.2 application-adapter slice B).
+ *
+ * The one place that knows the HTTP statuses and JSON bodies frozen in
+ * `docs/sync_api_contract.md`, so `handler.ts` stays a dispatcher. Every error
+ * leaves here as the contract envelope `{code, message, retryable}` built from a
+ * canned message table: a provider error message, exception text, stack, token,
+ * or request body can never reach a client through this module.
+ *
+ * Note snapshots travel as the eight fields `SyncNoteSnapshot` in
+ * `lib/application/sync/sync_contract.dart` requires - `id`, `title`, `content`,
+ * `revision`, `createdAt`, `serverUpdatedAt`, `pinnedAt`, `deletedAt` - which is the
+ * store's `NoteSnapshot`. The M1.0 example abbreviates that object; the
+ * Application port is what the client can actually construct.
+ */
+
+import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
+import type { InvalidCursorReason } from './cursor';
+import type { AppliedMutation, ChangesPage, ConflictedMutation, NoteSnapshot } from './dynamo_sync_store';
+import type { ChangesQueryProblem, MutationProblem } from './request_parser';
+
+/** Contract error codes this slice can emit. */
+export type SyncErrorCode =
+  | 'UNAUTHORIZED'
+  | 'NOT_FOUND'
+  | 'INVALID_REQUEST'
+  | 'INVALID_MUTATION'
+  | 'DOCUMENT_REQUIRES_UPGRADE'
+  | 'INVALID_CURSOR'
+  | 'REVISION_CONFLICT'
+  | 'SERVER_UNAVAILABLE'
+  | 'INTERNAL_ERROR';
+
+export type SyncErrorBody = Readonly<{
+  code: SyncErrorCode;
+  message: string;
+  retryable: boolean;
+}>;
+
+/** The wire form of one note snapshot; see the module comment. */
+export type NoteBody = Readonly<{
+  id: string;
+  title?: string;
+  content?: string;
+  protected?: boolean;
+  protectionRevision?: number;
+  contentAvailable?: boolean;
+  revision: number;
+  createdAt: string;
+  serverUpdatedAt: string;
+  pinnedAt: string | null;
+  deletedAt: string | null;
+  ownerId?: string;
+  share?: NoteSnapshot['share'];
+  labelIds?: readonly string[];
+  labelProjections?: NoteSnapshot['labelProjections'];
+  attachments?: NoteSnapshot['attachments'];
+  document?: NoteSnapshot['document'];
+}>;
+
+export type AppliedMutationBody = Readonly<{
+  status: 'applied';
+  mutationId: string;
+  note: NoteBody;
+}>;
+
+/** The 409 body: `status` is carried by the HTTP status, as the contract shows it. */
+export type ConflictBody = Readonly<{
+  code: 'REVISION_CONFLICT';
+  retryable: false;
+  mutationId: string;
+  remoteNote: NoteBody | null;
+}>;
+
+export type ChangesPageBody = Readonly<{
+  items: readonly NoteBody[];
+  hasMore: boolean;
+  catchUpPending?: boolean;
+  nextCursor?: string;
+}>;
+
+const CONTENT_TYPE_JSON = { 'content-type': 'application/json' } as const;
+
+/**
+ * Safe, user-facing text for every way a mutation can be refused. The keys are
+ * the store's reasons plus the parser's body problem, so a `SyncInvalidMutationError`
+ * thrown by the store is mapped by the same table as a body the parser refused.
+ */
+const MUTATION_MESSAGES: Readonly<Record<MutationProblem, string>> = {
+  BODY_MALFORMED: 'The request body must be a JSON object.',
+  MUTATION_ID_INVALID: 'A mutation needs a non-empty mutationId of at most 128 characters.',
+  MUTATION_ID_REUSED: 'That mutationId was already used for a different request.',
+  NOTE_ID_INVALID: 'A mutation needs a non-empty noteId of at most 128 characters.',
+  OPERATION_UNSUPPORTED: 'The mutation operation is not supported.',
+  BASE_REVISION_INVALID: 'baseRevision must be a non-negative whole number.',
+  PAYLOAD_REQUIRED: 'create and update need a title and content payload.',
+  PAYLOAD_INVALID: 'A payload needs a string title and content.',
+  PAYLOAD_TOO_LARGE: 'The note payload is too large to store.',
+  ATTACHMENTS_UNSUPPORTED: 'Attachment synchronization requires the verified-object backend. Local data is retained.',
+  DOCUMENTS_UNSUPPORTED: 'Rich document synchronization requires the updated client and backend. Local data is retained.',
+};
+
+const CURSOR_MESSAGES: Readonly<Record<InvalidCursorReason, string>> = {
+  MALFORMED: 'The sync cursor is not readable.',
+  UNSUPPORTED_VERSION: 'This sync cursor came from a different API version.',
+  ACCOUNT_MISMATCH: 'This sync cursor was issued to a different account.',
+};
+
+const LIMIT_MESSAGE = 'limit must be a whole number from 1 to 100.';
+
+export const jsonResponse = (statusCode: number, body: unknown): APIGatewayProxyStructuredResultV2 => ({
+  statusCode,
+  headers: CONTENT_TYPE_JSON,
+  body: JSON.stringify(body),
+});
+
+const errorResponse = (statusCode: number, body: SyncErrorBody): APIGatewayProxyStructuredResultV2 =>
+  jsonResponse(statusCode, body);
+
+/** Projects a stored snapshot onto the wire shape, so storage fields cannot leak. */
+export const noteBodyOf = (note: NoteSnapshot, authorizedContent = false, labels = false, documents = false): NoteBody => ({
+  id: note.id,
+  ...(documents ? {document: note.deletedAt === null &&
+    (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.document ?? null : null} : {}),
+  ...((!note.protected || authorizedContent) && note.contentAvailable !== false ? { title: note.title, content: note.content } : {}),
+  ...(note.protected || note.protectionRevision || note.contentAvailable === false ? { protected: note.protected ?? false,
+    protectionRevision: note.protectionRevision ?? 0,
+    contentAvailable: (!note.protected || authorizedContent) && note.contentAvailable !== false } : {}),
+  ...(note.ownerId && note.share ? { ownerId: note.ownerId } : {}),
+  ...(note.share ? { share: { ...note.share, sharerLabel: note.share.sharerLabel ?? undefined } } : {}),
+  ...(note.contentAvailable === false ? { contentAvailable: false } : {}),
+  revision: note.revision,
+  createdAt: note.createdAt,
+  serverUpdatedAt: note.serverUpdatedAt,
+  pinnedAt: note.pinnedAt ?? null,
+  deletedAt: note.deletedAt,
+  ...(note.attachments !== undefined ? {attachments: note.deletedAt === null &&
+    (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.attachments ?? [] : []} : {}),
+  ...(labels ? {labelIds: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelIds ?? [] : [],
+    labelProjections: note.deletedAt === null && (!note.protected || authorizedContent) && note.contentAvailable !== false ? note.labelProjections ?? [] : []} : {}),
+});
+
+/**
+ * The applied result, minus the store's `replayed` flag: it is bookkeeping for
+ * the store, and the contract's applied body carries only these three fields.
+ */
+export const appliedMutationBody = ({ mutationId, note }: AppliedMutation): AppliedMutationBody => ({
+  status: 'applied',
+  mutationId,
+  note: noteBodyOf(note),
+});
+
+/** `remoteNote` is `null` when the account has no stored note to conflict with. */
+export const conflictBody = ({ mutationId, remoteNote }: ConflictedMutation): ConflictBody => ({
+  code: 'REVISION_CONFLICT',
+  retryable: false,
+  mutationId,
+  remoteNote: remoteNote === null ? null : noteBodyOf(remoteNote),
+});
+
+/**
+ * The change page. `nextCursor` is copied only when the store minted one: it is
+ * optional on the port, and an absent cursor must stay absent rather than be
+ * serialized as `null`.
+ */
+export const changesPageBody = ({ items, nextCursor, hasMore, catchUpPending }: ChangesPage): ChangesPageBody => {
+  const body: { items: NoteBody[]; hasMore: boolean; nextCursor?: string; catchUpPending?: boolean } = {
+  items: items.map(note => noteBodyOf(note)),
+    hasMore,
+    ...(catchUpPending ? { catchUpPending: true } : {}),
+  };
+  if (typeof nextCursor === 'string' && nextCursor.length > 0) {
+    body.nextCursor = nextCursor;
+  }
+  return body;
+};
+
+export const appliedMutationResponse = (result: AppliedMutation): APIGatewayProxyStructuredResultV2 =>
+  jsonResponse(200, appliedMutationBody(result));
+
+export const conflictResponse = (result: ConflictedMutation): APIGatewayProxyStructuredResultV2 =>
+  jsonResponse(409, conflictBody(result));
+
+export const changesResponse = (page: ChangesPage): APIGatewayProxyStructuredResultV2 =>
+  jsonResponse(200, page.wireVersion === 2 || page.wireVersion === 3 ? {wireVersion: page.wireVersion,
+    ...(page.wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}),
+    items: [...page.items.map(note => ({entityType: 'note', note: noteBodyOf(note, false, true, page.wireVersion === 3)})),
+      ...(page.labels ?? []).map(label => ({entityType: 'label', label}))],
+    nextCursor: page.nextCursor, hasMore: page.hasMore,
+    ...(page.catchUpPending ? {catchUpPending: true} : {})} : changesPageBody(page));
+
+export function noteV2MutationResponse(result: AppliedMutation | ConflictedMutation, wireVersion: 2 | 3 = 2): APIGatewayProxyStructuredResultV2 {
+  return jsonResponse(result.status === 'applied' ? 200 : 409,
+    result.status === 'applied' ? {wireVersion, ...(wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}), entityType: 'note', status: 'applied', mutationId: result.mutationId,
+      note: noteBodyOf(result.note, false, true, wireVersion === 3)} : {wireVersion, ...(wireVersion === 3 ? {documentCapability: 'basicBlocksV1'} : {}), entityType: 'note', code: 'REVISION_CONFLICT',
+      retryable: false, mutationId: result.mutationId, remoteNote: result.remoteNote ? noteBodyOf(result.remoteNote, false, true, wireVersion === 3) : null});
+}
+
+/**
+ * Reached only when the authorizer was bypassed: the deployed API rejects an
+ * unauthenticated `/sync/*` call before the Lambda runs.
+ */
+export const unauthorizedResponse = (): APIGatewayProxyStructuredResultV2 =>
+  errorResponse(401, {
+    code: 'UNAUTHORIZED',
+    message: 'Sign in to use remote sync.',
+    retryable: false,
+  });
+
+export const notFoundResponse = (): APIGatewayProxyStructuredResultV2 =>
+  errorResponse(404, {
+    code: 'NOT_FOUND',
+    message: 'This route does not exist.',
+    retryable: false,
+  });
+
+export const invalidMutationResponse = (problem: MutationProblem): APIGatewayProxyStructuredResultV2 =>
+  errorResponse(422, {
+    code: problem === 'DOCUMENTS_UNSUPPORTED' ? 'DOCUMENT_REQUIRES_UPGRADE' : 'INVALID_MUTATION',
+    message: MUTATION_MESSAGES[problem],
+    retryable: false,
+  });
+
+/**
+ * A refused change-feed query. `limit` is a request-shape problem and a cursor
+ * is a codec problem, so they carry different codes; both are client errors
+ * with no retry value.
+ */
+export const invalidChangesResponse = (
+  problem: ChangesQueryProblem | InvalidCursorReason,
+): APIGatewayProxyStructuredResultV2 =>
+  problem === 'LIMIT_INVALID'
+    ? errorResponse(422, { code: 'INVALID_REQUEST', message: LIMIT_MESSAGE, retryable: false })
+    : errorResponse(422, { code: 'INVALID_CURSOR', message: CURSOR_MESSAGES[problem], retryable: false });
+
+/**
+ * Storage failed. `retryable` comes from the store, so a throttled or contended
+ * write is a 503 the client may send again, while a failure the same request
+ * would repeat (bad data, denied call, missing table) is a 500 it must not.
+ */
+export const storageFailureResponse = (retryable: boolean): APIGatewayProxyStructuredResultV2 =>
+  retryable
+    ? errorResponse(503, {
+        code: 'SERVER_UNAVAILABLE',
+        message: 'Remote sync is temporarily unavailable. Try again.',
+        retryable: true,
+      })
+    : errorResponse(500, {
+        code: 'INTERNAL_ERROR',
+        message: 'The request could not be completed.',
+        retryable: false,
+      });
+
+/** The catch-all: nothing about the failure itself is described to the client. */
+export const internalErrorResponse = (): APIGatewayProxyStructuredResultV2 =>
+  errorResponse(500, {
+    code: 'INTERNAL_ERROR',
+    message: 'The request could not be completed.',
+    retryable: true,
+  });

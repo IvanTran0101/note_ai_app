@@ -1,0 +1,301 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "M03 private attachment storage only. Does not enable attachment APIs or sync.",
+  "Parameters": {
+    "UploadOrigin": {
+      "Type": "String",
+      "Description": "Exact HTTPS browser origin allowed to PUT staging objects; never a wildcard.",
+      "AllowedPattern": "https://[^/*]+",
+      "ConstraintDescription": "Use an exact HTTPS origin without a path or wildcard."
+    }
+  },
+  "Resources": {
+    "AttachmentBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "CorsConfiguration": {
+          "CorsRules": [
+            {
+              "AllowedOrigins": [
+                {
+                  "Ref": "UploadOrigin"
+                }
+              ],
+              "AllowedMethods": [
+                "PUT"
+              ],
+              "AllowedHeaders": [
+                "content-type",
+                "x-amz-checksum-sha256",
+                "x-amz-content-sha256",
+                "x-amz-date",
+                "authorization",
+                "x-amz-security-token"
+              ],
+              "ExposeHeaders": [
+                "ETag",
+                "x-amz-version-id"
+              ],
+              "MaxAge": 300
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "TlsOnly": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AttachmentBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AttachmentBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${AttachmentBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "UploadSignerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "M03ScopedObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AttachmentBucket.Arn}/staging/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "VerifierRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "M03ScopedObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AttachmentBucket.Arn}/staging/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AttachmentBucket.Arn}/final/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ReadGatewayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "M03ScopedObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AttachmentBucket.Arn}/final/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "StagingCleanupRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "M03ScopedObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AttachmentBucket.Arn}/staging/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "UploadSignerRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "UploadSignerRole",
+          "Arn"
+        ]
+      }
+    },
+    "VerifierRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "VerifierRole",
+          "Arn"
+        ]
+      }
+    },
+    "ReadGatewayRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ReadGatewayRole",
+          "Arn"
+        ]
+      }
+    },
+    "StagingCleanupRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "StagingCleanupRole",
+          "Arn"
+        ]
+      }
+    },
+    "BucketName": {
+      "Value": {
+        "Ref": "AttachmentBucket"
+      }
+    }
+  }
+}

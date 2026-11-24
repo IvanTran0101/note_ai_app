@@ -1,0 +1,314 @@
+import { createProfileService, handleProfile } from '../profile/http_routes';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoLabelStore } from '../labels/dynamo_label_store';
+import { AttachmentAttemptStore } from '../attachments/attempt_store';
+import { S3AttachmentObjects } from '../attachments/s3_object_store';
+import { AttachmentUseCases } from '../attachments/use_cases';
+import { handleAttachments, isAttachmentPath } from '../attachments/handler';
+import { parseLabelMutation } from '../labels/label_models';
+import { labelProjectionResponse } from '../labels/label_projection_handler';
+import type {
+  APIGatewayProxyEventV2WithJWTAuthorizer,
+  APIGatewayProxyHandlerV2WithJWTAuthorizer,
+  APIGatewayProxyStructuredResultV2,
+} from 'aws-lambda';
+import { SyncInvalidCursorError } from './cursor';
+import { DynamoSyncStore, SyncInvalidMutationError, SyncStorageError } from './dynamo_sync_store';
+import type { SyncStore } from './dynamo_sync_store';
+import { parseChangesQuery, parseMutationBody } from './request_parser';
+import { Argon2idPasswordHasher } from '../protection/argon2id_password_hasher';
+import { DynamoProtectionStore } from '../protection/dynamo_protection_store';
+import { ProtectionUseCases } from '../protection/use_cases';
+import { NoteSecurityError } from '../protection/protection_store';
+import { DynamoNoteAcl } from '../sharing/dynamo_note_acl';
+import { DynamoShareStore } from '../sharing/dynamo_share_store';
+import { CognitoRecipientResolver } from '../sharing/cognito_recipient_resolver';
+import { ShareUseCases } from '../sharing/share_use_cases';
+import { handleShares } from '../sharing/share_handler';
+import { SesRecoveryMailer } from '../protection/ses_recovery_mailer';
+import { handleProtection, securityErrorResponse, unlockGrantOf } from '../protection/handler';
+import { CognitoRecoveryMailbox } from '../protection/cognito_recovery_mailbox';
+import {
+  appliedMutationResponse,
+  changesResponse,
+  conflictResponse,
+  internalErrorResponse,
+  invalidChangesResponse,
+  invalidMutationResponse,
+  jsonResponse,
+  noteV2MutationResponse,
+  notFoundResponse,
+  storageFailureResponse,
+  unauthorizedResponse,
+} from './sync_response';
+
+/**
+ * NoteFlow remote sync Lambda (M1.2 application-adapter slice B).
+ *
+ * Serves the routes frozen in `docs/sync_api_contract.md`:
+ *
+ * - `GET  /sync/health`    -> `200 { "ok": true }`
+ * - `POST /sync/mutations` -> `200` applied, `409` conflict, `422` invalid
+ * - `GET  /sync/changes`   -> `200` page, `422` invalid cursor or limit
+ * - anything else          -> `404`
+ *
+ * This file owns transport only: method/path routing, the identity check, and
+ * the store calls. Body and query parsing live in `request_parser.ts`, JSON
+ * bodies and statuses in `sync_response.ts`, and note/mutation semantics in
+ * `dynamo_sync_store.ts`; the API Gateway resource, JWT authorizer, and CORS
+ * stay in `http_api.ts`. There is no router class: the dispatch is three small
+ * functions.
+ *
+ * Identity comes from the verified claims only - a body `ownerId` is never
+ * authoritative - and no token, request body, identifier, or exception text is
+ * ever logged or echoed. Logs carry a route, a problem class, and at most the
+ * class name of an unexpected error.
+ */
+
+/**
+ * `process` is described by `@types/node`, which this backend does not depend on
+ * (see `package.json`), so the two variables the function reads are declared
+ * here. A module-scoped declaration only shadows the global of the same name.
+ */
+declare const process: { env: Record<string, string | undefined> };
+
+/** Paths of the frozen contract; `http_api.ts` routes the same three. */
+const HEALTH_PATH = '/sync/health';
+const MUTATIONS_PATH = '/sync/mutations';
+const CHANGES_PATH = '/sync/changes';
+
+type SyncRoute = 'health' | 'mutations' | 'changes' | 'unknown';
+
+/**
+ * `NOTES_TABLE_NAME` is set by `sync_function.ts`; `NOTES_TABLE_REGION` travels
+ * under an app-owned name because the Lambda runtime reserves `AWS_REGION`.
+ */
+const NOTES_TABLE_NAME = process.env.NOTES_TABLE_NAME ?? '';
+const NOTES_TABLE_REGION = process.env.NOTES_TABLE_REGION;
+
+/**
+ * One document client and one store per container, built at module scope so a
+ * warm Lambda reuses the SDK's HTTP connections across invocations instead of
+ * rebuilding them per request. The marshalling options match the ones the store
+ * applies to its own default client; passing the client in keeps its lifecycle
+ * - and the region the function was deployed with - owned here.
+ *
+ * A missing table name fails the constructor during container init, which is the
+ * intended behaviour for a misconfigured deployment: no route, not even health,
+ * should report healthy against no storage.
+ */
+const documentClient = DynamoDBDocumentClient.from(
+  new DynamoDBClient(NOTES_TABLE_REGION === undefined ? {} : { region: NOTES_TABLE_REGION }),
+  { marshallOptions: { removeUndefinedValues: true } },
+);
+
+const security = new ProtectionUseCases(new DynamoProtectionStore(NOTES_TABLE_NAME, documentClient, true),
+  new Argon2idPasswordHasher(), new DynamoNoteAcl(NOTES_TABLE_NAME, documentClient),
+  new SesRecoveryMailer(process.env.NOTE_SECURITY_SENDER ?? ''), Date.now,
+  Number(process.env.NOTE_SECURITY_GRANT_TTL_MS ?? '900000'));
+const attachmentAttempts = process.env.ATTACHMENT_BUCKET ? new AttachmentAttemptStore(NOTES_TABLE_NAME, documentClient) : undefined;
+const attachmentService = attachmentAttempts ? new AttachmentUseCases(attachmentAttempts,
+  new S3AttachmentObjects(process.env.ATTACHMENT_BUCKET!), security) : undefined;
+const store: SyncStore = new DynamoSyncStore({ tableName: NOTES_TABLE_NAME, documentClient, security, sharing: true, attachments: attachmentAttempts });
+const labels = new DynamoLabelStore(NOTES_TABLE_NAME, documentClient);
+const sharing = new ShareUseCases(new DynamoShareStore(NOTES_TABLE_NAME, documentClient),
+  new CognitoRecipientResolver(process.env.USER_POOL_ID ?? ''), security);
+const recoveryMailbox = new CognitoRecoveryMailbox();
+const profileService = process.env.ATTACHMENT_BUCKET
+  ? createProfileService(documentClient, NOTES_TABLE_NAME, process.env.ATTACHMENT_BUCKET)
+  : undefined;
+
+const methodOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string =>
+  event.requestContext?.http?.method?.toUpperCase() ?? '';
+
+/**
+ * An empty method means the event did not come through API Gateway (a direct
+ * invoke, or a test), so the path decides on its own, as it did in M1.1. A
+ * method that is present must be the contract's one.
+ */
+const matchesMethod = (expected: string, method: string): boolean => method === '' || method === expected;
+
+const routeOf = (method: string, path: string): SyncRoute => {
+  switch (path.replace(/^\/sync\/v[23]\//, '/sync/')) {
+    case HEALTH_PATH:
+      return matchesMethod('GET', method) ? 'health' : 'unknown';
+    case '/sync/protection-predecessor':
+    case '/sync/protected-mutations':
+    case '/sync/shared-mutations':
+    case '/sync/label-projections':
+    case MUTATIONS_PATH:
+      return matchesMethod('POST', method) ? 'mutations' : 'unknown';
+    case CHANGES_PATH:
+      return matchesMethod('GET', method) ? 'changes' : 'unknown';
+    default:
+      return 'unknown';
+  }
+};
+
+/**
+ * The Cognito subject that owns every note these routes read and write - the
+ * subject of an ACCESS token only: an ID token carries the same `sub` but is
+ * addressed to the client, not to this API, so it never authenticates a data
+ * route. Verified claims are the only identity source the handler trusts;
+ * optional chaining keeps an authorizer-less direct invocation from throwing,
+ * so a missing identity - or the wrong token type - is a 401 rather than a 500.
+ */
+const accessTokenSubOf = (event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined => {
+  const claims = event.requestContext?.authorizer?.jwt?.claims;
+  const sub = claims?.['sub'];
+  return claims?.token_use === 'access' && typeof sub === 'string' ? sub : undefined;
+};
+
+/** An error's class name is a classifier, never request content. */
+const errorNameOf = (error: unknown): string => {
+  const name = (error as { name?: unknown } | null | undefined)?.name;
+  return typeof name === 'string' ? name : 'UnknownError';
+};
+
+const logRejected = (route: SyncRoute, problem: string): void => {
+  console.info('sync request rejected', { route, problem });
+};
+
+/**
+ * Maps what the store throws onto the contract's client and retryable failures.
+ * `undefined` means the error is not one this layer knows, and the caller lets
+ * the dispatcher turn it into a safe 500.
+ */
+const responseForStoreError = (
+  route: SyncRoute,
+  error: unknown,
+): APIGatewayProxyStructuredResultV2 | undefined => {
+  if (error instanceof NoteSecurityError) return securityErrorResponse(error);
+  if (error instanceof SyncInvalidMutationError) {
+    logRejected(route, error.reason);
+    return invalidMutationResponse(error.reason);
+  }
+  if (error instanceof SyncInvalidCursorError) {
+    logRejected(route, error.reason);
+    return invalidChangesResponse(error.reason);
+  }
+  if (error instanceof SyncStorageError) {
+    console.warn('sync storage failure', { route, retryable: error.retryable });
+    return storageFailureResponse(error.retryable);
+  }
+  return undefined;
+};
+
+const handleMutation = async (
+  event: APIGatewayProxyEventV2WithJWTAuthorizer,
+  ownerId: string,
+): Promise<APIGatewayProxyStructuredResultV2> => {
+  const v2 = event.rawPath.startsWith('/sync/v2/');
+  const wireVersion = event.rawPath.startsWith('/sync/v3/') ? 3 : v2 ? 2 : 1;
+  if (v2 && event.rawPath === '/sync/v2/mutations') {
+    try {
+      const body = JSON.parse(event.body ?? 'null');
+      if (body?.entityType === 'label') {
+        const result = await labels.apply(ownerId, parseLabelMutation(body));
+        return jsonResponse(result.status === 'applied' ? 200 : 409, result);
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) return invalidMutationResponse('BODY_MALFORMED');
+      const mapped = responseForStoreError('mutations', error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  }
+  const path = event.rawPath.replace(/^\/sync\/v[23]\//, '/sync/');
+  const parsed = parseMutationBody(event.body, path === '/sync/protected-mutations', path === '/sync/shared-mutations', wireVersion);
+  if (!parsed.ok) {
+    logRejected('mutations', parsed.problem);
+    return invalidMutationResponse(parsed.problem);
+  }
+
+  try {
+    const result = await store.applyMutation(parsed.mutation.ownerId ?? ownerId, parsed.mutation, { actorId: ownerId, grant: unlockGrantOf(event),
+      inspectOnly: path === '/sync/protection-predecessor' });
+    return wireVersion >= 2 ? noteV2MutationResponse(result, wireVersion as 2 | 3) : result.status === 'applied' ? appliedMutationResponse(result) : conflictResponse(result);
+  } catch (error) {
+    const mapped = responseForStoreError('mutations', error);
+    if (mapped !== undefined) {
+      return mapped;
+    }
+    throw error;
+  }
+};
+
+const handleChanges = async (
+  event: APIGatewayProxyEventV2WithJWTAuthorizer,
+  ownerId: string,
+): Promise<APIGatewayProxyStructuredResultV2> => {
+  const parsed = parseChangesQuery(event.queryStringParameters);
+  if (!parsed.ok) {
+    logRejected('changes', parsed.problem);
+    return invalidChangesResponse(parsed.problem);
+  }
+
+  try {
+    return changesResponse(await store.listChanges(ownerId, parsed.cursor, parsed.limit,
+      event.rawPath.startsWith('/sync/v3/') ? 3 : event.rawPath.startsWith('/sync/v2/') ? 2 : 1));
+  } catch (error) {
+    const mapped = responseForStoreError('changes', error);
+    if (mapped !== undefined) {
+      return mapped;
+    }
+    throw error;
+  }
+};
+
+export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) => {
+  let route: SyncRoute = 'unknown';
+  try {
+    route = routeOf(methodOf(event), event.rawPath);
+    if (event.rawPath.startsWith('/me/')) {
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) {
+        return unauthorizedResponse();
+      }
+      return profileService ? await handleProfile(event, actor, profileService)
+        : jsonResponse(503, {code: 'PROFILE_UNAVAILABLE'});
+    }
+    if (event.rawPath.startsWith('/notes/')) {
+      const actor = accessTokenSubOf(event);
+      if (actor === undefined) return unauthorizedResponse();
+      if (isAttachmentPath(event.rawPath)) return attachmentService
+        ? await handleAttachments(event, actor, attachmentService)
+        : jsonResponse(503, {code: 'ATTACHMENT_UNAVAILABLE', retryable: true});
+      return event.rawPath.endsWith('/shares') ? await handleShares(event, actor, sharing)
+        : await handleProtection(event, actor, security, (e, sub) => recoveryMailbox.resolve(e, sub));
+    }
+
+    // M1.1 behaviour, unchanged: health answers without an identity so the
+    // deployment can be probed. The deployed API still puts it behind the JWT
+    // authorizer, so an anonymous caller never reaches this line.
+    if (route === 'health') {
+      return jsonResponse(200, { ok: true });
+    }
+    if (route === 'unknown') {
+      return notFoundResponse();
+    }
+
+    const ownerId = accessTokenSubOf(event);
+    if (ownerId === undefined) {
+      // Reachable when the authorizer was bypassed (a direct invoke) or the
+      // token presented is not a Cognito access token.
+      return unauthorizedResponse();
+    }
+    if (event.rawPath === '/sync/v2/label-projections' && methodOf(event) === 'POST') {
+      let body: unknown;
+      try { body = JSON.parse(event.body ?? 'null'); }
+      catch { return invalidMutationResponse('BODY_MALFORMED'); }
+      return await labelProjectionResponse(ownerId, body, NOTES_TABLE_NAME, documentClient, security);
+    }
+
+    return route === 'mutations' ? await handleMutation(event, ownerId) : await handleChanges(event, ownerId);
+  } catch (error) {
+    const mapped = responseForStoreError(route, error);
+    if (mapped !== undefined) return mapped;
+    // Nothing about the failure crosses the contract: no message, stack, cause,
+    // token, or request data is logged or returned.
+    console.error('sync request failed', { route, errorName: errorNameOf(error) });
+    return internalErrorResponse();
+  }
+};

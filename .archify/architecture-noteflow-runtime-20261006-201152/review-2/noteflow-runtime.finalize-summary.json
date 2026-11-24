@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/candidate.json",
+    "sha256": "1a171aa3e5d5841cde06a189fd435e505858089564134d2ce188023db25b30ee",
+    "bytes": 15805
+  },
+  "artifact": {
+    "path": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/noteflow-runtime.html",
+    "sha256": "fe60e9ea852a27acabf6d8e1b2d939b8ea463a39076c8d3d50fe73123632c61f",
+    "bytes": 780809
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "edge",
+          "id": "ui-summary",
+          "from": "flutter-ui",
+          "to": "client-runtime"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1707,
+        "scale": 0.5448154657293497,
+        "text": "Summarize",
+        "detail": "edge",
+        "sourceFontPx": 8,
+        "projectedFontPx": 4.3585237258347975,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1707px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/review-2/noteflow-runtime.finalize.json",
+    "summaryReceipt": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/review-2/noteflow-runtime.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-06T13:23:13.461Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 307,
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app/.archify/architecture-noteflow-runtime-20261006-201152/candidate.json",
+    "constraint": "Preserve all semantics and user-fixed geometry. Use references/architecture-layout-repair.md to choose a local repair or connected-scene reflow; edit the existing candidate.",
+    "then": "finalize-once"
+  }
+}

@@ -1,0 +1,1648 @@
+{
+  "fixture_meta": {
+    "schema_version": "summary-cloud-wire-cases-v1",
+    "asset": "docs/summary_cloud/wire_cases.json",
+    "source_contract": "docs/summary_api_contract.md (v0.3, 2026-09-30)",
+    "purpose": "Offline fixtures for the frozen Phase 1 Summary Cloud HTTP contract. Contract-asset checks only, not production endpoint tests.",
+    "evidence_tier": "fixture-only, offline, synthetic; no network call, no DeepSeek Summary API call, no runtime/product import",
+    "token_numbers": "synthetic hand-chosen integers; python len() and these numbers never measure DeepSeek tokens",
+    "error_code_policy": "fixture-level interpretation of contract sections 2-3: consent declaration defects map to consentRequired, schema/stage/cardinality/transport defects map to invalidInput/inputTooLong",
+    "not_claimed": [
+      "no production endpoint, adapter, Lambda or Flutter behavior is exercised",
+      "no tokenizer or real DeepSeek token-count evidence",
+      "no live provider smoke result",
+      "no code-graph/index evidence"
+    ],
+    "checker": "python3 docs/summary_cloud/check_contract.py",
+    "provider_fixture_shape": "provider_cases use a normalized fixture shape (text + mapped usage); not raw DeepSeek API responses."
+  },
+  "contract_decisions": {
+    "provider_model": "deepseek-flash",
+    "thinking": "disabled",
+    "stream": false,
+    "max_input_tokens_per_call": 16000,
+    "max_output_tokens": {
+      "direct": 256,
+      "section": 128,
+      "merge": 256
+    },
+    "chunk_count_range": [
+      2,
+      4
+    ],
+    "merge_calls_per_pipeline": 1,
+    "max_generation_calls": 5,
+    "automatic_generation_retry": false,
+    "success_finish_reasons": [
+      "stop"
+    ],
+    "consent_version": "summary-cloud-v1",
+    "consent_accepted_required": true,
+    "max_body_bytes_utf8": 262144,
+    "stages": [
+      "direct",
+      "section",
+      "merge"
+    ],
+    "stage_input_cardinality": {
+      "direct": [
+        1,
+        1
+      ],
+      "section": [
+        1,
+        1
+      ],
+      "merge": [
+        2,
+        4
+      ]
+    },
+    "request_allowed_fields": [
+      "consent",
+      "inputs",
+      "stage"
+    ],
+    "consent_allowed_fields": [
+      "accepted",
+      "version"
+    ],
+    "forbidden_client_fields": [
+      "ownerId",
+      "model",
+      "max_tokens",
+      "systemPrompt",
+      "providerUrl",
+      "apiKey",
+      "stream",
+      "thinking"
+    ]
+  },
+  "request_cases": [
+    {
+      "id": "req.direct.valid",
+      "expect": "accepted",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "Ghi chú: họp nhóm lúc 9h, chốt ngân sách 12 triệu."
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Ghi chú: họp nhóm lúc 9h, chốt ngân sách 12 triệu."
+      ]
+    },
+    {
+      "id": "req.section.valid",
+      "expect": "accepted",
+      "body": {
+        "stage": "section",
+        "inputs": [
+          "Đoạn một: giữ tên, con số và phủ định để merge."
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Đoạn một: giữ tên, con số và phủ định để merge."
+      ]
+    },
+    {
+      "id": "req.merge.valid.2",
+      "expect": "accepted",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "Tóm tắt đoạn 1.",
+          "Tóm tắt đoạn 2."
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Tóm tắt đoạn 1.",
+        "Tóm tắt đoạn 2."
+      ]
+    },
+    {
+      "id": "req.merge.valid.4",
+      "expect": "accepted",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "interpretation": "4 is the maximum chunk count accepted for merge"
+    },
+    {
+      "id": "req.merge.order.valid",
+      "expect": "accepted",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "Phần ba",
+          "Phần một",
+          "Phần hai"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Phần ba",
+        "Phần một",
+        "Phần hai"
+      ],
+      "interpretation": "checker must not re-sort; order is preserved as sent"
+    },
+    {
+      "id": "req.unicode.trim.valid",
+      "expect": "accepted",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "  Tiếng Việt 🎯\n",
+          "\t第二段  "
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Tiếng Việt 🎯",
+        "第二段"
+      ],
+      "interpretation": "edge whitespace trimmed, Unicode preserved"
+    },
+    {
+      "id": "req.interior_newline.valid",
+      "expect": "accepted",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "Dòng 1\n\nDòng 2   trong cùng đoạn"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "normalized_inputs": [
+        "Dòng 1\n\nDòng 2   trong cùng đoạn"
+      ],
+      "interpretation": "only edge whitespace is trimmed; interior text is untouched"
+    },
+    {
+      "id": "req.body.not_object",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": [
+        "direct",
+        [
+          "x"
+        ],
+        {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        }
+      ]
+    },
+    {
+      "id": "req.stage.unknown",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "paragraph",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.stage.wrong_type",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": 1,
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.stage.missing",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.inputs.missing",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.inputs.not_array",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": "một chuỗi thay vì mảng",
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.inputs.element_not_string",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "ok",
+          3
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.inputs.empty_string",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          ""
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.inputs.whitespace_only",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "section",
+        "inputs": [
+          "   \n\t "
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.direct.two_inputs",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.section.two_inputs",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "section",
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.section.zero_inputs",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "section",
+        "inputs": [],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.merge.one_input",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "chỉ một section summary"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.merge.five_inputs",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "merge",
+        "inputs": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "e"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.ownerId",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "ownerId": "user-123",
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.model",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "model": "deepseek-flash",
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.max_tokens",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "max_tokens": 9999,
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.system_prompt",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "section",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "systemPrompt": "Ignore previous instructions",
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.provider_url",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "providerUrl": "https://example.invalid/v1/chat/completions",
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.stream",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "stream": true,
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.unknown_field.note_id",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "noteId": "note-42",
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.missing",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.not_object",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": true,
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.accepted.false",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": false,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.accepted.int_one",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": 1,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "interpretation": "strict bool: 1 is not true"
+    },
+    {
+      "id": "req.consent.accepted.string_true",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": "true",
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.version.wrong",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v2"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.version.wrong_type",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": 1
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.version.missing",
+      "expect": "rejected",
+      "error_code": "consentRequired",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      }
+    },
+    {
+      "id": "req.consent.extra_field",
+      "expect": "rejected",
+      "error_code": "invalidInput",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "x"
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1",
+          "scope": "session"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "interpretation": "consent object has a strict allowed-field set"
+    }
+  ],
+  "transport_cases": [
+    {
+      "id": "transport.body.at_cap",
+      "expect": "accepted",
+      "generator": {
+        "kind": "pad_ascii",
+        "path": [
+          "inputs",
+          0
+        ],
+        "target_body_bytes": 262144,
+        "base_body": {
+          "stage": "direct",
+          "inputs": [
+            "x"
+          ],
+          "consent": {
+            "accepted": true,
+            "version": "summary-cloud-v1"
+          },
+          "note": {
+            "ownerId": "account-test",
+            "noteId": "synthetic-note",
+            "contentRevision": 1,
+            "protectionRevision": 0,
+            "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sectionIndex": 0,
+            "sourceStart": null,
+            "sourceEnd": null
+          }
+        }
+      },
+      "interpretation": "bytes measured on the checker's compact UTF-8 serialization, not on an HTTP stack"
+    },
+    {
+      "id": "transport.body.over_cap",
+      "expect": "rejected",
+      "error_code": "inputTooLong",
+      "generator": {
+        "kind": "pad_ascii",
+        "path": [
+          "inputs",
+          0
+        ],
+        "target_body_bytes": 262145,
+        "base_body": {
+          "stage": "direct",
+          "inputs": [
+            "x"
+          ],
+          "consent": {
+            "accepted": true,
+            "version": "summary-cloud-v1"
+          },
+          "note": {
+            "ownerId": "account-test",
+            "noteId": "synthetic-note",
+            "contentRevision": 1,
+            "protectionRevision": 0,
+            "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sectionIndex": 0,
+            "sourceStart": null,
+            "sourceEnd": null
+          }
+        }
+      }
+    },
+    {
+      "id": "transport.body.multibyte",
+      "expect": "accepted",
+      "body": {
+        "stage": "direct",
+        "inputs": [
+          "Tiếng Việt có dấu: ấ ệ ộ ữ ợ 🎯🎯🎯 và đoạn lặp để đo byte."
+        ],
+        "consent": {
+          "accepted": true,
+          "version": "summary-cloud-v1"
+        },
+        "note": {
+          "ownerId": "account-test",
+          "noteId": "synthetic-note",
+          "contentRevision": 1,
+          "protectionRevision": 0,
+          "runId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sectionIndex": 0,
+          "sourceStart": null,
+          "sourceEnd": null
+        }
+      },
+      "require_multibyte_bytes_gt_chars": true,
+      "interpretation": "proves byte length and character length are different measures; cap is bytes"
+    }
+  ],
+  "provider_cases": [
+    {
+      "id": "provider.stop.valid",
+      "expect": "accepted",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "Bản tóm tắt hợp lệ.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "provider.stop.unicode.valid",
+      "expect": "accepted",
+      "stage": "section",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "Giữ tên Nguyễn Văn A, 12 triệu, phủ định \"không chốt\". 第二段 🎯",
+        "usage": {
+          "inputTokens": 8000,
+          "outputTokens": 128
+        }
+      }
+    },
+    {
+      "id": "provider.stop.trimmed.valid",
+      "expect": "accepted",
+      "stage": "merge",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "\n  Tóm tắt sau merge.  \n",
+        "usage": {
+          "inputTokens": 300,
+          "outputTokens": 40
+        }
+      },
+      "normalized_summary": "Tóm tắt sau merge."
+    },
+    {
+      "id": "provider.output.section.at_budget.valid",
+      "expect": "accepted",
+      "stage": "section",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "Section summary ở đúng trần 128.",
+        "usage": {
+          "inputTokens": 9000,
+          "outputTokens": 128
+        }
+      },
+      "interpretation": "128 is the section output budget; usage at the budget with stop is accepted"
+    },
+    {
+      "id": "provider.output.section.over_budget.rejected",
+      "expect": "rejected",
+      "reason": "budget_mismatch",
+      "stage": "section",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "Section summary vượt trần.",
+        "usage": {
+          "inputTokens": 9000,
+          "outputTokens": 129
+        }
+      },
+      "interpretation": "conservative fixture rule: stop plus over-budget usage is invalid, not success"
+    },
+    {
+      "id": "provider.length.rejected",
+      "expect": "rejected",
+      "reason": "length",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "length",
+        "text": "Bị cắt vì hết max_tokens",
+        "usage": {
+          "inputTokens": 16000,
+          "outputTokens": 256
+        }
+      }
+    },
+    {
+      "id": "provider.filtered.rejected",
+      "expect": "rejected",
+      "reason": "filtered",
+      "stage": "section",
+      "provider": {
+        "finish_reason": "filtered",
+        "text": "",
+        "usage": {
+          "inputTokens": 9000,
+          "outputTokens": 0
+        }
+      }
+    },
+    {
+      "id": "provider.aborted.rejected",
+      "expect": "rejected",
+      "reason": "aborted",
+      "stage": "merge",
+      "provider": {
+        "finish_reason": "aborted",
+        "text": "một phần",
+        "usage": {
+          "inputTokens": 300,
+          "outputTokens": 10
+        }
+      }
+    },
+    {
+      "id": "provider.finish_reason.missing.rejected",
+      "expect": "rejected",
+      "reason": "missing_finish_reason",
+      "stage": "direct",
+      "provider": {
+        "text": "Không có finish_reason",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "provider.text.empty.rejected",
+      "expect": "rejected",
+      "reason": "empty_output",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "   \n\t",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 0
+        }
+      }
+    },
+    {
+      "id": "provider.text.wrong_type.rejected",
+      "expect": "rejected",
+      "reason": "empty_output",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": 42,
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "provider.usage.missing.rejected",
+      "expect": "rejected",
+      "reason": "usage_missing",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "Không có usage."
+      },
+      "interpretation": "backend must not invent token numbers when the provider omits usage"
+    },
+    {
+      "id": "provider.usage.wrong_type.rejected",
+      "expect": "rejected",
+      "reason": "usage_shape",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "usage dạng chuỗi.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": "95"
+        }
+      }
+    },
+    {
+      "id": "provider.usage.bool.rejected",
+      "expect": "rejected",
+      "reason": "usage_shape",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "usage bool.",
+        "usage": {
+          "inputTokens": true,
+          "outputTokens": 95
+        }
+      },
+      "interpretation": "strict integer: bool is not a token count"
+    },
+    {
+      "id": "provider.usage.negative.rejected",
+      "expect": "rejected",
+      "reason": "usage_shape",
+      "stage": "section",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "usage âm.",
+        "usage": {
+          "inputTokens": 9000,
+          "outputTokens": -1
+        }
+      }
+    },
+    {
+      "id": "provider.usage.extra_field.rejected",
+      "expect": "rejected",
+      "reason": "usage_shape",
+      "stage": "direct",
+      "provider": {
+        "finish_reason": "stop",
+        "text": "usage có trường lạ.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95,
+          "cachedTokens": 10
+        }
+      }
+    }
+  ],
+  "response_cases": [
+    {
+      "id": "resp.success.valid",
+      "expect": "accepted",
+      "envelope": {
+        "summary": "Bản tóm tắt hợp lệ.",
+        "requestId": "server-generated-id",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "resp.success.unicode.valid",
+      "expect": "accepted",
+      "envelope": {
+        "summary": "Tóm tắt tiếng Việt 🎯 có dấu.",
+        "requestId": "req-2",
+        "usage": {
+          "inputTokens": 16000,
+          "outputTokens": 256
+        }
+      }
+    },
+    {
+      "id": "resp.success.empty_summary.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "summary": "   ",
+        "requestId": "req-3",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 0
+        }
+      }
+    },
+    {
+      "id": "resp.success.summary_not_string.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "summary": {
+          "text": "không phải string"
+        },
+        "requestId": "req-4",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "resp.success.usage_missing.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "summary": "Thiếu usage.",
+        "requestId": "req-5"
+      }
+    },
+    {
+      "id": "resp.success.usage_wrong_type.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "summary": "usage sai kiểu.",
+        "requestId": "req-6",
+        "usage": {
+          "inputTokens": "1200",
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "resp.success.request_id_blank.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "summary": "Thiếu requestId.",
+        "requestId": "  ",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 95
+        }
+      }
+    },
+    {
+      "id": "resp.error.valid",
+      "expect": "accepted",
+      "envelope": {
+        "error": {
+          "code": "timeout"
+        },
+        "requestId": "server-generated-id"
+      }
+    },
+    {
+      "id": "resp.error.rate_limited.valid",
+      "expect": "accepted",
+      "envelope": {
+        "error": {
+          "code": "rateLimited"
+        },
+        "requestId": "req-8"
+      }
+    },
+    {
+      "id": "resp.error.unknown_code.rejected",
+      "expect": "rejected",
+      "reason": "unknown_error_code",
+      "envelope": {
+        "error": {
+          "code": "providerExploded"
+        },
+        "requestId": "req-9"
+      }
+    },
+    {
+      "id": "resp.error.code_not_string.rejected",
+      "expect": "rejected",
+      "reason": "unknown_error_code",
+      "envelope": {
+        "error": {
+          "code": 500
+        },
+        "requestId": "req-10"
+      }
+    },
+    {
+      "id": "resp.error.missing_request_id.rejected",
+      "expect": "rejected",
+      "reason": "error_shape",
+      "envelope": {
+        "error": {
+          "code": "invalidInput"
+        }
+      }
+    },
+    {
+      "id": "resp.gateway.body_outside_envelope",
+      "expect": "rejected",
+      "reason": "safe_fallback",
+      "envelope": "<html>502 Bad Gateway</html>",
+      "interpretation": "gateway may return a non-envelope body; Flutter maps by status and must not treat it as success"
+    },
+    {
+      "id": "resp.gateway.unexpected_object.rejected",
+      "expect": "rejected",
+      "reason": "response_shape",
+      "envelope": {
+        "message": "Forbidden"
+      },
+      "interpretation": "unknown JSON object shape is not a success envelope"
+    }
+  ],
+  "token_boundary_cases": [
+    {
+      "id": "tokens.synthetic.at_cap",
+      "expect": "within_budget",
+      "measure": "synthetic",
+      "synthetic_total_input_tokens": 16000,
+      "interpretation": "hand-chosen integer, not a measurement"
+    },
+    {
+      "id": "tokens.synthetic.over_cap",
+      "expect": "over_budget",
+      "measure": "synthetic",
+      "synthetic_total_input_tokens": 16001,
+      "interpretation": "one token over the frozen operational cap"
+    },
+    {
+      "id": "tokens.synthetic.cap_includes_prompt.within",
+      "expect": "within_budget",
+      "measure": "synthetic",
+      "synthetic_content_tokens": 15600,
+      "synthetic_prompt_tokens": 400,
+      "interpretation": "content alone and prompt+wrappers together still fit 16000"
+    },
+    {
+      "id": "tokens.synthetic.cap_includes_prompt.over",
+      "expect": "over_budget",
+      "measure": "synthetic",
+      "synthetic_content_tokens": 15650,
+      "synthetic_prompt_tokens": 400,
+      "interpretation": "content-only would fit, but prompt+wrappers push the call over the cap"
+    },
+    {
+      "id": "tokens.synthetic.chunk_plan.section_budget",
+      "expect": "within_budget",
+      "measure": "synthetic",
+      "synthetic_content_tokens": 15690,
+      "synthetic_prompt_tokens": 300,
+      "interpretation": "section chunk stays under the same per-call input cap"
+    }
+  ],
+  "pipeline_cases": [
+    {
+      "id": "pipeline.direct.one_call",
+      "expect": "allowed",
+      "stage_plan": [
+        "direct"
+      ],
+      "expect_calls": 1
+    },
+    {
+      "id": "pipeline.section2.merge",
+      "expect": "allowed",
+      "stage_plan": [
+        "section",
+        "section",
+        "merge"
+      ],
+      "expect_calls": 3
+    },
+    {
+      "id": "pipeline.section4.merge",
+      "expect": "allowed",
+      "stage_plan": [
+        "section",
+        "section",
+        "section",
+        "section",
+        "merge"
+      ],
+      "expect_calls": 5,
+      "interpretation": "4 chunks + 1 merge is the frozen maximum"
+    },
+    {
+      "id": "pipeline.section5.blocked_before_generation",
+      "expect": "pipelineTooLarge",
+      "stage_plan": [
+        "section",
+        "section",
+        "section",
+        "section",
+        "section",
+        "merge"
+      ],
+      "expect_calls": 0,
+      "interpretation": "must fail before the first generation call"
+    },
+    {
+      "id": "pipeline.recursive_merge.blocked",
+      "expect": "pipelineTooLarge",
+      "stage_plan": [
+        "section",
+        "section",
+        "merge",
+        "merge"
+      ],
+      "expect_calls": 0,
+      "interpretation": "one merge only; recursive merge is outside this configuration"
+    },
+    {
+      "id": "pipeline.direct_plus_sections.blocked",
+      "expect": "pipelineTooLarge",
+      "stage_plan": [
+        "direct",
+        "section",
+        "merge"
+      ],
+      "expect_calls": 0,
+      "interpretation": "no extra direct summary after or alongside section work"
+    }
+  ],
+  "negative_self_checks": [
+    {
+      "id": "neg.flipped_expectation",
+      "kind": "flip_expect",
+      "case_id": "req.direct.valid",
+      "interpretation": "a changed expected outcome must be reported as a mismatch"
+    },
+    {
+      "id": "neg.malformed_missing_id",
+      "kind": "drop_key",
+      "case_id": "provider.stop.valid",
+      "key": "id",
+      "interpretation": "a malformed fixture case must fail shape validation"
+    },
+    {
+      "id": "neg.unexpected_case_key",
+      "kind": "add_key",
+      "case_id": "req.section.valid",
+      "key": "futureField",
+      "value": "x",
+      "interpretation": "unexpected schema in a fixture must fail by default"
+    },
+    {
+      "id": "neg.boolean_token_part",
+      "kind": "add_key",
+      "case_id": "tokens.synthetic.cap_includes_prompt.within",
+      "key": "synthetic_content_tokens",
+      "value": true,
+      "interpretation": "Bool must not pass as a synthetic integer token count."
+    }
+  ],
+  "contract_version": "0.4",
+  "provenance": "v0.3 golden cases extended with v0.4 canonical note context"
+}

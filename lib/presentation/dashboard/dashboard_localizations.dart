@@ -24,10 +24,20 @@ final class DashboardCopy {
 
   final bool _isVietnamese;
 
-  String get title => 'NoteFlow';
-  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get title => _isVietnamese ? 'Trang chủ' : 'Home';
+  String get workspaceLabel => 'NoteFlow';
+  String get workspaceHint => _isVietnamese
+      ? 'Lưu ý tưởng, sắp xếp công việc và để AI tổng hợp phần quan trọng.'
+      : 'Capture ideas, organize work, and let AI surface what matters.';
   String get recentlyUpdated =>
       _isVietnamese ? 'Cập nhật gần đây' : 'Recently updated';
+  String get recents => _isVietnamese ? 'Gần đây' : 'Recents';
+  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
+  String get today => _isVietnamese ? 'Hôm nay' : 'Today';
+  String get yesterday => _isVietnamese ? 'Hôm qua' : 'Yesterday';
+  String get pastWeek => _isVietnamese ? 'Tuần qua' : 'Past week';
+  String get past30Days => _isVietnamese ? '30 ngày qua' : 'Past 30 days';
+  String get results => _isVietnamese ? 'Kết quả' : 'Results';
   String notesCount(int count) => _isVietnamese
       ? '$count ghi chú'
       : '$count ${count == 1 ? 'note' : 'notes'}';
@@ -51,6 +61,9 @@ final class DashboardCopy {
   String get loadError => _isVietnamese
       ? 'Không thể tải ghi chú. Vui lòng thử lại.'
       : 'Couldn’t load notes. Please try again.';
+  String get storageUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ tải hoặc lưu ghi chú. Hãy dùng ứng dụng đã cài đặt để tiếp tục.'
+      : 'This Web build cannot load or save notes. Use the installed app to continue.';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get noMatches =>
       _isVietnamese ? 'Không tìm thấy ghi chú phù hợp' : 'No matching notes';
@@ -60,12 +73,28 @@ final class DashboardCopy {
   String get updatedAt => _isVietnamese ? 'Cập nhật' : 'Updated';
   String get untitled => _isVietnamese ? '(Chưa đặt tên)' : '(Untitled)';
   String get noContent => _isVietnamese ? 'Không có nội dung' : 'No content';
+  String get pinNote => _isVietnamese ? 'Ghim ghi chú' : 'Pin note';
+  String get unpinNote => _isVietnamese ? 'Bỏ ghim ghi chú' : 'Unpin note';
+  String get pinned => _isVietnamese ? 'Đã ghim' : 'Pinned';
+  String get shared => _isVietnamese ? 'Được chia sẻ' : 'Shared';
+  String get layoutSaveError => _isVietnamese
+      ? 'Không thể lưu bố cục ghi chú.'
+      : 'Couldn’t save the note layout.';
+  String get pinSaveError => _isVietnamese
+      ? 'Không thể cập nhật ghim ghi chú.'
+      : 'Couldn’t update the note pin.';
 
   String updatedOn(String date) =>
       _isVietnamese ? '$updatedAt $date' : '$updatedAt $date';
 
-  String noteSemantics({required String title, required String preview}) {
-    return _isVietnamese ? 'Ghi chú $title. $preview' : 'Note $title. $preview';
+  String noteSemantics({
+    required String title,
+    required String preview,
+    bool pinned = false,
+  }) {
+    return _isVietnamese
+        ? 'Ghi chú $title. $preview${pinned ? ' Đã ghim.' : ''}'
+        : 'Note $title. $preview${pinned ? ' Pinned.' : ''}';
   }
 }
 

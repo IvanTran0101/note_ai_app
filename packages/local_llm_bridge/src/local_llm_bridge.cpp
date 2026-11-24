@@ -1,5 +1,7 @@
 #include "local_llm_bridge.h"
 
+#include "common/chat.h"
+#include "common/common.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -11,9 +13,172 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+
+// The modern llama.cpp chat layer depends on these two small vocabulary
+// helpers from common/common.cpp. Pulling that large utility translation unit
+// into the mobile bridge would also bring unrelated CLI/runtime dependencies,
+// so keep the equivalent, bridge-local implementations here. They use only
+// the public llama.cpp vocabulary API and are linked by common/chat.cpp.
+std::vector<llama_token> common_tokenize(const llama_vocab* vocab,
+                                         const std::string& text,
+                                         bool add_special,
+                                         bool parse_special) {
+  if (text.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw std::runtime_error("tokenization input is too large");
+  }
+
+  int32_t token_count = static_cast<int32_t>(text.size()) +
+      (add_special ? 2 : 0);
+  std::vector<llama_token> result(static_cast<size_t>(token_count));
+  token_count = llama_tokenize(
+      vocab,
+      text.data(),
+      text.size(),
+      result.data(),
+      result.size(),
+      add_special,
+      parse_special);
+  if (token_count == std::numeric_limits<int32_t>::min()) {
+    throw std::runtime_error("tokenization result exceeds int32_t limit");
+  }
+  if (token_count < 0) {
+    result.resize(static_cast<size_t>(-token_count));
+    const int32_t check = llama_tokenize(
+        vocab,
+        text.data(),
+        text.size(),
+        result.data(),
+        result.size(),
+        add_special,
+        parse_special);
+    if (check != -token_count) {
+      throw std::runtime_error("tokenization size changed between passes");
+    }
+  } else {
+    result.resize(static_cast<size_t>(token_count));
+  }
+  return result;
+}
+
+std::vector<llama_token> common_tokenize(const llama_context* context,
+                                         const std::string& text,
+                                         bool add_special,
+                                         bool parse_special) {
+  const llama_model* model = llama_get_model(context);
+  if (model == nullptr) {
+    throw std::runtime_error("tokenization context has no model");
+  }
+  return common_tokenize(
+      llama_model_get_vocab(model), text, add_special, parse_special);
+}
+
+std::string common_token_to_piece(const llama_vocab* vocab,
+                                  llama_token token,
+                                  bool special) {
+  std::string piece(16, '\0');
+  int32_t size = llama_token_to_piece(
+      vocab, token, piece.data(), static_cast<int32_t>(piece.size()), 0,
+      special);
+  if (size < 0) {
+    piece.resize(static_cast<size_t>(-size));
+    size = llama_token_to_piece(
+        vocab, token, piece.data(), static_cast<int32_t>(piece.size()), 0,
+        special);
+  }
+  if (size < 0) {
+    throw std::runtime_error("failed to convert token to piece");
+  }
+  piece.resize(static_cast<size_t>(size));
+  return piece;
+}
+
+std::string common_token_to_piece(const llama_context* context,
+                                  llama_token token,
+                                  bool special) {
+  const llama_model* model = llama_get_model(context);
+  if (model == nullptr) {
+    throw std::runtime_error("token piece context has no model");
+  }
+  return common_token_to_piece(
+      llama_model_get_vocab(model), token, special);
+}
+
+// The selected modern chat sources also reference these small string/TTY
+// helpers from common/common.cpp. Keep the bridge self-contained instead of
+// linking common/common.cpp, whose remaining code belongs to llama.cpp CLI
+// tools and would substantially widen the mobile binary.
+void string_replace_all(std::string& value,
+                        const std::string& search,
+                        const std::string& replacement) {
+  if (search.empty()) {
+    return;
+  }
+  std::string result;
+  result.reserve(value.size());
+  size_t last_position = 0;
+  size_t position = 0;
+  while ((position = value.find(search, last_position)) != std::string::npos) {
+    result.append(value, last_position, position - last_position);
+    result.append(replacement);
+    last_position = position + search.size();
+  }
+  result.append(value, last_position, std::string::npos);
+  value = std::move(result);
+}
+
+std::string string_join(const std::vector<std::string>& values,
+                        const std::string& separator) {
+  std::ostringstream result;
+  for (size_t index = 0; index < values.size(); ++index) {
+    if (index > 0) {
+      result << separator;
+    }
+    result << values[index];
+  }
+  return result.str();
+}
+
+std::vector<std::string> string_split(const std::string& value,
+                                      const std::string& delimiter) {
+  std::vector<std::string> parts;
+  if (delimiter.empty()) {
+    parts.push_back(value);
+    return parts;
+  }
+
+  size_t start = 0;
+  size_t end = value.find(delimiter);
+  while (end != std::string::npos) {
+    parts.push_back(value.substr(start, end - start));
+    start = end + delimiter.size();
+    end = value.find(delimiter, start);
+  }
+  parts.push_back(value.substr(start));
+  return parts;
+}
+
+std::string string_repeat(const std::string& value, size_t count) {
+  std::string result;
+  if (count == 0 || value.empty()) {
+    return result;
+  }
+  result.reserve(value.size() * count);
+  for (size_t index = 0; index < count; ++index) {
+    result += value;
+  }
+  return result;
+}
+
+bool tty_can_use_colors() {
+  // The Flutter bridge has no CLI TTY. Disabling colors also keeps native
+  // logging deterministic when called from an iOS/macOS worker isolate.
+  return false;
+}
 
 namespace {
 
@@ -159,10 +324,11 @@ bool append_token_piece(const llama_vocab* vocab,
 }
 
 /*
- * Formats a chat turn with the model's chat template and appends the assistant
- * turn start. A non-empty system prompt creates a system turn followed by a
- * user turn; an empty system prompt creates a user turn only. On success
- * returns OK and fills `formatted`; the caller must hold the request mutex.
+ * Formats a chat turn with llama.cpp's modern Jinja/PEG chat layer and
+ * appends the model-specific assistant turn start. The template is read from
+ * the GGUF metadata; no Gemma-specific syntax is hardcoded in this bridge.
+ * On success returns OK and fills `formatted`; the caller must hold the
+ * request mutex.
  */
 int32_t format_chat_prompt(const llama_model* model,
                            const char* system_prompt,
@@ -177,38 +343,57 @@ int32_t format_chat_prompt(const llama_model* model,
     return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_MISSING;
   }
 
-  llama_chat_message messages[2];
-  size_t message_count = 0;
+  common_chat_templates_ptr chat_templates;
+  try {
+    chat_templates = common_chat_templates_init(model, "");
+  } catch (const std::exception& exception) {
+    set_error(error_buffer, error_capacity,
+              "llama.cpp failed to initialize the model chat template: %s",
+              exception.what());
+    return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
+  }
+  if (!chat_templates) {
+    set_error(error_buffer, error_capacity,
+              "llama.cpp returned no model chat template");
+    return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
+  }
+
+  common_chat_templates_inputs inputs;
+  inputs.use_jinja = true;
+  inputs.add_generation_prompt = true;
+  // Summary calls should return content directly instead of asking the model
+  // to emit a separate reasoning channel.
+  inputs.enable_thinking = false;
   if (system_prompt[0] != '\0') {
-    messages[message_count++] = {"system", system_prompt};
+    common_chat_msg system_message;
+    system_message.role = "system";
+    system_message.content = system_prompt;
+    inputs.messages.push_back(system_message);
   }
-  messages[message_count++] = {"user", user_prompt};
+  common_chat_msg user_message;
+  user_message.role = "user";
+  user_message.content = user_prompt;
+  inputs.messages.push_back(user_message);
 
-  const int32_t required = llama_chat_apply_template(
-      chat_template, messages, static_cast<int32_t>(message_count),
-      /*add_ass=*/true, nullptr, 0);
-  if (required < 0) {
+  try {
+    const common_chat_params params =
+        common_chat_templates_apply(chat_templates.get(), inputs);
+    if (params.prompt.empty()) {
+      set_error(error_buffer, error_capacity,
+                "llama.cpp rendered an empty model chat prompt");
+      return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
+    }
+    *formatted = params.prompt;
+  } catch (const std::exception& exception) {
     set_error(error_buffer, error_capacity,
-              "llama.cpp does not support the model chat template");
+              "llama.cpp failed to render the model chat template: %s",
+              exception.what());
     return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
-  }
-  if (required == std::numeric_limits<int32_t>::max()) {
-    set_error(error_buffer, error_capacity,
-              "formatted chat prompt is too large");
-    return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
-  }
-
-  std::vector<char> buffer(static_cast<size_t>(required) + 1);
-  const int32_t written = llama_chat_apply_template(
-      chat_template, messages, static_cast<int32_t>(message_count),
-      /*add_ass=*/true, buffer.data(), static_cast<int32_t>(buffer.size()));
-  if (written < 0 || written > required) {
+  } catch (...) {
     set_error(error_buffer, error_capacity,
               "llama.cpp failed to render the model chat template");
     return LOCAL_LLM_BRIDGE_STATUS_CHAT_TEMPLATE_FAILED;
   }
-
-  formatted->assign(buffer.data(), static_cast<size_t>(written));
   return LOCAL_LLM_BRIDGE_STATUS_OK;
 }
 

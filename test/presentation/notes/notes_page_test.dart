@@ -1,3 +1,6 @@
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -55,6 +58,9 @@ void main() {
 
     expect(find.byKey(const ValueKey<String>('notes-empty')), findsOneWidget);
     expect(find.text('New note'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('title-field')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey<String>('new-note-empty')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('title-field')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('content-field')), findsOneWidget);
     expect(
@@ -92,7 +98,6 @@ void main() {
 
     await pumpPage(tester, controller);
 
-    expect(find.byKey(const ValueKey<String>('note-note-1')), findsOneWidget);
     expect(
       tester
           .widget<TextField>(find.byKey(const ValueKey<String>('title-field')))
@@ -130,6 +135,8 @@ void main() {
         _FakeNotesApplicationController();
 
     await pumpPage(tester, controller);
+    await tester.tap(find.byKey(const ValueKey<String>('new-note-empty')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey<String>('title-field')),
       'New note',
@@ -178,12 +185,12 @@ void main() {
 
     await pumpPage(tester, controller);
 
-    expect(find.byKey(const ValueKey<String>('notes-error')), findsOneWidget);
-    expect(find.textContaining('storage unavailable'), findsNothing);
     expect(
-      find.text('Couldn’t load notes. Please try again.'),
-      findsWidgets,
+      find.byKey(const ValueKey<String>('notes-load-error-state')),
+      findsOneWidget,
     );
+    expect(find.textContaining('storage unavailable'), findsNothing);
+    expect(find.text('Couldn’t load notes. Please try again.'), findsWidgets);
     expect(find.byKey(const ValueKey<String>('retry-notes')), findsOneWidget);
   });
 
@@ -323,7 +330,14 @@ final class _FakeNotesApplicationController
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async {
+  SummaryConsentAppService? get summaryConsent => null;
+
+  @override
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
     final NoteDto current = _find(noteId);
     summarizedNoteId = noteId;
     return 'Summary of ${current.content}';

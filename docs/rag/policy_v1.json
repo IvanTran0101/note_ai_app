@@ -1,0 +1,178 @@
+{
+  "contractVersion": "rag.v0.1",
+  "wireVersion": 1,
+  "status": "ARTIFACTS_READY_FOR_REVIEW",
+  "runtimeEnabled": false,
+  "approvedScope": {
+    "ownership": "own",
+    "syncedOnly": true,
+    "textOnly": true,
+    "protectedAllowed": false,
+    "sharedAllowed": false,
+    "attachmentsAllowed": false,
+    "turns": 1,
+    "scopeTypes": [
+      "account",
+      "note"
+    ]
+  },
+  "hosting": {
+    "frontend": "vercel",
+    "backend": "aws-lambda",
+    "region": "ap-southeast-1",
+    "vectorStore": "s3-vectors",
+    "keywordStore": "s3-standard-snapshot",
+    "keywordCompute": "aws-lambda",
+    "cacheIsPersistent": false
+  },
+  "chunking": {
+    "strategy": "paragraph-sentence-token-then-pack",
+    "targetTokens": 400,
+    "maxEmbeddingTokens": 512,
+    "overlapTokens": 0,
+    "maxEmbeddingCharacters": 2048
+  },
+  "embedding": {
+    "model": "cohere.embed-multilingual-v3",
+    "dimensions": 1024,
+    "documentInputType": "search_document",
+    "queryInputType": "search_query",
+    "truncate": "NONE"
+  },
+  "retrieval": {
+    "vectorTopK": 20,
+    "bm25TopK": 20,
+    "maxUnionCandidates": 40,
+    "rrf": {
+      "constant": 60,
+      "vectorWeight": 1,
+      "bm25Weight": 1,
+      "rankStartsAt": 1
+    },
+    "mmr": {
+      "lambda": 0.7,
+      "maxAnchors": 8,
+      "relevance": "normalized-rrf",
+      "redundancy": "chunk-cosine"
+    }
+  },
+  "context": {
+    "previousChunks": 1,
+    "nextChunks": 1,
+    "recursive": false,
+    "sameNoteRevisionSection": true,
+    "dedupe": "source-identity-and-source-spans",
+    "semanticDedupe": false,
+    "preserveConflictingText": true,
+    "evidenceMaxTokens": 6000,
+    "includesTitleAndSourceLabels": true,
+    "anchorsFirst": true,
+    "removeExpansionFirst": true
+  },
+  "jev": {
+    "questionSetVersion": "rag-evidence.v1",
+    "questions": {
+      "answerable_from_evidence": {
+        "type": "noul",
+        "instructions": "Does the supplied evidence contain enough information to answer the user's question using only this evidence?",
+        "criteria": {
+          "true": "Evidence có dữ kiện cho các phần user hỏi, đúng đối tượng và điều kiện liên quan.",
+          "false": "Chỉ cùng chủ đề; thiếu dữ kiện; hoặc phải bổ sung kiến thức ngoài evidence."
+        }
+      },
+      "has_unresolved_conflict": {
+        "type": "noul",
+        "instructions": "Does the supplied evidence contain an unresolved contradiction directly relevant to answering the user's question?",
+        "criteria": {
+          "true": "Cùng đối tượng/điều kiện nhưng có thông tin không tương thích, context chưa giải quyết.",
+          "false": "Không có mâu thuẫn liên quan hoặc evidence giải thích rõ sự khác biệt."
+        }
+      }
+    },
+    "oneRequest": true,
+    "freeTextReason": false,
+    "liveModel": null,
+    "liveThresholds": null
+  },
+  "safety": {
+    "ragConsentSeparate": true,
+    "defaultConsent": false,
+    "consentVersion": "rag-consent.v1",
+    "canonicalRevalidation": true,
+    "livePolicyRequired": true,
+    "providerKeysServerOnly": true,
+    "automaticRetrievalLoop": false,
+    "automaticGenerationRetry": false,
+    "citationValidation": true,
+    "rawContentLogging": false
+  },
+  "budget": {
+    "awsStagingTargetUsd": 5,
+    "hardBillingCap": false,
+    "externalProviderBudget": null
+  },
+  "technicalDefaults": {
+    "approval": "PROPOSED_FOR_CONTRACT_REVIEW",
+    "offsetUnit": "utf16-code-unit",
+    "spanEnd": "exclusive",
+    "embeddingText": "title-newline-content-span",
+    "mmrNormalization": "rrf-score-divided-by-pool-maximum",
+    "mmrRedundancy": "maximum-positive-cosine-to-selected",
+    "tieBreak": "source-key-ascending",
+    "sourceKeyParts": [
+      "ownerId",
+      "noteId",
+      "revision",
+      "sectionId",
+      "chunkId"
+    ],
+    "consentStorage": {
+      "table": "existing-notes-table",
+      "sortKey": "RAG#CONSENT",
+      "partitionKey": "OWNER#<verified-sub>",
+      "noTtl": true,
+      "noFeedOrRelayAttributes": true
+    },
+    "wire": {
+      "route": "/ai/rag/query",
+      "method": "POST",
+      "bodyMaxUtf8Bytes": 16384,
+      "questionMaxUtf8Bytes": 4096,
+      "questionMaxCodePoints": 2048,
+      "responseMaxUtf8Bytes": 65536,
+      "outputMaxTokens": 1024,
+      "requestTimeoutMs": 26000
+    },
+    "errorHttpStatus": {
+      "INVALID_INPUT": 400,
+      "INPUT_TOO_LONG": 413,
+      "UNAUTHORIZED": 401,
+      "CONSENT_REQUIRED": 403,
+      "SCOPE_DENIED": 404,
+      "INDEX_NOT_READY": 409,
+      "SOURCE_CHANGED": 409,
+      "RATE_LIMITED": 429,
+      "EVIDENCE_VALIDATION_UNAVAILABLE": 503,
+      "PROVIDER_UNAVAILABLE": 503,
+      "INVALID_PROVIDER_OUTPUT": 502,
+      "TIMEOUT": 504,
+      "LIVE_POLICY_NOT_CONFIGURED": 503
+    }
+  },
+  "mockOnly": {
+    "provenance": "synthetic-fixture-values-not-calibrated",
+    "thresholds": {
+      "answerabilityMin": 0.9,
+      "conflictMax": 0.1
+    }
+  },
+  "liveBlockers": [
+    "contract-review",
+    "provider-tokenizers-and-fit-proof",
+    "bm25-analyzer-codec",
+    "jev-model-and-calibration",
+    "dynamodb-stream-lambda-indexing-wiring",
+    "index-retention-and-cleanup",
+    "external-provider-budget-and-live-authorization"
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "phase": "RAG Phase 2",
+  "status": "PASS_MOCK",
+  "dateUtc": "2026-10-11T15:18:10Z",
+  "root": "/Volumes/Kingsman/Projects/Schools/NoteFlow/note_ai_app",
+  "branch": "final-tuankiet",
+  "baseCommit": "b39324a",
+  "codeCommitted": false,
+  "implementors": {
+    "tool": "DeepSeek Harness delegate",
+    "workers": 3,
+    "rootRole": "scope, interfaces, review, serialized integration, checks"
+  },
+  "checks": [
+    {
+      "command": "npm run typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "node --import tsx --test amplify/rag/*.test.ts",
+      "result": "PASS",
+      "files": 16,
+      "tests": 148,
+      "failed": 0,
+      "skipped": 0,
+      "actualHttpLoopback": true
+    },
+    {
+      "command": "python3 -B tool/rag/check_phase1.py --root .",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 -B -m unittest discover -s tool/rag -p test_phase1_contract.py",
+      "result": "PASS",
+      "tests": 22
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "node --import tsx amplify/rag/mock_server.ts + documented curl to 127.0.0.1:8797/ai/rag/query",
+      "result": "PASS",
+      "status": "ANSWERED",
+      "citation": "S1",
+      "fixtureNote": "n-watch",
+      "serverStoppedAfterSmoke": true
+    }
+  ],
+  "resolvedVerificationIssues": [
+    "HTTP binding requires approved loopback escalation in this sandbox; root HTTP test passed with it",
+    "Initial root suite exposed an ESM freeze-test assumption; test corrected and complete root suite rerun PASS"
+  ],
+  "gates": {
+    "2.1": "PASS_MOCK: claims boundary, separate canonical consent/scope, source/session races, per-run deadline",
+    "2.2": "PASS_MOCK: source-safe chunking, independent BM25, synthetic embeddings and versioned lexical codec",
+    "2.3": "PASS_MOCK: Top-20 branches, RRF60, deterministic ties, absence vs errors",
+    "2.4": "PASS_MOCK: MMR .7/max8, reuse vectors, expansion/dedupe, injected context budget",
+    "2.5": "PASS_MOCK: two Noul gate, same immutable evidence, safe citation release, actual loopback HTTP"
+  },
+  "mockCallCounts": [
+    {
+      "scenario": "allow",
+      "status": "ANSWERED",
+      "reason": null,
+      "code": null,
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 1
+      }
+    },
+    {
+      "scenario": "insufficient",
+      "status": "NOT_ENOUGH_CONTEXT",
+      "reason": "INSUFFICIENT_EVIDENCE",
+      "code": null,
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 0
+      }
+    },
+    {
+      "scenario": "conflict",
+      "status": "NOT_ENOUGH_CONTEXT",
+      "reason": "UNRESOLVED_CONFLICT",
+      "code": null,
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 0
+      }
+    },
+    {
+      "scenario": "uncertain",
+      "status": "NOT_ENOUGH_CONTEXT",
+      "reason": "UNCERTAIN",
+      "code": null,
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 0
+      }
+    },
+    {
+      "scenario": "malformed",
+      "status": "ERROR",
+      "reason": null,
+      "code": "EVIDENCE_VALIDATION_UNAVAILABLE",
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 0
+      }
+    },
+    {
+      "scenario": "timeout",
+      "status": "ERROR",
+      "reason": null,
+      "code": "TIMEOUT",
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 0
+      }
+    },
+    {
+      "scenario": "invalid-output",
+      "status": "ERROR",
+      "reason": null,
+      "code": "INVALID_PROVIDER_OUTPUT",
+      "calls": {
+        "embedding": 1,
+        "vector": 1,
+        "keyword": 1,
+        "getVectors": 1,
+        "neighbors": 1,
+        "jev": 1,
+        "generation": 1
+      }
+    }
+  ],
+  "provenance": {
+    "corpus": "12 authored synthetic notes from Phase 1",
+    "vectors": "1024-dimensional lexical hash toy, not Cohere output",
+    "counters": "ceil(codepoints/4), not provider tokenizer measurements",
+    "model": "jev-fixture",
+    "thresholds": "0.9/0.1 synthetic branch values, not calibration",
+    "consent": "explicit synthetic fixture grant, not real persisted RAG consent"
+  },
+  "safety": {
+    "productionRuntimeEnabled": false,
+    "liveModel": null,
+    "liveThresholds": null,
+    "realRagProviderCalls": 0,
+    "awsOperations": 0,
+    "dependencyInstalls": 0,
+    "existingApplicationFilesModified": []
+  },
+  "notVerified": [
+    "real JWT signatures/API Gateway RAG route deployment",
+    "AWS/DynamoDB/S3/S3 Vectors/canonical consent CAS integration",
+    "provider tokenizers, Cohere semantic quality, Jev VI/EN calibration and DeepSeek generation quality",
+    "n8n publication/cleanup/replay orchestration",
+    "Flutter UI and Web/Native acceptance",
+    "AWS/external provider billing; $5 target is not a hard cap"
+  ],
+  "testLogSha256": "b77f2bdcc620dc39f65cf8f35e2f6a7fd827a9a6a850738c47659150d670b314",
+  "codeFileSha256": {
+    "amplify/rag/algorithm_boundaries.test.ts": "e1a09f5826c2dfbb21de2d4a183435f8ecf8e9b353414d94f256840760e62c98",
+    "amplify/rag/authority.test.ts": "c05a81e1b4a716bd07d3db3db194d6bfb83b4e932df8cb9c2f7a7fd7cab55f5a",
+    "amplify/rag/authority.ts": "55dd631675401c3c502a6c2b02c39aac1f68ad3b42bc7a8a5a5214d3f42080d4",
+    "amplify/rag/authority_boundaries.test.ts": "919f0d1da2cbb6610eee5c0f551260e71ad7b3a77bd41564a310ced9b0cebae6",
+    "amplify/rag/chunking.test.ts": "97299b17fd3c1fe39eb1b9cceaa0eec65f346d1c5d6fa774571c86b7b7a889c0",
+    "amplify/rag/chunking.ts": "027d3f39901d94af97bd064198e6f72096c24000353169bfac9b504d96fcbcb6",
+    "amplify/rag/context.test.ts": "3de7d50b052930a874f6c8d8235d20f2f44dfe6de826c52ef22c86a90d1e2d7c",
+    "amplify/rag/context.ts": "9be88b494ee52a8e100075378e3f83b20cd868a11b5b2bf2f05e764ae3bf8ffe",
+    "amplify/rag/contract.test.ts": "ab17df48fca73c061c2fbf31435915d80253309b9d7f9817cfceee9457e5e6d9",
+    "amplify/rag/contract.ts": "5c5d3a18d1360f6b659a64e50b63d551529eb8dbd13cf85825548c7077510f01",
+    "amplify/rag/deadline.test.ts": "bc1076297c994a77a2d7c6f452be1eca2f5ab3321d6e9ea5164a852fd61648e0",
+    "amplify/rag/deadline.ts": "ba9cf9359cad2d7f62c9ebb2247a6cdb29bdcf63cbb3b5a1574ee64916a6735e",
+    "amplify/rag/fixtures.test.ts": "57d03a8807b5613afe41a4c1d943f92c323720062fe6c5b26b6f78a0bc5227dc",
+    "amplify/rag/handler.test.ts": "51c64e9d472372673418638ca416f578b7fbd5acd13b1b8d1fd240a2d00a0684",
+    "amplify/rag/handler.ts": "b9037b71a4b846b10a948ef7c4e84fb2fd9f7baaba375ac89bc6e51fc6408efc",
+    "amplify/rag/http.test.ts": "7461b4e705055ffac1facf66a4241ea80dd9415c83a971059e3336c71793433a",
+    "amplify/rag/keyword.test.ts": "0d4931f4522a5dbcffa240122c17e9cae72330f51dc1a7964e36b1bb5cce9612",
+    "amplify/rag/keyword.ts": "8934bf5b08d978406a79c8b242ee02e6f0240e6be7da7f3bae71e8aa80606a25",
+    "amplify/rag/mock.ts": "a7ef73ae245009b7f3ab3bcea1c0f1af9d466fb07cbfef18ee6eedfbbd37e473",
+    "amplify/rag/mock_embedding.ts": "aa3d12ba6b359154fd5bfc6606f9647cea796c21b6291b8f729edf0c48fc573e",
+    "amplify/rag/mock_index.test.ts": "359d166e4c62aa95d3e878d873aa5e3132e6b3674c555093afd9ad50bfc4d528",
+    "amplify/rag/mock_index.ts": "06a54f8df25a8f32c324f93480381287e88da2e8082424c4f0366115e85ee778",
+    "amplify/rag/mock_server.ts": "dd306d8e41da4db3c79d646b4c95ade4cd372c70999c194b48c01d5da647a3fa",
+    "amplify/rag/pipeline.test.ts": "e12ac6aef85f652df195519c69351d8e6ce49ba4dd9a60794778156be578f479",
+    "amplify/rag/pipeline.ts": "3f3629944b13c3f96586191ede0d85ba5b88468976ed6d64fcf00b605ed0d3da",
+    "amplify/rag/pipeline_boundaries.test.ts": "40909cb270fae6a477cc80bf33cad55e45bddd8624f89e27aa0114283b437acb",
+    "amplify/rag/retrieval.test.ts": "69bbcadc3397d5589d0d91910076e85e0e1b9bb78cd183194da2b889b258e457",
+    "amplify/rag/retrieval.ts": "f5397707c91d7ff803ab79ee037c9a58a7e222292d11835b87cd0ef88f998561",
+    "amplify/rag/transport_boundaries.test.ts": "6043010111c05b6de8140f221b4d927f250dff3c979465465819f5af6ccf0507",
+    "amplify/rag/types.ts": "d4a942bfba05f66071ea39e97c7c1f6d79a3d3759af68cd427b7ffe213b55435"
+  }
+}

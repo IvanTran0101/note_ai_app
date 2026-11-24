@@ -16,8 +16,19 @@ typedef DashboardStateListener = void Function(DashboardState state);
 /// render and retry them without an uncaught asynchronous exception.
 final class DashboardController {
   /// Creates a controller using [query] and a positive recent-note limit.
-  DashboardController({required this._query, int recentLimit = 5})
-    : _recentLimit = _validateRecentLimit(recentLimit);
+  DashboardController({
+    required this._query,
+    int recentLimit = 5,
+    Stream<void> securityEvents = const Stream<void>.empty(),
+  }) : _recentLimit = _validateRecentLimit(recentLimit) {
+    _securitySubscription = securityEvents.listen((_) {
+      if (_disposed) return;
+      _generation++;
+      _inFlight = null;
+      _emit(const DashboardState.loading());
+      unawaited(load());
+    });
+  }
 
   final IDashboardOverviewQuery _query;
   final int _recentLimit;
@@ -26,6 +37,8 @@ final class DashboardController {
   DashboardState _state = const DashboardState.idle();
   Future<DashboardState>? _inFlight;
   bool _disposed = false;
+  int _generation = 0;
+  late final StreamSubscription<void> _securitySubscription;
 
   /// Current immutable state.
   DashboardState get state => _state;
@@ -79,16 +92,20 @@ final class DashboardController {
       return;
     }
     _disposed = true;
+    _generation++;
+    _state = const DashboardState.idle();
+    unawaited(_securitySubscription.cancel());
     _listeners.clear();
   }
 
   Future<DashboardState> _load() async {
+    final generation = _generation;
     _emit(const DashboardState.loading());
     try {
       final DashboardOverview overview = await _query.execute(
         recentLimit: _recentLimit,
       );
-      if (_disposed) {
+      if (_disposed || generation != _generation) {
         return _state;
       }
       final DashboardState next = overview.isEmpty
@@ -97,7 +114,7 @@ final class DashboardController {
       _emit(next);
       return next;
     } on Object catch (error) {
-      if (_disposed) {
+      if (_disposed || generation != _generation) {
         return _state;
       }
       final DashboardState next = DashboardState.failure(error);

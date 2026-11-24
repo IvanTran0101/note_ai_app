@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import '../../application/note_intelligence/model_provisioning/model_provisioning_state.dart';
 import '../../application/notes/note_application.dart';
+import 'note_ordering.dart';
+import 'note_flow_snackbar.dart';
 import 'note_editor_panel.dart';
 import 'notes_application_controller.dart';
 import 'notes_list_panel.dart';
@@ -90,7 +92,7 @@ class _NotesPageState extends State<NotesPage> {
       });
     }
     try {
-      final List<NoteDto> notes = await _application.listNotes();
+      final List<NoteDto> notes = sortNotes(await _application.listNotes());
       if (!mounted) {
         return;
       }
@@ -373,7 +375,7 @@ class _NotesPageState extends State<NotesPage> {
     }
     _populateEditor(note);
     setState(() {
-      _notes = List<NoteDto>.unmodifiable(next);
+      _notes = List<NoteDto>.unmodifiable(sortNotes(next));
       _selectedNoteId = note.id;
       _editingNewNote = false;
       _error = null;
@@ -409,7 +411,7 @@ class _NotesPageState extends State<NotesPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(buildNoteFlowSnackBar(context: context, message: message));
   }
 
   void _showUndoMessage({
@@ -420,8 +422,9 @@ class _NotesPageState extends State<NotesPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
+        buildNoteFlowSnackBar(
+          context: context,
+          message: message,
           action: SnackBarAction(
             label: copy.undo,
             onPressed: () => unawaited(_restoreDeletedNote(deleted)),
@@ -432,9 +435,10 @@ class _NotesPageState extends State<NotesPage> {
 
   Future<void> _restoreDeletedNote(NoteDto note) async {
     try {
-      final NoteDto restored = await _application.createNote(
+      final restored = await _application.createSnapshotNote(
         title: note.title,
         content: note.content,
+        document: note.document,
       );
       if (!mounted) {
         return;

@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NoteFlow — Kiến trúc hệ thống hiện tại",
+    "output": "noteflow-system.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/IvanTran0101/note_ai_app.git",
+      "revision": "639f4b306e7544e4c1de199c1241d03f05dbb4ec"
+    },
+    "views": [
+      {
+        "id": "application-flow",
+        "label": "Luồng ứng dụng",
+        "focus": ["presentation", "application", "domain", "persistence"],
+        "note": "Theo dõi cách Dashboard và Note Detail đi qua Application contracts đến Domain và lưu trữ cục bộ."
+      },
+      {
+        "id": "ai-provisioning",
+        "label": "Provisioning AI cục bộ",
+        "focus": ["provisioning", "model-storage", "gguf"],
+        "note": "Hardware capability quyết định model; artifact được tải, hash, xác minh và lưu trong app-private storage."
+      },
+      {
+        "id": "inference-boundary",
+        "label": "Boundary inference",
+        "focus": ["summary-service", "worker", "native-runtime"],
+        "note": "Summary request chạy qua worker isolate, C ABI và llama.cpp; native handle không đi ra ngoài isolate."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [40, 80],
+    "cols": 4,
+    "gapX": 70,
+    "gapY": 70,
+    "cellW": 190,
+    "cellH": 96
+  },
+  "components": [
+    {
+      "id": "presentation",
+      "type": "frontend",
+      "label": "Presentation",
+      "sublabel": "Dashboard · Detail",
+      "tag": "UI / UX",
+      "row": 0,
+      "col": 0,
+      "sources": [
+        { "path": "lib/presentation/dashboard/dashboard_page.dart" },
+        { "path": "lib/presentation/notes/note_detail_page.dart" },
+        { "path": "lib/presentation/notes/notes_workspace_page.dart" }
+      ]
+    },
+    {
+      "id": "application",
+      "type": "backend",
+      "label": "Application",
+      "sublabel": "Use cases · DTO seams",
+      "tag": "Orchestration",
+      "row": 0,
+      "col": 1,
+      "sources": [
+        { "path": "lib/application/notes/note_application.dart" },
+        { "path": "lib/application/note_intelligence/note_summary_app_service.dart" },
+        { "path": "lib/application/dashboard/get_dashboard_overview.dart" }
+      ]
+    },
+    {
+      "id": "domain",
+      "type": "backend",
+      "label": "Domain contracts",
+      "sublabel": "Note · Summary · interfaces",
+      "tag": "DDD boundary",
+      "row": 0,
+      "col": 2,
+      "sources": [
+        { "path": "lib/domain/notes/note.dart" },
+        { "path": "lib/domain/note_intelligence/summary.dart" },
+        { "path": "lib/domain/note_intelligence/i_note_summarization_service.dart" }
+      ]
+    },
+    {
+      "id": "persistence",
+      "type": "database",
+      "label": "Note persistence",
+      "sublabel": "INoteRepository · JSON file",
+      "tag": "Local data",
+      "row": 0,
+      "col": 3,
+      "sources": [
+        { "path": "lib/infrastructure/notes/note_repository.dart" },
+        { "path": "lib/infrastructure/notes/database_context.dart" }
+      ]
+    },
+    {
+      "id": "provisioning",
+      "type": "backend",
+      "label": "Model provisioning",
+      "sublabel": "ModelManager · device",
+      "tag": "First-use / single-flight",
+      "row": 1,
+      "col": 1,
+      "sources": [
+        { "path": "lib/infrastructure/ai/model_manager.dart" },
+        { "path": "lib/infrastructure/ai/model_catalog.dart" },
+        { "path": "lib/infrastructure/device/device_info_plus_hardware_detection.dart" }
+      ]
+    },
+    {
+      "id": "model-storage",
+      "type": "database",
+      "label": "Model storage",
+      "sublabel": "download · SHA-256",
+      "tag": "App-private artifact",
+      "row": 1,
+      "col": 2,
+      "sources": [
+        { "path": "lib/infrastructure/ai/model_storage.dart" },
+        { "path": "lib/infrastructure/ai/model_downloader.dart" },
+        { "path": "lib/infrastructure/ai/model_integrity_verifier.dart" }
+      ]
+    },
+    {
+      "id": "gguf",
+      "type": "external",
+      "label": "GGUF model",
+      "sublabel": "Gemma 1B / E2B artifact",
+      "tag": "Verified artifact",
+      "row": 1,
+      "col": 3
+    },
+    {
+      "id": "summary-service",
+      "type": "backend",
+      "label": "Local summarization",
+      "sublabel": "Application adapter",
+      "tag": "Chunk / merge policy",
+      "row": 2,
+      "col": 1,
+      "sources": [
+        { "path": "lib/infrastructure/note_intelligence/local_summarization_service.dart" },
+        { "path": "lib/application/note_intelligence/note_summary_app_service.dart" }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Worker isolate",
+      "sublabel": "LlmWorkerClient · isolate",
+      "tag": "Native handle owner",
+      "row": 2,
+      "col": 2,
+      "sources": [
+        { "path": "lib/infrastructure/ai/llm_worker_client.dart" },
+        { "path": "lib/infrastructure/ai/llm_worker_client_io.dart" }
+      ]
+    },
+    {
+      "id": "native-runtime",
+      "type": "backend",
+      "label": "Native AI runtime",
+      "sublabel": "Dart FFI · C ABI · llama.cpp",
+      "tag": "Pinned v0.3.0",
+      "row": 2,
+      "col": 3,
+      "sources": [
+        { "path": "packages/local_llm_bridge/lib/local_llm_bridge_io.dart" },
+        { "path": "packages/local_llm_bridge/src/local_llm_bridge.h" },
+        { "path": "packages/local_llm_bridge/hook/build.dart" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Flutter application process",
+      "wraps": ["presentation", "application", "domain", "persistence", "provisioning", "model-storage", "summary-service", "worker"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Native inference boundary",
+      "wraps": ["native-runtime"]
+    }
+  ],
+  "connections": [
+    { "id": "presentation-to-application", "from": "presentation", "to": "application", "label": "use cases / state", "variant": "emphasis" },
+    { "id": "application-to-domain", "from": "application", "to": "domain", "label": "Note + Summary contracts" },
+    { "id": "persistence-to-domain", "from": "persistence", "to": "domain", "label": "implements port", "variant": "dashed" },
+    { "id": "provisioning-to-storage", "from": "provisioning", "to": "model-storage", "label": "prepare artifact" },
+    { "id": "storage-to-gguf", "from": "model-storage", "to": "gguf", "label": "verify / commit", "variant": "dashed" },
+    { "id": "summary-to-worker", "from": "summary-service", "to": "worker", "label": "request" },
+    { "id": "worker-to-native", "from": "worker", "to": "native-runtime", "label": "FFI", "variant": "emphasis" },
+    { "id": "native-to-gguf", "from": "native-runtime", "to": "gguf", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Clean Architecture",
+      "items": [
+        "Presentation calls Application seams",
+        "Domain stays free of Flutter, FFI and llama.cpp",
+        "Infrastructure implements repository and AI adapters"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Model provisioning",
+      "items": [
+        "Device capability selects one compatible model",
+        "Download is streamed and verified by SHA-256",
+        "Artifact is committed to app-private storage"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Inference boundary",
+      "items": [
+        "Worker isolate owns the native runtime handle",
+        "Dart crosses the C ABI through FFI",
+        "Summary output returns through the Application service"
+      ]
+    }
+  ]
+}

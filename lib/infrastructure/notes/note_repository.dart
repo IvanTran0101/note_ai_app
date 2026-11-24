@@ -1,103 +1,335 @@
 import 'dart:async';
 
+import '../../application/notes/note_page.dart';
+import '../../application/sync/local_note_page_store.dart';
+import '../../application/labels/local_label_state.dart';
+import '../../application/notes/note_dto.dart';
+import '../../application/labels/note_query.dart';
+
+import '../../application/notes/note_access.dart';
+
+import '../../application/sync/local_note_state.dart';
+import '../../application/sync/local_sync_state.dart';
+import '../../application/sync/local_sync_store.dart';
+import '../../application/sync/note_sync_status.dart';
+import '../../application/sync/pending_mutation.dart';
+import '../../application/sync/sync_conflict.dart';
+import '../../application/sync/sync_failure.dart';
+import '../../application/sync/sync_mutation.dart';
 import '../../domain/notes/note.dart';
+import '../../domain/notes/note_document.dart';
+import '../sync/local_note_state_codec.dart';
+import '../../domain/notes/attachment.dart';
+import '../../domain/labels/label.dart';
+import '../../domain/labels/label_membership.dart';
+import '../../domain/notes/note_access_policy.dart';
+import '../../domain/notes/note_metadata.dart';
+import '../../domain/notes/note_protection.dart';
 import '../../domain/notes/note_repository.dart' as domain;
-import 'database_context.dart';
-import 'note_mapper.dart';
-import 'note_record.dart';
+
+part 'note_repository_page.dart';
+part 'note_repository_mutations.dart';
+part 'note_repository_mapping.dart';
+part 'note_repository_save.dart';
+part 'note_repository_access.dart';
+part 'note_repository_delete.dart';
+part 'note_repository_update.dart';
 
 /// Infrastructure implementation of the domain's [domain.INoteRepository].
 ///
-/// The repository maps between the Note aggregate and persistence records. It
-/// owns no business rules: Note remains responsible for its own mutations,
-/// while this class only performs CRUD and ordering/concurrency coordination.
-final class NoteRepository implements domain.INoteRepository {
-  NoteRepository({required this.databaseContext});
+/// The repository owns one account-scoped [ILocalSyncStore] per signed-in
+/// account and keeps local notes and their outbox entries in the same
+/// [LocalSyncState] document. Every mutation transforms the current document
+/// through [ILocalSyncStore.update], so a note change and its queued mutation
+/// stay atomic even when sync is writing a checkpoint at the same time.
+///
+/// All operations run through one FIFO queue. Reads therefore observe every
+/// preceding mutation, and concurrent read-modify-write calls cannot overwrite
+/// each other.
+///
+/// The repository never calls the remote data source: it only queues outbox
+/// mutations that a later sync coordinator pushes.
+final class NoteRepository
+    implements
+        INotePageReader,
+        domain.INoteDocumentRepository,
+        domain.INoteMetadataRepository,
+        domain.ISharedNoteRepository,
+        domain.INoteSnapshotRepository {
+  @override
+  Future<NotePage> queryNotePage(String actorId, NotePageQuery query) =>
+      _queryPage(actorId, query);
 
-  final DatabaseContext databaseContext;
+  /// Creates a repository from the injected account resolver, store factory,
+  /// mutation-id generator, and clock.
+  NoteRepository({
+    required this.currentAccountUserId,
+    required this.localSyncStoreFactory,
+    required this.generateMutationId,
+    required this.now,
+    this.accessGuard,
+    this.sessionGeneration,
+    this.labelsEnabled = false,
+  });
+
+  /// Resolves the account the next operation acts on.
+  final String Function() currentAccountUserId;
+
+  /// Creates the account-bound local store on first use.
+  final ILocalSyncStore Function({required String accountUserId})
+  localSyncStoreFactory;
+
+  /// Produces a new mutation id for an outbox entry.
+  final String Function() generateMutationId;
+
+  /// Supplies the local timestamp recorded on notes and mutations.
+  final DateTime Function() now;
+  final INoteAccessGuard? accessGuard;
+  final int Function()? sessionGeneration;
+  final bool labelsEnabled;
+  @override
+  int get documentVersion => NoteDocument.version;
+
+  /// One store instance per account, created on first use and reused after.
+  final Map<String, ILocalSyncStore> _storesByAccount =
+      <String, ILocalSyncStore>{};
 
   /// Serializes repository operations so concurrent read-modify-write calls
-  /// cannot overwrite each other's changes. Reads also use this queue and
-  /// therefore observe all preceding mutations.
+  /// cannot overwrite each other's changes.
   Future<void> _operationTail = Future<void>.value();
 
   @override
   Future<Note?> findById(String id) {
     return _enqueue<Note?>(() async {
-      final List<NoteRecord> records = await databaseContext.readNotes();
-      for (final NoteRecord record in records) {
-        if (record.id == id) {
-          return NoteMapper.toDomain(record);
-        }
+      final fence = _captureWrite();
+      final LocalNoteState? note = await _findPagedNote(fence.account, id);
+      _requireWrite(fence);
+      if (note == null || note.isDeleted) {
+        return null;
       }
-      return null;
+      return _domainNoteFromLocal(
+        note,
+        metadataOnly:
+            note.protection.enabled &&
+            !(accessGuard?.allows(
+                  ownerId: note.ownerId,
+                  noteId: note.id,
+                  protection: note.protection,
+                  operation: NoteOperation.read,
+                ) ??
+                false),
+      );
     });
   }
 
   @override
   Future<List<Note>> findByOwnerId(String ownerId) {
     return _enqueue<List<Note>>(() async {
-      final List<NoteRecord> records = await databaseContext.readNotes();
-      return List<Note>.unmodifiable(
-        records
-            .where((NoteRecord record) => record.ownerId == ownerId)
-            .map(NoteMapper.toDomain),
-      );
-    });
-  }
-
-  @override
-  Future<void> save(Note note) {
-    return _enqueue<void>(() async {
-      final List<NoteRecord> records = List<NoteRecord>.of(
-        await databaseContext.readNotes(),
-      );
-      final NoteRecord replacement = NoteMapper.toRecord(note);
-      final int existingIndex = records.indexWhere(
-        (NoteRecord record) => record.id == note.id,
-      );
-      if (existingIndex == -1) {
-        records.add(replacement);
-      } else {
-        records[existingIndex] = replacement;
+      final String accountUserId = _requireActiveAccountUserId();
+      if (ownerId != accountUserId) {
+        // The active account never exposes another owner's notes.
+        return const <Note>[];
       }
-      await databaseContext.writeNotes(records);
+      final LocalSyncState state = await _readStateFor(accountUserId);
+      return List<Note>.unmodifiable(
+        state.notes
+            .where(
+              (LocalNoteState note) =>
+                  !note.isDeleted && note.ownerId == ownerId,
+            )
+            .map(
+              (note) => _domainNoteFromLocal(
+                note,
+                metadataOnly: note.protection.enabled,
+              ),
+            ),
+      );
     });
   }
 
   @override
-  Future<void> deleteById(String id) {
-    return _enqueue<void>(() async {
-      final List<NoteRecord> records = List<NoteRecord>.of(
-        await databaseContext.readNotes(),
-      );
-      records.removeWhere((NoteRecord record) => record.id == id);
-      await databaseContext.writeNotes(records);
-    });
+  Future<List<Note>> findSharedWith(String actorId) => _enqueue(() async {
+    if (actorId != _requireActiveAccountUserId()) return <Note>[];
+    final state = await _readStateFor(actorId);
+    return state.notes
+        .where(
+          (n) =>
+              n.ownerId != actorId &&
+              !n.isDeleted &&
+              n.share?.isActive == true &&
+              n.share?.recipientId == actorId,
+        )
+        .map((n) => _domainNoteFromLocal(n, metadataOnly: n.protection.enabled))
+        .toList(growable: false);
+  });
+
+  @override
+  Future<NoteMetadata?> findMetadataById(String id) async {
+    final Note? note = await findById(id);
+    return note?.metadata;
+  }
+
+  @override
+  Future<List<NoteMetadata>> findMetadataByOwnerId(String ownerId) async =>
+      (await findByOwnerId(ownerId))
+          .map((note) => note.metadata)
+          .toList(growable: false);
+
+  @override
+  Future<void> save(Note note) => _save(note);
+  @override
+  Future<void> saveSnapshot(Note note, Note expected) =>
+      _save(note, expected: expected);
+
+  @override
+  Future<Note> updateById({
+    required String noteId,
+    required String ownerId,
+    required String expectedAccountUserId,
+    required domain.NoteChange change,
+    required domain.NoteCommitFence canCommit,
+  }) => _updateById(
+    noteId: noteId,
+    ownerId: ownerId,
+    expectedAccountUserId: expectedAccountUserId,
+    change: change,
+    canCommit: canCommit,
+  );
+
+  @override
+  Future<void> deleteById(String id) => _deleteById(id);
+
+  Future<LocalSyncState> _readStateFor(String accountUserId) async {
+    final LocalSyncState state = await _storeFor(accountUserId).read();
+    if (state.accountUserId != accountUserId) {
+      throw StateError('The local sync store returned another account state.');
+    }
+    return state;
+  }
+
+  /// Resolves the account the current operation belongs to, failing closed when
+  /// no account is signed in.
+  String _requireActiveAccountUserId() {
+    final String accountUserId = currentAccountUserId();
+    if (accountUserId.trim().isEmpty) {
+      throw StateError('No signed-in account is available for local notes.');
+    }
+    return accountUserId;
+  }
+
+  ILocalSyncStore _storeFor(String accountUserId) {
+    return _storesByAccount.putIfAbsent(
+      accountUserId,
+      () => localSyncStoreFactory(accountUserId: accountUserId),
+    );
+  }
+
+  /// True when the entry has never been pushed, so it can still be rewritten.
+  ///
+  /// An attempted or blocked entry may already be in flight (or applied with a
+  /// lost response), and the server rejects reuse of its id with a changed
+  /// request.
+  static bool _isUnsent(PendingMutation entry) {
+    return entry.retryCount == 0 && !entry.blocked;
+  }
+
+  static LocalNoteState? _findNote(LocalSyncState state, String id) {
+    for (final LocalNoteState note in state.notes) {
+      if (note.referenceFor(state.accountUserId) == id) {
+        return note;
+      }
+    }
+    return null;
+  }
+
+  /// Index of the newest outbox entry for [noteId], or -1 when none exists.
+  static int _lastPendingIndexFor(LocalSyncState state, String noteId) {
+    for (int index = state.outbox.length - 1; index >= 0; index--) {
+      if (state.outbox[index].isLabel) continue;
+      if (state.outbox[index].mutation
+              .identityFor(state.accountUserId)
+              .referenceFor(state.accountUserId) ==
+          noteId) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  static List<LocalNoteState> _notesWith(
+    List<LocalNoteState> notes,
+    LocalNoteState replacement,
+  ) {
+    final int index = notes.indexWhere(
+      (LocalNoteState note) => note.identity == replacement.identity,
+    );
+    if (index == -1) {
+      return <LocalNoteState>[...notes, replacement];
+    }
+    final List<LocalNoteState> copy = List<LocalNoteState>.of(notes);
+    copy[index] = replacement;
+    return copy;
+  }
+
+  static List<PendingMutation> _outboxWithReplacement(
+    List<PendingMutation> outbox,
+    int index,
+    PendingMutation replacement,
+  ) {
+    final List<PendingMutation> copy = List<PendingMutation>.of(outbox);
+    copy[index] = replacement;
+    return copy;
+  }
+
+  /// Copies a state while replacing only the notes and outbox.
+  static LocalSyncState _stateWith(
+    LocalSyncState current, {
+    required List<LocalNoteState> notes,
+    required List<PendingMutation> outbox,
+  }) {
+    return LocalSyncState(
+      accountUserId: current.accountUserId,
+      labels: current.labels,
+      syncWireVersion: current.syncWireVersion,
+      notes: notes,
+      outbox: outbox,
+      conflicts: current.conflicts,
+      cursor: current.cursor,
+      userPreferences: current.userPreferences,
+    );
   }
 
   Future<T> _enqueue<T>(Future<T> Function() operation) {
     final Future<void> previous = _operationTail;
     final Completer<void> release = Completer<void>();
     _operationTail = release.future;
-    return previous.then((_) async {
-      try {
-        return await operation();
-      } finally {
-        release.complete();
-      }
-    });
+    return previous.then((_) => operation()).whenComplete(release.complete);
   }
 }
 
-/// Creates the native file-backed Note repository.
+/// Creates the local-first Note repository.
 ///
-/// The composition root can inject a fake [DatabaseContext] in tests. This
-/// factory is intentionally not wired into `main.dart` during M4.2.
+/// The composition root injects the active account resolver, the account-bound
+/// local sync store factory, the mutation-id generator, and the clock. Tests
+/// inject fakes. The repository stays offline-safe: it never calls the remote
+/// data source.
 domain.INoteRepository createNoteRepository({
-  DatabaseContext? databaseContext,
+  required String Function() currentAccountUserId,
+  required ILocalSyncStore Function({required String accountUserId})
+  localSyncStoreFactory,
+  required String Function() generateMutationId,
+  required DateTime Function() now,
+  INoteAccessGuard? accessGuard,
+  int Function()? sessionGeneration,
+  bool labelsEnabled = false,
 }) {
   return NoteRepository(
-    databaseContext: databaseContext ?? FileDatabaseContext(),
+    currentAccountUserId: currentAccountUserId,
+    localSyncStoreFactory: localSyncStoreFactory,
+    generateMutationId: generateMutationId,
+    now: now,
+    accessGuard: accessGuard,
+    sessionGeneration: sessionGeneration,
+    labelsEnabled: labelsEnabled,
   );
 }

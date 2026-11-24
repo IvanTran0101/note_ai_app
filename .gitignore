@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/test/m05_browser_suite.generated.dart
 
 # Symbolication related
 app.*.symbols
@@ -47,6 +48,10 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
+# Amplify Gen 2 backend tooling (generated local state only)
+/node_modules/
+/.amplify/
+
 # Local agent instructions and generated workspace files
 /pack/
 /_agent_ops/
@@ -54,7 +59,71 @@ AGENTS.md
 /.agents
 skills-lock.json
 /.claude
+<<<<<<< HEAD
 node_modules/
 output/
 tool/
 .amplify/
+=======
+/.pack/
+
+# Local secrets, credentials, and signing material
+.env
+.env.*
+!.env.example
+!.env.*.example
+/secrets/
+/credentials/
+**/secrets/
+**/credentials/
+/hinhanh/
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key
+*.crt
+*.cer
+*.der
+/android/local.properties
+google-services.json
+GoogleService-Info.plist
+
+# Local UI audit references and generated captures (kept on this machine)
+/docs/ui-qa/
+/docs/notion-reference-matrix.md
+/docs/ui-upgrade-baseline.md
+/docs/ui-upgrade-handoff.md
+/output/
+/plan.md
+/ui-audit-scorecard.md
+/docs/
+/docs/rag/
+
+# Publish only the Phase4 contract/manifests; raw cloud receipts remain in ignored output.
+!/docs/
+/docs/*
+!/docs/rag/
+/docs/rag/*
+!/docs/rag/deepseek_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_tokenizer_manifest.json
+!/docs/rag/embeddinggemma_profile_v1.json
+!/docs/rag/policy_v2.json
+!/docs/rag/EMBEDDING_MIGRATION.md
+!/docs/rag/PHASE4_HANDOFF.md
+!/docs/rag/phase4_policy_v1.json
+!/docs/rag/phase4_receipt.json
+!/docs/rag/phase4_remediation_v2.md
+!/docs/rag/phase4_calibration_review.md
+
+!/docs/rag/phase4_hanh_recalibration.json
+!/docs/rag/phase4_hanh_recalibration.md
+
+# Required RAG inputs and reviewable M09 implementation records.
+!/docs/rag/tokenizer_manifest.json
+!/docs/rag/index_job_policy_v1.json
+!/docs/m09/
+/docs/m09/*
+!/docs/m09/*.md
+>>>>>>> 8a071f867750edfba23e1e1aebb5187a0959f041

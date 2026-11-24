@@ -1,0 +1,1744 @@
+{
+  "provenance": "manual-synthetic-gold-and-probabilities-not-Jev-evaluation",
+  "cases": [
+    {
+      "id": "q01",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "SLGH031 chạy bao lâu khi lên cót đầy?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 125,
+          "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q02",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Dự trữ năng lượng của SLGH031 là bao nhiêu?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 125,
+          "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Khoảng 80 giờ khi lên cót đầy. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q03",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Gói Basic được dùng thử bao lâu?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-condition",
+          "noteId": "n-condition",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 64,
+          "quote": "Gói Trial được dùng thử 14 ngày.\nGói Basic được dùng thử 7 ngày."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Gói Basic được dùng thử 7 ngày. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q04",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "SLGH031 bảo hành bao nhiêu năm?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 125,
+          "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.03
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.02
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q05",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "SLGH031 dự trữ năng lượng bao lâu?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1",
+        "S2"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 125,
+          "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+        },
+        "S2": {
+          "fixtureNoteKey": "a-watch-conflict",
+          "noteId": "n-conflict",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 57,
+          "quote": "SLGH031 dự trữ năng lượng khoảng 100 giờ khi lên cót đầy."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.97
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.98
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "UNRESOLVED_CONFLICT",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q06",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Nimbus N1 dự trữ bao lâu?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 125,
+          "quote": "SLGH031 sử dụng Caliber 9SA5.\nKhả năng dự trữ năng lượng khoảng 80 giờ khi lên cót đầy.\nVỏ đồng hồ dùng Ever-Brilliant Steel."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.02
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q07",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Bản MVP có xử lý file đính kèm không?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-negation",
+          "noteId": "n-negation",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 34,
+          "quote": "Bản MVP không xử lý file đính kèm."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Không, bản MVP không xử lý file đính kèm. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q08",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Buổi demo ở đâu và ai điều phối?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Tại phòng B203, do Linh điều phối. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q09",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Có lưu secrets trong frontend không?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-unicode",
+          "noteId": "n-unicode",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 68,
+          "quote": "🧠 Giữ nguyên tiếng Việt và emoji.\nKhông lưu secrets trong frontend."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Không lưu secrets trong frontend. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q10",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Thông tin tài khoản khác?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "b-watch",
+          "noteId": "n-watch",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 49,
+          "quote": "SLGH031 dự trữ 999 giờ trong fixture của actor-b."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "SCOPE_DENIED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q11",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Note đã xóa nói gì?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-deleted",
+          "noteId": "n-deleted",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 32,
+          "quote": "Nội dung đã xóa không được dùng."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "SCOPE_DENIED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q12",
+      "language": "vi",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Note protected nói gì?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-protected",
+          "noteId": "n-protected",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 43,
+          "quote": "Nội dung này không được dùng trong RAG MVP."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "SCOPE_DENIED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q13",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "How long does Nimbus N1 run when fully wound?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-en",
+          "noteId": "n-en",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 56,
+          "quote": "Nimbus N1 has an 80-hour power reserve when fully wound."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Its power reserve is 80 hours when fully wound. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q14",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "What is the power reserve of Nimbus N1?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-en",
+          "noteId": "n-en",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 56,
+          "quote": "Nimbus N1 has an 80-hour power reserve when fully wound."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "80 hours when fully wound. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q15",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "What is the warranty of Nimbus N1?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-en",
+          "noteId": "n-en",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 56,
+          "quote": "Nimbus N1 has an 80-hour power reserve when fully wound."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.02
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.02
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q16",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "What is Nimbus N1's power reserve?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1",
+        "S2"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-en",
+          "noteId": "n-en",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 56,
+          "quote": "Nimbus N1 has an 80-hour power reserve when fully wound."
+        },
+        "S2": {
+          "fixtureNoteKey": "a-en-conflict",
+          "noteId": "n-en-conflict",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 56,
+          "quote": "Nimbus N1 has a 100-hour power reserve when fully wound."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.95
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.97
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "UNRESOLVED_CONFLICT",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q17",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "How many trial days does Basic have?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-condition",
+          "noteId": "n-condition",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 64,
+          "quote": "Gói Trial được dùng thử 14 ngày.\nGói Basic được dùng thử 7 ngày."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ANSWER_ALLOWED",
+        "reason": null,
+        "expectedDeepseekCalls": 1,
+        "goldAnswer": "Basic has a 7-day trial. [S1]",
+        "goldSourceIds": [
+          "S1"
+        ]
+      }
+    },
+    {
+      "id": "q18",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": false,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "UNAUTHORIZED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q19",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": false,
+        "version": "rag-consent.v1",
+        "generation": 2
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "CONSENT_REQUIRED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q20",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 0,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "SOURCE_CHANGED",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q21",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "BUILDING",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.96
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "INDEX_NOT_READY",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q22",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": "PROVIDER_UNAVAILABLE",
+        "jev": null
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "PROVIDER_UNAVAILABLE",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q23",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "Who runs the demo?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {},
+          "usage": {
+            "input_tokens": 1,
+            "output_tokens": 1
+          }
+        }
+      },
+      "expected": {
+        "status": "ERROR",
+        "reason": "EVIDENCE_VALIDATION_UNAVAILABLE",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    },
+    {
+      "id": "q24",
+      "language": "en",
+      "contracts": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20",
+        "C21",
+        "C22",
+        "C24"
+      ],
+      "authenticated": true,
+      "actorId": "actor-a",
+      "consent": {
+        "accepted": true,
+        "version": "rag-consent.v1",
+        "generation": 1
+      },
+      "capturedConsentGeneration": 1,
+      "sessionGeneration": 1,
+      "capturedSessionGeneration": 1,
+      "indexState": "READY",
+      "request": {
+        "wireVersion": 1,
+        "question": "What does the note mean?",
+        "scope": {
+          "type": "account"
+        }
+      },
+      "evidenceIds": [
+        "S1"
+      ],
+      "sourceMap": {
+        "S1": {
+          "fixtureNoteKey": "a-meeting",
+          "noteId": "n-meeting",
+          "revision": 1,
+          "startOffset": 0,
+          "endOffset": 58,
+          "quote": "Buổi demo diễn ra tại phòng B203.\nNgười điều phối là Linh."
+        }
+      },
+      "providerMock": {
+        "errorCode": null,
+        "jev": {
+          "model": "jev-fixture",
+          "answers": {
+            "answerable_from_evidence": {
+              "type": "noul",
+              "noul": 0.5
+            },
+            "has_unresolved_conflict": {
+              "type": "noul",
+              "noul": 0.03
+            }
+          },
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 10
+          }
+        }
+      },
+      "expected": {
+        "status": "NOT_ENOUGH_CONTEXT",
+        "reason": "UNCERTAIN",
+        "expectedDeepseekCalls": 0,
+        "goldAnswer": null,
+        "goldSourceIds": []
+      }
+    }
+  ]
+}

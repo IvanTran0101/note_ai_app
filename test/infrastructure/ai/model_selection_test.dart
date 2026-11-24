@@ -15,6 +15,9 @@ import 'package:note_ai_app/infrastructure/device/hardware_detection.dart';
 const String _sha256Zeros =
     '0000000000000000000000000000000000000000000000000000000000000000';
 
+const int _mib = 1024 * 1024;
+const int _gib = 1024 * _mib;
+
 /// Builds a valid descriptor; override only the fields a test cares about.
 ModelDescriptor _descriptor({
   String id = 'model-a',
@@ -22,9 +25,9 @@ ModelDescriptor _descriptor({
   String fileName = 'model-a.gguf',
   String downloadUrl = 'https://example.invalid/model-a.gguf',
   String sha256 = _sha256Zeros,
-  int fileSizeBytes = 1 << 20, // 1 MiB
-  int? estimatedPeakMemoryBytes = 4 << 30, // 4 GiB
-  int? requiredFreeStorageBytes = 1 << 30, // 1 GiB
+  int fileSizeBytes = 1 * _mib, // 1 MiB
+  int? estimatedPeakMemoryBytes = 4 * _gib, // 4 GiB
+  int? requiredFreeStorageBytes = 1 * _gib, // 1 GiB
   List<String> supportedPlatforms = const ['android', 'ios'],
   List<String> supportedAbis = const ['arm64', 'arm64-v8a'],
   String minOsVersion = '14.0',
@@ -58,8 +61,8 @@ DeviceCapability _capability({
   String osVersion = '17.6',
   bool isPhysicalDevice = true,
   List<String> supportedAbis = const ['arm64'],
-  int totalMemoryBytes = 8 << 30, // 8 GiB
-  int freeStorageBytes = 50 << 30, // 50 GiB
+  int totalMemoryBytes = 8 * _gib, // 8 GiB
+  int freeStorageBytes = 50 * _gib, // 50 GiB
 }) {
   return DeviceCapability(
     platform: platform,
@@ -203,9 +206,9 @@ void main() {
       'memory gate rejects when device memory is below the peak estimate',
       () {
         final result = _policy.select(
-          capability: _capability(totalMemoryBytes: 4 << 30),
+          capability: _capability(totalMemoryBytes: 4 * _gib),
           candidates: [
-            _descriptor(id: 'big', estimatedPeakMemoryBytes: 6 << 30),
+            _descriptor(id: 'big', estimatedPeakMemoryBytes: 6 * _gib),
           ],
         );
 
@@ -221,30 +224,30 @@ void main() {
       final candidates = [
         _descriptor(
           id: 'small',
-          estimatedPeakMemoryBytes: 2 << 30,
+          estimatedPeakMemoryBytes: 2 * _gib,
           selectionPriority: 1,
         ),
         _descriptor(
           id: 'big',
-          estimatedPeakMemoryBytes: 6 << 30,
+          estimatedPeakMemoryBytes: 6 * _gib,
           selectionPriority: 2,
         ),
       ];
 
       final highMemory = _policy.select(
-        capability: _capability(totalMemoryBytes: 8 << 30),
+        capability: _capability(totalMemoryBytes: 8 * _gib),
         candidates: candidates,
       );
       expect(highMemory.selectedModel!.id, 'big');
 
       final lowMemory = _policy.select(
-        capability: _capability(totalMemoryBytes: 4 << 30),
+        capability: _capability(totalMemoryBytes: 4 * _gib),
         candidates: candidates,
       );
       expect(lowMemory.selectedModel!.id, 'small');
       expect(
         lowMemory.rejectionReasonFor(
-          _descriptor(id: 'big', estimatedPeakMemoryBytes: 6 << 30),
+          _descriptor(id: 'big', estimatedPeakMemoryBytes: 6 * _gib),
         ),
         contains('memory gate'),
       );
@@ -252,8 +255,8 @@ void main() {
 
     test('storage gate rejects when free storage is below the requirement', () {
       final result = _policy.select(
-        capability: _capability(freeStorageBytes: 5 << 30),
-        candidates: [_descriptor(id: 'a', requiredFreeStorageBytes: 10 << 30)],
+        capability: _capability(freeStorageBytes: 5 * _gib),
+        candidates: [_descriptor(id: 'a', requiredFreeStorageBytes: 10 * _gib)],
       );
 
       expect(result.selectedModel, isNull);
@@ -332,7 +335,7 @@ void main() {
       final result = _policy.select(
         capability: _capability(),
         candidates: [
-          _descriptor(id: 'no-memory', estimatedPeakMemoryBytes: 100 << 30),
+          _descriptor(id: 'no-memory', estimatedPeakMemoryBytes: 100 * _gib),
           _descriptor(id: 'wrong-abi', supportedAbis: ['x86_64']),
         ],
       );

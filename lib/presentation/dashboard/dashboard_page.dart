@@ -1,18 +1,36 @@
+import '../../application/labels/note_query.dart';
+import '../labels/label_catalog_scope.dart';
+
 import 'dart:async';
 
+import '../../application/notes/note_page.dart';
+import '../../application/notes/note_access.dart';
+import '../notes/note_page_navigation.dart';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/notes/note_application.dart';
+import '../common/note_flow_primitives.dart';
 import '../notes/notes_application_controller.dart';
 import '../notes/note_detail_route_result.dart';
+import '../notes/notes_theme_tokens.dart';
+import '../workspace/workspace_ui_tokens.dart';
 import 'dashboard_content.dart';
 import 'dashboard_controller.dart';
 import 'dashboard_localizations.dart';
+import 'dashboard_search_dock.dart';
+import 'dashboard_search_dialog.dart';
 import 'dashboard_state.dart';
 import 'dashboard_state_views.dart';
 import 'dashboard_view_models.dart';
 
 export 'dashboard_view_models.dart' show DashboardLayout, DashboardSort;
+
+part 'dashboard_pagination.dart';
+part 'dashboard_page_view.dart';
+part 'dashboard_loading.dart';
+part 'dashboard_search_actions.dart';
 
 /// Notes-first Dashboard surface for the M5.3 Presentation batch.
 ///
@@ -27,8 +45,11 @@ final class DashboardPage extends StatefulWidget {
     required this.notesController,
     required this.onOpenNote,
     required this.onCreateNote,
+    this.embeddedInWorkspace = false,
     this.onOpenSettings,
     this.onOpenDiagnostics,
+    this.onSearchVisibilityChanged,
+    this.noteChanges,
   });
 
   /// Controller for M5.1/M5.2 overview state.
@@ -49,15 +70,37 @@ final class DashboardPage extends StatefulWidget {
   /// detail route is dismissed.
   final FutureOr<NoteDetailRouteResult?> Function() onCreateNote;
 
+  /// Whether navigation and global actions are supplied by the host shell.
+  final bool embeddedInWorkspace;
+
   /// Opens the existing appearance settings flow.
   final VoidCallback? onOpenSettings;
 
   /// Opens the existing diagnostics flow.
   final VoidCallback? onOpenDiagnostics;
 
+  /// Reports the existing search visibility state to a compact host shell.
+  final ValueChanged<bool>? onSearchVisibilityChanged;
+
+  /// Account-scoped notifications after durable note/security sync changes.
+  final Listenable? noteChanges;
+
   static const Key searchFieldKey = ValueKey<String>('dashboard-search-field');
   static const Key searchToggleKey = ValueKey<String>(
     'dashboard-search-toggle',
+  );
+  static const Key searchDockKey = ValueKey<String>('dashboard-search-dock');
+  static const Key desktopSearchOverlayKey = ValueKey<String>(
+    'dashboard-desktop-search-overlay',
+  );
+  static const Key desktopSearchSurfaceKey = ValueKey<String>(
+    'dashboard-desktop-search-surface',
+  );
+  static const Key searchDockSortKey = ValueKey<String>(
+    'dashboard-search-dock-sort',
+  );
+  static const Key searchDockCloseKey = ValueKey<String>(
+    'dashboard-search-dock-close',
   );
   static const Key newNoteKey = ValueKey<String>('dashboard-create-note');
   static const Key contentKey = ValueKey<String>('dashboard-content');
@@ -82,69 +125,112 @@ final class DashboardPage extends StatefulWidget {
   static const Key errorKey = ValueKey<String>('dashboard-error');
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  DashboardPageState createState() => DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+final class DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchController = TextEditingController();
 
+  void _updatePageState(VoidCallback action) => setState(action);
+  StreamSubscription<void>? _pageSecurity;
+  int? _pageSession;
+  Timer? _searchPageTimer;
+  NotePage? _notePage;
+  int _pageNumber = 0;
+  int _pageSequence = 0;
+  StateSetter? _pageDialogState;
+  List<NoteDto> _recentPageNotes = const [];
   List<NoteDto> _notes = const <NoteDto>[];
   Object? _notesError;
   bool _loadingNotes = true;
   bool _searchOpen = false;
+  bool _desktopSearchDialogOpen = false;
   String _searchText = '';
+  Set<LabelSelection> _selectedLabels = {};
+  String? _labelActor;
   DashboardLayout _layout = DashboardLayout.grid;
   DashboardSort _sort = DashboardSort.updated;
   String? _selectedNoteId;
+  Future<void>? _loadInFlight;
+  bool _reloadAfterCurrent = false;
 
   @override
   void initState() {
     super.initState();
     widget.dashboardController.addListener(_onOverviewStateChanged);
-    unawaited(_load());
+    widget.noteChanges?.addListener(_notesChanged);
+    _subscribePageSecurity();
+    unawaited(reload());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final actor = LabelCatalogScope.maybeOf(context)?.application
+        ?.currentActor();
+    if (_labelActor != actor) {
+      _labelActor = actor;
+      _selectedLabels = {};
+      _searchText = '';
+      _searchController.clear();
+    }
   }
 
   @override
   void didUpdateWidget(covariant DashboardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.notesController != widget.notesController) {
+      _pageSequence++;
+      _subscribePageSecurity();
+      if (supportsNotePages(widget.notesController)) _restartPageQuery();
+    }
+    if (oldWidget.noteChanges != widget.noteChanges) {
+      oldWidget.noteChanges?.removeListener(_notesChanged);
+      widget.noteChanges?.addListener(_notesChanged);
+      _notesChanged();
+    }
     if (oldWidget.dashboardController != widget.dashboardController) {
       oldWidget.dashboardController.removeListener(_onOverviewStateChanged);
       widget.dashboardController.addListener(_onOverviewStateChanged);
-      unawaited(_load());
+      unawaited(reload());
     }
   }
 
-  Future<void> _load() async {
-    if (mounted) {
-      setState(() {
-        _loadingNotes = true;
-        _notesError = null;
-      });
+  /// Reloads notes and the Dashboard overview after the page becomes active.
+  Future<void> reload() {
+    final Future<void>? inFlight = _loadInFlight;
+    if (inFlight != null) {
+      return inFlight;
     }
+    final Future<void> started = _loadInternal();
+    _loadInFlight = started;
+    return _clearLoadInFlight(started);
+  }
 
+  Future<void> _togglePin(NoteDto note) async {
+    final NotesApplicationController controller = widget.notesController;
+    if (controller is! NotesModule02Controller) return;
+    final NotesModule02Controller module02Controller =
+        controller as NotesModule02Controller;
     try {
-      final List<dynamic> results = await Future.wait<dynamic>(
-        <Future<dynamic>>[
-          widget.notesController.listNotes(),
-          widget.dashboardController.load(),
-        ],
+      final NoteDto updated = await module02Controller.setPinned(
+        noteId: note.id,
+        pinned: note.pinnedAt == null,
       );
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
-        _notes = List<NoteDto>.unmodifiable(results.first as List<NoteDto>);
-        _loadingNotes = false;
-        _notesError = null;
+        _notes = List<NoteDto>.unmodifiable(
+          _notes.map((NoteDto item) => item.id == updated.id ? updated : item),
+        );
       });
-    } on Object catch (error) {
-      if (!mounted) {
-        return;
+      if (supportsNotePages(widget.notesController)) {
+        await _reloadNotePage();
       }
-      setState(() {
-        _loadingNotes = false;
-        _notesError = error;
-      });
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(DashboardCopy.of(context).pinSaveError)),
+      );
     }
   }
 
@@ -155,27 +241,21 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _toggleSearch() {
-    setState(() {
-      _searchOpen = !_searchOpen;
-      if (!_searchOpen) {
-        _searchText = '';
-        _searchController.clear();
-      }
-    });
+    if (_searchOpen) {
+      closeSearch();
+    } else {
+      openSearch();
+    }
   }
 
-  void _clearSearch() {
-    setState(() {
-      _searchText = '';
-      _searchController.clear();
-    });
-  }
+  void openSearch() => _openDashboardSearch();
+  void closeSearch() => _closeDashboardSearch();
 
   Future<void> _openNote(NoteDto note) async {
     setState(() => _selectedNoteId = note.id);
     final NoteDetailRouteResult? result = await widget.onOpenNote(note);
     if (mounted && (result?.shouldRefresh ?? false)) {
-      await _load();
+      await reload();
     }
   }
 
@@ -186,7 +266,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _openCreateNote() async {
     final NoteDetailRouteResult? result = await widget.onCreateNote();
     if (mounted && (result?.shouldRefresh ?? false)) {
-      await _load();
+      await reload();
     }
   }
 
@@ -200,84 +280,80 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final DashboardCopy copy = DashboardCopy.of(context);
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final double width = MediaQuery.sizeOf(context).width;
+    final bool compact = NoteFlowLayout.isCompact(context);
+    final bool wide = width >= 840;
+    final bool expanded = width >= 840 && widget.embeddedInWorkspace;
     return Scaffold(
-      backgroundColor: colors.surface,
-      appBar: AppBar(
-        title: Text(copy.title),
-        actions: <Widget>[
-          IconButton(
-            key: DashboardPage.searchToggleKey,
-            tooltip: _searchOpen ? copy.closeSearch : copy.search,
-            icon: Icon(_searchOpen ? Icons.close : Icons.search),
-            onPressed: _toggleSearch,
-          ),
-          if (widget.onOpenSettings != null)
-            IconButton(
-              key: DashboardPage.settingsKey,
-              tooltip: copy.settings,
-              icon: const Icon(Icons.tune_outlined),
-              onPressed: widget.onOpenSettings,
+      backgroundColor: compact && (!_searchOpen || !kIsWeb)
+          ? NoteFlowWorkspaceTokens.of(context).compactHomeSurface
+          : colors.surface,
+      bottomNavigationBar:
+          compact &&
+              widget.embeddedInWorkspace &&
+              _searchOpen &&
+              !_desktopSearchDialogOpen
+          ? _buildCompactSearchDock(context, copy)
+          : null,
+      appBar: compact && widget.embeddedInWorkspace
+          ? null
+          : AppBar(
+              toolbarHeight: wide ? 44 : null,
+              title: Text(
+                '${copy.workspaceLabel} / ${copy.title}',
+                key: const ValueKey<String>('dashboard-page-breadcrumb'),
+              ),
+              titleTextStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+              actions: <Widget>[
+                if (!expanded || !widget.embeddedInWorkspace)
+                  IconButton(
+                    key: DashboardPage.searchToggleKey,
+                    tooltip: _searchOpen ? copy.closeSearch : copy.search,
+                    icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                    onPressed: _toggleSearch,
+                  ),
+                if ((!expanded || !widget.embeddedInWorkspace) &&
+                    widget.onOpenSettings != null)
+                  IconButton(
+                    key: DashboardPage.settingsKey,
+                    tooltip: copy.settings,
+                    icon: const Icon(Icons.tune_outlined),
+                    onPressed: widget.onOpenSettings,
+                  ),
+                if ((!expanded || !widget.embeddedInWorkspace) &&
+                    widget.onOpenDiagnostics != null)
+                  IconButton(
+                    key: DashboardPage.diagnosticsKey,
+                    tooltip: copy.diagnostics,
+                    icon: const Icon(Icons.monitor_heart_outlined),
+                    onPressed: widget.onOpenDiagnostics,
+                  ),
+              ],
             ),
-          if (widget.onOpenDiagnostics != null)
-            IconButton(
-              key: DashboardPage.diagnosticsKey,
-              tooltip: copy.diagnostics,
-              icon: const Icon(Icons.monitor_heart_outlined),
-              onPressed: widget.onOpenDiagnostics,
-            ),
-        ],
-      ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          return _buildBody(context, constraints, copy);
+          return NoteFlowStateTransition(
+            child: _buildBody(
+              context,
+              constraints,
+              copy,
+              searchOpenOverride: _desktopSearchDialogOpen ? false : null,
+              searchTextOverride: _desktopSearchDialogOpen ? '' : null,
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildBody(
-    BuildContext context,
-    BoxConstraints constraints,
-    DashboardCopy copy,
-  ) {
-    if (_isLoading && _notes.isEmpty) {
-      return DashboardLoadingView(key: DashboardPage.loadingKey, copy: copy);
-    }
-    if (_notesError != null && _notes.isEmpty) {
-      return DashboardNotesErrorView(copy: copy, onRetry: _load);
-    }
-    if (_hasError && _notes.isEmpty) {
-      return DashboardErrorView(copy: copy, onRetry: _load);
-    }
-    if (!_loadingNotes && _notes.isEmpty) {
-      return DashboardEmptyView(copy: copy, onCreateNote: _createNote);
-    }
-
-    return DashboardContent(
-      notes: _notes,
-      overview: widget.dashboardController.state.overview,
-      copy: copy,
-      searchController: _searchController,
-      searchOpen: _searchOpen,
-      searchText: _searchText,
-      layout: _layout,
-      sort: _sort,
-      selectedNoteId: _selectedNoteId,
-      hasError: _hasError,
-      onSearchChanged: (String value) => setState(() => _searchText = value),
-      onClearSearch: _clearSearch,
-      onSortChanged: (DashboardSort value) => setState(() => _sort = value),
-      onLayoutChanged: (DashboardLayout value) =>
-          setState(() => _layout = value),
-      onOpenNote: (NoteDto note) => unawaited(_openNote(note)),
-      onCreateNote: _createNote,
-      onRetry: _load,
-      onRefresh: _load,
-    );
-  }
-
   @override
   void dispose() {
+    _searchPageTimer?.cancel();
+    unawaited(_pageSecurity?.cancel());
+    widget.noteChanges?.removeListener(_notesChanged);
     widget.dashboardController.removeListener(_onOverviewStateChanged);
     _searchController.dispose();
     super.dispose();

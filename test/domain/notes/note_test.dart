@@ -38,6 +38,38 @@ void main() {
       expect(note.createdAt, createdAt);
       expect(note.updatedAt, createdAt);
     });
+
+    test('rejects blank text and preserves surrounding formatting', () {
+      expect(
+        () => Note.create(
+          id: id,
+          ownerId: ownerId,
+          title: '  ',
+          content: content,
+          now: createdAt,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => Note.create(
+          id: id,
+          ownerId: ownerId,
+          title: title,
+          content: '\n\t',
+          now: createdAt,
+        ),
+        throwsArgumentError,
+      );
+      final Note formatted = Note.create(
+        id: id,
+        ownerId: ownerId,
+        title: '  $title  ',
+        content: '\n$content\n',
+        now: createdAt,
+      );
+      expect(formatted.title, '  $title  ');
+      expect(formatted.content, '\n$content\n');
+    });
   });
 
   group('Note.reconstitute', () {
@@ -75,6 +107,19 @@ void main() {
 
       expect(note.createdAt, isNot(note.updatedAt));
       expect(note.updatedAt, updatedAt);
+    });
+
+    test('keeps legacy blank text readable', () {
+      final Note note = Note.reconstitute(
+        id: id,
+        ownerId: ownerId,
+        title: '',
+        content: '  ',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+      );
+      expect(note.title, isEmpty);
+      expect(note.content, '  ');
     });
   });
 
@@ -126,6 +171,38 @@ void main() {
       expect(note.createdAt, createdAt);
       expect(note.title, title);
     });
+
+    test('rejects empty content', () {
+      final Note note = buildNote(createdAt);
+      expect(() => note.replaceContent('  ', createdAt), throwsArgumentError);
+      expect(note.content, content);
+    });
+  });
+
+  group('Note.pin', () {
+    test('pin is idempotent and unpin followed by pin gets a new time', () {
+      final Note note = buildNote(createdAt);
+      final DateTime firstPin = createdAt.add(const Duration(hours: 1));
+      final DateTime unpinned = firstPin.add(const Duration(hours: 1));
+      final DateTime secondPin = unpinned.add(const Duration(hours: 1));
+
+      note.pin(firstPin);
+      note.pin(secondPin);
+      expect(note.pinnedAt, firstPin);
+      expect(note.updatedAt, firstPin);
+
+      note.unpin(unpinned);
+      expect(note.pinnedAt, isNull);
+      expect(note.updatedAt, unpinned);
+      note.pin(secondPin);
+      expect(note.pinnedAt, secondPin);
+    });
+  });
+
+  test('toString does not expose note text', () {
+    final Note note = buildNote(createdAt);
+    expect(note.toString(), isNot(contains(title)));
+    expect(note.toString(), isNot(contains(content)));
   });
 
   group('timestamps', () {

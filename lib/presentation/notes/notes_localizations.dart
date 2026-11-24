@@ -29,6 +29,7 @@ final class NotesCopy {
 
   final bool _isVietnamese;
 
+  String get allNotes => _isVietnamese ? 'Tất cả ghi chú' : 'All notes';
   String get title => _isVietnamese ? 'NoteFlow · Ghi chú' : 'NoteFlow · Notes';
   String get notes => _isVietnamese ? 'Ghi chú' : 'Notes';
   String get newNote => _isVietnamese ? 'Ghi chú mới' : 'New note';
@@ -36,6 +37,7 @@ final class NotesCopy {
   String get createFirstNote =>
       _isVietnamese ? 'Tạo ghi chú đầu tiên' : 'Create your first note';
   String get noContent => _isVietnamese ? 'Không có nội dung' : 'No content';
+  String get pinned => _isVietnamese ? 'Đã ghim' : 'Pinned';
   String get untitled => _isVietnamese ? '(Chưa đặt tên)' : '(Untitled)';
   String get retry => _isVietnamese ? 'Thử lại' : 'Retry';
   String get loadingNotes =>
@@ -66,6 +68,9 @@ final class NotesCopy {
   String get loadError => _isVietnamese
       ? 'Không thể tải ghi chú. Vui lòng thử lại.'
       : 'Couldn’t load notes. Please try again.';
+  String get persistenceUnavailable => _isVietnamese
+      ? 'Phiên bản Web này không hỗ trợ tải hoặc lưu ghi chú. Hãy dùng ứng dụng đã cài đặt để tiếp tục.'
+      : 'This Web build cannot load or save notes. Use the installed app to continue.';
   String get saveError => _isVietnamese
       ? 'Không thể lưu ghi chú. Vui lòng thử lại.'
       : 'Couldn’t save the note. Please try again.';

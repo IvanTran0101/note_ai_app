@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
 import 'model_provisioning_status_panel.dart';
 import 'note_detail_localizations.dart';
 import 'note_detail_summary.dart';
+import 'note_detail_utilities.dart';
+import 'note_summary_availability.dart';
+import 'note_summary_feedback.dart';
+import 'notes_theme_tokens.dart';
+import 'note_summary_content_motion.dart';
 
 /// Scrollable editor content for [NoteDetailPage].
 ///
@@ -15,14 +21,27 @@ final class NoteDetailEditorForm extends StatelessWidget {
     super.key,
     required this.titleController,
     required this.contentController,
+    this.titleFocusNode,
     required this.contentFocusNode,
     required this.contentFieldContextKey,
     required this.copy,
     required this.hasSavedNote,
     required this.isDirty,
     required this.error,
+    this.informationalError = false,
     required this.statusMessage,
+    this.showSaveState = true,
     required this.actionBusy,
+    this.readOnly = false,
+    this.labels,
+    this.attachments,
+    this.includeContent = true,
+    this.includeTitle = true,
+    this.includeMetadata = true,
+    this.quietMetadata = false,
+    this.includeFeedback = true,
+    this.isSummarizing = false,
+    this.showBusyIndicator = true,
     required this.provisioningReader,
     required this.onProvisioningRetry,
     required this.onProvisioningCancel,
@@ -34,18 +53,33 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.regenerateSummaryLabel,
     this.onErrorRetry,
     this.errorRetryLabel,
+    this.errorRetryEnabled = true,
+    this.summaryAvailability,
+    this.summaryCloud = false,
+    this.onCancelSummary,
   });
 
   final TextEditingController titleController;
   final TextEditingController contentController;
+  final FocusNode? titleFocusNode;
   final FocusNode contentFocusNode;
   final GlobalKey contentFieldContextKey;
   final NoteDetailCopy copy;
   final bool hasSavedNote;
   final bool isDirty;
   final String? error;
+  final bool informationalError;
   final String? statusMessage;
+  final bool showSaveState;
   final bool actionBusy;
+  final bool readOnly;
+  final Widget? labels;
+  final Widget? attachments;
+  final bool includeContent;
+  final bool includeTitle, includeMetadata, includeFeedback;
+  final bool quietMetadata;
+  final bool isSummarizing;
+  final bool showBusyIndicator;
   final IModelProvisioningReader? provisioningReader;
   final VoidCallback? onProvisioningRetry;
   final VoidCallback? onProvisioningCancel;
@@ -58,56 +92,200 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final VoidCallback? onErrorRetry;
   final String? errorRetryLabel;
 
+  /// Whether the error retry action may run; false renders it disabled while a
+  /// rate-limit hint still has to elapse.
+  final bool errorRetryEnabled;
+
+  /// Availability of the Summary action, or null when the host shows none.
+  final NoteSummaryAvailability? summaryAvailability;
+
+  /// Whether the active runtime is the cloud one, for unavailable copy.
+  final bool summaryCloud;
+
+  /// Cancels the in-flight generation; visible for the whole run.
+  final VoidCallback? onCancelSummary;
+
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final NoteFlowUiTokens tokens = NoteFlowUiTokens.of(context);
+    final TextStyle? titleStyle = Theme.of(context).textTheme.headlineLarge;
+    final TextStyle? bodyStyle = Theme.of(context).textTheme.bodyLarge;
+    final bool animateSummary =
+        isSummarizing && !MediaQuery.disableAnimationsOf(context);
+    final TextStyle contentStyle =
+        bodyStyle?.copyWith(color: tokens.textPrimary, height: 1.5) ??
+        TextStyle(color: tokens.textPrimary, height: 1.5);
+    final bool compactWeb =
+        kIsWeb &&
+        MediaQuery.sizeOf(context).width < NoteFlowLayout.compactBreakpoint;
+    final double titleLeadingInset = compactWeb
+        ? NoteFlowLayout.compactWebEditorTitleLeadingInset
+        : 0;
+    final nativePhone = NoteFlowLayout.isNativePhone(context);
+    final double titleFontSize = nativePhone
+        ? 34
+        : NoteFlowLayout.isCompact(context)
+        ? 32
+        : 40;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        TextField(
-          key: const ValueKey<String>('note-detail-title-field'),
-          controller: titleController,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(labelText: copy.titleLabel),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          key: contentFieldContextKey,
-          child: TextField(
-            key: const ValueKey<String>('note-detail-content-field'),
-            controller: contentController,
-            focusNode: contentFocusNode,
-            minLines: 10,
+        if (includeTitle)
+          TextField(
+            key: const ValueKey<String>('note-detail-title-field'),
+            controller: titleController,
+            readOnly: readOnly,
+            focusNode: titleFocusNode,
+            minLines: 1,
             maxLines: null,
-            keyboardType: TextInputType.multiline,
-            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.next,
+            style: titleStyle?.copyWith(
+              fontSize: titleFontSize,
+              fontWeight: FontWeight.w700,
+              color: tokens.textPrimary,
+              height: nativePhone ? 1.18 : 1.2,
+            ),
             decoration: InputDecoration(
-              labelText: copy.contentLabel,
-              alignLabelWithHint: true,
+              hintText: copy.titleLabel,
+              hintStyle: titleStyle?.copyWith(
+                fontSize: titleFontSize,
+                fontWeight: FontWeight.w700,
+                color: tokens.textMuted,
+                height: nativePhone ? 1.18 : 1.2,
+              ),
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              contentPadding: EdgeInsets.fromLTRB(
+                titleLeadingInset,
+                nativePhone ? 4 : NoteFlowSpacing.sm,
+                0,
+                nativePhone ? 12 : NoteFlowSpacing.sm,
+              ),
             ),
           ),
-        ),
-        if (isDirty) ...<Widget>[
-          const SizedBox(height: 12),
+        if (includeTitle) const SizedBox(height: NoteFlowSpacing.sm),
+        if (includeTitle && labels != null) ...[
+          KeyedSubtree(
+            key: const ValueKey('note-detail-labels-below-title'),
+            child: labels!,
+          ),
+          const SizedBox(height: NoteFlowSpacing.sm),
+        ],
+        if (includeMetadata) ..._metadata(),
+        if (includeContent)
+          Container(
+            key: contentFieldContextKey,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      kIsWeb &&
+                          MediaQuery.sizeOf(context).width >=
+                              NoteFlowLayout.compactBreakpoint
+                      ? NoteFlowLayout.webDocumentMaxWidth
+                      : NoteFlowLayout.editorTextMaxWidth,
+                ),
+                child: NoteSummaryContentMotion(
+                  active: animateSummary,
+                  controller: contentController,
+                  textStyle: contentStyle,
+                  child: TextField(
+                    key: const ValueKey<String>('note-detail-content-field'),
+                    controller: contentController,
+                    readOnly: readOnly,
+                    focusNode: contentFocusNode,
+                    minLines: 1,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: animateSummary
+                        ? contentStyle.copyWith(color: Colors.transparent)
+                        : contentStyle,
+                    cursorColor: animateSummary
+                        ? Colors.transparent
+                        : tokens.textPrimary,
+                    decoration: InputDecoration(
+                      hintText: copy.contentLabel,
+                      hintStyle: bodyStyle?.copyWith(color: tokens.textMuted),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: NoteFlowSpacing.sm,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (includeFeedback && isDirty && showSaveState) ...<Widget>[
+          const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
             label: copy.unsavedChanges,
-            child: Text(
-              copy.unsavedChanges,
+            child: Row(
               key: const ValueKey<String>('note-detail-dirty'),
-              style: Theme.of(context).textTheme.bodySmall,
+              children: <Widget>[
+                Icon(Icons.edit_outlined, size: 16, color: tokens.textMuted),
+                const SizedBox(width: NoteFlowSpacing.sm),
+                Expanded(
+                  child: Text(
+                    copy.unsavedChanges,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.textMuted),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-        if (error != null) ...<Widget>[
-          const SizedBox(height: 12),
+        if (includeFeedback && error != null) ...<Widget>[
+          const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
             label: error,
-            child: Text(
-              error!,
+            child: Container(
               key: const ValueKey<String>('note-detail-error'),
-              style: TextStyle(color: colors.error),
+              padding: const EdgeInsets.all(NoteFlowSpacing.md),
+              decoration: BoxDecoration(
+                color: tokens.subtleSurface,
+                borderRadius: BorderRadius.circular(NoteFlowRadius.card),
+                border: Border.all(
+                  color: informationalError ? tokens.divider : tokens.error,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    informationalError
+                        ? Icons.cloud_off_outlined
+                        : Icons.error_outline,
+                    size: 18,
+                    color: informationalError ? tokens.textMuted : tokens.error,
+                  ),
+                  const SizedBox(width: NoteFlowSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color: informationalError
+                            ? tokens.textSecondary
+                            : tokens.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (onErrorRetry != null && errorRetryLabel != null)
@@ -115,25 +293,39 @@ final class NoteDetailEditorForm extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton(
                 key: const ValueKey<String>('note-detail-error-retry'),
-                onPressed: onErrorRetry,
+                onPressed: errorRetryEnabled ? onErrorRetry : null,
                 child: Text(errorRetryLabel!),
               ),
             ),
         ],
-        if (statusMessage != null) ...<Widget>[
-          const SizedBox(height: 12),
+        if (includeFeedback &&
+            statusMessage != null &&
+            showSaveState) ...<Widget>[
+          const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
             label: statusMessage,
-            child: Text(
-              statusMessage!,
+            child: Row(
               key: const ValueKey<String>('note-detail-status'),
-              style: TextStyle(color: colors.primary),
+              children: <Widget>[
+                Icon(Icons.check_circle_outline, size: 16, color: tokens.link),
+                const SizedBox(width: NoteFlowSpacing.sm),
+                Expanded(
+                  child: Text(
+                    statusMessage!,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.textSecondary),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-        if (actionBusy) ...<Widget>[
-          const SizedBox(height: 12),
+        if (includeFeedback &&
+            actionBusy &&
+            !isSummarizing &&
+            showBusyIndicator) ...<Widget>[
+          const SizedBox(height: NoteFlowSpacing.md),
           Semantics(
             liveRegion: true,
             label: copy.actionInProgress,
@@ -142,23 +334,51 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         ],
-        if (provisioningReader != null)
+        if (includeFeedback && provisioningReader != null)
           ModelProvisioningStatusPanel(
             reader: provisioningReader!,
             onRetry: hasSavedNote ? onProvisioningRetry : null,
             onCancel: onProvisioningCancel,
           ),
-        NoteDetailSummary(
-          copy: copy,
-          hasSavedNote: hasSavedNote,
-          summary: summary,
-          isStale: summaryStale,
-          onCopy: onCopySummary,
-          onRegenerate: onRegenerateSummary,
-          copyLabel: copySummaryLabel,
-          regenerateLabel: regenerateSummaryLabel,
-        ),
       ],
     );
+  }
+
+  List<Widget> _metadata() {
+    final feedback = summaryAvailability == null
+        ? const SizedBox.shrink()
+        : NoteSummaryFeedback(
+            copy: copy,
+            availability: summaryAvailability!,
+            cloud: summaryCloud,
+            isRunning: isSummarizing,
+            onCancel: onCancelSummary,
+          );
+    final result = NoteDetailSummary(
+      copy: copy,
+      hasSavedNote: hasSavedNote,
+      summary: summary,
+      isStale: summaryStale,
+      isSummarizing: isSummarizing,
+      onCopy: onCopySummary,
+      onRegenerate: onRegenerateSummary,
+      copyLabel: copySummaryLabel,
+      regenerateLabel: regenerateSummaryLabel,
+    );
+    if (!quietMetadata || !hasSavedNote) {
+      return [feedback, result, ?attachments];
+    }
+    return [
+      if (isSummarizing) feedback,
+      if (summary != null) result,
+      ?attachments,
+      NoteDetailUtilities(
+        label: copy.noteDetails,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [if (!isSummarizing) feedback],
+        ),
+      ),
+    ];
   }
 }

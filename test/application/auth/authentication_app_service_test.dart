@@ -1,0 +1,1101 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:note_ai_app/application/auth/auth_models.dart';
+import 'package:note_ai_app/application/auth/authentication_app_service.dart';
+import 'package:note_ai_app/application/auth/current_user.dart';
+import 'package:note_ai_app/application/auth/current_user_session.dart';
+import 'package:note_ai_app/domain/auth/auth_identity.dart';
+import 'package:note_ai_app/domain/auth/authentication_failure.dart';
+import 'package:note_ai_app/domain/auth/authentication_service.dart';
+import 'package:note_ai_app/domain/users/user_profile.dart';
+import 'package:note_ai_app/domain/users/user_profile_repository.dart';
+
+void main() {
+  late FakeAuthenticationService authentication;
+  late FakeUserProfileRepository profiles;
+  late CurrentUserSession session;
+  late AuthenticationAppService service;
+
+  setUp(() {
+    authentication = FakeAuthenticationService();
+    profiles = FakeUserProfileRepository();
+    session = CurrentUserSession();
+    service = AuthenticationAppService(
+      authenticationService: authentication,
+      currentUserSession: session,
+      userProfileRepository: profiles,
+    );
+    addTearDown(authentication.authState.close);
+  });
+
+  group('login', () {
+    test(
+      'authenticates, publishes the identity, and returns provider facts',
+      () async {
+        authentication.loginResult = identity(isEmailVerified: true);
+
+        final AuthUserDto user = await service.login(
+          const LoginInput(email: '  user@example.com ', password: ' secret '),
+        );
+
+        expect(authentication.calls, <String>['login']);
+        expect(authentication.input('login.email'), 'user@example.com');
+        expect(authentication.input('login.password'), ' secret ');
+        expect(user.userId, 'user-1');
+        expect(user.email, 'user@example.com');
+        expect(user.isEmailVerified, isTrue);
+        expect(session.identity, same(authentication.loginResult));
+      },
+    );
+
+    test(
+      'keeps the previous session when the provider rejects the login',
+      () async {
+        final AuthIdentity previous = identity(userId: 'user-9');
+        session.setIdentity(previous);
+        authentication.failures['login'] = Exception('rejected');
+
+        await expectLater(
+          () => service.login(
+            const LoginInput(email: 'user@example.com', password: 'wrong'),
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        expect(session.identity, same(previous));
+      },
+    );
+  });
+
+  group('stale completions', () {
+    test(
+      'a login completing after logout does not resurrect the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'switch@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        await service.logout();
+        gate.complete(identity());
+
+        await expectLater(login, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+        // Generation 1 recorded the prior sign-in; 2 records the logout clear.
+        expect(session.sessionGeneration, 2);
+      },
+    );
+
+    test(
+      'a session-expiry event during a pending login rejects the late login',
+      () async {
+        // The session is already empty, so the null event's clear() alone
+        // changes nothing; only the epoch invalidates the pending login.
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen((AuthUserDto? _) {});
+        addTearDown(subscription.cancel);
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        authentication.authState.add(null);
+        await pumpEventQueue();
+        gate.complete(identity());
+
+        await expectLater(login, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+      },
+    );
+
+    test(
+      'a same-user signed-in echo during a pending login keeps the login valid',
+      () async {
+        final AuthIdentity echoed = identity(isEmailVerified: true);
+        final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+        authentication.loginGate = gate;
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen((AuthUserDto? _) {});
+        addTearDown(subscription.cancel);
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        authentication.authState.add(echoed);
+        await pumpEventQueue();
+        gate.complete(echoed);
+
+        final AuthUserDto user = await login;
+        expect(user.userId, 'user-1');
+        expect(user.isEmailVerified, isTrue);
+        expect(session.identity, same(echoed));
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test('a login completing after another account signed in does not overwrite it', () async {
+      final Completer<AuthIdentity> gateA = Completer<AuthIdentity>();
+      authentication.loginGate = gateA;
+      final Future<AuthUserDto> loginA = service.login(
+        const LoginInput(email: 'a@example.com', password: 'secret'),
+      );
+      await pumpEventQueue();
+
+      authentication.loginGate = null;
+      authentication.loginResult = identity(userId: 'user-b');
+      final AuthUserDto userB = await service.login(
+        const LoginInput(email: 'b@example.com', password: 'secret'),
+      );
+      expect(userB.userId, 'user-b');
+
+      gateA.complete(identity(userId: 'user-a'));
+      await expectLater(loginA, throwsA(unauthenticatedFailure()));
+
+      expect(session.userId, 'user-b');
+      expect(session.identity, same(authentication.loginResult));
+    });
+
+    test(
+      'a restore started before login cannot publish a stale null over it',
+      () async {
+        // The session starts empty: only the epoch advanced by login can
+        // invalidate the older restore, not a generation change.
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(userId: 'user-2');
+        final AuthUserDto user = await service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        expect(user.userId, 'user-2');
+        expect(session.userId, 'user-2');
+
+        gate.complete(null);
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
+        expect(session.userId, 'user-2');
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test(
+      'a login invalidates an older restore even when it returns stale null',
+      () async {
+        // The session starts empty, so only the login epoch can reject the
+        // older restore: it finishes null while login is still pending.
+        final Completer<AuthIdentity?> restoreGate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = restoreGate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        final Completer<AuthIdentity> loginGate = Completer<AuthIdentity>();
+        authentication.loginGate = loginGate;
+        final Future<AuthUserDto> login = service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+        await pumpEventQueue();
+
+        final Future<void> restoreRejected = expectLater(
+          restore,
+          throwsA(unauthenticatedFailure()),
+        );
+        restoreGate.complete(null);
+        await restoreRejected;
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+
+        // The pending login outlives the rejected restore and still publishes.
+        loginGate.complete(identity(userId: 'user-2'));
+        final AuthUserDto user = await login;
+        expect(user.userId, 'user-2');
+        expect(session.userId, 'user-2');
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test(
+      'a restore started before login cannot overwrite the newer identity',
+      () async {
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(userId: 'user-2');
+        await service.login(
+          const LoginInput(email: 'user@example.com', password: 'secret'),
+        );
+
+        gate.complete(identity(userId: 'user-1'));
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
+        expect(session.userId, 'user-2');
+        expect(session.identity, same(authentication.loginResult));
+      },
+    );
+
+    test(
+      'a restore completing after logout does not resurrect the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        await service.logout();
+        gate.complete(identity());
+
+        await expectLater(restore, throwsA(unauthenticatedFailure()));
+        expect(session.isAuthenticated, isFalse);
+        expect(session.identity, isNull);
+      },
+    );
+
+    test('an identity refresh completing after logout does not resurrect the session', () async {
+      session.setIdentity(identity(userId: 'user-9'));
+      final Completer<AuthIdentity> gate = Completer<AuthIdentity>();
+      authentication.refreshGate = gate;
+      final Future<AuthUserDto> refresh = service.refreshIdentity();
+      await pumpEventQueue();
+
+      await service.logout();
+      gate.complete(identity());
+
+      await expectLater(refresh, throwsA(unauthenticatedFailure()));
+      expect(session.isAuthenticated, isFalse);
+      expect(session.identity, isNull);
+    });
+  });
+
+  group('logout', () {
+    test(
+      'clears the local session even when provider sign-out fails',
+      () async {
+        session.setIdentity(identity());
+        authentication.failures['logout'] = Exception('network');
+
+        await expectLater(service.logout, throwsA(isA<Exception>()));
+
+        expect(session.isAuthenticated, isFalse);
+        expect(authentication.calls, <String>['logout']);
+      },
+    );
+  });
+
+  group('restoreSession', () {
+    test(
+      'clears the session and returns null without a provider identity',
+      () async {
+        session.setIdentity(identity());
+
+        final AuthUserDto? user = await service.restoreSession();
+
+        expect(user, isNull);
+        expect(session.isAuthenticated, isFalse);
+        expect(authentication.calls, <String>['getCurrentIdentity']);
+      },
+    );
+
+    test('publishes an existing provider identity', () async {
+      authentication.storedIdentity = identity(isEmailVerified: true);
+
+      final AuthUserDto? user = await service.restoreSession();
+
+      expect(user?.userId, 'user-1');
+      expect(user?.isEmailVerified, isTrue);
+      expect(session.identity, same(authentication.storedIdentity));
+    });
+
+    test(
+      'propagates a provider failure without touching the session',
+      () async {
+        final AuthIdentity previous = identity(userId: 'user-9');
+        session.setIdentity(previous);
+        authentication.failures['getCurrentIdentity'] = Exception(
+          'unavailable',
+        );
+
+        await expectLater(service.restoreSession, throwsA(isA<Exception>()));
+
+        expect(session.identity, same(previous));
+      },
+    );
+  });
+
+  group('observeAuthState', () {
+    test('does not publish or clear the session before an event arrives', () {
+      final AuthIdentity previous = identity(userId: 'user-9');
+      session.setIdentity(previous);
+
+      service.observeAuthState();
+
+      expect(session.identity, same(previous));
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('maps a signed-in identity into the session and the event', () async {
+      final AuthIdentity signedIn = identity(isEmailVerified: true);
+      final Future<List<AuthUserDto?>> received = service
+          .observeAuthState()
+          .take(1)
+          .toList();
+      // Let the returned stream attach to the provider stream before emitting.
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+
+      final List<AuthUserDto?> events = await received;
+      expect(events, hasLength(1));
+      expect(events.single?.userId, 'user-1');
+      expect(events.single?.email, 'user@example.com');
+      expect(events.single?.isEmailVerified, isTrue);
+      expect(session.identity, same(signedIn));
+      expect(session.userId, 'user-1');
+      expect(session.isAuthenticated, isTrue);
+    });
+
+    test(
+      'maps a null sign-out to a null event and clears the session',
+      () async {
+        session.setIdentity(identity(userId: 'user-9'));
+        final Future<List<AuthUserDto?>> received = service
+            .observeAuthState()
+            .take(1)
+            .toList();
+        await pumpEventQueue();
+
+        authentication.authState.add(null);
+
+        expect(await received, <AuthUserDto?>[null]);
+        expect(session.identity, isNull);
+        expect(session.userId, isNull);
+        expect(session.isAuthenticated, isFalse);
+      },
+    );
+
+    test('publishes every provider event in order', () async {
+      final AuthIdentity signedIn = identity(userId: 'user-2');
+      final Future<List<AuthUserDto?>> received = service
+          .observeAuthState()
+          .take(2)
+          .toList();
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+      authentication.authState.add(null);
+
+      final List<AuthUserDto?> events = await received;
+      expect(events.map((AuthUserDto? user) => user?.userId), <String?>[
+        'user-2',
+        null,
+      ]);
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test('updates the session before delivering the mapped user', () async {
+      final AuthIdentity signedIn = identity();
+      AuthIdentity? identityAtDelivery;
+      final Future<void> delivered = service.observeAuthState().first.then((
+        AuthUserDto? _,
+      ) {
+        identityAtDelivery = session.identity;
+      });
+      await pumpEventQueue();
+
+      authentication.authState.add(signedIn);
+      await delivered;
+
+      expect(identityAtDelivery, same(signedIn));
+    });
+
+    test(
+      'propagates a provider stream failure without touching the session',
+      () async {
+        final AuthIdentity previous = identity(userId: 'user-9');
+        session.setIdentity(previous);
+        final Completer<Object> failure = Completer<Object>();
+        final StreamSubscription<AuthUserDto?> subscription = service
+            .observeAuthState()
+            .listen(
+              (AuthUserDto? _) {},
+              onError: (Object error) => failure.complete(error),
+            );
+        addTearDown(subscription.cancel);
+        await pumpEventQueue();
+
+        authentication.authState.addError(Exception('stream failed'));
+
+        expect(await failure.future, isA<Exception>());
+        expect(session.identity, same(previous));
+      },
+    );
+  });
+
+  group('refreshIdentity', () {
+    test('republishes the refreshed identity', () async {
+      session.setIdentity(identity(isEmailVerified: false));
+      authentication.refreshResult = identity(isEmailVerified: true);
+
+      final AuthUserDto user = await service.refreshIdentity();
+
+      expect(user.isEmailVerified, isTrue);
+      expect(session.identity, same(authentication.refreshResult));
+    });
+
+    test(
+      'rejects an unauthenticated caller before the provider call',
+      () async {
+        await expectLater(
+          service.refreshIdentity,
+          throwsA(isA<UnauthenticatedException>()),
+        );
+
+        expect(authentication.calls, isEmpty);
+      },
+    );
+  });
+
+  group('register', () {
+    const RegisterInput input = RegisterInput(
+      email: '  new@example.com ',
+      displayName: '  New User ',
+      password: ' secret-1 ',
+      confirmPassword: ' secret-1 ',
+    );
+
+    test(
+      'registers, signs in, saves the profile, and requests verification',
+      () async {
+        authentication.loginResult = identity(isEmailVerified: false);
+
+        final RegistrationResult result = await service.register(input);
+
+        expect(authentication.calls, <String>[
+          'register',
+          'login',
+          'getCurrentIdentity',
+          'requestEmailVerification',
+        ]);
+        expect(authentication.input('register.email'), 'new@example.com');
+        expect(authentication.input('register.password'), ' secret-1 ');
+        expect(authentication.input('login.email'), 'new@example.com');
+        expect(profiles.saved.single.userId, 'user-1');
+        expect(profiles.saved.single.displayName, 'New User');
+        expect(session.userId, 'user-1');
+        expect(result.user.userId, 'user-1');
+        expect(
+          result.verificationDispatchStatus,
+          VerificationDispatchStatus.requested,
+        );
+      },
+    );
+
+    test(
+      'skips verification when the provider reports a verified identity',
+      () async {
+        authentication.loginResult = identity(isEmailVerified: true);
+
+        final RegistrationResult result = await service.register(input);
+
+        expect(authentication.calls, <String>[
+          'register',
+          'login',
+          'getCurrentIdentity',
+        ]);
+        expect(
+          result.verificationDispatchStatus,
+          VerificationDispatchStatus.notRequired,
+        );
+        expect(session.isAuthenticated, isTrue);
+      },
+    );
+
+    test('keeps the registration when the verification dispatch is temporarily '
+        'unavailable', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      authentication.failures['requestEmailVerification'] =
+          const AuthenticationFailure(
+            AuthenticationFailureCode.temporarilyUnavailable,
+          );
+
+      final RegistrationResult result = await service.register(input);
+
+      expect(
+        result.verificationDispatchStatus,
+        VerificationDispatchStatus.pending,
+      );
+      expect(result.user.userId, 'user-1');
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
+
+    test('propagates a non-temporary verification dispatch failure', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      const AuthenticationFailure failure = AuthenticationFailure(
+        AuthenticationFailureCode.unsupportedChallenge,
+      );
+      authentication.failures['requestEmailVerification'] = failure;
+
+      await expectLater(
+        () => service.register(input),
+        throwsA(
+          isA<AuthenticationFailure>().having(
+            (AuthenticationFailure exception) => exception.code,
+            'code',
+            AuthenticationFailureCode.unsupportedChallenge,
+          ),
+        ),
+      );
+
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
+
+    test('propagates an untyped verification dispatch failure', () async {
+      authentication.loginResult = identity(isEmailVerified: false);
+      authentication.failures['requestEmailVerification'] = Exception(
+        'dispatch failed',
+      );
+
+      await expectLater(
+        () => service.register(input),
+        throwsA(isA<Exception>()),
+      );
+
+      expect(session.userId, 'user-1');
+      expect(profiles.saved.single.userId, 'user-1');
+    });
+
+    test('SDK intended sign-in event waits for profile; logout invalidates registration', () async {
+      final subscription = service.observeAuthState().listen((_) {});
+      addTearDown(subscription.cancel);
+      authentication.loginResult = identity(
+        email: 'new@example.com',
+        isEmailVerified: true,
+      );
+      profiles.saveGate = Completer<void>();
+      final registration = service.register(input);
+      await pumpEventQueue();
+      authentication.authState.add(authentication.loginResult);
+      await pumpEventQueue();
+      expect(session.isAuthenticated, isFalse);
+      authentication.authState.add(null);
+      await pumpEventQueue();
+      final check = expectLater(
+        registration,
+        throwsA(isA<AuthenticationFailure>()),
+      );
+      profiles.saveGate!.complete();
+      await check;
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test(
+      'SDK intended sign-in event is published once the profile finishes',
+      () async {
+        final delivered = <AuthUserDto?>[];
+        final subscription = service.observeAuthState().listen(delivered.add);
+        addTearDown(subscription.cancel);
+        authentication.loginResult = identity(
+          email: 'new@example.com',
+          isEmailVerified: true,
+        );
+        profiles.saveGate = Completer<void>();
+        final registration = service.register(input);
+        await pumpEventQueue();
+        authentication.authState.add(authentication.loginResult);
+        await pumpEventQueue();
+        expect(delivered, isEmpty);
+        profiles.saveGate!.complete();
+        final result = await registration;
+        expect(result.profileSetupPending, isFalse);
+        expect(session.userId, 'user-1');
+      },
+    );
+
+    test('SDK account switch without a delivered Hub event cannot publish old registration', () async {
+      authentication.loginResult = identity(isEmailVerified: true);
+      profiles.saveGate = Completer<void>();
+      final registration = service.register(input);
+      await pumpEventQueue();
+      authentication.storedIdentity = identity(userId: 'other-user');
+      final check = expectLater(
+        registration,
+        throwsA(isA<AuthenticationFailure>()),
+      );
+      profiles.saveGate!.complete();
+      await check;
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test(
+      'a restore started before registration cannot publish its stale result',
+      () async {
+        final Completer<AuthIdentity?> gate = Completer<AuthIdentity?>();
+        authentication.getCurrentIdentityGate = gate;
+        final Future<AuthUserDto?> restore = service.restoreSession();
+        await pumpEventQueue();
+
+        authentication.loginResult = identity(isEmailVerified: true);
+        final Future<RegistrationResult> registration = service.register(input);
+        await pumpEventQueue();
+
+        // Both reads wait on the same provider gate; registration already
+        // advanced the epoch, so only its read may publish. Attach the
+        // restore's expectation before releasing the gate so its rejection is
+        // never observed as an unhandled asynchronous error.
+        final Future<void> restoreRejected = expectLater(
+          restore,
+          throwsA(unauthenticatedFailure()),
+        );
+        gate.complete(authentication.loginResult);
+        final RegistrationResult result = await registration;
+        await restoreRejected;
+
+        expect(result.user.userId, 'user-1');
+        expect(session.userId, 'user-1');
+        expect(profiles.saved.single.userId, 'user-1');
+      },
+    );
+
+    test('publishes the session only after the profile is saved', () async {
+      authentication.loginResult = identity(isEmailVerified: true);
+      bool authenticatedDuringSave = true;
+      profiles.onSave = () => authenticatedDuringSave = session.isAuthenticated;
+
+      await service.register(input);
+
+      expect(authenticatedDuringSave, isFalse);
+      expect(session.isAuthenticated, isTrue);
+    });
+
+    test('reports profile setup pending after Cognito succeeds without signing up again', () async {
+      authentication.loginResult = identity(isEmailVerified: true);
+      profiles.saveFailure = Exception('storage failed');
+      final result = await service.register(input);
+      expect(result.profileSetupPending, isTrue);
+      expect(session.isAuthenticated, isTrue);
+      expect(authentication.countOf('register'), 1);
+      expect(authentication.countOf('login'), 1);
+      expect(profiles.saved, isEmpty);
+    });
+
+    test(
+      'leaves the session unauthenticated when provider registration fails',
+      () async {
+        authentication.failures['register'] = Exception('already registered');
+
+        await expectLater(
+          () => service.register(input),
+          throwsA(isA<Exception>()),
+        );
+
+        expect(session.isAuthenticated, isFalse);
+        expect(authentication.countOf('login'), 0);
+      },
+    );
+  });
+
+  group('validation', () {
+    test('rejects blank login fields before any provider call', () async {
+      await expectLater(
+        () => service.login(const LoginInput(email: '   ', password: 'secret')),
+        throwsA(reasonIs(AuthValidationReason.emailRequired)),
+      );
+      await expectLater(
+        () => service.login(
+          const LoginInput(email: 'user@example.com', password: '  '),
+        ),
+        throwsA(reasonIs(AuthValidationReason.passwordRequired)),
+      );
+
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('rejects blank and mismatched registration fields', () async {
+      await expectLater(
+        () => service.register(
+          const RegisterInput(
+            email: 'new@example.com',
+            displayName: '  ',
+            password: 'secret-1',
+            confirmPassword: 'secret-1',
+          ),
+        ),
+        throwsA(reasonIs(AuthValidationReason.displayNameRequired)),
+      );
+      await expectLater(
+        () => service.register(
+          const RegisterInput(
+            email: 'new@example.com',
+            displayName: 'New User',
+            password: 'secret-1',
+            confirmPassword: 'secret-2',
+          ),
+        ),
+        throwsA(reasonIs(AuthValidationReason.passwordConfirmationMismatch)),
+      );
+
+      expect(authentication.calls, isEmpty);
+      expect(profiles.saved, isEmpty);
+    });
+
+    test('requires a verification code and the current password', () async {
+      session.setIdentity(identity());
+
+      await expectLater(
+        () => service.confirmEmailVerification(code: '  '),
+        throwsA(reasonIs(AuthValidationReason.verificationCodeRequired)),
+      );
+      await expectLater(
+        () => service.changePassword(
+          currentPassword: '',
+          newPassword: 'new-secret',
+          confirmPassword: 'new-secret',
+        ),
+        throwsA(reasonIs(AuthValidationReason.currentPasswordRequired)),
+      );
+
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('rejects a mismatched password reset confirmation', () async {
+      await expectLater(
+        () => service.confirmPasswordReset(
+          email: 'user@example.com',
+          code: '123456',
+          newPassword: 'new-secret',
+          confirmPassword: 'other-secret',
+        ),
+        throwsA(reasonIs(AuthValidationReason.passwordConfirmationMismatch)),
+      );
+
+      expect(authentication.calls, isEmpty);
+    });
+  });
+
+  group('confirmEmailVerification', () {
+    test('refreshes the identity after a confirmed code', () async {
+      session.setIdentity(identity(isEmailVerified: false));
+      authentication.refreshResult = identity(isEmailVerified: true);
+
+      final AuthUserDto user = await service.confirmEmailVerification(
+        code: ' 123456 ',
+      );
+
+      expect(authentication.calls, <String>[
+        'confirmEmailVerification',
+        'refreshIdentity',
+      ]);
+      expect(authentication.input('confirmEmailVerification.code'), '123456');
+      expect(user.isEmailVerified, isTrue);
+      expect(session.identity, same(authentication.refreshResult));
+    });
+
+    test(
+      'rejects an unauthenticated caller before the provider call',
+      () async {
+        await expectLater(
+          () => service.confirmEmailVerification(code: '123456'),
+          throwsA(isA<UnauthenticatedException>()),
+        );
+
+        expect(authentication.calls, isEmpty);
+      },
+    );
+  });
+
+  group('resendEmailVerification', () {
+    test('requires an authenticated user', () async {
+      await expectLater(
+        service.resendEmailVerification,
+        throwsA(isA<UnauthenticatedException>()),
+      );
+
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('requests verification for the authenticated user', () async {
+      session.setIdentity(identity());
+
+      await service.resendEmailVerification();
+
+      expect(authentication.calls, <String>['requestEmailVerification']);
+    });
+  });
+
+  group('password reset', () {
+    test('requests a reset while signed out', () async {
+      await service.requestPasswordReset(email: '  user@example.com ');
+
+      expect(
+        authentication.input('requestPasswordReset.email'),
+        'user@example.com',
+      );
+      expect(authentication.countOf('login'), 0);
+      expect(session.isAuthenticated, isFalse);
+    });
+
+    test('confirms a reset without signing in', () async {
+      await service.confirmPasswordReset(
+        email: ' user@example.com ',
+        code: ' 123456 ',
+        newPassword: ' new-secret ',
+        confirmPassword: ' new-secret ',
+      );
+
+      expect(authentication.calls, <String>['confirmPasswordReset']);
+      expect(
+        authentication.input('confirmPasswordReset.email'),
+        'user@example.com',
+      );
+      expect(authentication.input('confirmPasswordReset.code'), '123456');
+      expect(
+        authentication.input('confirmPasswordReset.newPassword'),
+        ' new-secret ',
+      );
+      expect(session.isAuthenticated, isFalse);
+    });
+  });
+
+  group('changePassword', () {
+    test('requires an authenticated user', () async {
+      await expectLater(
+        () => service.changePassword(
+          currentPassword: 'old-secret',
+          newPassword: 'new-secret',
+          confirmPassword: 'new-secret',
+        ),
+        throwsA(isA<UnauthenticatedException>()),
+      );
+
+      expect(authentication.calls, isEmpty);
+    });
+
+    test('delegates current and new passwords only', () async {
+      final AuthIdentity previous = identity();
+      session.setIdentity(previous);
+
+      await service.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        confirmPassword: 'new-secret',
+      );
+
+      expect(authentication.calls, <String>['changePassword']);
+      expect(
+        authentication.input('changePassword.currentPassword'),
+        'old-secret',
+      );
+      expect(authentication.input('changePassword.newPassword'), 'new-secret');
+      expect(session.identity, same(previous));
+    });
+  });
+}
+
+/// Matcher for an [AuthValidationException] carrying [reason].
+Matcher reasonIs(AuthValidationReason reason) {
+  return isA<AuthValidationException>().having(
+    (AuthValidationException exception) => exception.reason,
+    'reason',
+    reason,
+  );
+}
+
+/// Matcher for the stale-completion rejection shared by fenced operations.
+Matcher unauthenticatedFailure() {
+  return isA<AuthenticationFailure>().having(
+    (AuthenticationFailure failure) => failure.code,
+    'code',
+    AuthenticationFailureCode.unauthenticated,
+  );
+}
+
+AuthIdentity identity({
+  String userId = 'user-1',
+  String email = 'user@example.com',
+  bool isEmailVerified = false,
+}) {
+  return AuthIdentity(
+    userId: userId,
+    email: email,
+    isEmailVerified: isEmailVerified,
+  );
+}
+
+/// Hand-written provider double: records calls and inputs, replays canned
+/// identities, and throws any failure registered in [failures] by call name.
+final class FakeAuthenticationService implements IAuthenticationService {
+  final List<String> calls = <String>[];
+  final Map<String, Object?> inputs = <String, Object?>{};
+  final Map<String, Object> failures = <String, Object>{};
+
+  AuthIdentity? storedIdentity;
+  AuthIdentity loginResult = identity();
+  AuthIdentity refreshResult = identity();
+
+  /// When set, the call parks until the completer resolves, so a test can
+  /// interleave session work between the call and its completion.
+  Completer<AuthIdentity>? loginGate;
+  Completer<AuthIdentity?>? getCurrentIdentityGate;
+  Completer<AuthIdentity>? refreshGate;
+
+  /// Provider auth-state events the fake replays to its observer.
+  final StreamController<AuthIdentity?> authState =
+      StreamController<AuthIdentity?>.broadcast();
+
+  String? input(String key) => inputs[key] as String?;
+
+  int countOf(String call) =>
+      calls.where((String recorded) => recorded == call).length;
+
+  @override
+  Future<void> register({
+    required String email,
+    required String password,
+  }) async {
+    _record('register', <String, Object?>{
+      'register.email': email,
+      'register.password': password,
+    });
+  }
+
+  @override
+  Future<AuthIdentity> login({
+    required String email,
+    required String password,
+  }) async {
+    _record('login', <String, Object?>{
+      'login.email': email,
+      'login.password': password,
+    });
+    final Completer<AuthIdentity>? gate = loginGate;
+    if (gate != null) {
+      final AuthIdentity result = await gate.future;
+      storedIdentity = result;
+      return result;
+    }
+    storedIdentity = loginResult;
+    return loginResult;
+  }
+
+  @override
+  Future<void> logout() async {
+    _record('logout');
+  }
+
+  @override
+  Future<AuthIdentity?> getCurrentIdentity() async {
+    _record('getCurrentIdentity');
+    final Completer<AuthIdentity?>? gate = getCurrentIdentityGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return storedIdentity;
+  }
+
+  @override
+  Stream<AuthIdentity?> observeAuthState() => authState.stream;
+
+  @override
+  Future<void> requestEmailVerification() async {
+    _record('requestEmailVerification');
+  }
+
+  @override
+  Future<void> confirmEmailVerification({required String code}) async {
+    _record('confirmEmailVerification', <String, Object?>{
+      'confirmEmailVerification.code': code,
+    });
+  }
+
+  @override
+  Future<AuthIdentity> refreshIdentity() async {
+    _record('refreshIdentity');
+    final Completer<AuthIdentity>? gate = refreshGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return refreshResult;
+  }
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {
+    _record('requestPasswordReset', <String, Object?>{
+      'requestPasswordReset.email': email,
+    });
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    _record('confirmPasswordReset', <String, Object?>{
+      'confirmPasswordReset.email': email,
+      'confirmPasswordReset.code': code,
+      'confirmPasswordReset.newPassword': newPassword,
+    });
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _record('changePassword', <String, Object?>{
+      'changePassword.currentPassword': currentPassword,
+      'changePassword.newPassword': newPassword,
+    });
+  }
+
+  void _record(
+    String call, [
+    Map<String, Object?> input = const <String, Object?>{},
+  ]) {
+    calls.add(call);
+    inputs.addAll(input);
+    final Object? failure = failures[call];
+    if (failure != null) {
+      throw failure;
+    }
+  }
+}
+
+/// Hand-written profile double recording saved profiles and optional failures.
+final class FakeUserProfileRepository implements IUserProfileRepository {
+  final List<UserProfile> saved = <UserProfile>[];
+
+  Object? saveFailure;
+  void Function()? onSave;
+  Completer<void>? saveGate;
+
+  @override
+  Future<UserProfile?> findByUserId(String userId) async {
+    return saved.isEmpty ? null : saved.last;
+  }
+
+  @override
+  Future<void> save(UserProfile profile) async {
+    onSave?.call();
+    await saveGate?.future;
+    final Object? failure = saveFailure;
+    if (failure != null) {
+      throw failure;
+    }
+    saved.add(profile);
+  }
+}

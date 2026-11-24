@@ -1,11 +1,16 @@
+import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
+import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:note_ai_app/application/notes/note_application.dart';
+import 'package:note_ai_app/presentation/notes/note_detail_back_confirmation.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_localizations.dart';
 import 'package:note_ai_app/presentation/notes/note_detail_page.dart';
 import 'package:note_ai_app/presentation/notes/notes_application_controller.dart';
+import 'package:note_ai_app/presentation/notes/notes_theme_tokens.dart';
 
 void main() {
   final DateTime createdAt = DateTime.utc(2026, 1, 1);
@@ -47,6 +52,118 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('saved editor retains focus while its dirty feedback changes', (
+    tester,
+  ) async {
+    final controller = _FakeNotesController(notes: [buildNote()]);
+    await pumpPage(tester, controller, note: buildNote());
+    final field = find.byKey(NoteDetailPage.contentFieldKey);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: field, matching: find.byType(EditableText)),
+    );
+    expect(editable.focusNode.hasFocus, isTrue);
+    tester.testTextInput.enterText('First typed character');
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(editable.focusNode.hasFocus, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('unchanged ACK preserves the editor selection', (tester) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    final text = tester
+        .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+        .controller!;
+    text.selection = const TextSelection.collapsed(offset: 3);
+    await pumpPage(
+      tester,
+      controller,
+      note: NoteDto(
+        id: initial.id,
+        ownerId: initial.ownerId,
+        title: initial.title,
+        content: initial.content,
+        createdAt: initial.createdAt,
+        updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+        contentRevision: 1,
+      ),
+    );
+    expect(text.selection.baseOffset, 3);
+  });
+
+  testWidgets('ACK with unchanged text preserves and saves the newer draft', (
+    tester,
+  ) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Newer draft',
+    );
+    await tester.pump();
+    final acknowledged = NoteDto(
+      id: initial.id,
+      ownerId: initial.ownerId,
+      title: initial.title,
+      content: initial.content,
+      createdAt: initial.createdAt,
+      updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+      contentRevision: 1,
+    );
+    await pumpPage(tester, controller, note: acknowledged);
+    expect(find.byKey(const ValueKey('editor-remote-change')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+          .controller!
+          .text,
+      'Newer draft',
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(controller.notes.single.content, 'Newer draft');
+  });
+
+  testWidgets('changed remote text still requires review of the local draft', (
+    tester,
+  ) async {
+    final initial = buildNote();
+    final controller = _FakeNotesController(notes: [initial]);
+    await pumpPage(tester, controller, note: initial);
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Unsaved local draft',
+    );
+    await tester.pump();
+    await pumpPage(
+      tester,
+      controller,
+      note: NoteDto(
+        id: initial.id,
+        ownerId: initial.ownerId,
+        title: initial.title,
+        content: 'A real remote edit',
+        createdAt: initial.createdAt,
+        updatedAt: initial.updatedAt.add(const Duration(seconds: 1)),
+        contentRevision: 1,
+      ),
+    );
+    expect(find.byKey(const ValueKey('editor-remote-change')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(NoteDetailPage.contentFieldKey))
+          .controller!
+          .text,
+      'Unsaved local draft',
+    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(controller.replaceContentCalls, 0);
+  });
+
   testWidgets('creates a new note through the application seam', (
     WidgetTester tester,
   ) async {
@@ -64,12 +181,16 @@ void main() {
       'A new note body',
     );
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
+    );
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(controller.notes.single.title, 'A new note');
     expect(controller.notes.single.content, 'A new note body');
-    expect(find.text('Note saved.'), findsOneWidget);
+    expect(find.text('Saved locally.'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(
@@ -78,6 +199,85 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('shows a specific notice when note storage is unsupported', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..createNoteError = UnsupportedError('web storage unavailable');
+    await pumpPage(tester, controller);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Temporary draft',
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Couldn’t save the note. Please try again.'),
+      findsNothing,
+    );
+    final Container unavailableNotice = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('note-detail-error')),
+    );
+    final BoxDecoration noticeDecoration =
+        unavailableNotice.decoration! as BoxDecoration;
+    expect(
+      noticeDecoration.border!.top.color,
+      NoteFlowUiTokens.light().divider,
+    );
+    expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
+    expect(controller.notes, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('autosave failure offers retry and saves the latest draft', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController()
+      ..createNoteError = StateError('temporary storage failure');
+    await pumpPage(tester, controller);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Retry this note',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(NoteDetailPage.contentFieldKey));
+    await tester.enterText(
+      find.byKey(NoteDetailPage.contentFieldKey),
+      'Latest draft content',
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Couldn’t save the note. Please try again.'),
+      findsOneWidget,
+    );
+    final Finder retryButton = find.byKey(
+      const ValueKey<String>('note-detail-error-retry'),
+    );
+    expect(retryButton, findsOneWidget);
+
+    controller.createNoteError = null;
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(controller.notes.single.title, 'Retry this note');
+    expect(controller.notes.single.content, 'Latest draft content');
+    expect(find.text('Saved locally.'), findsOneWidget);
+    expect(retryButton, findsNothing);
   });
 
   testWidgets('updates only changed fields on an existing note', (
@@ -102,14 +302,10 @@ void main() {
     );
     expect(find.byKey(NoteDetailPage.dirtyKey), findsOneWidget);
     expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('note-detail-save')),
-          )
-          .onPressed,
-      isNotNull,
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
     );
-    await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(controller.renameCalls, 1);
@@ -147,7 +343,7 @@ void main() {
         isNull,
       );
 
-      await tester.tap(find.byKey(const ValueKey<String>('note-detail-save')));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey<String>('note-detail-summarize')),
@@ -238,6 +434,26 @@ void main() {
     expect(controller.summarizeCalls, 2);
   });
 
+  testWidgets('autosaves when both editor fields lose focus', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.enterText(
+      find.byKey(NoteDetailPage.titleFieldKey),
+      'Saved after focus loss',
+    );
+    await tester.pump();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+
+    expect(controller.renameCalls, 1);
+    expect(controller.notes.single.title, 'Saved after focus loss');
+  });
+
   testWidgets('dirty back offers Cancel and Discard', (
     WidgetTester tester,
   ) async {
@@ -250,6 +466,7 @@ void main() {
       'Unsaved title',
     );
     await tester.pump();
+    expect(controller.renameCalls, 0);
     expect(
       tester.widget<IconButton>(find.byKey(NoteDetailPage.backKey)).onPressed,
       isNotNull,
@@ -260,20 +477,25 @@ void main() {
         .onPressed;
     expect(back, isNotNull);
     back!();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Save changes before leaving?'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey<String>('note-detail-back-cancel')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.renameCalls, 0);
 
     final VoidCallback? backAgain = tester
         .widget<IconButton>(find.byKey(NoteDetailPage.backKey))
         .onPressed;
     expect(backAgain, isNotNull);
     backAgain!();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.renameCalls, 0);
     await tester.tap(
       find.byKey(const ValueKey<String>('note-detail-back-discard')),
     );
@@ -307,6 +529,56 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
+  testWidgets('dirty back explains Web limitation without a Save action', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          NoteDetailCopy.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const <Locale>[Locale('en'), Locale('vi')],
+        home: Builder(
+          builder: (BuildContext context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showNoteDetailBackConfirmation(
+                context: context,
+                copy: NoteDetailCopy.of(context),
+                canSave: false,
+              ),
+              child: const Text('Open confirmation'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open confirmation'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('You have unsaved changes.'), findsOneWidget);
+    expect(
+      find.text(
+        'This Web build cannot save notes. Changes in this draft will be lost when you leave.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-save')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-cancel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-back-discard')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('deletes an existing note after confirmation', (
     WidgetTester tester,
   ) async {
@@ -327,13 +599,104 @@ void main() {
     expect(find.byKey(NoteDetailPage.titleFieldKey), findsNothing);
   });
 
+  testWidgets('desktop more menu dismisses and preserves delete confirmation', (
+    WidgetTester tester,
+  ) async {
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    final Rect triggerRect = tester.getRect(
+      find.byKey(const ValueKey<String>('note-detail-more')),
+    );
+    final Rect menuItemRect = tester.getRect(
+      find.byKey(NoteDetailPage.moreDeleteKey),
+    );
+    expect(menuItemRect.top, greaterThanOrEqualTo(triggerRect.bottom));
+    expect(menuItemRect.right, lessThanOrEqualTo(triggerRect.right));
+    expect(triggerRect.right - menuItemRect.right, lessThanOrEqualTo(8));
+    expect(
+      menuItemRect.right,
+      lessThanOrEqualTo(tester.view.physicalSize.width),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    // Tapping the barrier dismisses the menu without running any action.
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    // The delete confirmation can be cancelled from its dialog.
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(NoteDetailPage.moreDeleteKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete note?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete note?'), findsNothing);
+    expect(find.byKey(NoteDetailPage.titleFieldKey), findsOneWidget);
+    expect(controller.notes, hasLength(1));
+  });
+
+  testWidgets('compact more actions remain a dismissible bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _FakeNotesController controller = _FakeNotesController(
+      notes: <NoteDto>[buildNote()],
+    );
+    await pumpPage(tester, controller, note: controller.notes.single);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(PopupMenuItem<bool>), findsNothing);
+    expect(controller.notes, hasLength(1));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('note-detail-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsOneWidget);
+    await tester.tapAt(const Offset(195, 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(NoteDetailPage.moreDeleteKey), findsNothing);
+    expect(controller.notes, hasLength(1));
+  });
+
   testWidgets('renders Vietnamese detail copy', (WidgetTester tester) async {
     await pumpPage(tester, _FakeNotesController(), locale: const Locale('vi'));
 
     expect(find.text('Ghi chú mới'), findsOneWidget);
     expect(find.text('Tiêu đề'), findsOneWidget);
     expect(find.text('Nội dung'), findsOneWidget);
-    expect(find.text('Lưu'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-save')),
+      findsNothing,
+    );
   });
 }
 
@@ -347,6 +710,7 @@ final class _FakeNotesController implements NotesApplicationController {
   String? summarizedNoteId;
   int summarizeCalls = 0;
   int summarizeFailuresRemaining = 0;
+  Object? createNoteError;
   int _nextId = 1;
 
   @override
@@ -357,6 +721,10 @@ final class _FakeNotesController implements NotesApplicationController {
     required String title,
     required String content,
   }) async {
+    final Object? error = createNoteError;
+    if (error != null) {
+      throw error;
+    }
     final DateTime now = DateTime.utc(2026, 1, 2);
     final NoteDto created = NoteDto(
       id: 'note-${_nextId++}',
@@ -394,7 +762,14 @@ final class _FakeNotesController implements NotesApplicationController {
   }
 
   @override
-  Future<String> summarizeNote(String noteId) async {
+  SummaryConsentAppService? get summaryConsent => null;
+
+  @override
+  Future<String> summarizeNote(
+    String noteId, {
+    NoteDto? selectedSnapshot,
+    SummaryRunScope? scope,
+  }) async {
     final NoteDto note = _find(noteId);
     summarizeCalls++;
     summarizedNoteId = noteId;

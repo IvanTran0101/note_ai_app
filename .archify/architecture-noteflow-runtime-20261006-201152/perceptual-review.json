@@ -1,0 +1,18 @@
+{
+  "artifactSha256": "fe60e9ea852a27acabf6d8e1b2d939b8ea463a39076c8d3d50fe73123632c61f",
+  "candidateSha256": "8f4a3d46668ff054fb9793a2c77eeb70ec4da649dc7732effef782833d3bcb21",
+  "review": "inspected",
+  "reviewer": "Codex root",
+  "screenshotsInspected": [
+    "visual-check/noteflow-runtime.visual-check.1440x900.light.png",
+    "visual-check/noteflow-runtime.visual-check.2048x1320.dark.png"
+  ],
+  "scope": "Primary path, node placement, trust boundary containment and the two resolved crossing locations in main diagram; card text/source evidence checked from candidate, not a scrolled card screenshot",
+  "findings": [
+    "Primary green Summary path remains distinguishable from sign-in and realtime branches.",
+    "Component boxes and three ownership boundaries are visible without clipping at inspected viewports.",
+    "Two resolved crossover bridges and the longer realtime feedback route remain; do not claim a crossing-free drawing.",
+    "Supporting detail is placed in five cards below the diagram; main diagram is deliberately high-level."
+  ],
+  "placementReview": "One position-only alternate arrangement failed desktop readability; restored the first passing candidate and completed finalize in review-3. No second placement round."
+}
