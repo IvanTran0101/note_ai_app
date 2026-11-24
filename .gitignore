@@ -54,3 +54,7 @@ AGENTS.md
 /.agents
 skills-lock.json
 /.claude
+node_modules/
+output/
+tool/
+.amplify/
