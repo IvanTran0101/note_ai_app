@@ -9,8 +9,7 @@ import 'summary_run_context.dart';
 /// recomputes it from the runtime availability callback, the live account and
 /// session, and the consent store.
 enum SummaryConsentStatus {
-  /// The runtime cannot summarize in the cloud (local mode, missing or
-  /// incompatible configuration), or no account is authenticated.
+  /// The cloud runtime is unavailable, or no account is authenticated.
   unavailable,
 
   /// Cloud summarization is possible, but this exact account and session has no
@@ -75,7 +74,6 @@ final class SummaryConsentAppService {
     required this._consent,
     required this._isAvailable,
     required this._cancelActiveRuns,
-    this._requiresCloudConsent = true,
   });
 
   final ICurrentUser _currentUser;
@@ -88,10 +86,6 @@ final class SummaryConsentAppService {
   /// Cancels every active summary run; the composition root binds this to the
   /// runtime's cancellation with [SummaryRunFailureCode.consentRequired].
   final void Function() _cancelActiveRuns;
-  final bool _requiresCloudConsent;
-
-  /// False for local composition; no cloud dialog is needed for local inference.
-  bool get requiresCloudConsent => _requiresCloudConsent;
 
   /// Safe runtime/session reason generation is unavailable in this composition.
   SummaryRunFailureCode? get unavailableReason {
@@ -106,7 +100,7 @@ final class SummaryConsentAppService {
   /// The current consent status for the live account and session.
   SummaryConsentStatus get state {
     final String? accountUserId = _liveAccountUserId;
-    if (!_requiresCloudConsent || accountUserId == null || !_isAvailable()) {
+    if (accountUserId == null || !_isAvailable()) {
       return SummaryConsentStatus.unavailable;
     }
     final SummaryCloudConsentSnapshot snapshot = _consent.capture(
@@ -127,7 +121,7 @@ final class SummaryConsentAppService {
   /// Neither case captures or mutates anything, so a refused confirmation can
   /// never be completed later.
   SummaryConsentRequest beginConsent() {
-    if (!_requiresCloudConsent || !_isAvailable()) {
+    if (!_isAvailable()) {
       throw const SummaryRunFailure(SummaryRunFailureCode.runtimeUnavailable);
     }
     final String? accountUserId = _liveAccountUserId;
@@ -168,7 +162,7 @@ final class SummaryConsentAppService {
         _session.sessionGeneration != request.sessionGeneration) {
       throw const SummaryRunFailure(SummaryRunFailureCode.sessionChanged);
     }
-    if (!_requiresCloudConsent || !_isAvailable()) {
+    if (!_isAvailable()) {
       throw const SummaryRunFailure(SummaryRunFailureCode.runtimeUnavailable);
     }
     if (_consent.generation != request.consentGeneration) {

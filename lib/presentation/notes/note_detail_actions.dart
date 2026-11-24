@@ -173,13 +173,6 @@ extension _NoteDetailActions on NoteDetailPageState {
     _update(() => _statusMessage = copy.summaryCancelExplanation(cloud));
   }
 
-  bool get _provisioningFailed {
-    final ModelProvisioningPhase? phase =
-        widget.provisioningReader?.current.phase;
-    return phase == ModelProvisioningPhase.failed ||
-        phase == ModelProvisioningPhase.cancelled;
-  }
-
   Future<void> _handleBack() async {
     if (_actionBusy) {
       return;

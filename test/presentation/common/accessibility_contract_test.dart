@@ -89,7 +89,6 @@ void main() {
               dashboard: const SizedBox(),
               notes: const SizedBox(),
               onOpenSettings: () {},
-              onOpenDiagnostics: () {},
             ),
           ),
         );
@@ -98,7 +97,6 @@ void main() {
         expect(find.byTooltip('Hide sidebar'), findsOneWidget);
         for (final (Key key, String label) in <(Key, String)>[
           (WorkspaceShell.settingsKey, 'Settings'),
-          (WorkspaceShell.diagnosticsKey, 'Diagnostics'),
         ]) {
           final SemanticsNode node = tester.getSemantics(find.byKey(key));
           expect(node.label, label);

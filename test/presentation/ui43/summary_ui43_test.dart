@@ -38,7 +38,6 @@ void main() {
                   child: NoteSummaryFeedback(
                     copy: copy,
                     availability: NoteSummaryAvailability.dirty,
-                    cloud: false,
                     isRunning: true,
                     onCancel: () => cancelCount++,
                   ),

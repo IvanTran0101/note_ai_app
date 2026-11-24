@@ -69,7 +69,6 @@ final class DashboardCopy {
       _isVietnamese ? 'Không tìm thấy ghi chú phù hợp' : 'No matching notes';
   String get clearSearch => _isVietnamese ? 'Xóa tìm kiếm' : 'Clear search';
   String get settings => _isVietnamese ? 'Cài đặt' : 'Settings';
-  String get diagnostics => _isVietnamese ? 'Chẩn đoán' : 'Diagnostics';
   String get updatedAt => _isVietnamese ? 'Cập nhật' : 'Updated';
   String get untitled => _isVietnamese ? '(Chưa đặt tên)' : '(Untitled)';
   String get noContent => _isVietnamese ? 'Không có nội dung' : 'No content';

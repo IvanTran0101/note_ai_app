@@ -2,9 +2,8 @@
 ///
 /// Every test drives the real `RagHttpGateway` (and, in one test, the real
 /// `RagAppService`) over the in-process `RagMockClient`; the widget test pumps
-/// the explicit debug mock root and asserts the local-summary refusal it
-/// injects into `NoteFlowApp`. Nothing here reaches a network, a model, or a
-/// real account; the fixture is the same synthetic note the mock root seeds.
+/// the explicit debug mock root and checks that cloud Summary is unavailable.
+/// The fixture is the same synthetic note the mock root seeds.
 library;
 
 import 'dart:async';
@@ -14,8 +13,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:note_ai_app/application/auth/current_user_session.dart';
 import 'package:note_ai_app/application/note_intelligence/rag_app_service.dart';
-import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
-import 'package:note_ai_app/application/notes/note_application.dart';
 import 'package:note_ai_app/dev/rag_mock_actors.dart';
 import 'package:note_ai_app/dev/rag_mock_client.dart';
 import 'package:note_ai_app/dev/rag_mock_fixture.dart';
@@ -24,8 +21,8 @@ import 'package:note_ai_app/dev/rag_mock_store.dart';
 import 'package:note_ai_app/domain/auth/auth_identity.dart';
 import 'package:note_ai_app/domain/note_intelligence/rag_models.dart';
 import 'package:note_ai_app/infrastructure/note_intelligence/rag_http_gateway.dart';
-import 'package:note_ai_app/main.dart' show NoteFlowApp;
 import 'package:note_ai_app/main_rag_mock.dart' as rag_mock;
+import 'package:note_ai_app/presentation/workspace/workspace_shell.dart';
 
 RagCallContext _context(String actorId) => RagCallContext(
   expectedUserId: actorId,
@@ -393,40 +390,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'the mock root injects the typed runtimeUnavailable summary refusal',
-    (WidgetTester tester) async {
-      // Pump the explicit debug mock root itself (not a reconstructed copy), so
-      // the assertion covers the exact composition `main_rag_mock.main` runs.
-      rag_mock.main();
-      await tester.pumpAndSettle();
+  testWidgets('the mock root keeps cloud Summary unavailable', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    rag_mock.main();
+    await tester.pumpAndSettle();
 
-      final NoteFlowApp app = tester.widget<NoteFlowApp>(
-        find.byType(NoteFlowApp),
-      );
-      final SummarizeNoteContent? supplied = app.localSummarizer;
-      expect(
-        supplied,
-        isNotNull,
-        reason: 'the mock root must wire NoteFlowApp.localSummarizer',
-      );
+    await tester.tap(find.byKey(WorkspaceShell.settingsKey));
+    await tester.pumpAndSettle();
+    final SwitchListTile consent = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey<String>('summary-cloud-consent-switch')),
+    );
+    expect(consent.onChanged, isNull);
+    expect(consent.value, isFalse);
 
-      // The refusal must throw synchronously, before `_summarize` can reach
-      // `_ensureService`/`_startService` and therefore the model download path.
-      bool threwBeforeAwait = false;
-      try {
-        supplied!.call('synthetic note body');
-      } on SummaryRunFailure catch (failure) {
-        threwBeforeAwait = true;
-        expect(failure.code, SummaryRunFailureCode.runtimeUnavailable);
-      }
-      expect(threwBeforeAwait, isTrue);
-
-      // Tear the mock root down so its in-process transport and any startup
-      // work are released before the binding checks for pending work.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    },
-  );
+    // Tear the mock root down so its in-process transport and any startup
+    // work are released before the binding checks for pending work.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -1,32 +1,18 @@
-/// Boot-time selection of the Summary runtime (Phase 3.5).
+/// Boot-time configuration for cloud Summary.
 ///
-/// The app is local-only by default. A build opts into the remote Summary path
-/// with `--dart-define=NOTEFLOW_AI_MODE=remote` plus an endpoint, supplied
-/// either explicitly as `--dart-define=NOTEFLOW_AI_API=<https base uri>` or,
-/// when that define is absent, by the generated Amplify outputs' custom
-/// `aiApiEndpoint` key (`amplify/backend.ts`).
-///
-/// This type is a pure selector: it reads no file, performs no I/O, never
-/// throws, and holds no provider credential. Unknown or unusable configuration
-/// fails closed to [SummaryRuntimeMode.unavailable] with a safe code - it never
-/// silently falls back to local, and the raw endpoint value never appears in a
-/// failure or in [SummaryRuntimeConfiguration.toString].
+/// The HTTPS endpoint comes from `NOTEFLOW_AI_API` or the generated Amplify
+/// outputs' custom `aiApiEndpoint` key. Endpoint values stay out of failures
+/// and [SummaryRuntimeConfiguration.toString].
 library;
 
 import 'dart:convert';
 
 /// Which Summary runtime one build selected.
 enum SummaryRuntimeMode {
-  /// On-device summarization. The default, and valid without any endpoint.
-  local,
-
   /// The contract's `/ai/summary` route through the remote service.
   remote,
 
-  /// No usable runtime: the compile-time mode is unknown, or the remote
-  /// endpoint is missing or invalid. Summarization stays unavailable until the
-  /// build configuration is fixed; this is a fail-closed outcome, not a
-  /// fallback to [local].
+  /// The mode is unsupported, or the endpoint is missing or invalid.
   unavailable,
 }
 
@@ -35,7 +21,7 @@ enum SummaryRuntimeMode {
 /// A code carries no endpoint, token, header, or response data, so it is safe
 /// to log and safe to surface in a diagnostic string.
 enum SummaryRuntimeFailureCode {
-  /// `NOTEFLOW_AI_MODE` is neither `local` nor `remote`.
+  /// A nonblank `NOTEFLOW_AI_MODE` value other than `remote` was supplied.
   unknownMode,
 
   /// Remote mode was selected but neither the explicit define nor the generated
@@ -56,27 +42,17 @@ enum SummaryRuntimeFailureCode {
 final class SummaryRuntimeConfiguration {
   /// Selects the runtime from injectable values.
   ///
-  /// [mode] is the raw mode token; blank or absent means "unconfigured" and
-  /// selects [SummaryRuntimeMode.local], the established behavior. The tokens
-  /// are the exact lowercase `local` and `remote` (surrounding whitespace is
-  /// ignored); anything else fails closed. [explicitEndpoint] is the
-  /// `NOTEFLOW_AI_API` value, where blank means absent. [amplifyOutputsJson] is
-  /// the generated Amplify outputs document, consulted only when no explicit
-  /// endpoint was supplied.
-  ///
-  /// In local mode any remote endpoint configuration, valid or not, is
-  /// ignored. In remote mode an unknown, missing, or invalid endpoint produces
-  /// [SummaryRuntimeMode.unavailable]; nothing is thrown.
+  /// [mode] accepts blank or `remote`, ignoring surrounding whitespace.
+  /// [explicitEndpoint] takes precedence over [amplifyOutputsJson] when
+  /// nonblank. An unsupported mode or unusable endpoint leaves Summary
+  /// unavailable.
   factory SummaryRuntimeConfiguration({
     String mode = '',
     String? explicitEndpoint,
     String? amplifyOutputsJson,
   }) {
     final String modeToken = mode.trim();
-    if (modeToken.isEmpty || modeToken == localModeToken) {
-      return const SummaryRuntimeConfiguration._local();
-    }
-    if (modeToken != remoteModeToken) {
+    if (modeToken.isNotEmpty && modeToken != remoteModeToken) {
       return const SummaryRuntimeConfiguration._unavailable(
         SummaryRuntimeFailureCode.unknownMode,
       );
@@ -101,7 +77,7 @@ final class SummaryRuntimeConfiguration {
 
   /// Selects the runtime from the compile-time defines.
   ///
-  /// Reads [modeEnvironmentKey] (blank or absent selects local) and
+  /// Reads [modeEnvironmentKey] (blank or absent selects remote) and
   /// [endpointEnvironmentKey]. [amplifyOutputsJson] is the generated outputs
   /// document, normally `amplifyConfig` from `lib/amplify_outputs.dart`. This
   /// factory never throws, so it is safe in `main` before any error surface
@@ -115,11 +91,6 @@ final class SummaryRuntimeConfiguration {
       amplifyOutputsJson: amplifyOutputsJson,
     );
   }
-
-  const SummaryRuntimeConfiguration._local()
-    : mode = SummaryRuntimeMode.local,
-      endpoint = null,
-      failureCode = null;
 
   const SummaryRuntimeConfiguration._remote(Uri endpoint)
     : this._(
@@ -141,14 +112,11 @@ final class SummaryRuntimeConfiguration {
     required this.failureCode,
   });
 
-  /// Compile-time define naming the runtime; blank or absent means local.
+  /// Optional compile-time define naming the remote runtime.
   static const String modeEnvironmentKey = 'NOTEFLOW_AI_MODE';
 
   /// Compile-time define carrying the explicit remote base URI.
   static const String endpointEnvironmentKey = 'NOTEFLOW_AI_API';
-
-  /// Mode token selecting the on-device runtime.
-  static const String localModeToken = 'local';
 
   /// Mode token selecting the remote runtime.
   static const String remoteModeToken = 'remote';
@@ -170,14 +138,8 @@ final class SummaryRuntimeConfiguration {
   /// Why the selection failed, or null exactly when [canSummarize] is true.
   final SummaryRuntimeFailureCode? failureCode;
 
-  /// Whether this build may summarize at all.
-  ///
-  /// Local mode is valid on its own; remote mode is valid only with a validated
-  /// endpoint. [SummaryRuntimeMode.unavailable] is never summarizable.
-  bool get canSummarize => mode != SummaryRuntimeMode.unavailable;
-
-  /// Whether the on-device runtime is selected.
-  bool get isLocal => mode == SummaryRuntimeMode.local;
+  /// Whether this build has a validated cloud endpoint.
+  bool get canSummarize => isRemote;
 
   /// Whether the remote runtime is selected.
   bool get isRemote => mode == SummaryRuntimeMode.remote;

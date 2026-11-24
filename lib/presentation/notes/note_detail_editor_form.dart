@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import '../../application/note_intelligence/model_provisioning/model_provisioning_boundary.dart';
-import 'model_provisioning_status_panel.dart';
 import 'note_detail_localizations.dart';
 import 'note_detail_summary.dart';
 import 'note_detail_utilities.dart';
@@ -42,9 +40,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.includeFeedback = true,
     this.isSummarizing = false,
     this.showBusyIndicator = true,
-    required this.provisioningReader,
-    required this.onProvisioningRetry,
-    required this.onProvisioningCancel,
     required this.summary,
     required this.summaryStale,
     this.onCopySummary,
@@ -55,7 +50,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
     this.errorRetryLabel,
     this.errorRetryEnabled = true,
     this.summaryAvailability,
-    this.summaryCloud = false,
     this.onCancelSummary,
   });
 
@@ -80,9 +74,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final bool quietMetadata;
   final bool isSummarizing;
   final bool showBusyIndicator;
-  final IModelProvisioningReader? provisioningReader;
-  final VoidCallback? onProvisioningRetry;
-  final VoidCallback? onProvisioningCancel;
   final String? summary;
   final bool summaryStale;
   final VoidCallback? onCopySummary;
@@ -100,7 +91,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
   final NoteSummaryAvailability? summaryAvailability;
 
   /// Whether the active runtime is the cloud one, for unavailable copy.
-  final bool summaryCloud;
 
   /// Cancels the in-flight generation; visible for the whole run.
   final VoidCallback? onCancelSummary;
@@ -334,12 +324,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
             ),
           ),
         ],
-        if (includeFeedback && provisioningReader != null)
-          ModelProvisioningStatusPanel(
-            reader: provisioningReader!,
-            onRetry: hasSavedNote ? onProvisioningRetry : null,
-            onCancel: onProvisioningCancel,
-          ),
       ],
     );
   }
@@ -350,7 +334,6 @@ final class NoteDetailEditorForm extends StatelessWidget {
         : NoteSummaryFeedback(
             copy: copy,
             availability: summaryAvailability!,
-            cloud: summaryCloud,
             isRunning: isSummarizing,
             onCancel: onCancelSummary,
           );

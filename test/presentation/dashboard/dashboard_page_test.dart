@@ -1530,12 +1530,11 @@ void main() {
       expect(created, isTrue);
     });
 
-    testWidgets('invokes optional settings and diagnostics callbacks', (
+    testWidgets('invokes the optional settings callback', (
       WidgetTester tester,
     ) async {
       final List<NoteDto> notes = <NoteDto>[_buildNote(id: 'a')];
       bool settings = false;
-      bool diagnostics = false;
       final DashboardController controller = DashboardController(
         query: _FakeDashboardQuery(_overview(notes: notes)),
       );
@@ -1545,19 +1544,14 @@ void main() {
         dashboardController: controller,
         notesController: _FakeNotesController(notes: notes),
         onOpenSettings: () => settings = true,
-        onOpenDiagnostics: () => diagnostics = true,
       );
       await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(const ValueKey<String>('dashboard-open-settings')),
       );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('dashboard-open-diagnostics')),
-      );
 
       expect(settings, isTrue);
-      expect(diagnostics, isTrue);
     });
 
     testWidgets('renders English labels by default', (
@@ -1748,7 +1742,6 @@ Future<void> _pumpDashboard(
   FutureOr<NoteDetailRouteResult?> Function(NoteDto)? onOpenNoteResult,
   VoidCallback? onCreateNote,
   VoidCallback? onOpenSettings,
-  VoidCallback? onOpenDiagnostics,
   bool embeddedInWorkspace = false,
   Locale locale = const Locale('en'),
   Size size = const Size(1200, 900),
@@ -1796,7 +1789,6 @@ Future<void> _pumpDashboard(
                   },
             embeddedInWorkspace: embeddedInWorkspace,
             onOpenSettings: onOpenSettings,
-            onOpenDiagnostics: onOpenDiagnostics,
             onSearchVisibilityChanged: onSearchVisibilityChanged,
             noteChanges: noteChanges,
           );

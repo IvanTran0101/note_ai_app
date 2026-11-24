@@ -96,19 +96,9 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
         MediaQuery.sizeOf(context).width >= 840 && widget.embeddedInWorkspace;
     return AppBar(
       title: Text(copy.notes),
-      actions:
-          expanded ||
-              widget.onOpenSettings == null && widget.onOpenDiagnostics == null
+      actions: expanded || widget.onOpenSettings == null
           ? null
-          : <Widget>[
-              if (!expanded && widget.onOpenSettings != null) _settingsAction(),
-              if (!expanded && widget.onOpenDiagnostics != null)
-                TextButton(
-                  key: const ValueKey<String>('open-diagnostics'),
-                  onPressed: widget.onOpenDiagnostics,
-                  child: Text(copy.diagnostics),
-                ),
-            ],
+          : [_settingsAction()],
     );
   }
 
@@ -184,8 +174,6 @@ extension _NotesWorkspaceView on NotesWorkspacePageState {
       key: _detailKeyFor(note?.reference ?? 'new'),
       notesController: _application,
       note: note,
-      provisioningReader: widget.provisioningReader,
-      onProvisioningCancel: widget.onProvisioningCancel,
       showAppBar: showAppBar,
       onEmbeddedExit: _handleDetailExit,
       onDirtyChanged: _handleDetailDirtyChanged,

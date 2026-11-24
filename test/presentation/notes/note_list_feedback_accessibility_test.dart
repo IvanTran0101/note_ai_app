@@ -25,11 +25,10 @@ void main() {
                   final copy = NoteDetailCopy.of(context);
                   expected = availability == NoteSummaryAvailability.dirty
                       ? copy.summarySavedRequired
-                      : copy.summaryLocalUnavailable;
+                      : copy.summaryCloudUnavailable;
                   return NoteSummaryFeedback(
                     copy: copy,
                     availability: availability,
-                    cloud: false,
                     isRunning: false,
                   );
                 },

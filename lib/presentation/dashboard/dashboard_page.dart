@@ -47,7 +47,6 @@ final class DashboardPage extends StatefulWidget {
     required this.onCreateNote,
     this.embeddedInWorkspace = false,
     this.onOpenSettings,
-    this.onOpenDiagnostics,
     this.onSearchVisibilityChanged,
     this.noteChanges,
   });
@@ -75,9 +74,6 @@ final class DashboardPage extends StatefulWidget {
 
   /// Opens the existing appearance settings flow.
   final VoidCallback? onOpenSettings;
-
-  /// Opens the existing diagnostics flow.
-  final VoidCallback? onOpenDiagnostics;
 
   /// Reports the existing search visibility state to a compact host shell.
   final ValueChanged<bool>? onSearchVisibilityChanged;
@@ -110,9 +106,6 @@ final class DashboardPage extends StatefulWidget {
     'dashboard-layout-toggle',
   );
   static const Key settingsKey = ValueKey<String>('dashboard-open-settings');
-  static const Key diagnosticsKey = ValueKey<String>(
-    'dashboard-open-diagnostics',
-  );
   static const Key emptyCreateKey = ValueKey<String>('dashboard-empty-create');
   static const Key notesErrorKey = ValueKey<String>('dashboard-notes-error');
   static const Key notesRetryKey = ValueKey<String>('dashboard-notes-retry');
@@ -322,14 +315,6 @@ final class DashboardPageState extends State<DashboardPage> {
                     tooltip: copy.settings,
                     icon: const Icon(Icons.tune_outlined),
                     onPressed: widget.onOpenSettings,
-                  ),
-                if ((!expanded || !widget.embeddedInWorkspace) &&
-                    widget.onOpenDiagnostics != null)
-                  IconButton(
-                    key: DashboardPage.diagnosticsKey,
-                    tooltip: copy.diagnostics,
-                    icon: const Icon(Icons.monitor_heart_outlined),
-                    onPressed: widget.onOpenDiagnostics,
                   ),
               ],
             ),

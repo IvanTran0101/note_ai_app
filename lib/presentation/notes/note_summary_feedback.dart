@@ -27,8 +27,7 @@ final class NoteSummaryFailureCopy {
 
 /// Resolves the Summary failure row, or null when none should be presented.
 ///
-/// [suppressed] lets the host keep a failed or cancelled local provisioning
-/// notice as the only message, exactly as before this phase. [retryEnabled] is
+/// [retryEnabled] is
 /// the same eligibility the primary and regenerate actions use, so a retry is
 /// never offered while the editor is dirty, conflicted, busy, or cooling down.
 /// The text is derived here on every build, so a language change retranslates
@@ -36,10 +35,9 @@ final class NoteSummaryFailureCopy {
 NoteSummaryFailureCopy? noteSummaryFailureCopy({
   required NoteDetailCopy copy,
   required NoteSummaryController controller,
-  required bool suppressed,
   required bool retryEnabled,
 }) {
-  if (suppressed || !controller.hasFailure) {
+  if (!controller.hasFailure) {
     return null;
   }
   final SummaryRunFailureCode? code = controller.failureCode;
@@ -74,7 +72,6 @@ final class NoteSummaryFeedback extends StatelessWidget {
     super.key,
     required this.copy,
     required this.availability,
-    required this.cloud,
     required this.isRunning,
     this.onCancel,
   });
@@ -94,7 +91,6 @@ final class NoteSummaryFeedback extends StatelessWidget {
 
   final NoteDetailCopy copy;
   final NoteSummaryAvailability availability;
-  final bool cloud;
   final bool isRunning;
   final VoidCallback? onCancel;
 
@@ -236,8 +232,7 @@ final class NoteSummaryFeedback extends StatelessWidget {
       NoteSummaryAvailability.dirty => copy.summarySavedRequired,
       NoteSummaryAvailability.conflict => copy.summaryConflictBlocked,
       NoteSummaryAvailability.signInRequired => copy.summarySignInRequired,
-      NoteSummaryAvailability.unavailable =>
-        cloud ? copy.summaryCloudUnavailable : copy.summaryLocalUnavailable,
+      NoteSummaryAvailability.unavailable => copy.summaryCloudUnavailable,
     };
   }
 }

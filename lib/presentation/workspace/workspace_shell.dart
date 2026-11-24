@@ -23,7 +23,7 @@ enum WorkspaceDestination { dashboard, notes }
 /// * `600–839` — an accessible [NavigationRail] with visible labels;
 /// * `>= 840` — a Notion-inspired sidebar (hideable to a narrow reopen control)
 ///   with a workspace header, section label, active rows and a footer for the
-///   optional settings/diagnostics actions.
+///   optional settings and Ask My Notes actions.
 class WorkspaceShell extends StatefulWidget {
   const WorkspaceShell({
     super.key,
@@ -34,7 +34,6 @@ class WorkspaceShell extends StatefulWidget {
     this.onOpenSearch,
     this.onCreateNote,
     this.onOpenSettings,
-    this.onOpenDiagnostics,
     this.onOpenRag,
     this.accountName,
     this.accountAvatar,
@@ -126,11 +125,6 @@ class WorkspaceShell extends StatefulWidget {
   /// Footer/compact settings action.
   static const Key settingsKey = ValueKey<String>('workspace-open-settings');
 
-  /// Footer/compact diagnostics action.
-  static const Key diagnosticsKey = ValueKey<String>(
-    'workspace-open-diagnostics',
-  );
-
   /// Account-wide "ask my notes" action in the sidebar and compact menu.
   static const Key askNotesKey = ValueKey<String>('workspace-open-rag');
 
@@ -172,9 +166,6 @@ class WorkspaceShell extends StatefulWidget {
 
   /// Optional appearance/settings action for the navigation footer.
   final VoidCallback? onOpenSettings;
-
-  /// Optional local-AI diagnostics action for the navigation footer.
-  final VoidCallback? onOpenDiagnostics;
 
   /// Optional account-wide "ask my notes" action. Supplied by the composition
   /// root only when the RAG endpoint/feature is configured; it is not a new
@@ -850,20 +841,12 @@ class WorkspaceShellState extends State<WorkspaceShell>
   List<CompactWorkspaceMenuItem<VoidCallback>> _compactUtilityItems(
     WorkspaceCopy copy,
   ) => [
-    if (widget.onOpenDiagnostics != null)
-      CompactWorkspaceMenuItem(
-        key: WorkspaceShell.diagnosticsKey,
-        label: copy.diagnostics,
-        icon: Icons.bug_report_outlined,
-        dividerBefore: true,
-        value: () => widget.onOpenDiagnostics?.call(),
-      ),
     if (widget.onOpenSettings != null)
       CompactWorkspaceMenuItem(
         key: WorkspaceShell.settingsKey,
         label: copy.settings,
         icon: Icons.settings_outlined,
-        dividerBefore: widget.onOpenDiagnostics == null,
+        dividerBefore: true,
         value: () => widget.onOpenSettings?.call(),
       ),
   ];
@@ -1058,9 +1041,7 @@ class WorkspaceShellState extends State<WorkspaceShell>
   }
 
   Widget _buildSidebarFooter(WorkspaceCopy copy) {
-    if (widget.onOpenRag == null &&
-        widget.onOpenSettings == null &&
-        widget.onOpenDiagnostics == null) {
+    if (widget.onOpenRag == null && widget.onOpenSettings == null) {
       return const SizedBox.shrink();
     }
     return Column(
@@ -1089,14 +1070,6 @@ class WorkspaceShellState extends State<WorkspaceShell>
                   label: copy.settings,
                   icon: Icons.settings_outlined,
                   onTap: widget.onOpenSettings,
-                  dense: true,
-                ),
-              if (widget.onOpenDiagnostics != null)
-                NoteFlowSidebarRow(
-                  key: WorkspaceShell.diagnosticsKey,
-                  label: copy.diagnostics,
-                  icon: Icons.bug_report_outlined,
-                  onTap: widget.onOpenDiagnostics,
                   dense: true,
                 ),
             ],

@@ -6,13 +6,8 @@
 /// two documented fixture questions through the real `RagHttpGateway` over an
 /// in-process transport.
 ///
-/// The synthetic RAG, sync, and consent state is memory-only: this root never
-/// reaches AWS, a real account, a key, a provider, the network, or a model
-/// download, and it injects a local-summarization refusal so no model runtime
-/// can start from it. This is not whole-app disk isolation: unrelated
-/// [NoteFlowApp] diagnostics may still read the native readiness file through
-/// `AiConfigurationStore`; only the synthetic surfaces above are promised to
-/// stay in memory.
+/// The synthetic RAG, sync, and consent state is memory-only. The mock
+/// connection keeps cloud Summary unavailable.
 library;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -20,11 +15,9 @@ import 'package:flutter/material.dart';
 
 import 'application/auth/auth_models.dart';
 import 'application/auth/current_user_session.dart';
-import 'application/note_intelligence/summary_run_context.dart';
 import 'dev/rag_mock_actors.dart';
 import 'dev/rag_mock_runtime.dart';
 import 'domain/auth/auth_identity.dart';
-import 'domain/note_intelligence/summary.dart';
 import 'main.dart' show NoteFlowApp;
 import 'presentation/auth/controllers/auth_controller.dart';
 
@@ -55,17 +48,6 @@ void main() {
       controller: controller,
     ),
   );
-}
-
-/// Refuses every local summarization before any engine, model, or download work.
-///
-/// This is the composition-root answer to `NoteFlowApp.localSummarizer`, the
-/// same seam the production root uses to supply an offline summarizer. That seam
-/// is checked by `_summarize` before `_ensureService`/`_startService`, so the
-/// note-detail Summary action and the local diagnostics page both get the typed
-/// refusal instead of a `mobileModelManager.download`.
-Future<Summary> _refuseLocalSummarization(String content) {
-  throw const SummaryRunFailure(SummaryRunFailureCode.runtimeUnavailable);
 }
 
 class _RagMockRoot extends StatefulWidget {
@@ -114,7 +96,6 @@ class _RagMockRootState extends State<_RagMockRoot> {
               connection: widget.runtime.connection,
               ragApiBaseUri: widget.runtime.ragApiBaseUri,
               localSyncStoreFactory: widget.runtime.storeFor,
-              localSummarizer: _refuseLocalSummarization,
               enableLabels: false,
             ),
           ),

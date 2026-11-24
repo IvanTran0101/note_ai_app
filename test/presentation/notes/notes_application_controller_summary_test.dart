@@ -3,9 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:note_ai_app/application/auth/current_user_session.dart';
-import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_failure.dart';
-import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_state.dart';
-import 'package:note_ai_app/application/note_intelligence/model_provisioning/model_provisioning_status_holder.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_cloud_consent.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_consent_app_service.dart';
 import 'package:note_ai_app/application/note_intelligence/summary_run_context.dart';
@@ -167,60 +164,36 @@ void main() {
     );
   });
 
-  for (final ModelProvisioningPhase phase in <ModelProvisioningPhase>[
-    ModelProvisioningPhase.failed,
-    ModelProvisioningPhase.cancelled,
-  ]) {
-    testWidgets('safe local failure preserves provisioning $phase notice', (
-      WidgetTester tester,
-    ) async {
-      final ModelProvisioningStatusHolder holder =
-          ModelProvisioningStatusHolder(
-            initial: ModelProvisioningState(
-              phase: phase,
-              modelId: 'synthetic-model',
-              failure: phase == ModelProvisioningPhase.failed
-                  ? const ModelProvisioningFailure(
-                      code: ModelProvisioningFailureCode.downloadFailed,
-                    )
-                  : null,
-              updatedAt: _time,
-            ),
-          );
-      addTearDown(holder.close);
-      final controller = _controller(
-        (_) async =>
-            throw const SummaryRunFailure(SummaryRunFailureCode.unexpected),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: const [NoteDetailCopy.delegate],
-          home: NoteDetailPage(
-            notesController: controller,
-            note: NoteDto.fromDomain(_note()),
-            provisioningReader: holder,
-          ),
+  testWidgets('summary failures expose retry and preserve the saved note', (
+    WidgetTester tester,
+  ) async {
+    final controller = _controller(
+      (_) async =>
+          throw const SummaryRunFailure(SummaryRunFailureCode.unexpected),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [NoteDetailCopy.delegate],
+        home: NoteDetailPage(
+          notesController: controller,
+          note: NoteDto.fromDomain(_note()),
         ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('note-detail-summarize')),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('note-detail-summarize')),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey<String>('model-provisioning-status')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('note-detail-error-retry')),
-        findsNothing,
-      );
-      expect(find.byKey(NoteDetailPage.summaryKey), findsNothing);
-      expect(
-        (await controller.listNotes()).single.content,
-        'Saved synthetic body',
-      );
-    });
-  }
+    expect(
+      find.byKey(const ValueKey<String>('note-detail-error-retry')),
+      findsOneWidget,
+    );
+    expect(find.byKey(NoteDetailPage.summaryKey), findsNothing);
+    expect(
+      (await controller.listNotes()).single.content,
+      'Saved synthetic body',
+    );
+  });
 }
